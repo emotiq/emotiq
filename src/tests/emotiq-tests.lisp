@@ -16,7 +16,7 @@
 
 ;;;; Octet Vector and Hex String Utilities
 
-(defparameter test-hex-string "a0b2c3d4e5f67890")
+(defparameter test-hex-string "a0b1c2d3e4f56789")
 
 (define-test octet-vector-to-hex-string
   (let ((octet-vector (hex-string-to-octet-vector test-hex-string)))
@@ -25,6 +25,10 @@
     (assert-eql (length octet-vector) (floor (length test-hex-string) 2))
     (let ((back-hex-string (octet-vector-to-hex-string octet-vector)))
       (assert-equalp back-hex-string test-hex-string))))
+
+
+(define-test hex-string-to-octet-vector
+  (assert-equal (ovref (hex-string-to-octet-vector "3d") 0) #x3d))
   
 
 
