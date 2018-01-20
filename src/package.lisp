@@ -3,7 +3,7 @@
 (defpackage #:emotiq
   (:use #:cl)
   (:export #:octet #:octet-vector #:octet-vector-p
-           #:make-octet-vector
+           #:make-octet-vector #:ovref
            #:octet-vector-to-hex-string #:hex-string-to-octet-vector
            #:string-to-octet-vector)
   (:export #:hash-digest-vector-to-hex-string
