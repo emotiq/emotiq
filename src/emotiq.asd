@@ -12,10 +12,7 @@
 
 
 (defmethod asdf:perform ((op asdf:test-op) (system (eql (asdf:find-system '#:emotiq))))
-  (asdf:load-system '#:emotiq)
-  (funcall (find-symbol "RUN-TESTS" '#:lisp-unit) :all '#:emotiq-tests))
-
-
+   (funcall (find-symbol "RUN-TESTS" '#:lisp-unit) :all '#:emotiq-tests))
 
 #| Abbreviated instructions for a test build in the Lisp REPL:
 
@@ -26,7 +23,7 @@
   (pushnew (pathname "/path/to/emotiq/src/") asdf:*central-registry* :test 'equal)
 
 2. Evaluate form to test, which also loads, the system:
-
+o
   (asdf:test-system :emotiq)
 
 3. At end you should see a result like
