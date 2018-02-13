@@ -27,9 +27,12 @@ EITHER do step 1.1 OR step 1.2
   (pushnew (pathname "/path/to/emotiq/src/") asdf:*central-registry* :test 'equal)
 
 1.2 Configure to have the lisp dynamically scan the filesystem at boot
-for ASDF source registry DSL artifacts.
+for ASDF source registry DSL artifacts.  
 
-  (uiop:run-program "mkdir -p ~/.config/common-lisp/source-registry.conf.d/ && cp etc/emotiq.conf ~/.config/common-lisp/source-registry.conf.d/")
+Assuming the source to <https://github.com/Emotiq/emotiq> has been
+cloned to <file:///~/work/github.com-Emotiq/emotiq/>,
+
+  (uiop:run-program "mkdir -p ~/.config/common-lisp/source-registry.conf.d/ && cp ~/work/github.com-Emotiq/emotiq/etc/emotiq.conf ~/.config/common-lisp/source-registry.conf.d/")
 
 2. Ensure Quicklisp dependencies have been satified
 
