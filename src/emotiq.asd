@@ -1,7 +1,8 @@
 ;;;; emotiq.asd
 
-(defsystem #:emotiq
+(defsystem "emotiq"
   :description "Emotiq"
+  :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
   :depends-on (#:ironclad #:bordeaux-threads)
   :serial t
