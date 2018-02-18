@@ -56,6 +56,8 @@ THE SOFTWARE.
 (in-package :crypto-purchase)
 
 
+;; ------------------------------------------------------------------
+
 (defun rand-val ()
   ;; random value in Z_r
   (random-between (ash *ed-r* -1) *ed-r*))
@@ -97,16 +99,16 @@ THE SOFTWARE.
 ;;
 ;;   1. the transaction properly covers the cost and fees
 ;;
-;;   2. the purchaser actually produced the purchase request (not forgery)
+;;   2. the purchaser actually produced the purchase request (not a forgery)
 ;;
 ;; The purchase transaction contains all the information needed to
 ;; match up against a price + fee, without revealing actual amounts of
 ;; currency offered and change requested back. But proof is offered
 ;; that it covers the vendor's cost and fees.
 ;;
-;; We still need to offer proof that values are positive or zero, and
-;; that they are less than some maximum value. But vendor doesn't need
-;; to know that.
+;; We still need to offer proof that individual currency values are
+;; positive or zero, and that they are less than some maximum value.
+;; But vendor doesn't need to know that.
 ;;
 ;; ----------------------------------------
 
@@ -119,14 +121,14 @@ H(args) = Hash function
 
 Customer:
 msg = (change - paid)*P + k*G,
-c = H(k*G,(change - paid)*P)
+c = H(k*G,(change - paid)*P,P)
 r = k - c*s
 (msg r) => vendor
 
 Vendor:
 A = (cost + fees)*P
 K = msg + A
-K =?= r*G + H(K,-A)*P
+K =?= r*G + H(K,-A,P)*P
 
 This works because (change - paid) + (cost + fees) = 0 for valid
 purchase transactions.
@@ -181,7 +183,8 @@ purchase transactions.
       (declare (integer c))
       (when (ed-pt= kpt chk)
         (list ;; list of 3 UTXO's on output
-         (list :utxo      ;; create a (change - paid) transaction to add to his account
+         ;; create a (change - paid) transaction to add to purchaser's account
+         (list :utxo      
                (gen-uuid) ;; timestamp
                msg r c pkey) ;; enough info to derive blinding K
          ;; generate a similar UTXO for vendor 
