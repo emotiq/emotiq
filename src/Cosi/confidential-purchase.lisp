@@ -1,5 +1,7 @@
 ;; confidential-purchase.lisp -- Cloaked purchases
-
+;;
+;; DM/Emotiq  02/18
+;; --------------------------------------------------------------------xs
 #|
 The MIT License
 
