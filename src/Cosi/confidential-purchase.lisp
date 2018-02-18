@@ -125,7 +125,7 @@ Customer:
 msg = (change - paid)*P + k*G,
 c = H(k*G,(change - paid)*P,P)
 r = k - c*s
-(msg r) => vendor
+(msg r P) => vendor
 
 Vendor:
 A = (cost + fees)*P
