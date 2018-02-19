@@ -232,16 +232,15 @@ THE SOFTWARE.
   (let ((vec   (make-array (+ (length poly1) (length poly2) -1)
                            :initial-element 0)))
     (loop for v1 across poly1
-          for ix1 from 0
+          for ix from 0
           do
           (loop for v2 across poly2
-                for ix2 from 0
+                for jx from ix
                 do
-                (let ((jx (+ ix1 ix2)))
-                  (setf (aref vec jx)
-                        (add-mod-r (aref vec jx)
-                                   (vec-dot-prod v1 v2)))
-                  )))
+                (setf (aref vec jx)
+                      (add-mod-r (aref vec jx)
+                                 (vec-dot-prod v1 v2)))
+                ))
     vec))
 
 ;; ------------------------------
