@@ -244,9 +244,33 @@ THE SOFTWARE.
     vec))
 
 ;; ------------------------------
+;; Pedersen Commitments
+
+(defun simple-commit (hpt blind val)
+  ;; commit to a value val with blinding blind*Hpt
+  (ed-add (ed-mul hpt blind)
+          (ed-nth-pt val)))
+
+(defun vec-commit (hpt blind hs hvec gs gvec)
+  ;; form a vector commitment with basis vector gs,
+  ;; blinding vector hs, and blinding term blind*Hpt
+  (let ((pt (ed-mul hpt blind)))
+    (loop for h across hs
+          for hv across hvec
+          for g across gs
+          for gv across gvec
+          do
+          (setf pt (ed-add pt
+                           (ed-add (ed-mul h hv)
+                                   (ed-mul g gv)))))
+    pt))
+
+;; ------------------------------
 
 (defstruct (range-proof
             (:constructor %make-range-proof))
+  ;; basis vectors for Pedersen Commitments
+  hpt hs gs
   ;; commitments
   vcmt acmt scmt t1cmt t2cmt
   ;; parameters
@@ -256,15 +280,10 @@ THE SOFTWARE.
   ;; challenge values (Shamir-Fiat hash values)
   x y z)
 
-(defstruct (range-proof-system
-            (:constructor %make-range-proof-system))
-  prover-fn  validator-fn)
-
 ;; ------------------------------
-;; Construct a range-proof-system, containing closures for range-proof
-;; construction and range-proof validataion
+;; Construct a range-prover for use on multiple values
 
-(defun make-range-proof-system (&key (nbits *max-bit-length*))
+(defun make-range-prover (&key (nbits *max-bit-length*))
   (check-type nbits (fixnum 1))
   ;; let's compute the basis vectors just once, and share them
   (let* ((hpt  (ed-nth-pt (rand-val)))
@@ -275,48 +294,30 @@ THE SOFTWARE.
   (labels
       ;; ---------------------------------------------
       ;; support routines
-      
-      ((simple-commit (blind val)
-         (ed-add (ed-mul hpt blind)
-                 (ed-nth-pt val)))
-       
-       (vec-commit (blind hs hvec gs gvec)
-         (let ((pt (ed-mul hpt blind)))
-           (loop for h across hs
-                 for hv across hvec
-                 for g across gs
-                 for gv across gvec
-                 do
-                 (setf pt (ed-add pt
-                                  (ed-add (ed-mul h hv)
-                                          (ed-mul g gv)))))
-           pt))
-
-       (int-to-vec (val)
+      ((int-to-vec (val)
          (convert-int-to-nbytesv val hashlen))
        
        (hash-cmpr (&rest args)
          (apply 'hashem-int (mapcar #'int-to-vec args)))
-
        ;; -------------------------------------------------
        
        (make-range-proof (v)
          (check-type v (integer 0))
          (assert (< v (ash 1 nbits)))
          (let* ((gamma      (rand-val))
-                (vcmt       (simple-commit gamma v))
+                (vcmt       (simple-commit hpt gamma v))
                 (vcmt-cmpr  (ed-compress-pt vcmt))
                 
                 (a_l        (bits-vector v nbits))
                 (a_r        (vec-decr a_l 1))
                 (alpha      (rand-val))
-                (acmt       (vec-commit alpha hs a_r gs a_l))
+                (acmt       (vec-commit hpt alpha hs a_r gs a_l))
                 (acmt-cmpr  (ed-compress-pt acmt))
                 
                 (s_l        (random-vec nbits))
                 (s_r        (random-vec nbits))
                 (rho        (rand-val))
-                (scmt       (vec-commit rho hs s_r gs s_l))
+                (scmt       (vec-commit hpt rho hs s_r gs s_l))
                 (scmt-cmpr  (ed-compress-pt scmt))
                 
                 ;; publish Acmt, Scmt
@@ -342,9 +343,9 @@ THE SOFTWARE.
                 (tau1       (rand-val))
                 (tau2       (rand-val))
                 
-                (t1cmt      (simple-commit tau1 t1))
+                (t1cmt      (simple-commit hpt tau1 t1))
                 (t1cmt-cmpr (ed-compress-pt t1cmt))
-                (t2cmt      (simple-commit tau2 t2))
+                (t2cmt      (simple-commit hpt tau2 t2))
                 (t2cmt-cmpr (ed-compress-pt t2cmt))
                 
                 ;; publish T1cmt, T2cmt
@@ -361,6 +362,10 @@ THE SOFTWARE.
                 ;; publish tau_x, mu, t_hat, lvec, rvec
                 )
            (%make-range-proof
+            ;; basis vectors for Pedersen Commitments
+            :hpt  (ed-compress-pt hpt)
+            :hs   (map 'vector 'ed-compress-pt hs)
+            :gs   (map 'vector 'ed-compress-pt gs)
             ;; commitments
             :vcmt  vcmt-cmpr
             :acmt  acmt-cmpr
@@ -376,70 +381,74 @@ THE SOFTWARE.
             ;; challenge values x, y, z
             :x     x
             :y     y
-            :z     z)))
+            :z     z))
+         ))
+    
+    ;; ---------------------------------------------------
+    #'make-range-proof)))
 
-       ;; ---------------------------------------------------
-       
-       (validate-range-proof (proof)
-         (let* ((y         (range-proof-y proof))
-                (yvec      (pow-vec y nbits))
-                (z         (range-proof-z proof))
-                (zsq       (mult-mod-r z z))
-                (x         (range-proof-x proof))
-                (xsq       (mult-mod-r x x))
-                (delta     (sub-mod-r
-                            (mult-mod-r
-                             (sub-mod-r z zsq)
-                             (reduce 'add-mod-r yvec))
-                            (mult-mod-r (1- (ash 1 nbits))
-                                        (mult-mod-r z zsq))))
-                (chck-v-l  (simple-commit (range-proof-tau_x proof)
-                                          (range-proof-t_hat proof)))
-                (vcmt      (ed-decompress-pt (range-proof-vcmt proof)))
-                (t1cmt     (ed-decompress-pt (range-proof-t1cmt proof)))
-                (t2cmt     (ed-decompress-pt (range-proof-t2cmt proof)))
-                (chck-v-r  (ed-add (ed-mul vcmt zsq)
-                                   (ed-add (ed-nth-pt delta)
-                                           (ed-add (ed-mul t1cmt x)
-                                                   (ed-mul t2cmt xsq))
-                                           ))))
-           (when (ed-pt= chck-v-l chck-v-r)
-             (let* ((hprimes   (map 'vector 'ed-mul
-                                    hs
-                                    (pow-vec (inv-mod-r y) nbits)))
-                    (hpows     (vec-add (vec-scale yvec z)
-                                        (vec-scale (twos-vec nbits) zsq)))
-                    (gpows     (vec-scale (ones-vec nbits) (neg-mod-r z)))
-                    (acmt      (ed-decompress-pt (range-proof-acmt proof)))
-                    (scmt      (ed-decompress-pt (range-proof-scmt proof)))
-                    (chk-p-l   (ed-add acmt
-                                       (ed-add (ed-mul scmt x)
-                                               (vec-commit 0
-                                                           hprimes hpows
-                                                           gs      gpows))))
-                    (lvec      (range-proof-lvec proof))
-                    (rvec      (range-proof-rvec proof))
-                    (chk-p-r   (vec-commit (range-proof-mu proof)
-                                           hprimes rvec
-                                           gs      lvec)))
-               (when (ed-pt= chk-p-l chk-p-r)
-                 (eql (range-proof-t_hat proof)
-                      (vec-dot-prod lvec rvec))
-                 )))
-           )))
-    ;; ------------------------------------------------
-    (%make-range-proof-system
-     :prover-fn     #'make-range-proof
-     :validator-fn  #'validate-range-proof)
-    )))
+;; ---------------------------------------------------------------------
+;; Range proof validation
+
+(defun validate-range-proof (proof)
+  (let* ((hpt       (ed-decompress-pt (range-proof-hpt proof)))
+         (hs        (map 'vector 'ed-decompress-pt (range-proof-hs proof)))
+         (gs        (map 'vector 'ed-decompress-pt (range-proof-gs proof)))
+         (nbits     (length gs))
+         (y         (range-proof-y proof))
+         (yvec      (pow-vec y nbits))
+         (z         (range-proof-z proof))
+         (zsq       (mult-mod-r z z))
+         (x         (range-proof-x proof))
+         (xsq       (mult-mod-r x x))
+         (delta     (sub-mod-r
+                     (mult-mod-r
+                      (sub-mod-r z zsq)
+                      (reduce 'add-mod-r yvec))
+                     (mult-mod-r (1- (ash 1 nbits))
+                                 (mult-mod-r z zsq))))
+         (chck-v-l  (simple-commit hpt (range-proof-tau_x proof)
+                                   (range-proof-t_hat proof)))
+         (vcmt      (ed-decompress-pt (range-proof-vcmt proof)))
+         (t1cmt     (ed-decompress-pt (range-proof-t1cmt proof)))
+         (t2cmt     (ed-decompress-pt (range-proof-t2cmt proof)))
+         (chck-v-r  (ed-add (ed-mul vcmt zsq)
+                            (ed-add (ed-nth-pt delta)
+                                    (ed-add (ed-mul t1cmt x)
+                                            (ed-mul t2cmt xsq))
+                                    ))))
+    (when (ed-pt= chck-v-l chck-v-r)
+      (let* ((hprimes   (map 'vector 'ed-mul
+                             hs
+                             (pow-vec (inv-mod-r y) nbits)))
+             (hpows     (vec-add (vec-scale yvec z)
+                                 (vec-scale (twos-vec nbits) zsq)))
+             (gpows     (vec-scale (ones-vec nbits) (neg-mod-r z)))
+             (acmt      (ed-decompress-pt (range-proof-acmt proof)))
+             (scmt      (ed-decompress-pt (range-proof-scmt proof)))
+             (chk-p-l   (ed-add acmt
+                                (ed-add (ed-mul scmt x)
+                                        (vec-commit hpt 0
+                                                    hprimes hpows
+                                                    gs      gpows))))
+             (lvec      (range-proof-lvec proof))
+             (rvec      (range-proof-rvec proof))
+             (chk-p-r   (vec-commit hpt (range-proof-mu proof)
+                                    hprimes rvec
+                                    gs      lvec)))
+        (when (ed-pt= chk-p-l chk-p-r)
+          (eql (range-proof-t_hat proof)
+               (vec-dot-prod lvec rvec))
+          )))
+    ))
 
 ;; ----------------------------------------------------------------------
 ;; test it out
 #|
 (defun tst (n &key (nbits 4))
-  (let* ((sys (make-range-proof-system :nbits nbits))
-         (proof (funcall (range-proof-system-prover-fn sys) n)))
-    (funcall (range-proof-system-validator-fn sys) proof)))
+  (let* ((prover (make-range-prover :nbits nbits))
+         (proof (funcall prover n)))
+    (validate-range-proof proof)))
 
 (defun timing-test (&optional (niter 1000))
   (time (loop repeat niter do
@@ -447,12 +456,12 @@ THE SOFTWARE.
 
 (defun proof-timing-test (&optional (niter 1000))
   (time (loop repeat niter do
-              (let ((sys (make-range-proof-system :nbits 64)))
-                (funcall (range-proof-system-prover-fn sys) (random-between 0 #.(1- (ash 1 64))))))))
+              (let ((prover (make-range-prover :nbits 64)))
+                (funcall prover (random-between 0 #.(1- (ash 1 64))))))))
 
 (defun verifier-timing-test (&optional (niter 1000))
-  (let* ((sys   (make-range-proof-system :nbits 64))
-         (proof (funcall (range-proof-system-prover-fn sys) (random-between 0 #.(1- (ash 1 64))))))
+  (let* ((prover (make-range-prover :nbits 64))
+         (proof  (funcall prover (random-between 0 #.(1- (ash 1 64))))))
     (time (loop repeat niter do
-                (funcall (range-proof-system-validator-fn sys) proof)))))
+                (validate-range-proof proof)))))
 |#
