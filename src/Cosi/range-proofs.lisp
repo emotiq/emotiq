@@ -78,6 +78,10 @@ THE SOFTWARE.
 
 (in-package :range-proofs)
 
+;; ------------------------------
+
+(defvar *max-bit-length*  64)
+
 ;; ------------------------------------------------------------------
 
 (defun rand-val ()
@@ -120,39 +124,8 @@ THE SOFTWARE.
   (convert-bytes-to-int
    (apply 'sha3-buffers (mapcar 'convert-pt-to-v pts))))
 
-;; --------------------------------------------------------------------
-
-#|
-;; try it out... 
-(let* ((nel  4)
-       (av   (make-coffs nel)))
-  (inspect (commit av)))
- |#
-#|
-;; -----------------------------------------------------------------------
-;; ZKP to prove N >= 0, select the 4 integers from Lagrange 4-square,
-;; whose sum of squares equals our N. Hence, sum >= 0.
-;;
-;; Make a commitment on these 4 numbers:
-;;    (n1 n2 n3 n4) -> Sum(n_i * p_i, i = 1..4) for p_i prime
-;;
-;; If the p_i are all coprime and > largest possible n_i then this sum is unique
-;; per ordering of n_i. Random blinding value v, secret key s,
-;; commitment (msg = Sum*P - V, c = H(V,msg),  r = v - c*s)
-;;   so R = r*G = v*G - c*s*G = v*G - c*P = V - c*P, or V = r*G + c*P
-;;      check H(V,msg) = c
-;;      Sum*P = msg + V
-
-(inspect
- (sort
-  (loop for ix from 0 below 11 nconc
-        (loop for iy from 0 below 11 collect (+ (* ix 11) (* iy 13))))
-  '<))
-|#
-
-(defvar *max-bit-length*  64)
-
 ;; ------------------------------
+;; Arithmetic over prime field equal to Curve order
 
 (defun sub-mod-r (a b)
   (sub-mod *ed-r* a b))
@@ -175,10 +148,13 @@ THE SOFTWARE.
 ;; ------------------------------
 
 (defun zero-vector (&optional (nel *max-bit-length*))
+  ;; create a vector of zeros
   (make-array nel
               :initial-element 0))
 
 (defun bits-vector (n &optional (nbits *max-bit-length*))
+  ;; convert a value n into a bit vector. Each index into the vector
+  ;; is the i'th bit of the value
   (let* ((arr (zero-vector nbits)))
     (loop for ix from 0 below nbits do
           (when (logbitp ix n)
@@ -186,6 +162,7 @@ THE SOFTWARE.
     arr))
 
 (defun random-vec (&optional (nel *max-bit-length*))
+  ;; construct a vector of unique random values
   (let ((vec (make-array nel)))
     (um:nlet-tail iter ((ix 0))
       (unless (>= ix nel)
@@ -199,10 +176,12 @@ THE SOFTWARE.
     vec))
 
 (defun basis-pts (&optional (nel *max-bit-length*))
+  ;; compute a vector of basis-vector curve points
   (let ((vec (random-vec nel)))
     (map-into vec 'ed-nth-pt vec)))
 
 (defun pow-vec (y &optional (nel *max-bit-length*))
+  ;; construct a vector of powers of y #(1 y y^2 ... y^(n-1))
   (let ((vec (make-array nel)))
     (do ((v  1  (mult-mod-r v y))
          (ix 0  (1+ ix)))
@@ -210,12 +189,15 @@ THE SOFTWARE.
       (setf (aref vec ix) v))))
 
 (defun ones-vec (&optional (nel *max-bit-length*))
+  ;; a vector of 1's
   (make-array nel :initial-element 1))
 
 (defun twos-vec (&optional (nel *max-bit-length*))
+  ;; a vector of powers of 2: #(1 2 2^2 2^3 ... 2^(n-1))
   (pow-vec 2 nel))
 
 ;; ------------------------------
+;; Vector arithmetic over the modular prime field
 
 (defun vec-decr (v k)
   (map 'vector (um:rcurry 'sub-mod-r k) v))
@@ -280,15 +262,21 @@ THE SOFTWARE.
   prover-fn  validator-fn)
 
 ;; ------------------------------
+;; Construct a range-proof-system, containing closures for range-proof
+;; construction and range-proof validataion
 
 (defun make-range-proof-system (&key (nbits *max-bit-length*))
   (check-type nbits (fixnum 1))
+  ;; let's compute the basis vectors just once, and share them
   (let* ((hpt  (ed-nth-pt (rand-val)))
          (hs   (basis-pts nbits))
          (gs   (basis-pts nbits))
          (hashlen (ceiling (hash-length-bits) 8)))
 
   (labels
+      ;; ---------------------------------------------
+      ;; support routines
+      
       ((simple-commit (blind val)
          (ed-add (ed-mul hpt blind)
                  (ed-nth-pt val)))
@@ -311,6 +299,8 @@ THE SOFTWARE.
        (hash-cmpr (&rest args)
          (apply 'hashem-int (mapcar #'int-to-vec args)))
 
+       ;; -------------------------------------------------
+       
        (make-range-proof (v)
          (check-type v (integer 0))
          (assert (< v (ash 1 nbits)))
@@ -389,6 +379,8 @@ THE SOFTWARE.
             :y     y
             :z     z)))
 
+       ;; ---------------------------------------------------
+       
        (validate-range-proof (proof)
          (let* ((y         (range-proof-y proof))
                 (yvec      (pow-vec y nbits))
@@ -436,11 +428,14 @@ THE SOFTWARE.
                       (vec-dot-prod lvec rvec))
                  )))
            )))
+    ;; ------------------------------------------------
     (%make-range-proof-system
      :prover-fn     #'make-range-proof
      :validator-fn  #'validate-range-proof)
     )))
 
+;; ----------------------------------------------------------------------
+;; test it out
 #|
 (defun tst (n &key (nbits 4))
   (let* ((sys (make-range-proof-system :nbits nbits))
