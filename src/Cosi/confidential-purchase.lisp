@@ -134,6 +134,11 @@ K =?= r*G + H(K,-A,P)*P
 
 This works because (change - paid) + (cost + fees) = 0 for valid
 purchase transactions.
+
+What about a dishonest vendor who accepts anything without checking? 
+  1. It would seem suicidal because attackers could forge bogus messages,
+     and any attacker would likely cheat the vendor to gain as much for himself 
+     as possible.
 |#
 
 ;; Client side -- create a purchase order
