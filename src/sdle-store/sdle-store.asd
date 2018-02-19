@@ -3,9 +3,8 @@
 (in-package #:cl-user)
 
 (defpackage #:sdle-store.system
-  (:use #:cl #:asdf)
+  (:use #:cl #:asdf) ;; ASDF3 explicitly states that it will :use both :asdf and :uiop
   (:export #:non-required-file))
-
 
 (in-package #:sdle-store.system)
 
@@ -41,7 +40,7 @@ CLISP, ECL and AllegroCL are supported.")
   (when (probe-file (component-pathname c))
     (call-next-method)))
 
-(defsystem sdle-store
+(defsystem "sdle-store"
   :name "SDLE-STORE"
   :author "Sean Ross <sross@common-lisp.net>; hacked by DM/SD 09/08"
   :maintainer "Sean Ross <sross@common-lisp.net>"
@@ -49,6 +48,7 @@ CLISP, ECL and AllegroCL are supported.")
   :description "Serialization package"
   :long-description "Portable CL Package to serialize data"
   :licence "MIT"
+  :in-order-to ((test-op (test-op "sdle-store/tests")))
   :serial t
   :components ((:file "package")
                (:file "utils")
@@ -66,12 +66,12 @@ CLISP, ECL and AllegroCL are supported.")
   (funcall (find-symbol "SETUP-SPECIAL-FLOATS" :sdle-store))
   (provide 'sdle-store))
 
-(defmethod perform ((op test-op) (sys (eql (find-system :sdle-store))))
-  (oos 'load-op :sdle-store-tests)
-  (oos 'test-op :sdle-store-tests))
+(defsystem "sdle-store/tests"
+  :depends-on (rt sdle-store cl-store)
+  :components ((:module tests
+                        :pathname "./"
+                        :components ((:file "tests")))))
 
-(defsystem sdle-store-tests
-  :depends-on (rt sdle-store)
-  :components ((:file "tests")))
+
 
 ;; EOF
