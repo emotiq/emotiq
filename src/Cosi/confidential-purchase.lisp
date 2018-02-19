@@ -139,6 +139,7 @@ What about a dishonest vendor who accepts anything without checking?
   1. It would seem suicidal because attackers could forge bogus messages,
      and any attacker would likely cheat the vendor to gain as much for himself 
      as possible.
+  2. The output UTXO from the vendor wouldn't check and would be rejected.
 |#
 
 ;; Client side -- create a purchase order
