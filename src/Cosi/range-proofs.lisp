@@ -425,9 +425,11 @@ THE SOFTWARE.
 
 #|
 (defun tst (n &key (nbits 4))
-  (let* ((sys (make-range-proof-system :nbits 4))
+  (let* ((sys (make-range-proof-system :nbits nbits))
          (proof (funcall (range-proof-system-prover-fn sys) n)))
     (funcall (range-proof-system-validator-fn sys) proof)))
-       
+
+(defun timing-test (&optional (niter 1000))
+  (time (loop repeat niter do
+              (tst (random-between 0 #.(1- (ash 1 64))) :nbits 64))))
  |#
-    
