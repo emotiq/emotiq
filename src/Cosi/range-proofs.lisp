@@ -25,6 +25,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
+;; -------------------------------------------------------------------------
+;; Compute a value range prover and verifier for use in validating
+;; cryptographically blinded numbers. This version proves each bit of
+;; the (integer) value. It produces a rather large structure of prime
+;; number field integers, two per bit of every value being attested,
+;; plus two more as cryptographic basis vector components for the
+;; Pedersen Commitments offered for the value.
+;;
+;; Algorithm adapted to ECC crypto from the paper:
+;;  "Bulletproofs: Short Proofs for Confidential Transactions and More" by
+;;     Bunz, Bootle, Boneh, Poelstra, Wuille, and Maxwell.
+;;       https://eprint.iacr.org/2017/1066.pdf
+;; 
+;; The code in this module is pre-Bulletproofs. Bulletproofs will help
+;; to shrink the proof size dramatically with a Log2 folding of vector
+;; sizes.
 
 (defpackage :range-proofs
   (:use :common-lisp :crypto-mod-math)
@@ -61,6 +77,8 @@ THE SOFTWARE.
    ))
 
 (in-package :range-proofs)
+
+;; ------------------------------------------------------------------
 
 (defun rand-val ()
   ;; random value in Z_r
@@ -432,4 +450,15 @@ THE SOFTWARE.
 (defun timing-test (&optional (niter 1000))
   (time (loop repeat niter do
               (tst (random-between 0 #.(1- (ash 1 64))) :nbits 64))))
- |#
+
+(defun proof-timing-test (&optional (niter 1000))
+  (time (loop repeat niter do
+              (let ((sys (make-range-proof-system :nbits 64)))
+                (funcall (range-proof-system-prover-fn sys) (random-between 0 #.(1- (ash 1 64))))))))
+
+(defun verifier-timing-test (&optional (niter 1000))
+  (let* ((sys   (make-range-proof-system :nbits 64))
+         (proof (funcall (range-proof-system-prover-fn sys) (random-between 0 #.(1- (ash 1 64))))))
+    (time (loop repeat niter do
+                (funcall (range-proof-system-validator-fn sys) proof)))))
+|#
