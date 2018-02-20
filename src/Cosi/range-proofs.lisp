@@ -69,10 +69,8 @@ THE SOFTWARE.
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:export
-   :make-range-proof-system
-   :range-proof-system
-   :range-proof-system-prover-fn
-   :range-proof-system-validator-fn
+   :make-range-prover
+   :validate-range-proof
    :range-proof
    ))
 
