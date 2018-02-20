@@ -558,7 +558,8 @@ THE SOFTWARE.
       )))
 
 ;; -------------------------------------------------------
-#||#
+#|
+  ;; not needed with fast validation running properly...
 (defun validate-dot-prod-proof (proof)
   (let* ((u         (ed-decompress-pt (dot-prod-proof-u proof)))
          (p         (ed-decompress-pt (dot-prod-proof-pcmt proof)))
@@ -606,7 +607,7 @@ THE SOFTWARE.
                              hl hr)))
             (iter gp hp pp (cdr xlrs))))
         ))))
-#||#             
+|#             
 ;; --------------------------------------------------------------
 
 (defun compute-svec (xlrs nbits)
