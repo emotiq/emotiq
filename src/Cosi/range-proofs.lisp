@@ -461,7 +461,7 @@ THE SOFTWARE.
              (p         (ed-decompress-pt (dot-prod-proof-pcmt dot-proof))))
         
         (when (ed-pt= chk-p-l p)
-          (validate-dot-prod-proof dot-proof))
+          (fast-validate-dot-prod-proof dot-proof))
         ))))
 
 ;; -----------------------------------------------------------
@@ -632,7 +632,7 @@ THE SOFTWARE.
          (p         (ed-decompress-pt (dot-prod-proof-pcmt proof)))
          (a         (dot-prod-proof-a proof))
          (b         (dot-prod-proof-b proof))
-         (xlrs      (dot-prod-proof-xlrs proof))
+         (xlrs      (reverse (dot-prod-proof-xlrs proof)))
          (sv        (compute-svec xlrs nbits))
          (svinv     (map 'vector 'inv-mod-r sv))
          (chk_l     (vec-commit u (mult-mod-r a b)
