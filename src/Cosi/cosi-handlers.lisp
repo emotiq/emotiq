@@ -63,8 +63,8 @@ THE SOFTWARE.
      (:commitment (reply-to msg seq)
       (node-cosi-commitment node reply-to msg seq))
 
-     (:signing (reply-to c c1 seq)
-      (node-cosi-signing node reply-to c c1 seq))
+     (:signing (reply-to c seq)
+      (node-cosi-signing node reply-to c seq))
 
      ;; -----------------------------------
      ;; for sim and debug
@@ -494,30 +494,29 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                  (mark-node-no-response node sub))
                 
                 (t
-                 (destructuring-bind (sub-ptsum sub-pt sub-bits) ans
+                 (destructuring-bind (sub-ptsum sub-bits) ans ;; partial V_sun, and V_i
                    ;; fold in the subtree answer
                    (setf bits (logior bits sub-bits)
                          vsum (ed-add vsum (ed-decompress-pt sub-ptsum)))
-                   ;; compute a random challenge for node validity checking
-                   (let ((chk (hash-pt-msg (ed-decompress-pt sub-pt) msg)))
-                     ;; accumulate participants for phase 2
-                     (push (list sub msg chk) (node-parts node))
-                     )))
+                   ;; accumulate participants for phase 2
+                   (push (list sub sub-ptsum sub-bits) (node-parts node))
+                   ))
                 )))
           (mapc #'fold-answer lst subs)
-          (send reply-to :commit seq-id (ed-compress-pt vsum) (ed-compress-pt vpt) bits)
+          ;; return partial V_sum and V_i for local checking
+          (send reply-to :commit seq-id (ed-compress-pt vsum) bits)
           )))))
 
 ;; ------------------------------
 
 (defun sub-signing (my-ip c seq-id)
-  (=lambda (node chk)
+  (=lambda (node)
     (let ((start    (get-universal-time))
           (timeout  10
                     ;; (* (node-load node) *default-timeout-period*)
                     )
           (ret-addr (make-return-addr my-ip)))
-      (send node :signing ret-addr c chk seq-id)
+      (send node :signing ret-addr c seq-id)
       (labels
           ((!dly ()
                  #+:LISPWORKS
@@ -532,7 +531,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                
                (wait ()
                  (recv
-                   ((list* :signed sub-seq ans)
+                   ((list :signed sub-seq ans)
                     (if (eql sub-seq seq-id)
                         (=return ans)
                       ;; else
@@ -556,8 +555,22 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                    )))
         (wait))
       )))
-  
-(defun node-cosi-signing (node reply-to c c1 seq-id)
+
+(defun get-summed-pkey (bits)
+  (let ((pksum (ed-neutral-point)))
+    (loop for node across *node-bit-tbl*
+          for bit from 0
+          do
+          (when (logbitp bit bits)
+            (setf pksum (ed-add pksum (node-pkey node)))))
+    pksum))
+
+(defun node-validate-member (sub-vpt c sub-r sub-bits)
+  (ed-pt= (ed-decompress-pt sub-vpt)
+          (ed-add (ed-nth-pt sub-r)
+                  (ed-mul (get-summed-pkey sub-bits) c))))
+
+(defun node-cosi-signing (node reply-to c seq-id)
   ;;
   ;; Second phase of Cosi:
   ;;   Given challenge value c, compute the signature value
@@ -567,7 +580,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;;
   (cond
    ((and (integerp c)  ;; valid setup for phase 2?
-         (integerp c1)
          (eql seq-id (node-seq node)))
     (labels
         ((compute-signage (challenge)
@@ -576,44 +588,41 @@ Connecting to #$(NODE "10.0.1.6" 65000)
       
       (let* ((ok      (node-ok node)) ;; did we participate in phase 1?
              (subs    (mapcar 'first (node-parts node)))
-             (chks    (mapcar 'third (node-parts node)))
              (rsum    (if ok (compute-signage c) 0))
-             (r1      (compute-signage c1))
              (missing nil))
         (setf (node-v   node) nil ;; done with these
               (node-seq node) nil)
         (=bind (r-lst)
-            (pmapcar (sub-signing (node-real-ip node) c seq-id) subs chks)
+            (pmapcar (sub-signing (node-real-ip node) c seq-id) subs)
           (labels
-              ((fold-answer (sub-rs sub-chk)
-                 (destructuring-bind (sub msg chk) sub-chk
+              ((fold-answer (sub-r sub-chk)
+                 (destructuring-bind (sub sub-vpt sub-bits) sub-chk
                    (cond
-                    ((null sub-rs)
+                    ((null sub-r)
                      ;; no response from node, or bad subtree
                      (pr (format nil "No signing: ~A" sub))
                      (mark-node-no-response node sub)
                      (setf missing t))
                     
                     (t
-                     (destructuring-bind (sub-r sub-r1) sub-rs
-                       ;; first validate the sub
-                       (if (node-validate-cosi node msg (list chk sub-r1 (node-bitmap sub)))
-                           (unless missing
-                             ;; sub was ok, but if we had some missing
-                             ;; subs, don't waste time computing
-                             ;; anything
-                             (setf rsum (add-mod *ed-r* rsum sub-r)))
-                         (progn
-                           ;; sub gave a corrupt answer on the local challenge
-                           (pr (format nil "Corrupt node: ~A" (node-ip sub)))
-                           (mark-node-corrupted node sub)
-                           (setf missing t))
-                         )))
+                     ;; first validate the sub using msg and its c_i, r_i
+                     (if (node-validate-member sub-vpt c sub-r sub-bits)
+                         (unless missing
+                           ;; sub was ok, but if we had some missing
+                           ;; subs, don't waste time computing
+                           ;; anything
+                           (setf rsum (add-mod *ed-r* rsum sub-r)))
+                       (progn
+                         ;; sub gave a corrupt answer on the local challenge
+                         (pr (format nil "Corrupt node: ~A" (node-ip sub)))
+                         (mark-node-corrupted node sub)
+                         (setf missing t))
+                       ))
                     ))))
             (mapc #'fold-answer r-lst (node-parts node))
             (if missing
                 (send reply-to :missing-node seq-id)
-              (send reply-to :signed seq-id rsum r1))
+              (send reply-to :signed seq-id rsum)) ;; return partial r_sum, and our r_i
             )))))
    
    (t ;; else -- bad args
@@ -625,7 +634,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defun node-compute-cosi (node reply-to msg)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
-  (let ((sess (gen-uuid-int))
+  (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
         (self (current-actor)))
     (ac:self-call :commitment self msg sess)
     (labels
@@ -634,17 +643,16 @@ Connecting to #$(NODE "10.0.1.6" 65000)
          
          (wait-commitment ()
            (recv
-             ((list :commit seq vpt vsubpt bits)
+             ((list :commit seq vpt bits)
               (cond
                ((eql seq sess)
                 ;; compute global challenge                         
-                (let ((c  (hash-pt-msg (ed-decompress-pt vpt)    msg))
-                      (c1 (hash-pt-msg (ed-decompress-pt vsubpt) msg)))
-                  (ac:self-call :signing self c c1 sess)
+                (let ((c  (hash-pt-msg (ed-decompress-pt vpt) msg)))
+                  (ac:self-call :signing self c sess)
                   (labels
                       ((wait-signing ()
                          (recv
-                           ((list :signed seq r _)
+                           ((list :signed seq r)
                             (cond
                              ((eql seq sess)
                               (let ((sig (list c r bits)))

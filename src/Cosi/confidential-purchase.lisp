@@ -195,7 +195,7 @@ What about a dishonest vendor who accepts anything without checking?
         (list ;; list of 3 UTXO's on output
          ;; create a (change - paid) transaction to add to purchaser's account
          (list :utxo      
-               (gen-uuid) ;; timestamp
+               (gen-uuid-int) ;; timestamp
                msg r c pkey) ;; enough info to derive blinding K
          ;; generate a similar UTXO for vendor 
          (gen-utxo-for-me cost)
@@ -203,4 +203,17 @@ What about a dishonest vendor who accepts anything without checking?
          (gen-fee fees)))
       )))
 
-            
+(defun NYI (arg)
+  (error "Not yet implemented: ~A" arg))
+
+(defun gen-fee (&rest args)
+  (declare (ignore args))
+  (NYI :gen-fee))
+
+(defun gen-uuid-int ()
+  (uuid:uuid-to-integer (uuid:make-v1-uuid)))
+
+(defun gen-utxo-for-me (&rest args)
+  (declare (ignore args))
+  (NYI :gen-utxo-for-me))
+
