@@ -49,6 +49,8 @@ THE SOFTWARE.
 
                 (:file "range-proofs")
                 (:file "confidential-purchase")
+
+                (:file "cosi-keying")
                 
                 ;; (:file :random-partition)
                 )
