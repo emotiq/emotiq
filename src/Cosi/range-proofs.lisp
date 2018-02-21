@@ -279,25 +279,24 @@ THE SOFTWARE.
 (defvar *hpt*   nil)
 
 (defstruct range-proof-block
-  gs hs hpt proofs)
+  ;; curve and basis vectors
+  curve
+  gs hs hpt
+  proofs)
 
 (defstruct (range-proof
             (:constructor %make-range-proof))
-  ;; basis vectors for Pedersen Commitments
-  ;;; hpt hs gs
   ;; commitments
   vcmt acmt scmt t1cmt t2cmt
   ;; parameters
   tau_x mu t_hat
   ;; left, right vectors
-  ;; lvec rvec
   dot-proof
   ;; challenge values (Shamir-Fiat hash values)
   x y z)
 
 (defstruct (dot-prod-proof
             (:constructor %make-dot-prod-proof))
-  ;; gs hs
   u pcmt a b xlrs)
 
 ;; ------------------------------
@@ -309,18 +308,20 @@ THE SOFTWARE.
          (*hs*     (basis-pts nbits))
          (prover   (make-range-prover :nbits nbits)))
     (make-range-proof-block
-     :gs  (map 'vector 'ed-compress-pt *gs*)
-     :hs  (map 'vector 'ed-compress-pt *hs*)
-     :hpt (ed-compress-pt *hpt*)
+     :curve  (ed-curve-name *edcurve*)
+     :gs     (map 'vector 'ed-compress-pt *gs*)
+     :hs     (map 'vector 'ed-compress-pt *hs*)
+     :hpt    (ed-compress-pt *hpt*)
      :proofs (mapcar prover vals))
     ))
 
 (defun validate-range-proofs (proof-block)
-  (let* ((*hpt*  (ed-decompress-pt (range-proof-block-hpt proof-block)))
-         (*hs*   (map 'vector 'ed-decompress-pt (range-proof-block-hs proof-block)))
-         (*gs*   (map 'vector 'ed-decompress-pt (range-proof-block-gs proof-block)))
-         (*max-bit-length* (length *gs*)))
-    (every 'validate-range-proof (range-proof-block-proofs proof-block))))
+  (with-ed-curve (range-proof-block-curve proof-block)
+    (let* ((*hpt*  (ed-decompress-pt (range-proof-block-hpt proof-block)))
+           (*hs*   (map 'vector 'ed-decompress-pt (range-proof-block-hs proof-block)))
+           (*gs*   (map 'vector 'ed-decompress-pt (range-proof-block-gs proof-block)))
+           (*max-bit-length* (length *gs*)))
+      (every 'validate-range-proof (range-proof-block-proofs proof-block)))))
 
 ;; ------------------------------
 ;; Construct a range-prover for use on multiple values

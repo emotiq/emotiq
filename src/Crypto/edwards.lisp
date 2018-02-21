@@ -141,12 +141,8 @@ THE SOFTWARE.
   curve)
 
 (defmethod select-curve ((curve symbol))
-  (ecase curve
-    (:curve-1174  *curve1174*)
-    (:curve-E382  *curve-E382*)
-    (:curve-41417 *curve41417*)
-    (:curve-E521  *curve-E521*)
-    ))
+  (find curve (list *curve1174* *curve-e382* *curve41417* *curve-e521*)
+        :key 'ed-curve-name))
 
 (defun ed-curves ()
   (list :curve-1174 :curve-E382 :curve-41417 :curve-E521))
