@@ -60,13 +60,19 @@ After Quicklisp has been installed, then issuing
     (ql:quickload :emotiq-tests)
     
 will download all the dependencies needed by the `EMOTIQ-TESTS`
-system.  Currently, not all the ASDF definitions are hooked up to
-depend on the `EMOTIQ-TESTS` systems, so if in exploring the code one
-finds a missing dependency from Quicklisp, a simple
+system. 
 
-    (ql:quickload :SYSTEM)
+We have many ASDF descriptions within this repository and available
+via `ql:quickload` other than `EMOTIQ-TESTS`.  Currently we are
+working many systems simultaneously, among them the `cosi` system.
 
-should satisfy the dependencies
+If in exploring the code one finds a missing dependency, say for the
+system `cosi`, a simple
+
+    (ql:quickload :cosi)
+
+should satisfy the dependencies.  (TODO: `cl:restart` for missing
+dependencies).
 
 ### Evaluate form to test, which also loads, the system:
 
@@ -89,4 +95,4 @@ stay equal, with other counts staying zero.
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-02-20 Tue 09:10Z>
+    Revised: <2018-02-20 Tue 10:59Z>
