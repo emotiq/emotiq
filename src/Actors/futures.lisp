@@ -109,7 +109,9 @@ THE SOFTWARE.
   `(cdr (cell ,ref)))
 
 ;; ------------------------------------
-                   
+
+
+;;; FIXME (ccl) Don't know how to do conditional store to (CELL-CASFLAG REF)
 (defun forcer (ref evalfn valfn)
   ;; FORCER - a generalized forcing function
   ;;
