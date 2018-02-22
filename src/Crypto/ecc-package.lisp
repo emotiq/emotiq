@@ -98,6 +98,9 @@ THE SOFTWARE.
    :*ed-r*
    :*ed-h*
    :*ed-q*
+   :*ed-name*
+   :*ed-nb*
+   :*ed-nbits*
    :ed-affine
    :ed-pt=
    :ed-neutral-point-p
@@ -132,6 +135,9 @@ THE SOFTWARE.
    :ed/
    :ed-sqrt
    :ed-expt
+
+   :ed-convert-int-to-lev
+   :ed-convert-lev-to-int
    ))
 
 (defpackage :lagrange-4-square

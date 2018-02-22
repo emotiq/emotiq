@@ -47,6 +47,7 @@ THE SOFTWARE.
    :ed-hash
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
+   :random-between
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:import-from :actors

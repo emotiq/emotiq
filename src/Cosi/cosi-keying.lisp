@@ -26,13 +26,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cosi-simgen)
+(defpackage :cosi-keying
+  (:use
+   :common-lisp
+   :ecc-crypto-b571
+   :crypto-mod-math
+   :edwards-ecc)
+  (:export
+   :make-keypair
+   :validate-pkey
+   :ed-dsa
+   :ed-dsa-validate
+   ))
 
-(import 'ecc-crypto-b571:random-between)
+(in-package :cosi-keying)
 
 ;; --------------------------------------------
 ;; Hashing with SHA3
-
+#|
 (defun select-sha3-hash ()
   (let ((nb  (1+ (integer-length *ed-q*))))
     (cond ((> nb 384) :sha3)
@@ -40,7 +51,7 @@ THE SOFTWARE.
           (t          :sha3/256)
           )))
 
-(defun sha3-buffers (&rest bufs)
+(defun csha3-buffers (&rest bufs)
   ;; assumes all buffers are UB8
   (let ((dig  (ironclad:make-digest (select-sha3-hash))))
     (dolist (buf bufs)
@@ -49,25 +60,21 @@ THE SOFTWARE.
             dig)))
 
 (defun stretched-hash (nstretch &rest bufs)
-  (multiple-value-bind (hash dig) (apply 'sha3-buffers bufs)
+  (multiple-value-bind (hash dig) (apply 'csha3-buffers bufs)
     (loop repeat nstretch do
           (ironclad:update-digest dig hash)
           (dolist (buf bufs)
             (ironclad:update-digest dig buf))
           (setf hash (ironclad:produce-digest dig)))
     hash))
-
-(defun convert-ub8v-to-int (vec)
-  (let ((ans  0))
-    (loop for v across vec do
-          (setf ans (logior (ash ans 8) v)))
-    ans))
+|#
+;; -----------------------------------------------
 
 (defun mod-r (v)
   (mod v *ed-r*))
 
 (defun hash-to-int (vec)
-  (mod-r (convert-ub8v-to-int vec)))
+  (mod-r (ed-convert-lev-to-int vec)))
 
 (defun add-mod-r (a b)
   (add-mod *ed-r* a b))
@@ -78,14 +85,17 @@ THE SOFTWARE.
 (defun mult-mod-r (a b)
   (mult-mod *ed-r* a b))
 
+;; ---------------------------------------------------
+
+#|
 (defun top-random (limit)
   (random-between (ash limit -1) limit))
 
 (defun hash-to-id (pt pkey)
   (hash-to-int
-   (sha3-buffers (loenc:encode
-                  (list (ed-compress-pt pt)
-                        pkey)))
+   (csha3-buffers (loenc:encode
+                   (list (ed-compress-pt pt)
+                         pkey)))
    ))
 
 (defun crypto-puzzle (skey pkey)
@@ -111,19 +121,70 @@ THE SOFTWARE.
      :pkey pkey
      :id   id
      :chk  chk)))
+|#
 
-(defun make-random-keypair (seed)
-  ;; from anything as a seed, return private, public key pair
-  (let* ((skey  (hash-to-int
-                 (stretched-hash (top-random 4096)
-                                 (loenc:encode (list (uuid:make-v1-uuid) seed)))))
-         (pkey (ed-compress-pt (ed-nth-pt skey))))
-    (make-id skey pkey)))
+(defun ed-dsa (msg skey id)
+  (let* ((h     (ed-convert-lev-to-int
+                 (sha3-buffers
+                  ;; full 512 bits
+                  (ed-convert-int-to-lev skey))))
+         (a     0)
+         (bits  (byte (- *ed-nbits* 5) 3)))
+    (setf (ldb bits a) (ldb bits h)
+          (ldb (byte 1 (1- *ed-nbits*)) a) 1)
+    (let* ((msg-enc   (loenc:encode msg))
+           (pkey      (ed-nth-pt a))
+           (pkey-cmpr (ed-compress-pt pkey))
+           (r         (ed-convert-lev-to-int
+                       (sha3-buffers
+                        (ed-convert-int-to-lev (ldb (byte *ed-nbits* *ed-nbits*) h))
+                        msg-enc)))
+           (rpt       (ed-nth-pt r))
+           (rpt-cmpr  (ed-compress-pt rpt))
+           (s         (add-mod-r r
+                                 (mult-mod-r a
+                                             (ed-convert-lev-to-int
+                                              (sha3-buffers
+                                               (ed-convert-int-to-lev rpt-cmpr)
+                                               (ed-convert-int-to-lev pkey-cmpr)
+                                               msg-enc))
+                                             ))))
+      (list
+       :msg   msg
+       :id    id
+       :pkey  pkey-cmpr
+       :r     rpt-cmpr
+       :s     s)
+      )))
 
-(defun make-deterministic-keypair (seed)
-  (let* ((skey (hash-to-int
-                (sha3-buffers (loenc:encode seed))))
-         (pkey (ed-compress-pt (ed-nth-pt skey))))
-    (make-id skey pkey)))
+(defun ed-dsa-validate (msg pkey r s)
+  (ed-pt=
+   (ed-nth-pt s)
+   (ed-add (ed-decompress-pt r)
+           (ed-mul (ed-decompress-pt pkey)
+                   (ed-convert-lev-to-int
+                    (sha3-buffers
+                     (ed-convert-int-to-lev r)
+                     (ed-convert-int-to-lev pkey)
+                     (loenc:encode msg)))
+                   ))))
 
-                         
+(defun make-keypair (seed)
+  (let* ((skey  (ldb (byte (1+ *ed-nbits*) 0)
+                     (ed-convert-lev-to-int
+                      (sha3-buffers (loenc:encode seed)))))
+         (plist (ed-dsa nil skey nil))
+         (pkey  (getf plist :pkey))
+         (id    (getf plist :s))
+         (chk   (getf plist :r)))
+    (list
+     :skey skey
+     :pkey pkey
+     :id   id
+     :chk  chk)))
+
+(defun validate-pkey (id pkey chk)
+  (ed-dsa-validate nil pkey chk id))
+        
+;; ------------------------------------------------------
+

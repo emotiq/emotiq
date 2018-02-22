@@ -40,8 +40,24 @@ THE SOFTWARE.
 ;; See paper: "Elligator: Elliptic-curve points indistinguishable from uniform random strings"
 ;; by Bernstein, Hamburg, Krasnova, and Lange
 
-(defstruct ed-curve
-  name c d q h r gen)
+(defstruct (ed-curve
+            (:constructor %make-ed-curve))
+  name c d q h r gen
+  nbits nb) ;; cached values for faster compress/decompress
+
+(defun make-ed-curve (&key name c d q h r gen)
+  (let ((nbits (integer-length q)))
+    (%make-ed-curve
+     :name  name
+     :c     c
+     :d     d
+     :q     q
+     :h     h
+     :r     r
+     :gen   gen
+     :nbits nbits
+     :nb    (ceiling nbits 8)
+     )))
 
 (defvar *edcurve*)
 
@@ -49,12 +65,15 @@ THE SOFTWARE.
   `(let ((*edcurve* (select-curve ,curve)))
      ,@body))
 
-(define-symbol-macro *ed-c*   (ed-curve-c   *edcurve*))
-(define-symbol-macro *ed-d*   (ed-curve-d   *edcurve*))
-(define-symbol-macro *ed-q*   (ed-curve-q   *edcurve*))
-(define-symbol-macro *ed-r*   (ed-curve-r   *edcurve*))
-(define-symbol-macro *ed-h*   (ed-curve-h   *edcurve*))
-(define-symbol-macro *ed-gen* (ed-curve-gen *edcurve*))
+(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
+(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
+(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
+(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
+(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
+(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
+(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
+(define-symbol-macro *ed-nbits* (ed-curve-nbits *edcurve*))
+(define-symbol-macro *ed-nb*    (ed-curve-nb    *edcurve*))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)
@@ -89,8 +108,8 @@ THE SOFTWARE.
          :h    4  ;; cofactor -- #E(K) = h*r
          :gen  (make-ecc-pt
                 :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
-                :y  3037538013604154504764115728651437646519513534305223422754827055689195992590))
-        ))
+                :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
+        )))
 
 (defvar *curve-E382*
   ;; rho-security = 2^188.8
@@ -448,24 +467,57 @@ THE SOFTWARE.
 (defun ed-nth-pt (n)
   (ed-affine (ed-mul *ed-gen* n)))
 
-(defun ed-compress-pt (pt)
-  ;; Bernstein suggests encoding as X:SGN(Y)... but what is the "sign"
-  ;; of a field number?
-  ;; What we have, instead, is using the LSB (even/odd). If x is even
-  ;; then (- x) is odd, and vice versa.
-  (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt)))
-    (logior (ash x 1) (logand y 1))))
+;; ---------------------------------------------------------------
 
-(defun ed-decompress-pt (v)
-  (let* ((sgn   (logand v 1))
-         (x     (ash v -1))
+(defun ed-convert-int-to-lev (v)
+  (let ((vec (make-array *ed-nb*
+                         :element-type '(unsigned-byte 8))))
+    (loop for ix from 0 below *ed-nb*
+          for pos from 0 by 8
+          do
+          (setf (aref vec ix) (ldb (byte 8 pos) v)))
+    vec))
+
+(defun ed-convert-lev-to-int (vec)
+  (let ((ans  0))
+    (loop for v across vec
+          for pos from 0 by 8
+          do
+          (setf (ldb (byte 8 pos) ans) v))
+    ans))
+        
+(defun ed-compress-pt (pt &key lev) ;; lev = little-endian vector
+  ;;
+  ;; Standard encoding for EdDSA is X in little-endian notation, with
+  ;; Odd(y) encoded as MSB beyond X.
+  ;;
+  ;; If lev is true, then a little-endian UB8 vector is produced,
+  ;; else an integer value.
+  ;;
+  (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt)))
+    (let ((enc
+           (if (oddp y)
+               (let ((v  (ldb (byte *ed-nbits* 0) x)))
+                 (setf (ldb (byte 1 *ed-nbits*) v) 1)
+                 v)
+             x)))
+      (if lev
+          (ed-convert-int-to-lev enc)
+        enc))))
+
+(defmethod ed-decompress-pt ((v vector)) ;; assumed LE UB8V
+  (ed-decompress-pt (ed-convert-lev-to-int v)))
+
+(defmethod ed-decompress-pt ((v integer))
+  (let* ((sgn   (ldb (byte 1 *ed-nbits*) v))
+         (x     (ldb (byte *ed-nbits* 0) v))
          (yy    (ed/ (ed* (ed+ *ed-c* x)
                           (ed- *ed-c* x))
                      (ed* (ed- 1 (ed* x x *ed-c* *ed-c* *ed-d*)))))
          (y     (ed-sqrt yy))
-         (y     (if (oddp (logxor sgn y))
-                    (ed- y)
-                  y)))
+         (y     (if (eql sgn (ldb (byte 1 0) y))
+                    y
+                  (ed- y))))
     (assert (= yy (ed* y y))) ;; check that yy was a square
     ;; if yy was not a square then y^2 will equal -yy, not yy.
     (ed-validate-point
@@ -474,6 +526,8 @@ THE SOFTWARE.
        :x  x
        :y  y)))
     ))
+
+;; -----------------------------------------------------------------
 
 (defun ed-validate-point (pt)
   ;; guard against neutral point
@@ -485,11 +539,7 @@ THE SOFTWARE.
   pt)
 
 (defun ed-hash (pt)
-  (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
-             (nb  (ceiling (integer-length *ed-q*) 8))
-             (vx  (convert-int-to-nbytesv x nb))
-             (vy  (convert-int-to-nbytesv y nb)))
-    (sha3-buffers vx vy)))
+  (sha3-buffers (ed-compress-pt pt :lev t)))
 
 (defun ed-random-pair ()
   (let* ((r  (random-between 1 *ed-r*))
