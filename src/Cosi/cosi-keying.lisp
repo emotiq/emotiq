@@ -101,7 +101,10 @@ THE SOFTWARE.
   (published-form (ed-compress-pt v)))
 
 (defmethod published-form ((v string)) ;; assumed to be base64
-  v)
+  (if (ignore-errors
+        (decode-bytes-from-base64 v))
+      v
+    (call-next-method)))
 
 (defmethod published-form (v)
   (encode-bytes-to-base64 (loenc:encode v)))
@@ -179,13 +182,14 @@ THE SOFTWARE.
      :r    (published-form r)
      :s    (published-form s))))
 
-(defun top-rand (range)
+(defun top-octave-rand (range)
+  ;; random value in the top octave of the range
   (random-between (ash range -1) range))
 
 (defun make-keypair (seed)
   ;; seed can be anything at all, any Lisp object
   (make-deterministic-keypair (list seed
-                                    (top-rand *ed-r*))))
+                                    (top-octave-rand *ed-r*))))
 
 (defun validate-pkey (pkey r s)
   (ed-dsa-validate +keying-msg+ pkey r s))
