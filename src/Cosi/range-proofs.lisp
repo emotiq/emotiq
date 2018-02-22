@@ -67,7 +67,6 @@ THE SOFTWARE.
    :ed-pt=
    :ed-compress-pt
    :ed-decompress-pt
-   :convert-bytes-to-int
    :with-ed-curve
    :ed-nth-pt
    :ed-random-pair
