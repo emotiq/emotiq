@@ -34,40 +34,24 @@ THE SOFTWARE.
    :edwards-ecc)
   (:export
    :make-keypair
+   :make-deterministic-keypair
    :validate-pkey
    :ed-dsa
    :ed-dsa-validate
+   :need-integer-form
+   :published-form
    ))
 
 (in-package :cosi-keying)
 
-;; --------------------------------------------
-;; Hashing with SHA3
-#|
-(defun select-sha3-hash ()
-  (let ((nb  (1+ (integer-length *ed-q*))))
-    (cond ((> nb 384) :sha3)
-          ((> nb 256) :sha3/384)
-          (t          :sha3/256)
-          )))
+;; NOTE: The adopted standard for Emotiq (for now) is:
+;;    Hashes are hex strings, Binary data are base64 strings. And
+;;    while keying uses hashing internally, published keying info is
+;;    binary, not hashes. So key info will be presented as base64
+;;    strings.
+;;
+;;    Users are identified by public key.
 
-(defun csha3-buffers (&rest bufs)
-  ;; assumes all buffers are UB8
-  (let ((dig  (ironclad:make-digest (select-sha3-hash))))
-    (dolist (buf bufs)
-      (ironclad:update-digest dig buf))
-    (values (ironclad:produce-digest dig)
-            dig)))
-
-(defun stretched-hash (nstretch &rest bufs)
-  (multiple-value-bind (hash dig) (apply 'csha3-buffers bufs)
-    (loop repeat nstretch do
-          (ironclad:update-digest dig hash)
-          (dolist (buf bufs)
-            (ironclad:update-digest dig buf))
-          (setf hash (ironclad:produce-digest dig)))
-    hash))
-|#
 ;; -----------------------------------------------
 
 (defun mod-r (v)
@@ -87,44 +71,47 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------
 
-#|
-(defun top-random (limit)
-  (random-between (ash limit -1) limit))
+(defmethod need-integer-form ((v integer))
+  v)
 
-(defun hash-to-id (pt pkey)
-  (hash-to-int
-   (csha3-buffers (loenc:encode
-                   (list (ed-compress-pt pt)
-                         pkey)))
-   ))
+(defmethod need-integer-form ((v vector)) ;; assumed to be ub8v-le
+  (ed-convert-lev-to-int v))
 
-(defun crypto-puzzle (skey pkey)
-  (let* ((k   (top-random *ed-r*))
-         (kpt (ed-nth-pt k))
-         (id  (hash-to-id kpt pkey))
-         (chk (sub-mod-r k (mult-mod-r id skey))))
-    (values id chk)))
+(defmethod need-integer-form ((v string)) ;; assumed to be base64 string
+  (need-integer-form (decode-bytes-from-base64 v)))
 
-(defun pt-mul (pt k)
-  (ed-mul (ed-decompress-pt pt) k))
+(defmethod need-integer-form ((v ecc-pt))
+  (ed-compress-pt v))
 
-(defun validate-pkey (id pkey chk)
-  (let* ((kpt (ed-add (ed-nth-pt chk)
-                      (pt-mul pkey id)))
-         (chk-id (hash-to-id kpt pkey)))
-    (eql chk-id id)))
-           
-(defun make-id (skey pkey)
-  (multiple-value-bind (id chk) (crypto-puzzle skey pkey)
-    (list
-     :skey skey
-     :pkey pkey
-     :id   id
-     :chk  chk)))
-|#
+(defmethod need-integer-form ((v ed-proj-pt))
+  (need-integer-form (ed-affine v)))
 
-(defun ed-dsa (msg skey id)
-  (let* ((h     (ed-convert-lev-to-int
+;; -----------------
+
+(defmethod published-form ((v integer))
+  (published-form (ed-convert-int-to-lev v)))
+
+(defmethod published-form ((v vector)) ;; assumed to be ub8v le
+  (encode-bytes-to-base64 v))
+
+(defmethod published-form ((v ecc-pt))
+  (published-form (ed-compress-pt v)))
+
+(defmethod published-form ((v ed-proj-pt))
+  (published-form (ed-compress-pt v)))
+
+(defmethod published-form ((v string)) ;; assumed to be base64
+  v)
+
+(defmethod published-form (v)
+  (encode-bytes-to-base64 (loenc:encode v)))
+
+;; ---------------------------------------------------
+;; The IRTF EdDSA standard as a primitive
+
+(defun ed-dsa (msg skey)
+  (let* ((skey  (need-integer-form skey))
+         (h     (ed-convert-lev-to-int
                  (sha3-buffers
                   ;; full 512 bits
                   (ed-convert-int-to-lev skey))))
@@ -151,40 +138,57 @@ THE SOFTWARE.
                                              ))))
       (list
        :msg   msg
-       :id    id
-       :pkey  pkey-cmpr
-       :r     rpt-cmpr
-       :s     s)
+       :pkey  (published-form pkey-cmpr)
+       :r     (published-form rpt-cmpr)
+       :s     (published-form s))
       )))
 
 (defun ed-dsa-validate (msg pkey r s)
-  (ed-pt=
-   (ed-nth-pt s)
-   (ed-add (ed-decompress-pt r)
-           (ed-mul (ed-decompress-pt pkey)
-                   (ed-convert-lev-to-int
-                    (sha3-buffers
-                     (ed-convert-int-to-lev r)
-                     (ed-convert-int-to-lev pkey)
-                     (loenc:encode msg)))
-                   ))))
+  (let ((pkey (need-integer-form pkey))
+        (r    (need-integer-form r))
+        (s    (need-integer-form s)))
+    (ed-pt=
+     (ed-nth-pt s)
+     (ed-add (ed-decompress-pt r)
+             (ed-mul (ed-decompress-pt pkey)
+                     (ed-convert-lev-to-int
+                      (sha3-buffers
+                       (ed-convert-int-to-lev r)
+                       (ed-convert-int-to-lev pkey)
+                       (loenc:encode msg)))
+                     )))))
 
-(defun make-keypair (seed)
+;; --------------------------------------------
+
+(defconstant +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
+
+(defun make-deterministic-keypair (seed)
+  ;; WARNING!! This version is for testing only. Two different users
+  ;; who type in the same seed will end up with the same keying. We
+  ;; can't allow that in the released system.
   (let* ((skey  (ldb (byte (1+ *ed-nbits*) 0)
                      (ed-convert-lev-to-int
                       (sha3-buffers (loenc:encode seed)))))
-         (plist (ed-dsa nil skey nil))
+         (plist (ed-dsa +keying-msg+ skey))
          (pkey  (getf plist :pkey))
-         (id    (getf plist :s))
-         (chk   (getf plist :r)))
+         (s     (getf plist :s))
+         (r     (getf plist :r)))
     (list
      :skey skey
-     :pkey pkey
-     :id   id
-     :chk  chk)))
+     :pkey (published-form pkey)
+     :r    (published-form r)
+     :s    (published-form s))))
 
-(defun validate-pkey (id pkey chk)
-  (ed-dsa-validate nil pkey chk id))
+(defun top-rand (range)
+  (random-between (ash range -1) range))
+
+(defun make-keypair (seed)
+  ;; seed can be anything at all, any Lisp object
+  (make-deterministic-keypair (list seed
+                                    (top-rand *ed-r*))))
+
+(defun validate-pkey (pkey r s)
+  (ed-dsa-validate +keying-msg+ pkey r s))
         
 ;; ------------------------------------------------------
 
