@@ -502,8 +502,14 @@ THE SOFTWARE.
                  v)
              x)))
       (if lev
-          (ed-convert-int-to-lev enc)
+          (let ((enc (ed-convert-int-to-lev enc)))
+            (if (eq lev :base64)
+                (encode-bytes-to-base64 enc)
+              enc))
         enc))))
+
+(defmethod ed-decompress-pt ((s string)) ;; assumed Base64
+  (ed-decompress-pt (decode-bytes-from-base64 s)))
 
 (defmethod ed-decompress-pt ((v vector)) ;; assumed LE UB8V
   (ed-decompress-pt (ed-convert-lev-to-int v)))

@@ -55,6 +55,9 @@ THE SOFTWARE.
    :sha3-buffers
    
    :def-cached-var
+
+   :encode-bytes-to-base64
+   :decode-bytes-from-base64
    ))
 
 (defpackage :primes
@@ -101,6 +104,8 @@ THE SOFTWARE.
    :*ed-name*
    :*ed-nb*
    :*ed-nbits*
+   :ecc-pt
+   :ed-proj-pt
    :ed-affine
    :ed-pt=
    :ed-neutral-point-p
