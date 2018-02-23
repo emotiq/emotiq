@@ -1,0 +1,26 @@
+language: common-lisp
+# Attempt to run as more efficient container
+sudo: false
+
+env:
+  global:
+    - PATH=~/.roswell/bin:$PATH
+    - ROSWELL_INSTALL_DIR=$HOME/.roswell
+  matrix:
+    - LISP=sbcl-bin
+    - LISP=ccl-bin
+    - LISP=abcl-bin
+    - LISP=ecl-bin
+    - LISP=clisp-bin
+
+install:
+  - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
+  - ros install prove
+
+script:
+  - ros -s prove -e '(or (prove:run :quri-test) (uiop:quit -1))'
+  - run-prove quri-test.asd
+  - ros -s prove -s cl-coveralls
+        -e '(or (coveralls:with-coveralls (:exclude (list "t"))
+                  (prove:run :quri-test))
+                (uiop:quit -1))'
