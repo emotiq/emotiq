@@ -485,7 +485,7 @@ THE SOFTWARE.
           do
           (setf (ldb (byte 8 pos) ans) v))
     ans))
-        
+
 (defun ed-compress-pt (pt &key lev) ;; lev = little-endian vector
   ;;
   ;; Standard encoding for EdDSA is X in little-endian notation, with

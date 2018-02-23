@@ -37,6 +37,9 @@ THE SOFTWARE.
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. License terms apply."
   :components  (
+                (:file "base58")
+                (:file "cosi-keying")
+                
 		(:file "cosi-async")
 
                 ;; (:file "cosi")
@@ -50,8 +53,6 @@ THE SOFTWARE.
                 (:file "range-proofs")
                 (:file "confidential-purchase")
 
-                (:file "cosi-keying")
-                
                 ;; (:file :random-partition)
                 )
   :SERIAL T
