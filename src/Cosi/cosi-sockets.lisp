@@ -36,6 +36,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
+#+:ALLEGRO (require :sock)
+
 
 (in-package :cosi-simgen)
 

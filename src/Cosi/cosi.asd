@@ -29,9 +29,8 @@ THE SOFTWARE.
 
 (in-package :cl-user)
 
-#+:ALLEGRO (require :sock)
 
-(asdf:defsystem "cosi"
+(defsystem "cosi"
   :description "Cosi: Authenticated multi-signatures in Lisp"
   :version     "1.0"
   :author      "D.McClain <dbm@emotiq.ch>"
