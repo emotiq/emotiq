@@ -2,7 +2,7 @@
 
 (prove:plan 1)
 
-(prove:pass "A successful test of compiling and runing a test.")
+(prove:pass "A successful test of compiling dependencies and passing a test.")
 
 (prove:finalize)
 

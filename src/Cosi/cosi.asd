@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 (defsystem "cosi"
   :description "Cosi: Authenticated multi-signatures in Lisp"
-  :version     "1.0"
+  :version     "1.0.1"
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
   :depends-on (ironclad
@@ -53,7 +53,6 @@ THE SOFTWARE.
                                      (:file "cosi-keying")
 
                                      (:file "cosi-sockets")
-                                     
 
                                      (:file "random-partition")
                                      (:file "range-proofs")))))
@@ -67,8 +66,6 @@ THE SOFTWARE.
                         :components ((:file "test-cas")))))
                         
 
-
-
 (defsystem "cosi/t"
   :defsystem-depends-on (prove-asdf)
   :depends-on (prove cosi)
@@ -76,5 +73,6 @@ THE SOFTWARE.
               (uiop:symbol-call :prove-asdf :run-test-system c))
   :components ((:module range
                         :pathname "t/"
-                        :components ((:test-file "ranges-timing")))))
+                        :components ((:test-file "base")
+                                     (:test-file "ranges-timing")))))
 

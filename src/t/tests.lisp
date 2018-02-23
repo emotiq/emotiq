@@ -2,7 +2,8 @@
 
 (let ((test-hex-string "a0b1c2d3e4f56789"))
   (prove:plan 3)
-  (prove:diag "octet-vector-to-hex-string")
+  (prove:diag
+   (format nil "emotiq:hex-string-to-octet-vector on ~s…" test-hex-string)) 
   (let ((octet-vector (emotiq:hex-string-to-octet-vector test-hex-string)))
     (prove:is (emotiq:octet-vector-p octet-vector)
               t
@@ -14,15 +15,16 @@
     (let ((back-hex-string (emotiq:octet-vector-to-hex-string octet-vector)))
       (prove:is back-hex-string
                 test-hex-string
-                "back-hex in octect-vector-to-hex-string…"))))
+                "back-hex in emotiq:octet-vector-to-hex-string…"))))
 
 (prove:plan 1)
-(prove:is (emotiq ovref (emotiq:hex-string-to-octet-vector "3d") 0)
+(prove:is (emotiq:ovref (emotiq:hex-string-to-octet-vector "3d") 0)
           #x3d
-          "hex-string-to-octet-vector…")
+          "emotiq:ovvref on emotiq:hex-string-to-octet-vector…")
 
 (let ((string-rosetta-code "Rosetta code"))
-
+  (prove:diag
+   (format nil "Testing crypto on ~s" string-rosetta-code))
   (prove:plan 2)
   (let ((digest (emotiq:sha-256-string string-rosetta-code)))
     (prove:is
