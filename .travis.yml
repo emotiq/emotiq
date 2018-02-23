@@ -11,7 +11,7 @@ env:
     - LISP=ccl-bin
     - LISP=abcl-bin
     - LISP=ecl
-    - LISP=clisp-bin
+    - LISP=clisp
     - LISP=clasp
 
 install:
@@ -20,6 +20,7 @@ install:
 
 script:
   - ros -s prove -e '(or (prove:run :emotiq/t) (uiop:quit -1))'
+  - ros -s prove -e '(or (prove:run :cosi/t) (uiop:quit -1))'
   - ros -s prove -s cl-coveralls
         -e '(or (coveralls:with-coveralls (:exclude (list "t"))
                   (prove:run :emotiq/t))
