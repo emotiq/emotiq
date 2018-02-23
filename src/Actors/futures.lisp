@@ -111,7 +111,12 @@ THE SOFTWARE.
 ;; ------------------------------------
 
 
+
 ;;; FIXME (ccl) Don't know how to do conditional store to (CELL-CASFLAG REF)
+#+(or ccl)
+(defun forcer (ref evalfn valfn)
+  (warn "Unimplemented forcer (ref evalfn valfn) under ccl."))
+#-(or ccl)  
 (defun forcer (ref evalfn valfn)
   ;; FORCER - a generalized forcing function
   ;;
