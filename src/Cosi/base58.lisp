@@ -41,6 +41,7 @@ THE SOFTWARE.
   (length +alphabet+)) ;; should be 58
 
 (defun encode (val)
+  ;; convert val to base58 representation of little-endian value
   (check-type val (integer 0))
   (with-output-to-string (s)
     (um:nlet-tail iter ((v  val))
@@ -51,6 +52,7 @@ THE SOFTWARE.
     ))
 
 (defun decode (str)
+  ;; decode little-endian base58 to integer value
   (let ((val  0))
     (loop for char across str
           for base = 1 then (* base +len+)
