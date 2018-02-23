@@ -1,10 +1,6 @@
-;; ads.asd -- ASD File for Authenticated Data Structures
-;;
-;; DM/Emotiq  01/18
-;; -----------------------------------------------------------
-#|
-The MIT License
+;; cosi.asd -- ASDF File for Cosigning
 
+#|
 Copyright (c) 2018 Emotiq AG
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
