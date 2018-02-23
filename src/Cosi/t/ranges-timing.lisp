@@ -1,8 +1,8 @@
 (in-package cl-user)
 
 (prove:plan 1)
-(let ((n 123) ;; ?? What is a reasonable range of values
-      (nbits 4))
+(let ((n 128) ;; ?? What is a reasonable range of values
+      (nbits 64))
   (let* ((prover (range-proofs:make-range-prover :nbits nbits))
          (proof (funcall prover n)))
     (prove:ok
