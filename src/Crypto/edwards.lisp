@@ -486,6 +486,7 @@ THE SOFTWARE.
           (setf (ldb (byte 8 pos) ans) v))
     ans))
 
+;; ----------------------------------------
 (defun ed-compress-pt (pt &key lev) ;; lev = little-endian vector
   ;;
   ;; Standard encoding for EdDSA is X in little-endian notation, with
@@ -497,9 +498,7 @@ THE SOFTWARE.
   (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt)))
     (let ((enc
            (if (oddp y)
-               (let ((v  (ldb (byte *ed-nbits* 0) x)))
-                 (setf (ldb (byte 1 *ed-nbits*) v) 1)
-                 v)
+               (dpb 1 (byte 1 *ed-nbits*) x)
              x)))
       (if lev
           (let ((enc (ed-convert-int-to-lev enc)))
@@ -516,7 +515,7 @@ THE SOFTWARE.
 
 (defmethod ed-decompress-pt ((v integer))
   (let* ((sgn   (ldb (byte 1 *ed-nbits*) v))
-         (x     (ldb (byte *ed-nbits* 0) v))
+         (x     (dpb 0 (byte 1 *ed-nbits*) v))
          (yy    (ed/ (ed* (ed+ *ed-c* x)
                           (ed- *ed-c* x))
                      (ed* (ed- 1 (ed* x x *ed-c* *ed-c* *ed-d*)))))

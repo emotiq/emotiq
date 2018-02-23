@@ -122,35 +122,34 @@ THE SOFTWARE.
                  (sha3-buffers
                   ;; full 512 bits
                   (ed-convert-int-to-lev skey))))
-         (a     0)
+         (a     (dpb 1 (byte 1 (1- *ed-nbits*))
+                     (dpb 0 (byte 3 0)
+                          (ldb (byte (1- *ed-nbits*) 0) h))))
          ;; the constant 3 is for cofactors of 8 or lower pow2
-         (bits  (byte (- *ed-nbits* 4) 3)))
-    (setf (ldb bits a) (ldb bits h)
-          (ldb (byte 1 (1- *ed-nbits*)) a) 1)
-    (let* ((msg-enc   (loenc:encode msg))
-           (pkey      (ed-nth-pt a))
-           (pkey-cmpr (ed-compress-pt pkey))
-           (r         (ed-convert-lev-to-int
-                       (sha3-buffers
-                        (ed-convert-int-to-lev
-                         (ldb (byte *ed-nbits* (1+ *ed-nbits*)) h))
-                        msg-enc)))
-           (rpt       (ed-nth-pt r))
-           (rpt-cmpr  (ed-compress-pt rpt))
-           (s         (add-mod-r r
-                                 (mult-mod-r a
-                                             (ed-convert-lev-to-int
-                                              (sha3-buffers
-                                               (ed-convert-int-to-lev rpt-cmpr)
-                                               (ed-convert-int-to-lev pkey-cmpr)
-                                               msg-enc))
-                                             ))))
-      (list
-       :msg   msg
-       :pkey  (published-form pkey-cmpr)
-       :r     (published-form rpt-cmpr)
-       :s     (published-form s))
-      )))
+         (msg-enc   (loenc:encode msg))
+         (pkey      (ed-nth-pt a))
+         (pkey-cmpr (ed-compress-pt pkey))
+         (r         (ed-convert-lev-to-int
+                     (sha3-buffers
+                      (ed-convert-int-to-lev
+                       (ldb (byte *ed-nbits* (1+ *ed-nbits*)) h))
+                      msg-enc)))
+         (rpt       (ed-nth-pt r))
+         (rpt-cmpr  (ed-compress-pt rpt))
+         (s         (add-mod-r r
+                               (mult-mod-r a
+                                           (ed-convert-lev-to-int
+                                            (sha3-buffers
+                                             (ed-convert-int-to-lev rpt-cmpr)
+                                             (ed-convert-int-to-lev pkey-cmpr)
+                                             msg-enc))
+                                           ))))
+    (list
+     :msg   msg
+     :pkey  (published-form pkey-cmpr)
+     :r     (published-form rpt-cmpr)
+     :s     (published-form s))
+    ))
 
 (defun ed-dsa-validate (msg pkey r s)
   (let ((pkey (need-integer-form pkey))
