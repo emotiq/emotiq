@@ -5,7 +5,8 @@
   :description "Emotiq"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
-  :depends-on (ironclad
+  :depends-on (prove ;; FIXME
+               ironclad
                bordeaux-threads)
   :serial t
   :in-order-to ((test-op (test-op "emotiq/t")))
@@ -18,9 +19,9 @@
   :description "Emotiq"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
-  :defsystem-depends-on (prove-asdf)
   :depends-on (prove
                emotiq)
+  :defsystem-depends-on (prove-asdf) ;;; FIXME
   :perform (test-op (o s)
               (symbol-call :prove :run s))
   :components ((:module tests :pathname "t/"
