@@ -43,7 +43,7 @@ THE SOFTWARE.
 (defmacro! match-mode-ppcre-lambda-form (o!args)
   ``(lambda (,',g!str)
       (cl-ppcre:scan
-       ,(car ',g!args)
+       ,(car ,g!args)
        ,',g!str)))
 
 #+cl-ppcre
