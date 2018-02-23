@@ -17,8 +17,9 @@ install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
   - ros install prove
 
+# TODO: do this without PROVE via ASDF prescriptions
 script:
-  - ros -s prove -e '(or (prove:run :quri-test) (uiop:quit -1))'
+  - ros -s prove -e '(or (prove:run :emotiq-tests) (uiop:quit -1))'
   - run-prove quri-test.asd
   - ros -s prove -s cl-coveralls
         -e '(or (coveralls:with-coveralls (:exclude (list "t"))
