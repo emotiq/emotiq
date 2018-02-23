@@ -14,10 +14,11 @@
     (let ((back-hex-string (emotiq:octet-vector-to-hex-string octet-vector)))
       (prove:is back-hex-string
                 test-hex-string
-                "bach-hex in octect-vector-to-hex-string…"))))
+                "back-hex in octect-vector-to-hex-string…"))))
 
 (prove:plan 1)
-(prove:is (ovref (hex-string-to-octet-vector "3d") 0) #x3d
+(prove:is (emotiq ovref (emotiq:hex-string-to-octet-vector "3d") 0)
+          #x3d
           "hex-string-to-octet-vector…")
 
 (let ((string-rosetta-code "Rosetta code"))
@@ -38,6 +39,7 @@
               #(118 79 175 92 97 172 49 95 20 151 249 223 165 66 113
                 57 101 183 133 229 204 47 112 125 100 104 215 209 18
                 76 223 207)
+              :test #'equalp
               "Vector of digest…")
     (prove:is (length digest)
               32
@@ -60,6 +62,7 @@
                182 149 18 84 75 48 59 229 153 170 135 90 241 128 63 58
                252 46 190 87 241 183 165 34 103 23 186 239 194 71 13
                 69 116)
+              :test #'equalp
               "sha3-512 vector comparison…")
     (prove:is (length digest)
               64
