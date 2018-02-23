@@ -35,12 +35,15 @@ THE SOFTWARE.
                useful-macros
                usocket)
   :in-order-to ((test-op (test-op "cosi/t")))
-  :components ((:module source
+  :components ((:module package
+                        :pathname "./"
+                        :components ((:file "package")))
+               (:module source
+                        :depends-on (package)
                         :pathname "./"
                         :serial t
                         :components ((:file "cosi-async")
                                      (:file "cosi")
-                                     (:file "cosi-sockets")
                                      
                                      (:file "cosi-construction")
                                      (:file "cosi-handlers")
@@ -48,6 +51,9 @@ THE SOFTWARE.
                                      (:file "confidential-purchase")
                                      
                                      (:file "cosi-keying")
+
+                                     (:file "cosi-sockets")
+                                     
 
                                      (:file "random-partition")
                                      (:file "range-proofs")))))

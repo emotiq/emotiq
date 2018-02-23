@@ -3,33 +3,6 @@
 ;; DM/Emotiq  01/18
 ;; ------------------------------------------------------------------------
 
-(defpackage :cosi
-  (:use :common-lisp :crypto-mod-math)
-  (:import-from :edwards-ecc
-		:ed-add 
-		:ed-sub 
-		:ed-mul 
-		:ed-div 
-		:ed-affine
-		:ed-nth-pt
-		:*ed-r*
-		:*ed-q*
-                :ed-neutral-point
-                :ed-pt=
-		:with-ed-curve
-		:ed-compress-pt
-		:ed-decompress-pt
-		:ed-validate-point
-		:ed-hash
-		:ed-random-pair)
-  (:import-from :ecc-crypto-b571
-		:convert-int-to-nbytesv
-		:convert-bytes-to-int)
-  (:export
-   :schnorr-signature
-   :verify-schnorr-signature
-   ))
-
 ;; -------------------------------------------------------
 
 (in-package :cosi)
