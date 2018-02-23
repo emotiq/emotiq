@@ -52,6 +52,17 @@ THE SOFTWARE.
                                      (:file "random-partition")
                                      (:file "range-proofs")))))
 
+
+(defsystem "cosi/test/allegro"
+  :description "Allegro timing code from dbm."
+  :depends-on (cosi)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "test-cas")))))
+                        
+
+
+
 (defsystem "cosi/t"
   :defsystem-depends-on (prove-asdf)
   :depends-on (prove cosi)
