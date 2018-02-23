@@ -33,8 +33,9 @@ THE SOFTWARE.
    :crypto-mod-math
    :edwards-ecc)
   (:export
-   :make-keypair
+   :make-random-keypair
    :make-deterministic-keypair
+   :make-subkey
    :validate-pkey
    :ed-dsa
    :ed-dsa-validate
@@ -120,7 +121,7 @@ THE SOFTWARE.
                   (ed-convert-int-to-lev skey))))
          (a     0)
          ;; the constant 3 is for cofactors of 8 or lower pow2
-         (bits  (byte (- *ed-nbits* 5) 3)))
+         (bits  (byte (- *ed-nbits* 4) 3)))
     (setf (ldb bits a) (ldb bits h)
           (ldb (byte 1 (1- *ed-nbits*)) a) 1)
     (let* ((msg-enc   (loenc:encode msg))
@@ -128,7 +129,7 @@ THE SOFTWARE.
            (pkey-cmpr (ed-compress-pt pkey))
            (r         (ed-convert-lev-to-int
                        (sha3-buffers
-                        (ed-convert-int-to-lev (ldb (byte *ed-nbits* *ed-nbits*) h))
+                        (ed-convert-int-to-lev (ldb (byte *ed-nbits* (1+ *ed-nbits*)) h))
                         msg-enc)))
            (rpt       (ed-nth-pt r))
            (rpt-cmpr  (ed-compress-pt rpt))
@@ -187,10 +188,18 @@ THE SOFTWARE.
   ;; random value in the top octave of the range
   (random-between (ash range -1) range))
 
-(defun make-keypair (seed)
+(defun make-random-keypair (seed)
   ;; seed can be anything at all, any Lisp object
   (make-deterministic-keypair (list seed
                                     (top-octave-rand *ed-r*))))
+
+(defun make-subkey (skey &rest sub-keys)
+  (reduce (lambda (quad sub-key)
+            (make-deterministic-keypair
+             (list (need-integer-form (getf quad :skey))
+                   sub-key)))
+          sub-keys
+          :initial-value (list :skey skey)))
 
 (defun validate-pkey (pkey r s)
   (ed-dsa-validate +keying-msg+ pkey r s))
