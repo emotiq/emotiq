@@ -295,7 +295,11 @@ THE SOFTWARE.
 ;; Construct a range-prover for use on multiple values
 
 (defun make-range-prover (&key (nbits *max-bit-length*))
+  #-ccl
   (check-type nbits (fixnum 1))
+  #+ccl
+  (check-type nbits fixnum)
+  
   ;; let's compute the basis vectors just once, and share them
   (let* ((hpt  *hpt*)
          (hs   *hs*)
