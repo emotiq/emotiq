@@ -548,7 +548,7 @@ THE SOFTWARE.
   (sha3-buffers (ed-compress-pt pt :lev t)))
 
 (defun ed-random-pair ()
-  (let* ((r  (random-between 1 *ed-r*))
+  (let* ((r  (* *ed-h* (random-between 1 *ed-r*)))
          (pt (ed-nth-pt r)))
     (values r pt)))
 

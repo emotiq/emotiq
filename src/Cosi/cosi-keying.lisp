@@ -119,6 +119,7 @@ THE SOFTWARE.
                   ;; full 512 bits
                   (ed-convert-int-to-lev skey))))
          (a     0)
+         ;; the constant 3 is for cofactors of 8 or lower pow2
          (bits  (byte (- *ed-nbits* 5) 3)))
     (setf (ldb bits a) (ldb bits h)
           (ldb (byte 1 (1- *ed-nbits*)) a) 1)

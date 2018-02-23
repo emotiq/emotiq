@@ -26,35 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :crypto-purchase
-  (:use :common-lisp :crypto-mod-math)
-  (:import-from :edwards-ecc
-   :ed-mul
-   :ed-add
-   :ed-sub
-   :ed-div
-   :ed-negate
-   :ed-affine
-   :*edcurve*
-   :*ed-r*
-   :*ed-q*
-   :*ed-gen*
-   :ed-curve-name
-   :random-between
-   :ed-pt=
-   :ed-compress-pt
-   :ed-decompress-pt
-   :convert-bytes-to-int
-   :with-ed-curve
-   :ed-nth-pt
-   :ed-random-pair
-   )
-  (:import-from :ecc-crypto-b571
-   :convert-int-to-nbytesv
-   :convert-bytes-to-int)
-  (:export
-   ))
-
 (in-package :crypto-purchase)
 
 
