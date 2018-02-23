@@ -193,12 +193,12 @@ THE SOFTWARE.
   (make-deterministic-keypair (list seed
                                     (top-octave-rand *ed-r*))))
 
-(defun make-subkey (skey &rest sub-keys)
-  (reduce (lambda (quad sub-key)
+(defun make-subkey (skey &rest sub-seeds)
+  (reduce (lambda (quad sub-seed)
             (make-deterministic-keypair
              (list (need-integer-form (getf quad :skey))
-                   sub-key)))
-          sub-keys
+                   sub-seed)))
+          sub-seeds
           :initial-value (list :skey skey)))
 
 (defun validate-pkey (pkey r s)
