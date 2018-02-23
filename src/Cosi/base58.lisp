@@ -1,4 +1,4 @@
-;; cosi-keying.lisp -- Keying for Cosi networks
+;; base58.lisp -- BTC-style base58 value encoding
 ;;
 ;; DM/Emotiq 02/18
 ;; ----------------------------------------------------------------
