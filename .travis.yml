@@ -10,8 +10,9 @@ env:
     - LISP=sbcl-bin
     - LISP=ccl-bin
     - LISP=abcl-bin
-    - LISP=ecl-bin
+    - LISP=ecl
     - LISP=clisp-bin
+    - LISP=clasp
 
 install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
