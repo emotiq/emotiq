@@ -805,7 +805,7 @@ THE SOFTWARE.
              pt
              ))
           )))
-
+ 
 (defun elligator-encode (pt)
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   ;; return encoding tau for point pt, or nil if pt not in image of phi(tau)
@@ -848,9 +848,10 @@ THE SOFTWARE.
   ;; Elligator-capable public key.
   (um:nlet-tail iter ((ix  0))
     (let* ((skey (compute-skey (list ix seed)))
-           (pkey (ed-nth-pt skey)))
-      (if (elligator-encode pkey)
-          (values skey pkey)
+           (pkey (ed-nth-pt skey))
+           (tau  (elli2-encode pkey)))
+      (if tau
+          (values skey tau)
         (iter (1+ ix))))))
 
 (defun compute-elligator-summed-pkey (sum-pkey)
@@ -859,7 +860,7 @@ THE SOFTWARE.
   ;; used on final sum, not on intermediate partial sums.
   (um:nlet-tail iter ((ix 0))
     (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
-      (or (elligator-encode p)
+      (or (elli2-encode p)
           (iter (1+ ix))))))
 #|
 (multiple-value-bind (skey1 pkey1) (compute-elligator-skey :dave)
@@ -877,14 +878,17 @@ THE SOFTWARE.
                      (ed-convert-int-to-lev k-priv)
                      msgv))))
            (rpt   (ed-nth-pt r))
-           (tau-r (elligator-encode rpt)))
+           (tau-r (elli2-encode rpt)))
       (if (and (plusp r) tau-r)
           (values r tau-r)
         (iter (1+ ix)))
       )))
 
-(defun elligator-ed-dsa (msg tau-pub k-priv)
-  (let ((msg-enc (loenc:encode msg)))
+(defun elligator-ed-dsa (msg k-priv)
+  (let ((msg-enc (loenc:encode msg))
+        (tau-pub (elli2-encode (ed-nth-pt k-priv))))
+    (unless tau-pub
+      (error "Not an Elligator key"))
     (multiple-value-bind (r tau-r)
         (compute-elligator-schnorr-deterministic-random msg-enc k-priv)
       (let* ((s  (add-mod-r
@@ -907,8 +911,8 @@ THE SOFTWARE.
 (defun elligator-ed-dsa-validate (msg tau-pub tau-r s)
   (ed-pt=
    (ed-nth-pt s)
-   (ed-add (elligator-decode tau-r)
-           (ed-mul (elligator-decode tau-pub)
+   (ed-add (elli2-decode tau-r)
+           (ed-mul (elli2-decode tau-pub)
                    (ed-convert-lev-to-int
                     (sha3-buffers
                      (ed-convert-int-to-lev tau-r)
@@ -1222,7 +1226,7 @@ THE SOFTWARE.
                               (ed* b 1pur2 1pur2)))
                  tau)
                |#
-               tau
+               (logior tau (elligator-int-padding))
           ))))
         ))
                 

@@ -130,6 +130,10 @@ THE SOFTWARE.
    :elligator-limit
    :elligator-nbits
 
+   :elli2-encode
+   :elli2-decode
+   :elli2-random-pt
+   
    :ed-schnorr-sig
    :ed-schnorr-sig-verify
    

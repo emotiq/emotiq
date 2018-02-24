@@ -131,6 +131,7 @@
    :reconstruct-tree
    :forwarding))
 
+(pushnew :ELLIGATOR *features*)
 (defpackage :cosi-keying
   (:use
    :common-lisp

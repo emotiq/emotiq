@@ -83,19 +83,30 @@ THE SOFTWARE.
 ;; The IETF EdDSA standard as a primitive
 
 (defun cosi-dsa (msg skey)
+  #-:ELLIGATOR
   (let ((quad  (ed-dsa msg skey)))
     (list
-     :msg   (getf quad :msg)
-     :pkey  (published-form (getf quad :pkey))
-     :r     (published-form (getf quad :r))
-     :s     (published-form (getf quad :s))
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :pkey))
+     :r    (published-form (getf quad :r))
+     :s    (published-form (getf quad :s))
+     ))
+  #+:ELLIGATOR
+  (let ((quad (elligator-ed-dsa msg skey)))
+    (list
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :tau-pub))
+     :r    (published-form (getf quad :tau-r))
+     :s    (published-form (getf quad :s))
      )))
 
 (defun cosi-dsa-validate (msg pkey r s)
   (let ((pkey (need-integer-form pkey))
         (r    (need-integer-form r))
         (s    (need-integer-form s)))
-    (ed-dsa-validate msg pkey r s)))
+    (#-:ELLIGATOR ed-dsa-validate 
+     #+:ELLIGATOR elligator-ed-dsa-validate
+     msg pkey r s)))
 
 ;; --------------------------------------------
 
@@ -105,7 +116,8 @@ THE SOFTWARE.
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  (compute-skey seed))
+  (let* ((skey  #-:ELLIGATOR (compute-skey seed)
+                #+:ELLIGATOR (compute-elligator-skey seed))
          (plist (cosi-dsa +keying-msg+ skey)))
     (list
      :skey skey
