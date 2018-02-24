@@ -42,22 +42,20 @@ THE SOFTWARE.
                         :depends-on (package)
                         :pathname "./"
                         :serial t
-                        :components ((:file "cosi-async")
-                                     (:file "cosi")
+                        :components ((:file "base58")
+                                     (:file "cosi-keying")
+
+				     (:file "cosi-async")
                                      
-                                     (:file "cosi-construction")
+				     (:file "cosi-construction")
+                                     (:file "cosi-sockets")
                                      (:file "cosi-handlers")
                                      
                                      (:file "confidential-purchase")
-                                     
-                                     (:file "cosi-keying")
 
-                                     (:file "cosi-sockets")
-
-                                     (:file "random-partition")
                                      (:file "range-proofs")))))
 
-
+#|
 (defsystem "cosi/test/allegro"
   :description "Allegro timing code from dbm."
   :depends-on (cosi)
@@ -76,3 +74,4 @@ THE SOFTWARE.
                         :components ((:test-file "base")
                                      (:test-file "ranges-timing")))))
 
+|#
