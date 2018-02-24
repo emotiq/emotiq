@@ -575,6 +575,26 @@ THE SOFTWARE.
     (assert (< skey *ed-r*))
     skey))
 
+(defun compute-elligator-skey (seed)
+  (um:nlet-tail iter ((ix  0))
+    (let* ((skey (compute-skey (list ix seed)))
+           (pkey (ed-nth-pt skey)))
+      (if (elligator-encode pkey)
+          (values skey pkey)
+        (iter (1+ ix))))))
+
+(defun compute-elligator-summed-pkey (sum-pkey)
+  (um:nlet-tail iter ((ix 0))
+    (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
+      (or (elligator-encode p)
+          (iter (1+ ix))))))
+#|
+(multiple-value-bind (skey1 pkey1) (compute-elligator-skey :dave)
+  (multiple-value-bind (skey2 pkey2) (compute-elligator-skey :dan)
+    (let ((p  (ed-add pkey1 pkey2)))
+      (compute-elligator-summed-pkey p))))
+ |#
+             
 (defun ed-random-pair ()
   (let* ((r    (random-between 1 *ed-q*))
          (skey (compute-skey r))
