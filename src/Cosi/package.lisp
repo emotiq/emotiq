@@ -134,7 +134,7 @@
    :reconstruct-tree
    :forwarding))
 
-;;; from random-partition
+;;; Duplication from random-partition
 #+(or)
 (defpackage :cosi-simgen
   (:use :common-lisp :cosi :crypto-mod-math)
