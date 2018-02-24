@@ -555,7 +555,7 @@ THE SOFTWARE.
               (loenc:encode (list ix seed)))))
     (um:nlet-tail iter ((ix   1)
                         (bits #()))
-      (if (>= (length bits) nbits)
+      (if (>= (* 8 (length bits)) nbits)
           bits
         (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
     ))
