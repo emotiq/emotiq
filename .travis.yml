@@ -6,6 +6,8 @@ env:
   global:
     - PATH=~/.roswell/bin:$PATH
     - ROSWELL_INSTALL_DIR=$HOME/.roswell
+# Speculatively hook into Coveralls <https://coveralls.io/>
+    - COVERAGE_EXCLUDE=t/
   matrix:
     - LISP=sbcl-bin
     - LISP=ccl-bin
@@ -16,12 +18,24 @@ env:
 
 install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
+# Add needed Quicklisp dependencies for testing here  
   - ros install prove
+  - ros install lisp-unit
 
 script:
-  - ros -s prove -e '(or (prove:run :emotiq/t) (uiop:quit -1))'
-  - ros -s prove -e '(or (prove:run :cosi/t) (uiop:quit -1))'
+  - ros -s lisp-unit
+        -e '(or (lisp-unit:run-tests :all :emotiq-tests)
+                (uiop:quit -1))'
+  - ros -s prove
+        -e '(or (prove:run :emotiq-prove)
+                (uiop:quit -1))'
+  - ros -s lisp-unit
+        -e '(or (lisp-unit:run-tests :all :cosi-test)
+                (uiop:quit -1))'                         
+  - ros -s prove
+        -e '(or (prove:run :cosi-prove)
+                (uiop:quit -1))'
   - ros -s prove -s cl-coveralls
         -e '(or (coveralls:with-coveralls (:exclude (list "t"))
-                  (prove:run :emotiq/t))
+                  (prove:run :emotiq-prove))
                 (uiop:quit -1))'
