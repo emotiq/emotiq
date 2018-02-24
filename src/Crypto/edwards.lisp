@@ -43,7 +43,7 @@ THE SOFTWARE.
 (defstruct (ed-curve
             (:constructor %make-ed-curve))
   name c d q h r gen
-  nbits nb nbr) ;; cached values for faster compress/decompress
+  nbits nb) ;; cached values for faster compress/decompress
 
 (defvar *edcurve*)
 
@@ -74,50 +74,7 @@ THE SOFTWARE.
      :gen   gen
      :nbits nbits
      :nb    (ceiling nbits 8)
-     :nbr   (integer-length r)
      )))
-
-(defun find-r-bits ()
-  ;; curve order is prime *ed-r* < 2^nbits. So find out how much less
-  ;; it is, and record the lowest bit position, such that, if all
-  ;; bits were 1 except that one, then we would be less than *ed-r*
-  ;;
-  ;; In other words:
-  ;;
-  ;;    pos = Min(p) , for p in (0..nbits), s.t.
-  ;;      ((2^nbits - 1) - 2^p) < *ed-r*
-  ;;
-  (let* ((nbits (integer-length *ed-r*))
-         (x     (1- (ash 1 nbits))))
-    (um:nlet-tail iter ((pos 0))
-      (if (> (dpb 0 (byte 1 pos) x) *ed-r*)
-          (iter (1+ pos))
-        (list nbits pos)))))
-
-(defun compute-a-for-skey (skey)
-  ;;
-  ;; Return a value, a, to be used for generating a public key
-  ;; 
-  ;;     2^nbits > *ed-r* > (2^nbits - 2^nzbit - 1) >= a >= 2^(nbits-1),
-  ;;  for
-  ;;     nbits = Ceiling(log2(*ed-r*)),
-  ;;  and
-  ;;     nzbit is smallest bit such that *ed-r* > (2^nbits - 2^nzbit - 1)
-  ;;
-  ;; Value a is in upper half range of *ed-r*
-  ;;
-  (let* ((h  (ed-convert-lev-to-int
-              (sha3-buffers
-               ;; full 512 bits
-               (ed-convert-int-to-lev skey))))
-         (a  (mod
-              (dpb 1 (byte 1 (1- *ed-nbits*))
-                   (ldb (byte *ed-nbits* 0) h))
-              *ed-r*)))
-    (dpb 0 (byte 3 0)
-         (if (logbitp (1- *ed-nbr*) a)
-             a
-           (sub-mod *ed-r* a)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)
@@ -137,25 +94,27 @@ THE SOFTWARE.
 ;; h = cofactor for curve order #E(K) = h*r
 ;; gen = generator point
 
-(defvar *curve1174*
+(defparameter *curve1174*
   ;; rho-security (security by Pollard's rho attack) = 2^124.3
   ;; rho-security = (* 0.886 (sqrt *ed-r*))  (0.886 = (sqrt (/ pi 4)))
   ;; x^2 + y^2 = 1 - 1174 x^2 y^2
-  (setf *edcurve*
-        (make-ed-curve
-         :name :Curve1174
-         :c    1
-         :d    -1174
-         :q    (- (ash 1 251) 9)
-         :r    904625697166532776746648320380374280092339035279495474023489261773642975601
-                 ;; = 2^249 - 11332719920821432534773113288178349711
-         :h    4  ;; cofactor -- #E(K) = h*r
-         :gen  (make-ecc-pt
-                :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
-                :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
-        )))
+  (make-ed-curve
+   :name :Curve1174
+   :c    1
+   :d    -1174
+   :q    (- (ash 1 251) 9)
+   :r    904625697166532776746648320380374280092339035279495474023489261773642975601
+   ;; = 2^249 - 11332719920821432534773113288178349711
+   :h    4  ;; cofactor -- #E(K) = h*r
+   :gen  (make-ecc-pt
+          :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
+          :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
+   ))
 
-(defvar *curve-E382*
+(unless (boundp '*edcurve*)
+  (setf *edcurve* *curve1174*))
+
+(defparameter *curve-E382*
   ;; rho-security = 2^188.8
   (make-ed-curve
    :name :Curve-E382
@@ -170,7 +129,7 @@ THE SOFTWARE.
           :y  17)
    ))
 
-(defvar *curve41417*
+(defparameter *curve41417*
   ;; rho-security = 2^205.3
   (make-ed-curve
    :name :Curve41417
@@ -185,7 +144,7 @@ THE SOFTWARE.
           :y  34)
    ))
 
-(defvar *curve-E521*
+(defparameter *curve-E521*
   ;; rho-security = 2^259.3
   (make-ed-curve
    :name :curve-E521
@@ -590,14 +549,66 @@ THE SOFTWARE.
 (defun ed-hash (pt)
   (sha3-buffers (ed-compress-pt pt :lev t)))
 
+(defun get-hash-bits (nbits seed)
+  (labels ((hash-part (ix)
+             (sha3-buffers
+              (loenc:encode (list ix seed)))))
+    (um:nlet-tail iter ((ix   1)
+                        (bits #()))
+      (if (>= (* 8 (length bits)) nbits)
+          bits
+        (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
+    ))
+
+(defun compute-skey (seed)
+  ;;
+  ;; Return a value based on seed, to be used for generating a
+  ;; public key, which is in the upper range of the *ed-r* field
+  ;;
+  (let* ((h     (ed-convert-lev-to-int
+                 (get-hash-bits *ed-nbits*
+                                (list seed :generate-private-key))))
+         (nbits (1- (integer-length (floor *ed-r* *ed-h*))))
+         (skey  (* *ed-h*  ;; avoid small-group attacks
+                   (dpb 1 (byte 1 nbits) ;; ensure non-zero
+                        (ldb (byte nbits 0) h)))))
+    (assert (< skey *ed-r*))
+    skey))
+
+(defun compute-elligator-skey (seed)
+  ;; compute a private key from the seed that is safe, and produces an
+  ;; Elligator-capable public key.
+  (um:nlet-tail iter ((ix  0))
+    (let* ((skey (compute-skey (list ix seed)))
+           (pkey (ed-nth-pt skey)))
+      (if (elligator-encode pkey)
+          (values skey pkey)
+        (iter (1+ ix))))))
+
+(defun compute-elligator-summed-pkey (sum-pkey)
+  ;; post-processing step after summing public keys. This corrects the
+  ;; summed key to become an Elligator-capable public key. Can only be
+  ;; used on final sum, not on intermediate partial sums.
+  (um:nlet-tail iter ((ix 0))
+    (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
+      (or (elligator-encode p)
+          (iter (1+ ix))))))
+#|
+(multiple-value-bind (skey1 pkey1) (compute-elligator-skey :dave)
+  (multiple-value-bind (skey2 pkey2) (compute-elligator-skey :dan)
+    (let ((p  (ed-add pkey1 pkey2)))
+      (compute-elligator-summed-pkey p))))
+ |#
+             
 (defun ed-random-pair ()
-  (let* ((r  (* *ed-h* (random-between 1 *ed-r*)))
-         (pt (ed-nth-pt r)))
-    (values r pt)))
+  (let* ((r    (random-between 1 *ed-q*))
+         (skey (compute-skey r))
+         (pt   (ed-nth-pt r)))
+    (values skey pt)))
 
 (defun ed-random-generator ()
   ;; every point on the curve is a generator
-  (cadr (multiple-value-list (ed-random-pair))))
+  (second (multiple-value-list (ed-random-pair))))
     
 #|
 (let* ((*edcurve* *curve41417*)

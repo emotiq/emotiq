@@ -143,7 +143,7 @@ THE SOFTWARE.
 
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
-   :compute-a-for-skey
+   :compute-skey
    ))
 
 (defpackage :lagrange-4-square
