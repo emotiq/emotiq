@@ -11,10 +11,11 @@ env:
   matrix:
     - LISP=sbcl-bin
     - LISP=ccl-bin
-    - LISP=abcl-bin
-    - LISP=ecl
-    - LISP=clisp
-    - LISP=clasp
+# Uncomment to enable the build farm resource to be spent on implementations that might actually produce usefull results    
+#    - LISP=abcl-bin
+#    - LISP=ecl
+#    - LISP=clisp
+#    - LISP=clasp
 
 install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
@@ -23,14 +24,15 @@ install:
   - ros install lisp-unit
 
 script:
-  - ros -s lisp-unit
-        -e '(or (lisp-unit:run-tests :all :emotiq-tests)
+  - ros -e '(ql:quickload :emotiq-tests)
+            (or (lisp-unit:run-tests :all :emotiq-tests)
                 (uiop:quit -1))'
   - ros -s prove
         -e '(or (prove:run :emotiq-prove)
                 (uiop:quit -1))'
   - ros -s lisp-unit
-        -e '(or (lisp-unit:run-tests :all :cosi-test)
+        -e '(ql:quickload :emotiq-tests)
+            (or (lisp-unit:run-tests :all :cosi-test)
                 (uiop:quit -1))'                         
   - ros -s prove
         -e '(or (prove:run :cosi-prove)
