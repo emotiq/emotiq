@@ -159,15 +159,20 @@ THE SOFTWARE.
           :y  12)
    ))
 
+(defun known-curves ()
+  (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
+
 (defmethod select-curve ((curve ed-curve))
   curve)
 
 (defmethod select-curve ((curve symbol))
-  (find curve (list *curve1174* *curve-e382* *curve41417* *curve-e521*)
+  (find curve (known-curves)
         :key 'ed-curve-name))
 
 (defun ed-curves ()
-  (list :curve-1174 :curve-E382 :curve-41417 :curve-E521))
+  ;; present caller with a list of symbols that can be used to select
+  ;; a curve using WITH-ED-CURVE
+  (mapcar 'ed-curve-name (known-curves)))
 
 ;; ----------------------------------------------------------------
 
