@@ -43,21 +43,7 @@ THE SOFTWARE.
 (defstruct (ed-curve
             (:constructor %make-ed-curve))
   name c d q h r gen
-  nbits nb) ;; cached values for faster compress/decompress
-
-(defun make-ed-curve (&key name c d q h r gen)
-  (let ((nbits (integer-length q)))
-    (%make-ed-curve
-     :name  name
-     :c     c
-     :d     d
-     :q     q
-     :h     h
-     :r     r
-     :gen   gen
-     :nbits nbits
-     :nb    (ceiling nbits 8)
-     )))
+  nbits nb nbr) ;; cached values for faster compress/decompress
 
 (defvar *edcurve*)
 
@@ -74,6 +60,64 @@ THE SOFTWARE.
 (define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
 (define-symbol-macro *ed-nbits* (ed-curve-nbits *edcurve*))
 (define-symbol-macro *ed-nb*    (ed-curve-nb    *edcurve*))
+(define-symbol-macro *ed-nbr*   (ed-curve-nbr   *edcurve*))
+
+(defun make-ed-curve (&key name c d q h r gen)
+  (let ((nbits     (integer-length q)))
+    (%make-ed-curve
+     :name  name
+     :c     c
+     :d     d
+     :q     q
+     :h     h
+     :r     r
+     :gen   gen
+     :nbits nbits
+     :nb    (ceiling nbits 8)
+     :nbr   (integer-length r)
+     )))
+
+(defun find-r-bits ()
+  ;; curve order is prime *ed-r* < 2^nbits. So find out how much less
+  ;; it is, and record the lowest bit position, such that, if all
+  ;; bits were 1 except that one, then we would be less than *ed-r*
+  ;;
+  ;; In other words:
+  ;;
+  ;;    pos = Min(p) , for p in (0..nbits), s.t.
+  ;;      ((2^nbits - 1) - 2^p) < *ed-r*
+  ;;
+  (let* ((nbits (integer-length *ed-r*))
+         (x     (1- (ash 1 nbits))))
+    (um:nlet-tail iter ((pos 0))
+      (if (> (dpb 0 (byte 1 pos) x) *ed-r*)
+          (iter (1+ pos))
+        (list nbits pos)))))
+
+(defun compute-a-for-skey (skey)
+  ;;
+  ;; Return a value, a, to be used for generating a public key
+  ;; 
+  ;;     2^nbits > *ed-r* > (2^nbits - 2^nzbit - 1) >= a >= 2^(nbits-1),
+  ;;  for
+  ;;     nbits = Ceiling(log2(*ed-r*)),
+  ;;  and
+  ;;     nzbit is smallest bit such that *ed-r* > (2^nbits - 2^nzbit - 1)
+  ;;
+  ;; Value a is in upper half range of *ed-r*
+  ;;
+  (let* ((h  (ed-convert-lev-to-int
+              (sha3-buffers
+               ;; full 512 bits
+               (ed-convert-int-to-lev skey))))
+         (a  (mod
+              (dpb 1 (byte 1 (1- *ed-nbits*))
+                   (ldb (byte *ed-nbits* 0) h))
+              *ed-r*)))
+    (dpb 0 (byte 3 0)
+         (if (logbitp (1- *ed-nbr*) a)
+             a
+           (sub-mod *ed-r* a)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)

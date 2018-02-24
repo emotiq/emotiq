@@ -117,33 +117,27 @@ THE SOFTWARE.
 ;; The IRTF EdDSA standard as a primitive
 
 (defun ed-dsa (msg skey)
-  (let* ((skey  (need-integer-form skey))
-         (h     (ed-convert-lev-to-int
-                 (sha3-buffers
-                  ;; full 512 bits
-                  (ed-convert-int-to-lev skey))))
-         (a     (dpb 1 (byte 1 (1- *ed-nbits*))
-                     (dpb 0 (byte 3 0)
-                          (ldb (byte (1- *ed-nbits*) 0) h))))
-         ;; the constant 3 is for cofactors of 8 or lower pow2
+  (let* ((a         (compute-a-for-skey
+                     (need-integer-form skey)))
          (msg-enc   (loenc:encode msg))
          (pkey      (ed-nth-pt a))
          (pkey-cmpr (ed-compress-pt pkey))
          (r         (ed-convert-lev-to-int
                      (sha3-buffers
-                      (ed-convert-int-to-lev
-                       (ldb (byte *ed-nbits* (1+ *ed-nbits*)) h))
+                      (ed-convert-int-to-lev a)
                       msg-enc)))
          (rpt       (ed-nth-pt r))
          (rpt-cmpr  (ed-compress-pt rpt))
-         (s         (add-mod-r r
-                               (mult-mod-r a
-                                           (ed-convert-lev-to-int
-                                            (sha3-buffers
-                                             (ed-convert-int-to-lev rpt-cmpr)
-                                             (ed-convert-int-to-lev pkey-cmpr)
-                                             msg-enc))
-                                           ))))
+         (s         (add-mod-r
+                     r
+                     (mult-mod-r
+                      a
+                      (ed-convert-lev-to-int
+                       (sha3-buffers
+                        (ed-convert-int-to-lev rpt-cmpr)
+                        (ed-convert-int-to-lev pkey-cmpr)
+                        msg-enc))
+                      ))))
     (list
      :msg   msg
      :pkey  (published-form pkey-cmpr)
