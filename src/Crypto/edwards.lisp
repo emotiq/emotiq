@@ -883,7 +883,7 @@ THE SOFTWARE.
         (iter (1+ ix)))
       )))
 
-(defun elligator-dsa (msg tau-pub k-priv)
+(defun elligator-ed-dsa (msg tau-pub k-priv)
   (let ((msg-enc (loenc:encode msg)))
     (multiple-value-bind (r tau-r)
         (compute-elligator-schnorr-deterministic-random msg-enc k-priv)
@@ -904,7 +904,7 @@ THE SOFTWARE.
          :s       s)
         ))))
 
-(defun elligator-dsa-validate (msg tau-pub tau-r s)
+(defun elligator-ed-dsa-validate (msg tau-pub tau-r s)
   (ed-pt=
    (ed-nth-pt s)
    (ed-add (elligator-decode tau-r)

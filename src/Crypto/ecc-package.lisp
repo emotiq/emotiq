@@ -157,8 +157,8 @@ THE SOFTWARE.
    :compute-elligator-skey
    :compute-elligator-summed-pkey
    :compute-elligator-schnorr-deterministic-random
-   :elligator-dsa
-   :elligator-dsa-validate
+   :elligator-ed-dsa
+   :elligator-ed-dsa-validate
    ))
 
 (defpackage :lagrange-4-square
