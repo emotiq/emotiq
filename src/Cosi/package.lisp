@@ -180,3 +180,7 @@
    :reconstruct-tree
    :forwarding))
 
+;;; LISP-UNIT groups tests by package
+(defpackage cosi-test
+  (:use cl))
+
