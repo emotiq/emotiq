@@ -23,12 +23,14 @@ install:
   - ros install lisp-unit
 
 script:
-  - ros -e '(or (lisp-unit:run-tests :all :emotiq-tests)
+  - ros -s lisp-unit
+        -e '(or (lisp-unit:run-tests :all :emotiq-tests)
                 (uiop:quit -1))'
   - ros -s prove
         -e '(or (prove:run :emotiq-prove)
                 (uiop:quit -1))'
-  - ros -e '(or (lisp-unit:run-tests :all :cosi-test)
+  - ros -s lisp-unit
+        -e '(or (lisp-unit:run-tests :all :cosi-test)
                 (uiop:quit -1))'                         
   - ros -s prove
         -e '(or (prove:run :cosi-prove)
