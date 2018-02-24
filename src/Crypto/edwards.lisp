@@ -575,41 +575,88 @@ THE SOFTWARE.
     (assert (< skey *ed-r*))
     skey))
 
-(defun compute-elligator-skey (seed)
-  ;; compute a private key from the seed that is safe, and produces an
-  ;; Elligator-capable public key.
-  (um:nlet-tail iter ((ix  0))
-    (let* ((skey (compute-skey (list ix seed)))
-           (pkey (ed-nth-pt skey)))
-      (if (elligator-encode pkey)
-          (values skey pkey)
-        (iter (1+ ix))))))
-
-(defun compute-elligator-summed-pkey (sum-pkey)
-  ;; post-processing step after summing public keys. This corrects the
-  ;; summed key to become an Elligator-capable public key. Can only be
-  ;; used on final sum, not on intermediate partial sums.
-  (um:nlet-tail iter ((ix 0))
-    (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
-      (or (elligator-encode p)
-          (iter (1+ ix))))))
-#|
-(multiple-value-bind (skey1 pkey1) (compute-elligator-skey :dave)
-  (multiple-value-bind (skey2 pkey2) (compute-elligator-skey :dan)
-    (let ((p  (ed-add pkey1 pkey2)))
-      (compute-elligator-summed-pkey p))))
- |#
-             
 (defun ed-random-pair ()
-  (let* ((r    (random-between 1 *ed-q*))
-         (skey (compute-skey r))
-         (pt   (ed-nth-pt r)))
+  (let* ((seed (random-between 0 (ash 1 *ed-nbits*)))
+         (skey (compute-skey seed))
+         (pt   (ed-nth-pt skey)))
     (values skey pt)))
 
 (defun ed-random-generator ()
   ;; every point on the curve is a generator
   (second (multiple-value-list (ed-random-pair))))
-    
+
+;; -----------------------------------------------
+;; madular arithmetic mod *ed-r* - for isometric prime field math
+
+(defun mod-r (v)
+  (mod v *ed-r*))
+
+(defun hash-to-int (vec)
+  (mod-r (ed-convert-lev-to-int vec)))
+
+(defun add-mod-r (a b)
+  (add-mod *ed-r* a b))
+
+(defun sub-mod-r (a b)
+  (sub-mod *ed-r* a b))
+
+(defun mult-mod-r (a b)
+  (mult-mod *ed-r* a b))
+
+;; ---------------------------------------------------
+;; The IETF EdDSA standard as a primitive
+
+(defun compute-schnorr-deterministic-random (msgv k-priv)
+  (um:nlet-tail iter ((ix 0))
+    (let ((r   (mod-r
+                (ed-convert-lev-to-int
+                 (sha3-buffers
+                  (ed-convert-int-to-lev ix)
+                  (ed-convert-int-to-lev k-priv)
+                  msgv)))))
+      (if (plusp r)
+          (values r (ed-nth-pt r))
+        (iter (1+ ix)))
+      )))
+
+(defun ed-dsa (msg skey)
+  (let* ((msg-enc   (loenc:encode msg))
+         (pkey      (ed-nth-pt skey))
+         (pkey-cmpr (ed-compress-pt pkey)))
+    (multiple-value-bind (r rpt)
+        (compute-schnorr-deterministic-random msg-enc skey)
+      (let* ((rpt-cmpr  (ed-compress-pt rpt))
+             (s         (add-mod-r
+                         r
+                         (mult-mod-r
+                          skey
+                          (ed-convert-lev-to-int
+                           (sha3-buffers
+                            (ed-convert-int-to-lev rpt-cmpr)
+                            (ed-convert-int-to-lev pkey-cmpr)
+                            msg-enc))
+                          ))))
+        (list
+         :msg   msg
+         :pkey  pkey-cmpr
+         :r     rpt-cmpr
+         :s     s)
+        ))))
+
+(defun ed-dsa-validate (msg pkey r s)
+  (ed-pt=
+   (ed-nth-pt s)
+   (ed-add (ed-decompress-pt r)
+           (ed-mul (ed-decompress-pt pkey)
+                   (ed-convert-lev-to-int
+                    (sha3-buffers
+                     (ed-convert-int-to-lev r)
+                     (ed-convert-int-to-lev pkey)
+                     (loenc:encode msg)))
+                   ))))
+
+;; -----------------------------------------------------------
+
 #|
 (let* ((*edcurve* *curve41417*)
        ;; (*edcurve* *curve1174*)
@@ -763,7 +810,7 @@ THE SOFTWARE.
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   ;; return encoding tau for point pt, or nil if pt not in image of phi(tau)
   (if (ed-neutral-point-p pt)
-      1
+      (logior 1 (elligator-int-padding))
     ;; else
     (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
                (yp1  (ed+ y 1)))
@@ -789,12 +836,87 @@ THE SOFTWARE.
                        (tau   (min enc (ed- enc))))
               ;; (assert (ed-pt= pt (elligator-decode enc))) ;; check that pt is in the Elligator set
               ;; (assert (< tau (elligator-limit)))
-              tau
+              (logior tau (elligator-int-padding))
               ))
           )))
     ))
 
 ;; -------------------------------------------------------
+
+(defun compute-elligator-skey (seed)
+  ;; compute a private key from the seed that is safe, and produces an
+  ;; Elligator-capable public key.
+  (um:nlet-tail iter ((ix  0))
+    (let* ((skey (compute-skey (list ix seed)))
+           (pkey (ed-nth-pt skey)))
+      (if (elligator-encode pkey)
+          (values skey pkey)
+        (iter (1+ ix))))))
+
+(defun compute-elligator-summed-pkey (sum-pkey)
+  ;; post-processing step after summing public keys. This corrects the
+  ;; summed key to become an Elligator-capable public key. Can only be
+  ;; used on final sum, not on intermediate partial sums.
+  (um:nlet-tail iter ((ix 0))
+    (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
+      (or (elligator-encode p)
+          (iter (1+ ix))))))
+#|
+(multiple-value-bind (skey1 pkey1) (compute-elligator-skey :dave)
+  (multiple-value-bind (skey2 pkey2) (compute-elligator-skey :dan)
+    (let ((p  (ed-add pkey1 pkey2)))
+      (compute-elligator-summed-pkey p))))
+ |#
+             
+(defun compute-elligator-schnorr-deterministic-random (msgv k-priv)
+  (um:nlet-tail iter ((ix 0))
+    (let* ((r     (mod-r
+                   (ed-convert-lev-to-int
+                    (sha3-buffers
+                     (ed-convert-int-to-lev ix)
+                     (ed-convert-int-to-lev k-priv)
+                     msgv))))
+           (rpt   (ed-nth-pt r))
+           (tau-r (elligator-encode rpt)))
+      (if (and (plusp r) tau-r)
+          (values r tau-r)
+        (iter (1+ ix)))
+      )))
+
+(defun elligator-dsa (msg tau-pub k-priv)
+  (let ((msg-enc (loenc:encode msg)))
+    (multiple-value-bind (r tau-r)
+        (compute-elligator-schnorr-deterministic-random msg-enc k-priv)
+      (let* ((s  (add-mod-r
+                  r
+                  (mult-mod-r
+                   k-priv
+                   (ed-convert-lev-to-int
+                    (sha3-buffers
+                     (ed-convert-int-to-lev tau-r)
+                     (ed-convert-int-to-lev tau-pub)
+                     msg-enc))
+                   ))))
+        (list
+         :msg     msg
+         :tau-pub tau-pub
+         :tau-r   tau-r
+         :s       s)
+        ))))
+
+(defun elligator-dsa-validate (msg tau-pub tau-r s)
+  (ed-pt=
+   (ed-nth-pt s)
+   (ed-add (elligator-decode tau-r)
+           (ed-mul (elligator-decode tau-pub)
+                   (ed-convert-lev-to-int
+                    (sha3-buffers
+                     (ed-convert-int-to-lev tau-r)
+                     (ed-convert-int-to-lev tau-pub)
+                     (loenc:encode msg)))
+                   ))))
+
+;; ------------------------------------------------------------
 
 (defun do-elligator-random-pt (fn-gen)
   ;; search for a random multiple of *ed-gen*
@@ -805,18 +927,17 @@ THE SOFTWARE.
   ;;  :tau = the Elligator encoding of the random point
   ;;  :pad = bits to round out the integer length to multiple octets
   (um:nlet-tail iter ()
-    (let* ((ix  (random-between 1 (* *ed-h* *ed-r*)))
-           (pt  (ed-mul *ed-gen* ix))
-           (tau (and (not (ed-neutral-point-p pt))
-                     (funcall fn-gen pt)))) ;; elligatorable? - only about 50% are
-      (if tau
-          (list :r   ix
-                :pt  pt
-                :tau tau
-                :pad (elligator-int-padding))
-        (iter))
-      )))
-  
+    (multiple-value-bind (skey pkey) (ed-random-pair)
+      (let ((tau  (and (plusp skey)
+                       (funcall fn-gen pkey)))) ;; elligatorable? - only about 50% are
+        (if tau
+            (list :r   skey
+                  :pt  pkey
+                  :tau tau
+                  :pad (elligator-int-padding))
+          (iter))
+        ))))
+
 (defun do-elligator-schnorr-sig (msg tau-pub k-priv fn-gen)
   ;; msg is a message vector suitable for hashing
   ;; tau-pub is the Elligator vector encoding for public key point pt-pub

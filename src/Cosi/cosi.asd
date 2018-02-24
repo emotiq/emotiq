@@ -55,7 +55,6 @@ THE SOFTWARE.
 
                                      (:file "range-proofs")))))
 
-
 (defsystem "cosi/test/allegro"
   :description "Allegro timing code from dbm."
   :depends-on (cosi)

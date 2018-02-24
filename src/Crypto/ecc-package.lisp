@@ -141,9 +141,24 @@ THE SOFTWARE.
    :ed-sqrt
    :ed-expt
 
+   :mod-r
+   :hash-to-int
+   :add-mod-r
+   :sub-mod-r
+   :mult-mod-r
+   
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
    :compute-skey
+   :compute-schnorr-deterministic-random
+   :ed-dsa
+   :ed-dsa-validate
+   
+   :compute-elligator-skey
+   :compute-elligator-summed-pkey
+   :compute-elligator-schnorr-deterministic-random
+   :elligator-dsa
+   :elligator-dsa-validate
    ))
 
 (defpackage :lagrange-4-square
