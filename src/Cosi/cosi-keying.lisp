@@ -117,21 +117,19 @@ THE SOFTWARE.
 ;; The IRTF EdDSA standard as a primitive
 
 (defun ed-dsa (msg skey)
-  (let* ((a         (compute-a-for-skey
-                     (need-integer-form skey)))
-         (msg-enc   (loenc:encode msg))
-         (pkey      (ed-nth-pt a))
+  (let* ((msg-enc   (loenc:encode msg))
+         (pkey      (ed-nth-pt skey))
          (pkey-cmpr (ed-compress-pt pkey))
          (r         (ed-convert-lev-to-int
                      (sha3-buffers
-                      (ed-convert-int-to-lev a)
+                      (ed-convert-int-to-lev skey)
                       msg-enc)))
          (rpt       (ed-nth-pt r))
          (rpt-cmpr  (ed-compress-pt rpt))
          (s         (add-mod-r
                      r
                      (mult-mod-r
-                      a
+                      skey
                       (ed-convert-lev-to-int
                        (sha3-buffers
                         (ed-convert-int-to-lev rpt-cmpr)
@@ -168,9 +166,7 @@ THE SOFTWARE.
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  (ldb (byte (1+ *ed-nbits*) 0)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers (loenc:encode seed)))))
+  (let* ((skey  (compute-skey seed))
          (plist (ed-dsa +keying-msg+ skey))
          (pkey  (getf plist :pkey))
          (s     (getf plist :s))
