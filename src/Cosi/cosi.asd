@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 (defsystem "cosi"
   :description "Cosi: Authenticated multi-signatures in Lisp"
-  :version     "1.0.1"
+  :version     "1.0.2"
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
   :depends-on (ironclad
@@ -34,7 +34,7 @@ THE SOFTWARE.
                lisp-object-encoder
                useful-macros
                usocket)
-  :in-order-to ((test-op (test-op "cosi/t")))
+  :in-order-to ((test-op (test-op "cosi-test")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
@@ -55,23 +55,10 @@ THE SOFTWARE.
 
                                      (:file "range-proofs")))))
 
-#|
 (defsystem "cosi/test/allegro"
-  :description "Allegro timing code from dbm."
+  :description "Allegro specific CAS timing code from dbm."
   :depends-on (cosi)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "test-cas")))))
                         
-
-(defsystem "cosi/t"
-  :defsystem-depends-on (prove-asdf)
-  :depends-on (prove cosi)
-  :perform (test-op (o c)
-              (uiop:symbol-call :prove-asdf :run-test-system c))
-  :components ((:module range
-                        :pathname "t/"
-                        :components ((:test-file "base")
-                                     (:test-file "ranges-timing")))))
-
-|#

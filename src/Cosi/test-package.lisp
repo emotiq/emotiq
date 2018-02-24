@@ -1,3 +1,4 @@
+(in-package cl-user)
 
 (defpackage :package-a
   (:use :common-lisp)
@@ -26,3 +27,9 @@
    :b
    :c))
 
+(define-test package-test
+    (let ((packages (mapcar #'find-package '(:a :b: :c))))
+      ;;; TODO: What do we wish to test about the package declarations?
+      (lisp-unit:assert-true
+       (= (length packages) 3))))
+            

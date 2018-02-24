@@ -57,15 +57,14 @@ first download and install it via the instructions available at
 
 After Quicklisp has been installed, then issuing 
 
-    (ql:quickload :prove)
-    (ql:quickload :emotiq/t)
+    (ql:quickload :emotiq-test)
     
 will download all the dependencies needed by the tests gathered into
-the `emotiq/t` system.
+the `emotiq-test` ASDF system.
 
 We have many ASDF descriptions within this repository whose
 dependencies may need to be satisfied by via `ql:quickload` other than
-`emotiq/t`.  
+`emotiq-test`.  
 
 Currently we are working many systems simultaneously, most noteworthy
 among them being the work in the `cosi` system.
@@ -84,68 +83,18 @@ dependencies).
 
 At end you should see a result like
 
+    Unit Test Summary
+     | 12 assertions total
+     | 12 passed
+     | 0 failed
+     | 0 execution errors
+     | 0 missing tests
 
-    Load 1 ASDF system:
-        emotiq/t
-    ; Loading "emotiq/t"
-
-
-    Running a test file '/Users/evenson/work/emotiq/src/t/base.lisp'
-    ;Loading #P"/Users/evenson/work/emotiq/src/t/base.lisp"...
-    1..1
-
-      ✓ A successful test of compiling dependencies and passing a test.
-
-    ✓ 1 test completed (0ms)
-
-    Running a test file '/Users/evenson/work/emotiq/src/t/tests.lisp'
-    ;Loading #P"/Users/evenson/work/emotiq/src/t/tests.lisp"...
-    1..3
-
-     emotiq:hex-string-to-octet-vector on "a0b1c2d3e4f56789"…
-      ✓ octet-vector-p… 
-
-      ✓ length octect-vector… 
-
-      ✓ back-hex in emotiq:octet-vector-to-hex-string… 
-
-    1..1
-
-      ✓ emotiq:ovvref on emotiq:hex-string-to-octet-vector… 
-
-     Testing crypto on "Rosetta code"
-    1..2
-
-      ✓ sha256-string… 
-
-      ✓ digest length… 
-
-    1..2
-
-      ✓ Vector of digest… 
-
-      ✓ Length of digest… 
-
-    1..2
-
-      ✓ sha3-512-string… 
-
-      ✓ sha3-512-string digest length… 
-
-    1..2
-
-      ✓ sha3-512 vector comparison… 
-
-      ✓ sha3-512 vector digest length… 
-
-    ✓ 2 tests completed (0ms)
-
-    Summary:
-      All 2 files passed.
-
+The counts of assertions/passed should go up over time, and should
+stay equal, with other counts staying zero.
 
 # Colophon
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-02-23 Fri 16:09Z>
+    Revised: <2018-02-24 Sat 07:28Z>
