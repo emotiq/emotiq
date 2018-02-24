@@ -576,6 +576,8 @@ THE SOFTWARE.
     skey))
 
 (defun compute-elligator-skey (seed)
+  ;; compute a private key from the seed that is safe, and produces an
+  ;; Elligator-capable public key.
   (um:nlet-tail iter ((ix  0))
     (let* ((skey (compute-skey (list ix seed)))
            (pkey (ed-nth-pt skey)))
@@ -584,6 +586,9 @@ THE SOFTWARE.
         (iter (1+ ix))))))
 
 (defun compute-elligator-summed-pkey (sum-pkey)
+  ;; post-processing step after summing public keys. This corrects the
+  ;; summed key to become an Elligator-capable public key. Can only be
+  ;; used on final sum, not on intermediate partial sums.
   (um:nlet-tail iter ((ix 0))
     (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
       (or (elligator-encode p)
