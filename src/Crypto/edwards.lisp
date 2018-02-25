@@ -40,16 +40,31 @@ THE SOFTWARE.
 ;; See paper: "Elligator: Elliptic-curve points indistinguishable from uniform random strings"
 ;; by Bernstein, Hamburg, Krasnova, and Lange
 
-(defstruct (ed-curve
-            (:constructor %make-ed-curve))
-  name c d q h r gen
-  nbits nb) ;; cached values for faster compress/decompress
+(defstruct ed-curve
+  name c d q h r gen)
 
 (defvar *edcurve*)
 
-(defmacro with-ed-curve (curve &body body)
-  `(let ((*edcurve* (select-curve ,curve)))
-     ,@body))
+;; -----------------------------------------------------------------------------
+;; for cached values dependent only on curve
+
+(defun get-cached-symbol-data (sym key1 key2 fn-compute)
+  ;;
+  ;; defines a generalized 2-level cache lookup, defined in the
+  ;; symbol-plist of sym
+  ;;
+  ;; key1 = category
+  ;; key2 = instance
+  ;;
+  (let* ((alst  (get sym key1))
+         (item  (cdr (assoc key2 alst))))
+    (or item
+        (let ((item (funcall fn-compute)))
+          (setf (get sym key1)
+                (cons (cons key2 item) alst))
+          item))))
+
+;; -----------------------------------------------------------
 
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
 (define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
@@ -58,23 +73,6 @@ THE SOFTWARE.
 (define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
 (define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
 (define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
-(define-symbol-macro *ed-nbits* (ed-curve-nbits *edcurve*))
-(define-symbol-macro *ed-nb*    (ed-curve-nb    *edcurve*))
-(define-symbol-macro *ed-nbr*   (ed-curve-nbr   *edcurve*))
-
-(defun make-ed-curve (&key name c d q h r gen)
-  (let ((nbits     (integer-length q)))
-    (%make-ed-curve
-     :name  name
-     :c     c
-     :d     d
-     :q     q
-     :h     h
-     :r     r
-     :gen   gen
-     :nbits nbits
-     :nb    (ceiling nbits 8)
-     )))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)
@@ -94,7 +92,7 @@ THE SOFTWARE.
 ;; h = cofactor for curve order #E(K) = h*r
 ;; gen = generator point
 
-(defparameter *curve1174*
+(defvar *curve1174*
   ;; rho-security (security by Pollard's rho attack) = 2^124.3
   ;; rho-security = (* 0.886 (sqrt *ed-r*))  (0.886 = (sqrt (/ pi 4)))
   ;; x^2 + y^2 = 1 - 1174 x^2 y^2
@@ -111,10 +109,9 @@ THE SOFTWARE.
           :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
    ))
 
-(unless (boundp '*edcurve*)
-  (setf *edcurve* *curve1174*))
+;; ---------------------------
 
-(defparameter *curve-E382*
+(defvar *curve-E382*
   ;; rho-security = 2^188.8
   (make-ed-curve
    :name :Curve-E382
@@ -129,7 +126,9 @@ THE SOFTWARE.
           :y  17)
    ))
 
-(defparameter *curve41417*
+;; ---------------------------
+
+(defvar *curve41417*
   ;; rho-security = 2^205.3
   (make-ed-curve
    :name :Curve41417
@@ -144,7 +143,9 @@ THE SOFTWARE.
           :y  34)
    ))
 
-(defparameter *curve-E521*
+;; ---------------------------
+
+(defvar *curve-E521*
   ;; rho-security = 2^259.3
   (make-ed-curve
    :name :curve-E521
@@ -159,20 +160,29 @@ THE SOFTWARE.
           :y  12)
    ))
 
-(defun known-curves ()
+;; ------------------------------------------------------
+
+(unless (boundp '*edcurve*) 
+  (setf *edcurve* *curve1174*)) ;; default to curve1174
+
+(defvar *known-curves*
   (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
 
 (defmethod select-curve ((curve ed-curve))
   curve)
 
 (defmethod select-curve ((curve symbol))
-  (find curve (known-curves)
+  (find curve *known-curves*
         :key 'ed-curve-name))
+
+(defmacro with-ed-curve (curve &body body)
+  `(let ((*edcurve* (select-curve ,curve)))
+     ,@body))
 
 (defun ed-curves ()
   ;; present caller with a list of symbols that can be used to select
   ;; a curve using WITH-ED-CURVE
-  (mapcar 'ed-curve-name (known-curves)))
+  (mapcar 'ed-curve-name *known-curves*))
 
 ;; ----------------------------------------------------------------
 
@@ -198,10 +208,12 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------------
 
-(def-cached-var ed-neutral-point
-  (make-ecc-pt
-   :x 0
-   :y *ed-c*))
+(defun ed-neutral-point ()
+  (get-cached-symbol-data '*edcurve* :ed-neutral-point *ed-c*
+                          (lambda ()
+                            (make-ecc-pt
+                             :x 0
+                             :y *ed-c*))))
 
 (defun ed-neutral-point-p (pt)
   (optima:ematch pt
@@ -476,11 +488,22 @@ THE SOFTWARE.
   (ed-affine (ed-mul *ed-gen* n)))
 
 ;; ---------------------------------------------------------------
+;; conversion between integers and little-endian UB8 vectors
 
-(defun ed-convert-int-to-lev (v)
-  (let ((vec (make-array *ed-nb*
+(defun ed-nbits ()
+  (get-cached-symbol-data '*edcurve* :ed-nbits *edcurve*
+                          (lambda ()
+                            (integer-length *ed-q*))))
+
+(defun ed-nbytes ()
+  (get-cached-symbol-data '*edcurve* :ed-nbytes *edcurve*
+                          (lambda ()
+                            (ceiling (ed-nbits) 8))))
+
+(defun ed-convert-int-to-lev (v &optional (nel (ed-nbytes)))
+  (let ((vec (make-array nel
                          :element-type '(unsigned-byte 8))))
-    (loop for ix from 0 below *ed-nb*
+    (loop for ix from 0 below nel
           for pos from 0 by 8
           do
           (setf (aref vec ix) (ldb (byte 8 pos) v)))
@@ -495,6 +518,17 @@ THE SOFTWARE.
     ans))
 
 ;; ----------------------------------------
+
+(defun ed-compressed-nbits ()
+  (get-cached-symbol-data '*edcurve* :ed-compressed-nbits *edcurve*
+                          (lambda ()
+                            (1+ (ed-nbits)))))
+
+(defun ed-compressed-nbytes ()
+  (get-cached-symbol-data '*edcurve* :ed-compressed-nbytes *edcurve*
+                          (lambda ()
+                            (ceiling (ed-compressed-nbits) 8))))
+
 (defun ed-compress-pt (pt &key lev) ;; lev = little-endian vector
   ;;
   ;; Standard encoding for EdDSA is X in little-endian notation, with
@@ -506,10 +540,10 @@ THE SOFTWARE.
   (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt)))
     (let ((enc
            (if (oddp y)
-               (dpb 1 (byte 1 *ed-nbits*) x)
+               (dpb 1 (byte 1 (ed-nbits)) x)
              x)))
       (if lev
-          (let ((enc (ed-convert-int-to-lev enc)))
+          (let ((enc (ed-convert-int-to-lev enc (ed-compressed-nbytes))))
             (if (eq lev :base64)
                 (encode-bytes-to-base64 enc)
               enc))
@@ -522,8 +556,9 @@ THE SOFTWARE.
   (ed-decompress-pt (ed-convert-lev-to-int v)))
 
 (defmethod ed-decompress-pt ((v integer))
-  (let* ((sgn   (ldb (byte 1 *ed-nbits*) v))
-         (x     (dpb 0 (byte 1 *ed-nbits*) v))
+  (let* ((nbits (ed-nbits))
+         (sgn   (ldb (byte 1 nbits) v))
+         (x     (dpb 0 (byte 1 nbits) v))
          (yy    (ed/ (ed* (ed+ *ed-c* x)
                           (ed- *ed-c* x))
                      (ed* (ed- 1 (ed* x x *ed-c* *ed-c* *ed-d*)))))
@@ -555,6 +590,7 @@ THE SOFTWARE.
   (sha3-buffers (ed-compress-pt pt :lev t)))
 
 (defun get-hash-bits (nbits seed)
+  ;; concatenated SHA3 until we collect enough bits
   (labels ((hash-part (ix)
              (sha3-buffers
               (loenc:encode (list ix seed)))))
@@ -567,11 +603,12 @@ THE SOFTWARE.
 
 (defun compute-skey (seed)
   ;;
-  ;; Return a value based on seed, to be used for generating a
-  ;; public key, which is in the upper range of the *ed-r* field
+  ;; Return a value based on seed, to be used for generating a public
+  ;; key, (aka, a secret key), which is in the upper range of the
+  ;; *ed-r* field, and which avoids potential small-group attacks
   ;;
   (let* ((h     (ed-convert-lev-to-int
-                 (get-hash-bits *ed-nbits*
+                 (get-hash-bits (ed-nbits)
                                 (list seed :generate-private-key))))
          (nbits (1- (integer-length (floor *ed-r* *ed-h*))))
          (skey  (* *ed-h*  ;; avoid small-group attacks
@@ -581,7 +618,9 @@ THE SOFTWARE.
     skey))
 
 (defun ed-random-pair ()
-  (let* ((seed (random-between 0 (ash 1 *ed-nbits*)))
+  ;; select a random private and public key from the curve, abiding by
+  ;; the precautions discussed for COMPUTE-SKEY
+  (let* ((seed (random-between 0 (ash 1 (ed-nbits))))
          (skey (compute-skey seed))
          (pt   (ed-nth-pt skey)))
     (values skey pt)))
@@ -616,8 +655,8 @@ THE SOFTWARE.
     (let ((r   (mod-r
                 (ed-convert-lev-to-int
                  (sha3-buffers
-                  (ed-convert-int-to-lev ix)
-                  (ed-convert-int-to-lev k-priv)
+                  (ed-convert-int-to-lev ix 4)
+                  (ed-convert-int-to-lev k-priv (ed-compressed-nbytes))
                   msgv)))))
       (if (plusp r)
           (values r (ed-nth-pt r))
@@ -631,14 +670,15 @@ THE SOFTWARE.
     (multiple-value-bind (r rpt)
         (compute-schnorr-deterministic-random msg-enc skey)
       (let* ((rpt-cmpr  (ed-compress-pt rpt))
+             (nbcmpr    (ed-compressed-nbytes))
              (s         (add-mod-r
                          r
                          (mult-mod-r
                           skey
                           (ed-convert-lev-to-int
                            (sha3-buffers
-                            (ed-convert-int-to-lev rpt-cmpr)
-                            (ed-convert-int-to-lev pkey-cmpr)
+                            (ed-convert-int-to-lev rpt-cmpr  nbcmpr)
+                            (ed-convert-int-to-lev pkey-cmpr nbcmpr)
                             msg-enc))
                           ))))
         (list
@@ -649,16 +689,17 @@ THE SOFTWARE.
         ))))
 
 (defun ed-dsa-validate (msg pkey r s)
-  (ed-pt=
-   (ed-nth-pt s)
-   (ed-add (ed-decompress-pt r)
-           (ed-mul (ed-decompress-pt pkey)
-                   (ed-convert-lev-to-int
-                    (sha3-buffers
-                     (ed-convert-int-to-lev r)
-                     (ed-convert-int-to-lev pkey)
-                     (loenc:encode msg)))
-                   ))))
+  (let ((nbcmpr (ed-compressed-nbytes)))
+    (ed-pt=
+     (ed-nth-pt s)
+     (ed-add (ed-decompress-pt r)
+             (ed-mul (ed-decompress-pt pkey)
+                     (ed-convert-lev-to-int
+                      (sha3-buffers
+                       (ed-convert-int-to-lev r    nbcmpr)
+                       (ed-convert-int-to-lev pkey nbcmpr)
+                       (loenc:encode msg)))
+                     )))))
 
 ;; -----------------------------------------------------------
 
@@ -709,10 +750,22 @@ THE SOFTWARE.
 ;; Elligator encoding of curve points
 
 (defun elligator-limit ()
-  (floor (1+ *ed-q*) 2))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-limit *edcurve*
+                          (lambda ()
+                            (floor (1+ *ed-q*) 2))))
 
 (defun elligator-nbits ()
-  (integer-length (1- (elligator-limit))))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-nbits *edcurve*
+                          (lambda ()
+                            (integer-length (1- (elligator-limit))))))
+
+(defun elligator-nbytes ()
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-nbytes *edcurve*
+                          (lambda ()
+                            (ceiling (elligator-nbits) 8))))
 
 (defun elligator-padding ()
   ;; generate random padding bits for the initial byte
@@ -748,15 +801,6 @@ THE SOFTWARE.
          (r    (ed+ c (ed/ c)))
          (s    (ed-sqrt (ed/ 2 c))))
     (list c s r )))
-
-(defun get-cached-symbol-data (sym key1 key2 fn-compute)
-  (let* ((alst  (get sym key1))
-         (item  (cdr (assoc key2 alst))))
-    (or item
-        (let ((item (funcall fn-compute)))
-          (setf (get sym key1)
-                (cons (cons key2 item) alst))
-          item))))
 
 (defun csr ()
   ;; Bernstein's Elligator c,s,r depend only on the curve.
@@ -879,8 +923,8 @@ THE SOFTWARE.
     (let* ((r     (mod-r
                    (ed-convert-lev-to-int
                     (sha3-buffers
-                     (ed-convert-int-to-lev ix)
-                     (ed-convert-int-to-lev k-priv)
+                     (ed-convert-int-to-lev ix 4)
+                     (ed-convert-int-to-lev k-priv (elligator-nbytes))
                      msgv))))
            (rpt   (ed-nth-pt r))
            (tau-r (elli2-encode rpt)))
@@ -896,16 +940,17 @@ THE SOFTWARE.
       (error "Not an Elligator key"))
     (multiple-value-bind (r tau-r)
         (compute-elligator-schnorr-deterministic-random msg-enc k-priv)
-      (let* ((s  (add-mod-r
-                  r
-                  (mult-mod-r
-                   k-priv
-                   (ed-convert-lev-to-int
-                    (sha3-buffers
-                     (ed-convert-int-to-lev tau-r)
-                     (ed-convert-int-to-lev tau-pub)
-                     msg-enc))
-                   ))))
+      (let* ((nbytes (elligator-nbytes))
+             (s      (add-mod-r
+                      r
+                      (mult-mod-r
+                       k-priv
+                       (ed-convert-lev-to-int
+                        (sha3-buffers
+                         (ed-convert-int-to-lev tau-r   nbytes)
+                         (ed-convert-int-to-lev tau-pub nbytes)
+                         msg-enc))
+                       ))))
         (list
          :msg     msg
          :tau-pub tau-pub
@@ -914,16 +959,17 @@ THE SOFTWARE.
         ))))
 
 (defun elligator-ed-dsa-validate (msg tau-pub tau-r s)
-  (ed-pt=
-   (ed-nth-pt s)
-   (ed-add (elli2-decode tau-r)
-           (ed-mul (elli2-decode tau-pub)
-                   (ed-convert-lev-to-int
-                    (sha3-buffers
-                     (ed-convert-int-to-lev tau-r)
-                     (ed-convert-int-to-lev tau-pub)
-                     (loenc:encode msg)))
-                   ))))
+  (let ((nbytes (elligator-nbytes)))
+    (ed-pt=
+     (ed-nth-pt s)
+     (ed-add (elli2-decode tau-r)
+             (ed-mul (elli2-decode tau-pub)
+                     (ed-convert-lev-to-int
+                      (sha3-buffers
+                       (ed-convert-int-to-lev tau-r   nbytes)
+                       (ed-convert-int-to-lev tau-pub nbytes)
+                       (loenc:encode msg)))
+                     )))))
 
 ;; ------------------------------------------------------------
 
