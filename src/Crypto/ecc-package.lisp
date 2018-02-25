@@ -51,6 +51,7 @@ THE SOFTWARE.
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
    :convert-bytes-to-int
+   :ctr-drbg
    :ctr-drbg-int
    :sha3-buffers
    

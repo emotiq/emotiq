@@ -133,7 +133,7 @@ THE SOFTWARE.
 (defun make-random-keypair (seed)
   ;; seed can be anything at all, any Lisp object
   (make-deterministic-keypair (list seed
-                                    (top-octave-rand *ed-r*))))
+                                    (ctr-drbg 256))))
 
 (defun make-subkey (skey &rest sub-seeds)
   (reduce (lambda (quad sub-seed)
