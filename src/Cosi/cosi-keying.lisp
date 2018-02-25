@@ -126,10 +126,6 @@ THE SOFTWARE.
      :s    (getf plist :s)
      )))
 
-(defun top-octave-rand (range)
-  ;; random value in the top octave of the range
-  (random-between (ash range -1) range))
-
 (defun make-random-keypair (seed)
   ;; seed can be anything at all, any Lisp object
   (make-deterministic-keypair (list seed
