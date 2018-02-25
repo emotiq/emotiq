@@ -7,7 +7,8 @@ env:
     - PATH=~/.roswell/bin:$PATH
     - ROSWELL_INSTALL_DIR=$HOME/.roswell
 # Speculatively hook into Coveralls <https://coveralls.io/>
-    - COVERAGE_EXCLUDE=t/
+# Coveralls configuration (currently unused)
+#    - COVERAGE_EXCLUDE=t/
   matrix:
     - LISP=sbcl-bin
     - LISP=ccl-bin
@@ -36,7 +37,10 @@ script:
   - ros -s prove
         -e '(or (prove:run :cosi-prove)
                 (uiop:quit -1))'
-  - ros -s prove -s cl-coveralls
-        -e '(or (coveralls:with-coveralls (:exclude (list "t"))
-                  (prove:run :emotiq-prove))
-                (uiop:quit -1))'
+  # Speculatively hook into Coveralls <https://coveralls.io/>
+  # Coveralls invocation (currently unused)
+  #                 
+  # - ros -s prove -s cl-coveralls
+  #       -e '(or (coveralls:with-coveralls (:exclude (list "t"))
+  #                 (prove:run :emotiq-prove))
+  #               (uiop:quit -1))'
