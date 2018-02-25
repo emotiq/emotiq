@@ -51,6 +51,7 @@ THE SOFTWARE.
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
    :convert-bytes-to-int
+   :ctr-drbg
    :ctr-drbg-int
    :sha3-buffers
    
@@ -130,6 +131,10 @@ THE SOFTWARE.
    :elligator-limit
    :elligator-nbits
 
+   :elli2-encode
+   :elli2-decode
+   :elli2-random-pt
+   
    :ed-schnorr-sig
    :ed-schnorr-sig-verify
    
@@ -141,9 +146,24 @@ THE SOFTWARE.
    :ed-sqrt
    :ed-expt
 
+   :mod-r
+   :hash-to-int
+   :add-mod-r
+   :sub-mod-r
+   :mult-mod-r
+   
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
    :compute-skey
+   :compute-schnorr-deterministic-random
+   :ed-dsa
+   :ed-dsa-validate
+   
+   :compute-elligator-skey
+   :compute-elligator-summed-pkey
+   :compute-elligator-schnorr-deterministic-random
+   :elligator-ed-dsa
+   :elligator-ed-dsa-validate
    ))
 
 (defpackage :lagrange-4-square

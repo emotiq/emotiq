@@ -26,23 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :cosi-keying
-  (:use
-   :common-lisp
-   :ecc-crypto-b571
-   :crypto-mod-math
-   :edwards-ecc)
-  (:export
-   :make-random-keypair
-   :make-deterministic-keypair
-   :make-subkey
-   :validate-pkey
-   :ed-dsa
-   :ed-dsa-validate
-   :need-integer-form
-   :published-form
-   ))
-
 (in-package :cosi-keying)
 
 ;; NOTE: The adopted standard for Emotiq (for now) is:
@@ -52,23 +35,6 @@ THE SOFTWARE.
 ;;    strings.
 ;;
 ;;    Users are identified by public key.
-
-;; -----------------------------------------------
-
-(defun mod-r (v)
-  (mod v *ed-r*))
-
-(defun hash-to-int (vec)
-  (mod-r (ed-convert-lev-to-int vec)))
-
-(defun add-mod-r (a b)
-  (add-mod *ed-r* a b))
-
-(defun sub-mod-r (a b)
-  (sub-mod *ed-r* a b))
-
-(defun mult-mod-r (a b)
-  (mult-mod *ed-r* a b))
 
 ;; ---------------------------------------------------
 
@@ -114,49 +80,33 @@ THE SOFTWARE.
   (published-form (need-integer-form v)))
 
 ;; ---------------------------------------------------
-;; The IRTF EdDSA standard as a primitive
+;; The IETF EdDSA standard as a primitive
 
-(defun ed-dsa (msg skey)
-  (let* ((msg-enc   (loenc:encode msg))
-         (pkey      (ed-nth-pt skey))
-         (pkey-cmpr (ed-compress-pt pkey))
-         (r         (ed-convert-lev-to-int
-                     (sha3-buffers
-                      (ed-convert-int-to-lev skey)
-                      msg-enc)))
-         (rpt       (ed-nth-pt r))
-         (rpt-cmpr  (ed-compress-pt rpt))
-         (s         (add-mod-r
-                     r
-                     (mult-mod-r
-                      skey
-                      (ed-convert-lev-to-int
-                       (sha3-buffers
-                        (ed-convert-int-to-lev rpt-cmpr)
-                        (ed-convert-int-to-lev pkey-cmpr)
-                        msg-enc))
-                      ))))
+(defun cosi-dsa (msg skey)
+  #-:ELLIGATOR
+  (let ((quad  (ed-dsa msg skey)))
     (list
-     :msg   msg
-     :pkey  (published-form pkey-cmpr)
-     :r     (published-form rpt-cmpr)
-     :s     (published-form s))
-    ))
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :pkey))
+     :r    (published-form (getf quad :r))
+     :s    (published-form (getf quad :s))
+     ))
+  #+:ELLIGATOR
+  (let ((quad (elligator-ed-dsa msg skey)))
+    (list
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :tau-pub))
+     :r    (published-form (getf quad :tau-r))
+     :s    (published-form (getf quad :s))
+     )))
 
-(defun ed-dsa-validate (msg pkey r s)
+(defun cosi-dsa-validate (msg pkey r s)
   (let ((pkey (need-integer-form pkey))
         (r    (need-integer-form r))
         (s    (need-integer-form s)))
-    (ed-pt=
-     (ed-nth-pt s)
-     (ed-add (ed-decompress-pt r)
-             (ed-mul (ed-decompress-pt pkey)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers
-                       (ed-convert-int-to-lev r)
-                       (ed-convert-int-to-lev pkey)
-                       (loenc:encode msg)))
-                     )))))
+    (#-:ELLIGATOR ed-dsa-validate 
+     #+:ELLIGATOR elligator-ed-dsa-validate
+     msg pkey r s)))
 
 ;; --------------------------------------------
 
@@ -166,25 +116,20 @@ THE SOFTWARE.
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  (compute-skey seed))
-         (plist (ed-dsa +keying-msg+ skey))
-         (pkey  (getf plist :pkey))
-         (s     (getf plist :s))
-         (r     (getf plist :r)))
+  (let* ((skey  #-:ELLIGATOR (compute-skey seed)
+                #+:ELLIGATOR (compute-elligator-skey seed))
+         (plist (cosi-dsa +keying-msg+ skey)))
     (list
      :skey skey
-     :pkey (published-form pkey)
-     :r    (published-form r)
-     :s    (published-form s))))
-
-(defun top-octave-rand (range)
-  ;; random value in the top octave of the range
-  (random-between (ash range -1) range))
+     :pkey (getf plist :pkey)
+     :r    (getf plist :r)
+     :s    (getf plist :s)
+     )))
 
 (defun make-random-keypair (seed)
   ;; seed can be anything at all, any Lisp object
   (make-deterministic-keypair (list seed
-                                    (top-octave-rand *ed-r*))))
+                                    (ctr-drbg 256))))
 
 (defun make-subkey (skey &rest sub-seeds)
   (reduce (lambda (quad sub-seed)
@@ -195,7 +140,7 @@ THE SOFTWARE.
           :initial-value (list :skey skey)))
 
 (defun validate-pkey (pkey r s)
-  (ed-dsa-validate +keying-msg+ pkey r s))
+  (cosi-dsa-validate +keying-msg+ pkey r s))
         
 ;; ------------------------------------------------------
 
