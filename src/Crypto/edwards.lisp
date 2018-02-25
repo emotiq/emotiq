@@ -43,8 +43,6 @@ THE SOFTWARE.
 (defstruct ed-curve
   name c d q h r gen)
 
-(defvar *edcurve*)
-
 ;; -----------------------------------------------------------------------------
 ;; for cached values dependent only on curve
 
@@ -65,14 +63,6 @@ THE SOFTWARE.
           item))))
 
 ;; -----------------------------------------------------------
-
-(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
-(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
-(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
-(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
-(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
-(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
-(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)
@@ -162,8 +152,17 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------
 
-(unless (boundp '*edcurve*) 
-  (setf *edcurve* *curve1174*)) ;; default to curve1174
+(defvar *edcurve* *curve1174*)
+
+(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
+(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
+(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
+(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
+(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
+(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
+(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
+
+;; ------------------------------------------------------
 
 (defvar *known-curves*
   (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
