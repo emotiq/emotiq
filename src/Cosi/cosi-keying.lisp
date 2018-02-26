@@ -132,6 +132,9 @@ THE SOFTWARE.
   #+:ELLIGATOR
   (multiple-value-bind (skey tau ix)
       (compute-deterministic-elligator-skey seed index)
+    ;; Note that Elligator encoding may have to search for a suitable
+    ;; key. Hence the index returned may be different from the index
+    ;; suggested.
     (declare (ignore tau))
     (let ((plist (cosi-dsa +keying-msg+ skey)))
       (list
