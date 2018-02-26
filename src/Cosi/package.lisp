@@ -155,3 +155,13 @@
    ))
 
 
+(defpackage :cosi-blkdef
+  (:use
+   :common-lisp)
+  (:export
+   :add-key-to-block
+   :add-transaction-to-block
+   :get-block-keys
+   :get-block-transactions
+   :publish-block
+   ))

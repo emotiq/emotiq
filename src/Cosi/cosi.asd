@@ -44,6 +44,7 @@ THE SOFTWARE.
                         :pathname "./"
                         :serial t
                         :components ((:file "base58")
+                                     (:file "cosi-blkdef")
                                      (:file "cosi-keying")
 
 				     (:file "cosi-async")

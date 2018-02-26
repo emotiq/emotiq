@@ -158,10 +158,33 @@ THE SOFTWARE.
           plist
         (iter (1+ ix))))))
 
-(defun make-random-keypair (&optional seed)
+;; --------------------------------------------------------------
+
+(defun get-seed (seed)
+  (if seed
+      (ed-convert-int-to-lev (need-integer-form seed))
+    (ctr-drbg 256)))
+
+(defun get-salt (salt)
+  (let ((pref (loenc:encode "salt")))
+    (if salt
+        (concatenate 'vector
+                     pref 
+                     (ed-convert-int-to-lev (need-integer-form salt)))
+      pref)))
+
+;; --------------------------------------------------------------
+;; User level access functions for keying
+
+(defun make-random-keypair (&optional seed salt)
   ;; seed can be anything at all, any Lisp object
   ;; This is the normal entry point when making new user keys.
-  (let ((rseed (list seed (ctr-drbg 256))))
+  (let* ((seed  (get-seed seed))
+         (salt  (get-salt salt))
+         (rseed (ironclad:pbkdf2-hash-password seed
+                                               :salt       salt
+                                               :digest     :sha3
+                                               :iterations 2048)))
     (make-unique-deterministic-keypair rseed)))
 
 (defun make-subkey (skey sub-seed)
@@ -219,9 +242,9 @@ THE SOFTWARE.
       (unless (bloom-filter:test-membership *pkey-filter* hashv)
         (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
         (setf *pkeys* (maps:add pk proof *pkeys*))
-        ;; maybe also add pkey+proof to blockchain?
-        ;; (add-key-to-blockchain pkey proof)
-        t))))
+        (cosi-blkdef:add-key-to-block pkey proof)
+        t)
+      )))
 
 (defun lookup-pkey (pkey)
   ;; return t if pkey found and valid, nil if not found or invalid
@@ -280,9 +303,13 @@ THE SOFTWARE.
   ;; word representing an 11-bit group presented in little-endian
   ;; order
   (assert (= 2048 (length wref)))
+  (assert (and (consp wlist)
+               (every 'stringp wlist)))
   (let ((val 0))
     (loop for wrd in wlist
           for pos from 0 by 11
           do
+          ;; this will error if word isn't found in list...
           (setf (ldb (byte 11 pos) val) (position wrd wref)))
     val))
+
