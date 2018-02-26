@@ -139,14 +139,19 @@
    :crypto-mod-math
    :edwards-ecc)
   (:export
-   :make-random-keypair
-   :make-deterministic-keypair
-   :make-subkey
-   :validate-pkey
-   :cosi-dsa
-   :cosi-dsa-validate
    :need-integer-form
    :published-form
+   :cosi-dsa
+   :cosi-dsa-validate
+   :make-random-keypair
+   :make-deterministic-keypair
+   :make-unique-deterministic-keypair
+   :make-subkey
+   :validate-pkey
+   
+   :add-key-to-blockchain
+   :populate-pkey-database
+   :refresh-pkey-database
    ))
 
 
