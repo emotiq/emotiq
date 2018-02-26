@@ -148,9 +148,7 @@ THE SOFTWARE.
   ;; we have uniqueness.
   (um:nlet-tail iter ((ix  0))
     (let* ((plist (make-deterministic-keypair seed ix))
-           (pkey  (#-:ELLIGATOR identity
-                   #+:ELLIGATOR to-elligator-range ;; remove random high bits
-                     (need-integer-form (getf plist :pkey))))
+           (pkey  (getf plist :pkey))
            (proof (list (getf plist :r) (getf plist :s))))
       (if (unique-key-p pkey proof)
           ;; when was unique, it also got added to table
@@ -159,6 +157,7 @@ THE SOFTWARE.
 
 (defun make-random-keypair (&optional seed)
   ;; seed can be anything at all, any Lisp object
+  ;; This is the normal entry point when making new user keys.
   (let ((rseed (list seed (ctr-drbg 256))))
     (make-unique-deterministic-keypair rseed)))
 
@@ -205,19 +204,25 @@ THE SOFTWARE.
                                   :hash-fn 'identity))
 (defvar *pkeys* (maps:empty)) ;; for now...
 
+(defun true-pkey (pkey)
+  (#-:ELLIGATOR identity
+   #+:ELLIGATOR to-elligator-range
+    (need-integer-form pkey)))
+
 (defun unique-key-p (pkey proof)
-  (let ((hashv (ed-convert-int-to-lev (need-integer-form pkey))))
+  (let* ((pk    (true-pkey pkey))
+         (hashv (ed-convert-int-to-lev pk)))
     (um:critical-section ;; for SMP safety
       (unless (bloom-filter:test-membership *pkey-filter* hashv)
         (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
-        (setf *pkeys* (maps:add pkey proof *pkeys*))
+        (setf *pkeys* (maps:add pk proof *pkeys*))
         ;; maybe also add pkey+proof to blockchain?
         ;; (add-key-to-blockchain pkey proof)
         t))))
 
 (defun lookup-pkey (pkey)
   ;; return t if pkey found and valid, nil if not found or invalid
-  (let ((proof (maps:find pkey *pkeys*)))
+  (let ((proof (maps:find (true-pkey pkey) *pkeys*)))
     (when proof
       (apply 'validate-pkey pkey proof))))
 
