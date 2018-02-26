@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 (defsystem "cosi"
   :description "Cosi: Authenticated multi-signatures in Lisp"
-  :version     "1.0.2"
+  :version     "1.0.3"
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
   :depends-on (ironclad
@@ -33,7 +33,8 @@ THE SOFTWARE.
                core-crypto
                lisp-object-encoder
                useful-macros
-               usocket)
+               usocket
+               bloom-filter)
   :in-order-to ((test-op (test-op "cosi-test")))
   :components ((:module package
                         :pathname "./"

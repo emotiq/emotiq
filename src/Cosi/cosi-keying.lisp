@@ -26,23 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :cosi-keying
-  (:use
-   :common-lisp
-   :ecc-crypto-b571
-   :crypto-mod-math
-   :edwards-ecc)
-  (:export
-   :make-random-keypair
-   :make-deterministic-keypair
-   :make-subkey
-   :validate-pkey
-   :ed-dsa
-   :ed-dsa-validate
-   :need-integer-form
-   :published-form
-   ))
-
 (in-package :cosi-keying)
 
 ;; NOTE: The adopted standard for Emotiq (for now) is:
@@ -52,23 +35,6 @@ THE SOFTWARE.
 ;;    strings.
 ;;
 ;;    Users are identified by public key.
-
-;; -----------------------------------------------
-
-(defun mod-r (v)
-  (mod v *ed-r*))
-
-(defun hash-to-int (vec)
-  (mod-r (ed-convert-lev-to-int vec)))
-
-(defun add-mod-r (a b)
-  (add-mod *ed-r* a b))
-
-(defun sub-mod-r (a b)
-  (sub-mod *ed-r* a b))
-
-(defun mult-mod-r (a b)
-  (mult-mod *ed-r* a b))
 
 ;; ---------------------------------------------------
 
@@ -114,92 +80,164 @@ THE SOFTWARE.
   (published-form (need-integer-form v)))
 
 ;; ---------------------------------------------------
-;; The IRTF EdDSA standard as a primitive
+;; The IETF EdDSA standard as a primitive
 
-(defun ed-dsa (msg skey)
-  (let* ((a         (compute-a-for-skey
-                     (need-integer-form skey)))
-         (msg-enc   (loenc:encode msg))
-         (pkey      (ed-nth-pt a))
-         (pkey-cmpr (ed-compress-pt pkey))
-         (r         (ed-convert-lev-to-int
-                     (sha3-buffers
-                      (ed-convert-int-to-lev a)
-                      msg-enc)))
-         (rpt       (ed-nth-pt r))
-         (rpt-cmpr  (ed-compress-pt rpt))
-         (s         (add-mod-r
-                     r
-                     (mult-mod-r
-                      a
-                      (ed-convert-lev-to-int
-                       (sha3-buffers
-                        (ed-convert-int-to-lev rpt-cmpr)
-                        (ed-convert-int-to-lev pkey-cmpr)
-                        msg-enc))
-                      ))))
+(defun cosi-dsa (msg skey)
+  #-:ELLIGATOR
+  (let ((quad  (ed-dsa msg skey)))
     (list
-     :msg   msg
-     :pkey  (published-form pkey-cmpr)
-     :r     (published-form rpt-cmpr)
-     :s     (published-form s))
-    ))
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :pkey))
+     :r    (published-form (getf quad :r))
+     :s    (published-form (getf quad :s))
+     ))
+  #+:ELLIGATOR
+  (let ((quad (elligator-ed-dsa msg skey)))
+    (list
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :tau-pub))
+     :r    (published-form (getf quad :tau-r))
+     :s    (published-form (getf quad :s))
+     )))
 
-(defun ed-dsa-validate (msg pkey r s)
+(defun cosi-dsa-validate (msg pkey r s)
   (let ((pkey (need-integer-form pkey))
         (r    (need-integer-form r))
         (s    (need-integer-form s)))
-    (ed-pt=
-     (ed-nth-pt s)
-     (ed-add (ed-decompress-pt r)
-             (ed-mul (ed-decompress-pt pkey)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers
-                       (ed-convert-int-to-lev r)
-                       (ed-convert-int-to-lev pkey)
-                       (loenc:encode msg)))
-                     )))))
+    (#-:ELLIGATOR ed-dsa-validate 
+     #+:ELLIGATOR elligator-ed-dsa-validate
+     msg pkey r s)))
 
 ;; --------------------------------------------
+;; Keying for attribution. User keys, and signatures. You really don't
+;; need such an elaborate system when generating keys for internal
+;; math operations like for range proofs and such. And range proofs
+;; also present special problems with respect to Elligator encodings.
 
 (defconstant +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
 
-(defun make-deterministic-keypair (seed)
+(defun make-deterministic-keypair (seed &optional (index 0))
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  (ldb (byte (1+ *ed-nbits*) 0)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers (loenc:encode seed)))))
-         (plist (ed-dsa +keying-msg+ skey))
-         (pkey  (getf plist :pkey))
-         (s     (getf plist :s))
-         (r     (getf plist :r)))
+  #-:ELLIGATOR
+  (let* ((skey  (compute-deterministic-skey seed index))
+         (plist (cosi-dsa +keying-msg+ skey)))
     (list
-     :skey skey
-     :pkey (published-form pkey)
-     :r    (published-form r)
-     :s    (published-form s))))
+     :skey  skey
+     :pkey  (getf plist :pkey)
+     :index index
+     :r     (getf plist :r)
+     :s     (getf plist :s)))
+  #+:ELLIGATOR
+  (multiple-value-bind (skey tau ix)
+      (compute-deterministic-elligator-skey seed index)
+    (declare (ignore tau))
+    (let ((plist (cosi-dsa +keying-msg+ skey)))
+      (list
+       :skey  skey
+       :pkey  (getf plist :pkey)
+       :index ix
+       :r     (getf plist :r)
+       :s     (getf plist :s)
+       ))))
 
-(defun top-octave-rand (range)
-  ;; random value in the top octave of the range
-  (random-between (ash range -1) range))
+(defun make-unique-deterministic-keypair (seed)
+  ;; create a unique deterministic keypair, using a Bloom filter to
+  ;; record keys, and adding an incrementing index to the seed until
+  ;; we have uniqueness.
+  (um:nlet-tail iter ((ix  0))
+    (let* ((plist (make-deterministic-keypair seed ix))
+           (pkey  (getf plist :pkey))
+           (proof (list (getf plist :r) (getf plist :s))))
+      (if (unique-key-p pkey proof)
+          ;; when was unique, it also got added to table
+          plist
+        (iter (1+ ix))))))
 
-(defun make-random-keypair (seed)
+(defun make-random-keypair (&optional seed)
   ;; seed can be anything at all, any Lisp object
-  (make-deterministic-keypair (list seed
-                                    (top-octave-rand *ed-r*))))
+  ;; This is the normal entry point when making new user keys.
+  (let ((rseed (list seed (ctr-drbg 256))))
+    (make-unique-deterministic-keypair rseed)))
 
-(defun make-subkey (skey &rest sub-seeds)
-  (reduce (lambda (quad sub-seed)
-            (make-deterministic-keypair
-             (list (need-integer-form (getf quad :skey))
-                   sub-seed)))
-          sub-seeds
-          :initial-value (list :skey skey)))
+(defun make-subkey (skey sub-seed)
+  ;; Need to do one at a time, since unique may have created an index
+  ;; value, and you can't retrace the path without that index value.
+  ;; That is to say, you really do need to keep a record of all the
+  ;; private keys along the way...
+  (make-unique-deterministic-keypair
+   (list (need-integer-form skey)
+         sub-seed)))
 
 (defun validate-pkey (pkey r s)
-  (ed-dsa-validate +keying-msg+ pkey r s))
+  (cosi-dsa-validate +keying-msg+ pkey r s))
         
 ;; ------------------------------------------------------
 
+;; Bloom filter sizing.... Suppose we want false positives rate
+;; P_false < 0.001, number of hashes needed is K = -log2 p = 9.97 =
+;; 10, and bits/item M/N = -1.44 Log2 p = 14.35. Suppose further, that
+;; we plan for N = 1M items in the filter.
+;;
+;; We can chop up the bits of a hash like SHA256 for use as the
+;; separate hash values, easier to do if we just use whole octets from
+;; the hash directly. And keeping M as a power of 2, enables just
+;; masking the hash value with 2^m-1 for indexing into the bit table..
+;;
+;; For 1M items, we need M = 14.35M bits => 16M or 24 bit addressing.
+;; With 10 hashes, we need 240 bits of hash overall. And the bit table
+;; will occupy 2 MB of memory.
+;;
+;; Pkeys are all at least 249 bits, so we are okay with just using the
+;; Pkey as the source of hash values for the Bloom filter. We just
+;; need to convert them into a little-endian vector of bytes.
+;;
+;; Not that no space is saved if we settle for p = 0.01 instead of
+;; 0.001. The only thing that happens with higher false positive
+;; probability is that we need only 7 hashes instead of 10.
+;;
+
+(defvar *pkey-filter*
+  (bloom-filter:make-bloom-filter :nitems  1000000
+                                  :pfalse  0.001
+                                  :hash-fn 'identity))
+(defvar *pkeys* (maps:empty)) ;; for now...
+
+(defun true-pkey (pkey)
+  (#-:ELLIGATOR identity
+   #+:ELLIGATOR to-elligator-range
+    (need-integer-form pkey)))
+
+(defun unique-key-p (pkey proof)
+  (let* ((pk    (true-pkey pkey))
+         (hashv (ed-convert-int-to-lev pk)))
+    (um:critical-section ;; for SMP safety
+      (unless (bloom-filter:test-membership *pkey-filter* hashv)
+        (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
+        (setf *pkeys* (maps:add pk proof *pkeys*))
+        ;; maybe also add pkey+proof to blockchain?
+        ;; (add-key-to-blockchain pkey proof)
+        t))))
+
+(defun lookup-pkey (pkey)
+  ;; return t if pkey found and valid, nil if not found or invalid
+  (let ((proof (maps:find (true-pkey pkey) *pkeys*)))
+    (when proof
+      (apply 'validate-pkey pkey proof))))
+
+
+(defun NYI (&rest args)
+  (error "Not yet implemented ~A" args))
+
+(defun #1=add-key-to-blockchain (pkey proof)
+  (declare (ignore pkey proof))
+  (NYI '#1#))
+
+(defun #1=populate-pkey-database ()
+  ;; this should populate *pkeys* and *pkey-filter* from the blockchain at startup
+  (NYI '#1#))
+
+(defun #1=refresh-pkey-database ()
+  ;; periodically refresh the database from blockchain updates
+  (NYI '#1#))

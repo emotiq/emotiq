@@ -1,6 +1,4 @@
-;;;; emotiq-tests.lisp
-
-(in-package #:emotiq-tests)
+(in-package #:emotiq-test)
 
 ;;; Documentation for LISP-UNIT testing framework is here:
 ;;;
