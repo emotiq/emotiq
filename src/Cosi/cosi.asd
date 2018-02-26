@@ -33,8 +33,9 @@ THE SOFTWARE.
                core-crypto
                lisp-object-encoder
                useful-macros
-               usocket)
-  :in-order-to ((test-op (test-op "cosi-test")))
+               usocket
+               bloom-filter)
+  :in-order-to ((test-op (test-op "cosi/t")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))

@@ -154,12 +154,12 @@ THE SOFTWARE.
    
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
-   :compute-skey
+   :compute-deterministic-skey
    :compute-schnorr-deterministic-random
    :ed-dsa
    :ed-dsa-validate
    
-   :compute-elligator-skey
+   :compute-deterministic-elligator-skey
    :compute-elligator-summed-pkey
    :compute-elligator-schnorr-deterministic-random
    :elligator-ed-dsa

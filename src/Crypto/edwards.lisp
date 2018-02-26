@@ -500,6 +500,8 @@ THE SOFTWARE.
                             (ceiling (ed-nbits) 8))))
 
 (defun ed-convert-int-to-lev (v &optional (nel (ed-nbytes)))
+  (unless (<= (integer-length v) (* 8 nel))
+    (error "Truncation implied"))
   (let ((vec (make-array nel
                          :element-type '(unsigned-byte 8))))
     (loop for ix from 0 below nel
@@ -600,7 +602,7 @@ THE SOFTWARE.
         (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
     ))
 
-(defun compute-skey (seed)
+(defun compute-deterministic-skey (seed &optional (index 0))
   ;;
   ;; Return a value based on seed, to be used for generating a public
   ;; key, (aka, a secret key), which is in the upper range of the
@@ -608,19 +610,19 @@ THE SOFTWARE.
   ;;
   (let* ((h     (ed-convert-lev-to-int
                  (get-hash-bits (ed-nbits)
-                                (list seed :generate-private-key))))
+                                (list seed :generate-private-key index))))
          (nbits (1- (integer-length (floor *ed-r* *ed-h*))))
          (skey  (* *ed-h*  ;; avoid small-group attacks
                    (dpb 1 (byte 1 nbits) ;; ensure non-zero
                         (ldb (byte nbits 0) h)))))
-    (assert (< skey *ed-r*))
+    ;; (assert (< skey *ed-r*)) ;; should be true by construction
     skey))
 
 (defun ed-random-pair ()
   ;; select a random private and public key from the curve, abiding by
-  ;; the precautions discussed for COMPUTE-SKEY
-  (let* ((seed (random-between 0 (ash 1 (ed-nbits))))
-         (skey (compute-skey seed))
+  ;; the precautions discussed for COMPUTE-DETERMINISTIC-SKEY
+  (let* ((seed (ctr-drbg 256))
+         (skey (compute-deterministic-skey seed))
          (pt   (ed-nth-pt skey)))
     (values skey pt)))
 
@@ -658,7 +660,7 @@ THE SOFTWARE.
                   (ed-convert-int-to-lev k-priv (ed-compressed-nbytes))
                   msgv)))))
       (if (plusp r)
-          (values r (ed-nth-pt r))
+          (values r (ed-nth-pt r) ix)
         (iter (1+ ix)))
       )))
 
@@ -891,15 +893,15 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------
 
-(defun compute-elligator-skey (seed)
+(defun compute-deterministic-elligator-skey (seed &optional (index 0))
   ;; compute a private key from the seed that is safe, and produces an
   ;; Elligator-capable public key.
-  (um:nlet-tail iter ((ix  0))
-    (let* ((skey (compute-skey (list ix seed)))
+  (um:nlet-tail iter ((ix  index))
+    (let* ((skey (compute-deterministic-skey seed ix))
            (pkey (ed-nth-pt skey))
            (tau  (elli2-encode pkey)))
       (if tau
-          (values skey tau)
+          (values skey tau ix)
         (iter (1+ ix))))))
 
 (defun compute-elligator-summed-pkey (sum-pkey)
@@ -915,6 +917,19 @@ THE SOFTWARE.
   (multiple-value-bind (skey2 pkey2) (compute-elligator-skey :dan)
     (let ((p  (ed-add pkey1 pkey2)))
       (compute-elligator-summed-pkey p))))
+
+(defun tst (nel)
+  (let ((ans nil)
+        (dict (make-hash-table)))
+    (loop for ix from 0 below nel do
+          (multiple-value-bind (skey tau ct)
+              (compute-elligator-skey (ed-convert-int-to-lev ix 4))
+            (if (gethash skey dict)
+                (print "Collision")
+              (setf (gethash skey dict) tau))
+            (when (plusp ct)
+              (push (cons ix ct) ans))))
+    ans))
  |#
              
 (defun compute-elligator-schnorr-deterministic-random (msgv k-priv)
@@ -928,9 +943,23 @@ THE SOFTWARE.
            (rpt   (ed-nth-pt r))
            (tau-r (elli2-encode rpt)))
       (if (and (plusp r) tau-r)
-          (values r tau-r)
+          (values r tau-r ix)
         (iter (1+ ix)))
       )))
+
+#|
+(defun tst (nel)
+  (let ((ans  nil)
+        (skey (compute-elligator-skey :dave)))
+    (loop for ix from 0 below nel do
+          (multiple-value-bind (r rpt ct)
+              (compute-elligator-schnorr-deterministic-random
+               (ed-convert-int-to-lev ix 4) skey)
+            (declare (ignore r rpt))
+            (when (plusp ct)
+              (push (cons ix ct) ans))))
+    ans))
+ |#
 
 (defun elligator-ed-dsa (msg k-priv)
   (let ((msg-enc (loenc:encode msg))
@@ -1238,7 +1267,8 @@ THE SOFTWARE.
        :y yw))))
              
 (defun elli2-encode (pt)
-  (cond ((ed-neutral-point-p pt)  0)
+  (cond ((ed-neutral-point-p pt)
+         (elligator-int-padding))
         (t 
          (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
                     ((sqrt-c4dm1 a b u) (elli2-ab))
