@@ -213,7 +213,7 @@ THE SOFTWARE.
   (error "Not yet implemented ~A" args))
 
 (defun #1=add-key-to-blockchain (pkey proof)
-  (declare (ignore pkey proof)
+  (declare (ignore pkey proof))
   (NYI '#1#))
 
 (defun #1=populate-pkey-database ()
