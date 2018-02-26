@@ -50,6 +50,7 @@ THE SOFTWARE.
                 (:file "btree-clos")
                 (:file "memory-btrees-clos")
 		#+:LISPWORKS (:file "protocols")
+                (:file "bloom-filter")
                 )
   :serial t
   :depends-on   ("useful-macros"
