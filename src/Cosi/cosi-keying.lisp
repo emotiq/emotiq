@@ -199,6 +199,7 @@ THE SOFTWARE.
         (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
         (setf *pkeys* (maps:add pkey proof *pkeys*))
         ;; maybe also add pkey+proof to blockchain?
+        ;; (add-key-to-blockchain pkey proof)
         t))))
 
 (defun lookup-pkey (pkey)
@@ -207,4 +208,14 @@ THE SOFTWARE.
     (when proof
       (apply 'validate-pkey pkey proof))))
 
-        
+
+(defun NYI (&rest args)
+  (error "Not yet implemented ~A" args))
+
+(defun #1=add-key-to-blockchain (pkey proof)
+  (declare (ignore pkey proof)
+  (NYI '#1#))
+
+(defun #1=populate-pkey-database ()
+  ;; this should populate *pkeys* and *pkey-filter* from the blockchain at startup
+  (NYI '#1#))
