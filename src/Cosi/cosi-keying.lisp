@@ -219,3 +219,7 @@ THE SOFTWARE.
 (defun #1=populate-pkey-database ()
   ;; this should populate *pkeys* and *pkey-filter* from the blockchain at startup
   (NYI '#1#))
+
+(defun #1=refresh-pkey-database ()
+  ;; periodically refresh the database from blockchain updates
+  (NYI '#1#))
