@@ -193,7 +193,7 @@ THE SOFTWARE.
 ;; Pkey as the source of hash values for the Bloom filter. We just
 ;; need to convert them into a little-endian vector of bytes.
 ;;
-;; Not that no space is saved if we settle for p = 0.01 instead of
+;; Note that no space is saved if we settle for p = 0.01 instead of
 ;; 0.001. The only thing that happens with higher false positive
 ;; probability is that we need only 7 hashes instead of 10.
 ;;
