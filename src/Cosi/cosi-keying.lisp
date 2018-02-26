@@ -120,16 +120,27 @@ THE SOFTWARE.
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  #-:ELLIGATOR (compute-deterministic-skey seed index)
-                #+:ELLIGATOR (compute-deterministic-elligator-skey seed index))
+  #-:ELLIGATOR
+  (let* ((skey  (compute-deterministic-skey seed index))
          (plist (cosi-dsa +keying-msg+ skey)))
     (list
      :skey  skey
      :pkey  (getf plist :pkey)
      :index index
      :r     (getf plist :r)
-     :s     (getf plist :s)
-     )))
+     :s     (getf plist :s)))
+  #+:ELLIGATOR
+  (multiple-value-bind (skey tau ix)
+      (compute-deterministic-elligator-skey seed index)
+    (declare (ignore tau))
+    (let ((plist (cosi-dsa +keying-msg+ skey)))
+      (list
+       :skey  skey
+       :pkey  (getf plist :pkey)
+       :index ix
+       :r     (getf plist :r)
+       :s     (getf plist :s)
+       ))))
 
 (defun make-unique-deterministic-keypair (seed)
   ;; create a unique deterministic keypair, using a Bloom filter to
@@ -139,13 +150,14 @@ THE SOFTWARE.
     (let* ((plist (make-deterministic-keypair seed ix))
            (pkey  (getf plist :pkey))
            (proof (list (getf plist :r) (getf plist :s))))
-      (if (unique-key-p pkey proof) ;; this also adds the key to the table if missing
+      (if (unique-key-p pkey proof)
+          ;; when was unique, it also got added to table
           plist
-        (iter (1+ ix))))
-    ))
+        (iter (1+ ix))))))
 
 (defun make-random-keypair (&optional seed)
   ;; seed can be anything at all, any Lisp object
+  ;; This is the normal entry point when making new user keys.
   (let ((rseed (list seed (ctr-drbg 256))))
     (make-unique-deterministic-keypair rseed)))
 
@@ -187,24 +199,30 @@ THE SOFTWARE.
 ;;
 
 (defvar *pkey-filter*
-  (bloom-filter:make-bloom-filter :nitems 1000000
-                                  :pfalse 0.001
-                                  :hashfn 'identity))
+  (bloom-filter:make-bloom-filter :nitems  1000000
+                                  :pfalse  0.001
+                                  :hash-fn 'identity))
 (defvar *pkeys* (maps:empty)) ;; for now...
 
+(defun true-pkey (pkey)
+  (#-:ELLIGATOR identity
+   #+:ELLIGATOR to-elligator-range
+    (need-integer-form pkey)))
+
 (defun unique-key-p (pkey proof)
-  (let ((hashv (ed-convert-int-to-lev (need-integer-form pkey))))
+  (let* ((pk    (true-pkey pkey))
+         (hashv (ed-convert-int-to-lev pk)))
     (um:critical-section ;; for SMP safety
       (unless (bloom-filter:test-membership *pkey-filter* hashv)
         (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
-        (setf *pkeys* (maps:add pkey proof *pkeys*))
+        (setf *pkeys* (maps:add pk proof *pkeys*))
         ;; maybe also add pkey+proof to blockchain?
         ;; (add-key-to-blockchain pkey proof)
         t))))
 
 (defun lookup-pkey (pkey)
   ;; return t if pkey found and valid, nil if not found or invalid
-  (let ((proof (maps:find pkey *pkeys*)))
+  (let ((proof (maps:find (true-pkey pkey) *pkeys*)))
     (when proof
       (apply 'validate-pkey pkey proof))))
 

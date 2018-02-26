@@ -130,7 +130,8 @@ THE SOFTWARE.
    :elligator-decode
    :elligator-limit
    :elligator-nbits
-
+   :to-elligator-range
+   
    :elli2-encode
    :elli2-decode
    :elli2-random-pt
