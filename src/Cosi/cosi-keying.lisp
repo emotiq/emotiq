@@ -120,16 +120,27 @@ THE SOFTWARE.
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  #-:ELLIGATOR (compute-deterministic-skey seed index)
-                #+:ELLIGATOR (compute-deterministic-elligator-skey seed index))
+  #-:ELLIGATOR
+  (let* ((skey  (compute-deterministic-skey seed index))
          (plist (cosi-dsa +keying-msg+ skey)))
     (list
      :skey  skey
      :pkey  (getf plist :pkey)
      :index index
      :r     (getf plist :r)
-     :s     (getf plist :s)
-     )))
+     :s     (getf plist :s)))
+  #+:ELLIGATOR
+  (multiple-value-bind (skey tau ix)
+      (compute-deterministic-elligator-skey seed index)
+    (declare (ignore tau))
+    (let ((plist (cosi-dsa +keying-msg+ skey)))
+      (list
+       :skey  skey
+       :pkey  (getf plist :pkey)
+       :index ix
+       :r     (getf plist :r)
+       :s     (getf plist :s)
+       ))))
 
 (defun make-unique-deterministic-keypair (seed)
   ;; create a unique deterministic keypair, using a Bloom filter to
@@ -137,12 +148,14 @@ THE SOFTWARE.
   ;; we have uniqueness.
   (um:nlet-tail iter ((ix  0))
     (let* ((plist (make-deterministic-keypair seed ix))
-           (pkey  (getf plist :pkey))
+           (pkey  (#-:ELLIGATOR identity
+                   #+:ELLIGATOR to-elligator-range ;; remove random high bits
+                     (need-integer-form (getf plist :pkey))))
            (proof (list (getf plist :r) (getf plist :s))))
-      (if (unique-key-p pkey proof) ;; this also adds the key to the table if missing
+      (if (unique-key-p pkey proof)
+          ;; when was unique, it also got added to table
           plist
-        (iter (1+ ix))))
-    ))
+        (iter (1+ ix))))))
 
 (defun make-random-keypair (&optional seed)
   ;; seed can be anything at all, any Lisp object
@@ -187,9 +200,9 @@ THE SOFTWARE.
 ;;
 
 (defvar *pkey-filter*
-  (bloom-filter:make-bloom-filter :nitems 1000000
-                                  :pfalse 0.001
-                                  :hashfn 'identity))
+  (bloom-filter:make-bloom-filter :nitems  1000000
+                                  :pfalse  0.001
+                                  :hash-fn 'identity))
 (defvar *pkeys* (maps:empty)) ;; for now...
 
 (defun unique-key-p (pkey proof)
