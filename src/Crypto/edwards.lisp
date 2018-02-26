@@ -602,8 +602,6 @@ THE SOFTWARE.
         (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
     ))
 
-(defvar *session-entropy* (ctr-drbg 256))
-
 (defun compute-deterministic-skey (seed &optional (index 0))
   ;;
   ;; Return a value based on seed, to be used for generating a public
@@ -612,7 +610,7 @@ THE SOFTWARE.
   ;;
   (let* ((h     (ed-convert-lev-to-int
                  (get-hash-bits (ed-nbits)
-                                (list seed :generate-private-key index *session-entropy*))))
+                                (list seed :generate-private-key index))))
          (nbits (1- (integer-length (floor *ed-r* *ed-h*))))
          (skey  (* *ed-h*  ;; avoid small-group attacks
                    (dpb 1 (byte 1 nbits) ;; ensure non-zero
