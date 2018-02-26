@@ -247,6 +247,7 @@ THE SOFTWARE.
 (defvar *wordlist-folder*  #P"~/Desktop/Emotiq/Research-Code/src/Cosi/wordlists/")
 
 (defun import-wordlist (filename)
+  ;; import a 2048 word list for use in wordlist encoding/decoding
   (um:accum acc
     (with-open-file (f (merge-pathnames
                         *wordlist-folder* 
@@ -261,6 +262,8 @@ THE SOFTWARE.
       )))
 
 (defun convert-int-to-wordlist (val wref)
+  ;; convert a positive, or zero, integer value to a list of words
+  ;; representing little-endian encoding in 11-bit groups
   (assert (= 2048 (length wref)))
   (check-type val (integer 0))
   (let ((nwrds (max 1 (ceiling (integer-length val) 11))))
@@ -269,6 +272,9 @@ THE SOFTWARE.
           collect (nth (ldb (byte 11 pos) val) wref))))
 
 (defun convert-wordlist-to-int (wlist wref)
+  ;; convert a list of words from a wordlist into an integer with each
+  ;; word representing an 11-bit group presented in little-endian
+  ;; order
   (assert (= 2048 (length wref)))
   (let ((val 0))
     (loop for wrd in wlist
