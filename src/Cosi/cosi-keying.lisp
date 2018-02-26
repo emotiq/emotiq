@@ -241,3 +241,38 @@ THE SOFTWARE.
 (defun #1=refresh-pkey-database ()
   ;; periodically refresh the database from blockchain updates
   (NYI '#1#))
+
+;; --------------------------------------------------------------------
+
+(defvar *wordlist-folder*  #P"~/Desktop/Emotiq/Research-Code/src/Cosi/wordlists/")
+
+(defun import-wordlist (filename)
+  (um:accum acc
+    (with-open-file (f (merge-pathnames
+                        *wordlist-folder* 
+                        filename)
+                       :direction :input)
+      (um:nlet-tail iter ()
+        (let ((wrd (read-line f nil f)))
+          (cond ((eql wrd f))
+                (t (acc wrd)
+                   (iter))
+                )))
+      )))
+
+(defun convert-int-to-wordlist (val wref)
+  (assert (= 2048 (length wref)))
+  (check-type val (integer 0))
+  (let ((nwrds (max 1 (ceiling (integer-length val) 11))))
+    (loop for ct from 0 below nwrds
+          for pos from 0 by 11
+          collect (nth (ldb (byte 11 pos) val) wref))))
+
+(defun convert-wordlist-to-int (wlist wref)
+  (assert (= 2048 (length wref)))
+  (let ((val 0))
+    (loop for wrd in wlist
+          for pos from 0 by 11
+          do
+          (setf (ldb (byte 11 pos) val) (position wrd wref)))
+    val))
