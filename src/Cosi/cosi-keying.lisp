@@ -248,6 +248,7 @@ THE SOFTWARE.
 
 (defun import-wordlist (filename)
   ;; import a 2048 word list for use in wordlist encoding/decoding
+  ;; E.g., (import-wordlist "english.txt")
   (um:accum acc
     (with-open-file (f (merge-pathnames
                         *wordlist-folder* 
