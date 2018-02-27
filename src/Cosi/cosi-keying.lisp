@@ -314,8 +314,9 @@ THE SOFTWARE.
 (defun convert-wordlist-to-int (wlist &optional (wref *english*))
   ;; convert a list of 24 words from a wordlist into an integer with
   ;; each word representing an 11-bit group presented in little-endian
-  ;; order. The result is a 256-bit integer. The MSB byte (8 bits)
-  ;; must match the SHA3/256 of the final value.
+  ;; order. The result is a 264-bit integer, which is a 256-bit
+  ;; integer plus a randomized top 8 bits. The MSB byte (8 bits) must
+  ;; match the SHA3/256 of the final 256-bit value.
   ;;
   ;; wref is a vector of 2048 words chosen from some language wordlist.
   ;;
