@@ -6,22 +6,41 @@ env:
   global:
     - PATH=~/.roswell/bin:$PATH
     - ROSWELL_INSTALL_DIR=$HOME/.roswell
+# Speculatively hook into Coveralls <https://coveralls.io/>
+# Coveralls configuration (currently unused)
+#    - COVERAGE_EXCLUDE=t/
   matrix:
     - LISP=sbcl-bin
     - LISP=ccl-bin
+# Uncomment to enable the build farm resource to be spent on implementations that might actually produce useful results    
     - LISP=abcl-bin
-    - LISP=ecl
-    - LISP=clisp
-    - LISP=clasp
+#    - LISP=ecl
+#    - LISP=clisp
+#    - LISP=clasp
 
 install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
+# Add needed Quicklisp dependencies for testing here  
   - ros install prove
+  - ros install lisp-unit
 
 script:
-  - ros -s prove -e '(or (prove:run :emotiq/t) (uiop:quit -1))'
-  - ros -s prove -e '(or (prove:run :cosi/t) (uiop:quit -1))'
-  - ros -s prove -s cl-coveralls
-        -e '(or (coveralls:with-coveralls (:exclude (list "t"))
-                  (prove:run :emotiq/t))
+  - ros -e '(ql:quickload :emotiq-test) 
+            (or (asdf:test-system :emotiq)
                 (uiop:quit -1))'
+  - ros -s prove
+        -e '(or (prove:run :emotiq-prove)
+                (uiop:quit -1))'
+  - ros -e '(ql:quickload :cosi-test)
+            (or (lisp-unit:run-tests :all :cosi-test)
+                (uiop:quit -1))'                         
+  - ros -s prove
+        -e '(or (prove:run :cosi-prove)
+                (uiop:quit -1))'
+  # Speculatively hook into Coveralls <https://coveralls.io/>
+  # Coveralls invocation (currently unused)
+  #                 
+  # - ros -s prove -s cl-coveralls
+  #       -e '(or (coveralls:with-coveralls (:exclude (list "t"))
+  #                 (prove:run :emotiq-prove))
+  #               (uiop:quit -1))'

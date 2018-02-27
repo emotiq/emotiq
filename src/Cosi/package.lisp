@@ -1,6 +1,7 @@
 
 ;; package :COSI was only used for initial cut (Brook's stage 1)
 ;; supplanted by :COSI-SIMGEN
+;; Does this mean we should eliminate this package definition? --MTE
 (defpackage :cosi
   (:use :common-lisp :crypto-mod-math)
   (:import-from :edwards-ecc
@@ -76,6 +77,7 @@
    :ed-pt=
    :ed-compress-pt
    :ed-decompress-pt
+   ;;; FIXME: convert-bytes-to-int symbol can't be in two IMPORT-FROM clauses under CCL
    :convert-bytes-to-int
    :with-ed-curve
    :ed-nth-pt
@@ -131,6 +133,7 @@
    :reconstruct-tree
    :forwarding))
 
+;;; TODO figure out how to prescriptively push compile-time features with ASDF
 (pushnew :ELLIGATOR *features*)
 (defpackage :cosi-keying
   (:use
