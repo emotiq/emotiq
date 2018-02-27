@@ -31,9 +31,9 @@ THE SOFTWARE.
 
 (defstruct cosi-block
   blk-hash
-  prev-ptrs
-  trans
-  keys)
+  prev-ptrs ;; list of hashes 1,2,4 back
+  trans     ;; list of transations + proofs
+  keys)     ;; list of new keys + proofs
 
 (defvar *all-blocks*    (make-hash-table   ;; the dummy blockchain...
                          :test 'equal))
@@ -67,6 +67,7 @@ THE SOFTWARE.
    (convert-vis-to-vec h2)))
 
 (defun merkle-tree (&rest args)
+  ;; all args are hashes
   (um:nlet-tail iter ((lst args)
                       (ans nil))
     (cond ((endp lst)
@@ -84,6 +85,8 @@ THE SOFTWARE.
           )))
           
 (defun publish-block ()
+  ;; stuff current-block into the blockchain (hash table) and create a
+  ;; new empty block
   (let* ((hash  (merkle-tree
                  (apply 'merkle-tree (cosi-block-prev-ptrs *current-block*))
                  (apply 'merkle-tree (mapcar 'hash-element
@@ -105,6 +108,7 @@ THE SOFTWARE.
     ))
 
 (defun goback (n &optional (start *current-block*))
+  ;; move backward by n blocks from start block
   (um:nlet-tail iter ((n   n)
                       (blk start))
     (if (zerop n)
