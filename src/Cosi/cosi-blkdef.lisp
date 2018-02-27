@@ -35,7 +35,8 @@ THE SOFTWARE.
   trans
   keys)
 
-(defvar *all-blocks*    (make-hash-table)) ;; the dummy blockchain...
+(defvar *all-blocks*    (make-hash-table   ;; the dummy blockchain...
+                         :test 'equal))
 (defvar *current-block* (make-cosi-block)) ;; block we're working on
   
 (defun add-key-to-block (pkey proof)
@@ -74,13 +75,11 @@ THE SOFTWARE.
                    (hash-element nil))
              (apply 'merkle-tree (nreverse ans))))
           
-          ((null (cdr lst))
-           (iter nil (cons (hash-pair-hashes (car lst) (hash-element nil))
-                           ans)))
-          
           (t
            (iter (cddr lst)
-                 (cons (hash-pair-hashes (car lst) (cadr lst))
+                 (cons (hash-pair-hashes (car lst)
+                                         (or (cadr lst)
+                                             (hash-element nil)))
                        ans)))
           )))
           
@@ -91,6 +90,8 @@ THE SOFTWARE.
                                              (cosi-block-trans *current-block*)))
                  (apply 'merkle-tree (mapcar 'hash-element
                                              (cosi-block-keys *current-block*))))))
+    (when (gethash hash *all-blocks*)
+      (error "Blockchain collision!!"))
     (setf (cosi-block-blk-hash *current-block*) hash
           (gethash hash *all-blocks*) *current-block*)
     (labels ((prev-hash (n)
