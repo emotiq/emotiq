@@ -35,8 +35,8 @@ THE SOFTWARE.
   trans
   keys)
 
-(defvar *all-blocks*    (make-hash-table))
-(defvar *current-block* (make-cosi-block))
+(defvar *all-blocks*    (make-hash-table)) ;; the dummy blockchain...
+(defvar *current-block* (make-cosi-block)) ;; block we're working on
   
 (defun add-key-to-block (pkey proof)
   (push (cons pkey proof) (cosi-block-keys *current-block*)))
@@ -72,10 +72,11 @@ THE SOFTWARE.
            (if (null (cdr ans))
                (or (car ans)
                    (hash-element nil))
-             (merkle-tree (nreverse ans))))
-
+             (apply 'merkle-tree (nreverse ans))))
+          
           ((null (cdr lst))
-           (hash-pair-hashes (car lst) (hash-element nil)))
+           (iter nil (cons (hash-pair-hashes (car lst) (hash-element nil))
+                           ans)))
           
           (t
            (iter (cddr lst)
@@ -99,7 +100,7 @@ THE SOFTWARE.
       (let ((hash2  (prev-hash 1))
             (hash4  (prev-hash 3)))
         (setf *current-block* (make-cosi-block
-                               :prev-ptrs (list hash hash2 hash4)))))
+                               :prev-ptrs (delete nil (list hash hash2 hash4))))))
     ))
 
 (defun goback (n &optional (start *current-block*))
