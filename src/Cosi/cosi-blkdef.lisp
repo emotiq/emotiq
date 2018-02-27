@@ -45,8 +45,8 @@ THE SOFTWARE.
 (defstruct cosi-block
   blk-hash
   prev-ptrs ;; list of hashes 1,2,4 back
-  (trans     (ads-treap:make-authenticated-treap));; list of transations + proofs
-  (keys      (ads-treap:make-authenticated-treap)))     ;; list of new keys + proofs
+  (trans     (ads-treap:make-authenticated-treap))   ;; Treap of transations + proofs
+  (keys      (ads-treap:make-authenticated-treap)))  ;; Treap of new keys + proofs
 
 (defvar *all-blocks*    (make-hash-table   ;; the dummy blockchain...
                          :test 'equal))
@@ -92,8 +92,9 @@ THE SOFTWARE.
 
 ;; -------------------------------------
 
-(defvar *block-queue*  (make-instance 'circ-queue
-                                      :nel 5))
+(defvar *block-queue*  ;; holds the last 4 blocks for fast backchain computation 
+  (make-instance 'circ-queue
+                 :nel 4))
 
 (defstruct pkey+prover
   pkey proof)
@@ -168,22 +169,19 @@ THE SOFTWARE.
                                              (hash-element nil)))
                        ans)))
           )))
-          
+
+(defun treap-digest (treap)
+  (if treap
+      (cosi-keying:published-form (ads:prover-digest treap))
+    (hash-element nil)))
+
 (defun publish-block ()
   ;; stuff current-block into the blockchain (hash table) and create a
   ;; new empty block
-  (let* ((keys  (cosi-block-keys *current-block*))
-         (trans (cosi-block-trans *current-block*))
-         (keys-dig (if keys
-                       (cosi-keying:published-form (ads:prover-digest keys))
-                     (hash-element nil)))
-         (trans-dig (if trans
-                        (cosi-keying:published-form (ads:prover-digest trans))
-                      (hash-element nil)))
-         (hash  (merkle-tree
+  (let* ((hash  (merkle-tree
                  (apply 'merkle-tree (cosi-block-prev-ptrs *current-block*))
-                 keys-dig
-                 trans-dig)))
+                 (treap-digest (cosi-block-keys *current-block*))
+                 (treap-digest (cosi-block-trans *current-block*)))))
     (when (gethash hash *all-blocks*)
       (error "Blockchain collision!!"))
     (setf (cosi-block-blk-hash *current-block*) hash
