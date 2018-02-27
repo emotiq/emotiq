@@ -54,6 +54,7 @@ THE SOFTWARE.
    :ctr-drbg
    :ctr-drbg-int
    :sha3-buffers
+   :sha3/256-buffers
    
    :def-cached-var
 

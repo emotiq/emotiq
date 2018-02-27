@@ -34,8 +34,9 @@ THE SOFTWARE.
                lisp-object-encoder
                useful-macros
                usocket
-               bloom-filter)
-  :in-order-to ((test-op (test-op "cosi-test")))
+               bloom-filter
+               ads-clos)
+  :in-order-to ((test-op (test-op "cosi/t")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
@@ -44,6 +45,7 @@ THE SOFTWARE.
                         :pathname "./"
                         :serial t
                         :components ((:file "base58")
+                                     (:file "cosi-blkdef")
                                      (:file "cosi-keying")
 
 				     (:file "cosi-async")

@@ -132,6 +132,9 @@ THE SOFTWARE.
   #+:ELLIGATOR
   (multiple-value-bind (skey tau ix)
       (compute-deterministic-elligator-skey seed index)
+    ;; Note that Elligator encoding may have to search for a suitable
+    ;; key. Hence the index returned may be different from the index
+    ;; suggested.
     (declare (ignore tau))
     (let ((plist (cosi-dsa +keying-msg+ skey)))
       (list
@@ -155,10 +158,33 @@ THE SOFTWARE.
           plist
         (iter (1+ ix))))))
 
-(defun make-random-keypair (&optional seed)
+;; --------------------------------------------------------------
+
+(defun get-seed (seed)
+  (if seed
+      (ed-convert-int-to-lev (need-integer-form seed))
+    (ctr-drbg 256)))
+
+(defun get-salt (salt)
+  (let ((pref (loenc:encode "salt")))
+    (if salt
+        (concatenate 'vector
+                     pref 
+                     (ed-convert-int-to-lev (need-integer-form salt)))
+      pref)))
+
+;; --------------------------------------------------------------
+;; User level access functions for keying
+
+(defun make-random-keypair (&optional seed salt)
   ;; seed can be anything at all, any Lisp object
   ;; This is the normal entry point when making new user keys.
-  (let ((rseed (list seed (ctr-drbg 256))))
+  (let* ((seed  (get-seed seed))
+         (salt  (get-salt salt))
+         (rseed (ironclad:pbkdf2-hash-password seed
+                                               :salt       salt
+                                               :digest     :sha3
+                                               :iterations 2048)))
     (make-unique-deterministic-keypair rseed)))
 
 (defun make-subkey (skey sub-seed)
@@ -193,7 +219,7 @@ THE SOFTWARE.
 ;; Pkey as the source of hash values for the Bloom filter. We just
 ;; need to convert them into a little-endian vector of bytes.
 ;;
-;; Not that no space is saved if we settle for p = 0.01 instead of
+;; Note that no space is saved if we settle for p = 0.01 instead of
 ;; 0.001. The only thing that happens with higher false positive
 ;; probability is that we need only 7 hashes instead of 10.
 ;;
@@ -216,9 +242,9 @@ THE SOFTWARE.
       (unless (bloom-filter:test-membership *pkey-filter* hashv)
         (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
         (setf *pkeys* (maps:add pk proof *pkeys*))
-        ;; maybe also add pkey+proof to blockchain?
-        ;; (add-key-to-blockchain pkey proof)
-        t))))
+        (cosi-blkdef:add-key-to-block pkey proof)
+        t)
+      )))
 
 (defun lookup-pkey (pkey)
   ;; return t if pkey found and valid, nil if not found or invalid
@@ -230,10 +256,6 @@ THE SOFTWARE.
 (defun NYI (&rest args)
   (error "Not yet implemented ~A" args))
 
-(defun #1=add-key-to-blockchain (pkey proof)
-  (declare (ignore pkey proof))
-  (NYI '#1#))
-
 (defun #1=populate-pkey-database ()
   ;; this should populate *pkeys* and *pkey-filter* from the blockchain at startup
   (NYI '#1#))
@@ -241,3 +263,49 @@ THE SOFTWARE.
 (defun #1=refresh-pkey-database ()
   ;; periodically refresh the database from blockchain updates
   (NYI '#1#))
+
+;; --------------------------------------------------------------------
+
+(defvar *wordlist-folder*  #P"~/Desktop/Emotiq/Research-Code/src/Cosi/wordlists/")
+
+(defun import-wordlist (filename)
+  ;; import a 2048 word list for use in wordlist encoding/decoding
+  ;; E.g., (import-wordlist "english.txt")
+  (um:accum acc
+    (with-open-file (f (merge-pathnames
+                        *wordlist-folder* 
+                        filename)
+                       :direction :input)
+      (um:nlet-tail iter ()
+        (let ((wrd (read-line f nil f)))
+          (cond ((eql wrd f))
+                (t (acc wrd)
+                   (iter))
+                )))
+      )))
+
+(defun convert-int-to-wordlist (val wref)
+  ;; convert a positive, or zero, integer value to a list of words
+  ;; representing little-endian encoding in 11-bit groups
+  (assert (= 2048 (length wref)))
+  (check-type val (integer 0))
+  (let ((nwrds (max 1 (ceiling (integer-length val) 11))))
+    (loop for ct from 0 below nwrds
+          for pos from 0 by 11
+          collect (nth (ldb (byte 11 pos) val) wref))))
+
+(defun convert-wordlist-to-int (wlist wref)
+  ;; convert a list of words from a wordlist into an integer with each
+  ;; word representing an 11-bit group presented in little-endian
+  ;; order
+  (assert (= 2048 (length wref)))
+  (assert (and (consp wlist)
+               (every 'stringp wlist)))
+  (let ((val 0))
+    (loop for wrd in wlist
+          for pos from 0 by 11
+          do
+          ;; this will error if word isn't found in list...
+          (setf (ldb (byte 11 pos) val) (position wrd wref)))
+    val))
+
