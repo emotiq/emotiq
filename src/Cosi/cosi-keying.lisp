@@ -272,7 +272,8 @@ THE SOFTWARE.
 (defun import-wordlist (filename)
   ;; import a 2048 word list for use in wordlist encoding/decoding
   ;; E.g., (import-wordlist "english.txt")
-  (let ((wlist (um:accum acc
+  (let ((wvec (coerce
+               (um:accum acc
                  (with-open-file (f (merge-pathnames
                                      *wordlist-folder* 
                                      filename)
@@ -283,10 +284,11 @@ THE SOFTWARE.
                          (let ((trimmed (string-trim *ws* wrd)))
                            (when (plusp (length trimmed))
                              (acc trimmed)))
-                         (iter))))))))
-    (unless (= 2048 (length wlist))
+                         (iter))))))
+               'vector)))
+    (unless (= 2048 (length wvec))
       (error "Invalid master word list"))
-    (coerce wlist 'vector)))
+    wvec))
 
 (defvar *english*  (import-wordlist "english.txt"))
 
