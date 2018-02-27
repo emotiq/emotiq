@@ -167,5 +167,6 @@
    :get-block-keys
    :get-block-transactions
    :publish-block
+   :goback
    ))
 
