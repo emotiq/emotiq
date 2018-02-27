@@ -267,7 +267,7 @@ THE SOFTWARE.
   (:method (val)
    ;; (does it break anything by having a catchall?)
    (make-instance 'hash-val
-                  :ubvec (basic-hash val)))
+                  :ubvec (basic-hash/256 val)))
   (:method ((val witness))
    (hash (witness-val val))))
 

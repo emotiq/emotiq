@@ -27,36 +27,121 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
+#|
+(defpackage :cosi-blkdef
+  (:use
+   :common-lisp)
+  (:export
+   :add-key-to-block
+   :add-transaction-to-block
+   :get-block-keys
+   :get-block-transactions
+   :publish-block
+   ))
+|#
+
 (in-package :cosi-blkdef)
 
 (defstruct cosi-block
   blk-hash
   prev-ptrs ;; list of hashes 1,2,4 back
-  trans     ;; list of transations + proofs
-  keys)     ;; list of new keys + proofs
+  (trans     (ads-treap:make-authenticated-treap));; list of transations + proofs
+  (keys      (ads-treap:make-authenticated-treap)))     ;; list of new keys + proofs
 
 (defvar *all-blocks*    (make-hash-table   ;; the dummy blockchain...
                          :test 'equal))
 (defvar *current-block* (make-cosi-block)) ;; block we're working on
-  
+
+;; ----------------------------------
+
+(defclass circ-queue ()
+  ((nel
+    ;; nbr items queue can hold
+    :reader  circ-queue-nel
+    :initarg :nel)
+   (pos
+    ;; current head position in queue
+    :accessor circ-queue-pos
+    :initform 0)
+   (items
+    ;; contents vector
+    :accessor circ-queue-items)))
+
+(defmethod initialize-instance :after ((q circ-queue) &key nel &allow-other-keys)
+  (setf (circ-queue-items q) (make-array nel
+                                         :initial-element nil)))
+
+(defmethod qref ((q circ-queue) pos)
+  (aref (circ-queue-items q)
+        (mod (+ pos (circ-queue-pos q))
+             (circ-queue-nel q))))
+
+(defmethod set-qref ((q circ-queue) pos item)
+  (setf (aref (circ-queue-items q)
+              (mod (+ pos (circ-queue-pos q))
+                   (circ-queue-nel q)))
+        item))
+
+(defsetf qref set-qref)
+
+(defmethod insert-item ((q circ-queue) item)
+  (setf (qref q 0) item
+        (circ-queue-pos q) (mod (1+ (circ-queue-pos q))
+                                (circ-queue-nel q)))
+  item)
+
+;; -------------------------------------
+
+(defvar *block-queue*  (make-instance 'circ-queue
+                                      :nel 5))
+
+(defstruct pkey+prover
+  pkey proof)
+
+(defmethod ads-treap:treap-prio-for-item ((item pkey+prover))
+  (pkey+prover-pkey item))
+
+(defmethod ads-treap:treap-key-for-item ((item pkey+prover))
+  (pkey+prover-pkey item))
+
 (defun add-key-to-block (pkey proof)
-  (push (cons pkey proof) (cosi-block-keys *current-block*)))
-
-(defun add-transaction-to-block (trans)
-  (push trans (cosi-block-trans *current-block*)))
-
+  (ads-treap:insert (make-pkey+prover
+                     :pkey pkey
+                     :proof proof)
+                    (cosi-block-keys *current-block*)))
+                    
 (defun get-block-keys ()
   (cosi-block-keys *current-block*))
+
+;; -------------------------------------
+
+(defstruct transaction
+  pkey
+  trans)
+
+(defmethod ads-treap:treap-prio-for-item ((item transaction))
+  (transaction-pkey item))
+
+(defmethod ads-treap:treap-key-for-item ((item transaction))
+  (transaction-pkey item))
+
+(defun add-transaction-to-block (pkey trans)
+  (ads-treap:insert (make-transaction
+                     :pkey   pkey
+                     :trans  trans)
+                    (cosi-block-trans *currrent-block*)))
 
 (defun get-block-transactions ()
   (cosi-block-trans *current-block*))
 
+;; ----------------------------------------
+
 (defun vis-hash (&rest args)
   (cosi-keying:published-form
-   (apply 'ecc-crypto-b571:sha3/256-buffers args)))
+   (apply 'sha3/256-buffers args)))
 
 (defun convert-vis-to-vec (hash)
-  (edec:ed-convert-int-to-lev (cosi-keying:need-integer-form hash) 32))
+  (ed-convert-int-to-lev (cosi-keying:need-integer-form hash) 32))
 
 (defun hash-element (item)
   (vis-hash (loenc:encode item)))
@@ -87,24 +172,27 @@ THE SOFTWARE.
 (defun publish-block ()
   ;; stuff current-block into the blockchain (hash table) and create a
   ;; new empty block
-  (let* ((hash  (merkle-tree
+  (let* ((keys  (cosi-block-keys *current-block*))
+         (trans (cosi-block-trans *current-block*))
+         (keys-dig (if keys
+                       (cosi-keying:published-form (ads:prover-digest keys))
+                     (hash-element nil)))
+         (trans-dig (if trans
+                        (cosi-keying:published-form (ads:prover-digest trans))
+                      (hash-element nil)))
+         (hash  (merkle-tree
                  (apply 'merkle-tree (cosi-block-prev-ptrs *current-block*))
-                 (apply 'merkle-tree (mapcar 'hash-element
-                                             (cosi-block-trans *current-block*)))
-                 (apply 'merkle-tree (mapcar 'hash-element
-                                             (cosi-block-keys *current-block*))))))
+                 keys-dig
+                 trans-dig)))
     (when (gethash hash *all-blocks*)
       (error "Blockchain collision!!"))
     (setf (cosi-block-blk-hash *current-block*) hash
           (gethash hash *all-blocks*) *current-block*)
-    (labels ((prev-hash (n)
-               (let ((blk (goback n)))
-                 (when blk
-                   (cosi-block-blk-hash blk)))))
-      (let ((hash2  (prev-hash 1))
-            (hash4  (prev-hash 3)))
-        (setf *current-block* (make-cosi-block
-                               :prev-ptrs (delete nil (list hash hash2 hash4))))))
+    (insert-item *block-queue* hash)
+    (setf *current-block* (make-cosi-block
+                           :prev-ptrs (delete nil (list hash
+                                                        (qref *block-queue* -2)
+                                                        (qref *block-queue* -4)))))
     ))
 
 (defun goback (n &optional (start *current-block*))

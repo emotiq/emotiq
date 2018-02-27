@@ -34,7 +34,8 @@ THE SOFTWARE.
                lisp-object-encoder
                useful-macros
                usocket
-               bloom-filter)
+               bloom-filter
+               ads-clos)
   :in-order-to ((test-op (test-op "cosi/t")))
   :components ((:module package
                         :pathname "./"

@@ -27,7 +27,7 @@ THE SOFTWARE.
 |#
 
 
-(in-package :ads)
+(in-package :ads-treap)
 
 (defclass treap ()
   ((prio

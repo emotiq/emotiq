@@ -154,10 +154,13 @@
    :refresh-pkey-database
    ))
 
-
 (defpackage :cosi-blkdef
   (:use
    :common-lisp)
+  (:import-from :ecc-crypto-b571
+   :sha3/256-buffers)
+  (:import-from :edwards-ecc
+   :ed-convert-int-to-lev)
   (:export
    :add-key-to-block
    :add-transaction-to-block
@@ -165,3 +168,4 @@
    :get-block-transactions
    :publish-block
    ))
+
