@@ -71,30 +71,34 @@ THE SOFTWARE.
   (setf (circ-queue-items q) (make-array nel
                                          :initial-element nil)))
 
+(defmethod mod-offs ((q circ-queue) ix)
+  (mod (+ ix (circ-queue-pos q))
+       (circ-queue-nel q)))
+
 (defmethod qref ((q circ-queue) pos)
   (aref (circ-queue-items q)
-        (mod (+ pos (circ-queue-pos q))
-             (circ-queue-nel q))))
+        (mod-offs q pos)))
 
 (defmethod set-qref ((q circ-queue) pos item)
   (setf (aref (circ-queue-items q)
-              (mod (+ pos (circ-queue-pos q))
-                   (circ-queue-nel q)))
+              (mod-offs q pos))
         item))
 
 (defsetf qref set-qref)
 
 (defmethod insert-item ((q circ-queue) item)
-  (setf (qref q 0) item
-        (circ-queue-pos q) (mod (1+ (circ-queue-pos q))
-                                (circ-queue-nel q)))
+  (setf (qref q 0)         item
+        (circ-queue-pos q) (mod-offs q 1))
   item)
 
 ;; -------------------------------------
 
-(defvar *block-queue*  ;; holds the last 4 blocks for fast backchain computation 
+(defvar *block-queue*
+  ;; holds the last 4 block hashes for fast backchain computation
   (make-instance 'circ-queue
                  :nel 4))
+
+;; -------------------------------------
 
 (defstruct pkey+prover
   pkey proof)
