@@ -266,7 +266,7 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------------
 
-(defvar *wordlist-folder*  #P"~/Desktop/Emotiq/Research-Code/src/Cosi/wordlists/")
+(defvar *wordlist-folder*  #P"~/projects/Emotiq/src/Cosi/wordlists/")
 (defvar *ws* '(#\space #\tab #\linefeed #\newline #\page))
 
 (defun import-wordlist (filename)
