@@ -266,7 +266,7 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------------
 
-(defvar *wordlist-folder*  #P"~/projects/Emotiq/src/Cosi/wordlists/")
+(defvar *wordlist-folder*  (asdf:system-relative-pathname :cosi "wordlists/"))
 (defvar *ws* '(#\space #\tab #\linefeed #\newline #\page))
 
 (defun import-wordlist (filename)
