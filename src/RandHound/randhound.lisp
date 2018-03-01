@@ -1,5 +1,9 @@
 ;;; randhound.lisp
 
+; (primes:make-prime (truncate 1e9))
+(defparameter *q* 1031219477 "The q in Zq. Some large prime.")
+(defparameter *randbits* (integer-length *q*))
+
 (defclass sid-mixin ()
   ((sid :initarg :sid :initform nil :accessor sid
         :type (array (unsigned byte 8))
@@ -12,6 +16,41 @@
 
 ;; RandHound is the main protocol struct and implements the
 ;; onet.ProtocolInstance interface.
+
+(defclass treenode ()
+  ((id :initarg :id :initform nil :accessor id
+       :documentation "The Id represents that node of the tree")
+   (serveridentity :initarg :serveridentity :initform nil :accessor
+                   serveridentity
+                   :documentation "The ServerIdentity points to the corresponding host. One given host can be used more than once in a tree.")
+   (rosterindex :initarg :rosterindex :initform nil :accessor rosterindex
+                :documentation "RosterIndex is the index in the Roster where the `ServerIdentity` is located")
+   (parent :initarg :parent :initform nil :accessor parent)
+   (children :initarg :children :initform nil :accessor children)
+   (publicaggregatesubtree :initarg :publicaggregatesubtree :initform nil
+                           :accessor publicaggregatesubtree
+                           :documentation "Aggregate public key for *this* subtree,i.e. this node's public key + the aggregate of all its children's aggregate public key"))
+  )
+
+#|
+// TreeNode is one node in the tree
+type TreeNode struct {
+	// The Id represents that node of the tree
+	ID TreeNodeID
+	// The ServerIdentity points to the corresponding host. One given host
+	// can be used more than once in a tree.
+	ServerIdentity *network.ServerIdentity
+	// RosterIndex is the index in the Roster where the `ServerIdentity` is located
+	RosterIndex int
+	// Parent link
+	Parent *TreeNode
+	// Children links
+	Children []*TreeNode
+	// Aggregate public key for *this* subtree,i.e. this node's public key + the
+	// aggregate of all its children's aggregate public key
+	PublicAggregateSubTree kyber.Point
+}
+|#
 
 (defclass randhound (sid-mixin)
   ((treenode :initarg :treenode :initform nil :accessor treenode)
@@ -211,13 +250,37 @@ type RandHound struct {
 
 ; onet setup for randhound
 (defun setup (nodes faulty groups purpose)
+  ; nodes int
+  ; faulty int
+  ; groups int
+  ; purpose string
   (let ((rh (make-instance 'randhound
               :nodes nodes
               :faulty faulty
               :groups groups
               :purpose purpose)))
+    (init rh)
     rh
     ))
+
+(defmethod make-transcript ((rh randhound))
+  (make-instance 'transcript
+    :sid (sid rh)
+    :nodes (nodes rh)
+    :groups (groups rh)
+    :faulty (faulty rh)
+    :purpose (purpose rh)
+    :timestamp (timestamp rh)
+    :clirand (clirand rh)
+    :clikey ; (public() rh) 
+    :group (group rh)
+    :threshold (threshold rh)
+    :chosensecret (chosensecret rh)
+    :key (key rh)
+    :i1s (i1s rh)
+    :i2s (i2s rh)
+    :r1s (r1s rh)
+    :r2s (r2s rh)))
 
 #|
 a) Set the values in C and choose a random integer rT ∈R Zq 
@@ -226,27 +289,61 @@ b) Prepare the message
 ⟨I1⟩x0 = ⟨H(C), T, u, w⟩x0 ,
 record it in L, and broadcast it to all servers.
 |#
-(defmethod init ((rh randhound))
-  (setf (timestamp rh) (get-universal-time))
-  (setf (clirand rh) nil) ;[some random number from Zq]
-  ; pseudorandomly create a balanced grouping T of S
-  ; Record C in L.
-  (let ((transcript (make-instance 'transcript
-                      :sid (sid rh)
-                      :nodes (nodes rh)
-                      :groups (groups rh)
-                      :faulty (faulty rh)
-                      :purpose (purpose rh)
-                      :timestamp (timestamp rh)
-                      :clirand (clirand rh)
-                      :clikey ; (public() rh) 
-                      :group (group rh)
-                      :threshold (threshold rh)
-                      :chosensecret (chosensecret rh)
-                      :key (key rh)
-                      :i1s (i1s rh)
-                      :i2s (i2s rh)
-                      :r1s (r1s rh)
-                      :r2s (r2s rh))))
-    transcript
-    ))
+(defmethod start ()
+  (let ((rh (setup nodes faulty groups purpose)))
+    (setf (timestamp rh) (get-universal-time))
+    (setf (clirand rh) (ecc-crypto-b571:ctr-drbg-int *randbits*)) ;[some random number from Zq]
+    ; pseudorandomly create a balanced grouping T of S
+    #|
+// Determine server grouping
+	rh.server, rh.key, err = rh.Shard(rand, rh.groups)
+	if err != nil {
+		return err
+	}
+|#
+    ;; Set some group parameters
+    (loop for i from 0
+      for group across (server rh) do
+      (setf (aref (threshold rh) i) (/ (* 2 (length group)) 3))
+      (setf (aref (polycommit rh) i) nil) ; make([]kyber.Point, len(group))
+      (let ((g nil )); make([]int, len(group))
+        (loop for j from 0
+          for server0 across group do
+          (let ((s0 (rosterindex server0)))
+            (setf (aref ServerIdxToGroupNum s0) i)
+            (setf (aref ServerIdxToGroupIdx s0) j)
+            (setf (aref g j) s0)))
+          (setf (aref (group rh) i) g)))
+        
+        
+    ; Record C in L.
+    (let ((transcript (make-transcript rh)))
+      ; save the transcript away somewhere
+      ;; Determine server grouping
+      ;; rh.server, rh.key, err = rh.Shard(rand, rh.groups)
+      rh
+      )))
+
+;;; NewRandHound generates a new RandHound instance.
+(defun newrandhound ()
+  )
+
+#|
+// NewRandHound generates a new RandHound instance.
+func NewRandHound(node *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+
+	// Setup RandHound protocol struct
+	rh := &RandHound{
+		TreeNodeInstance: node,
+	}
+
+	// Setup message handlers
+	h := []interface{}{
+		rh.handleI1, rh.handleI2,
+		rh.handleR1, rh.handleR2,
+	}
+	err := rh.RegisterHandlers(h...)
+
+	return rh, err
+}
+|#
