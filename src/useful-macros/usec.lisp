@@ -70,8 +70,14 @@ THE SOFTWARE.
 
 #+:CLOZURE
 (PROGN
- (defun get-time-usec ()
-   (ccl::get-internal-real-time))
+  (defun get-time-usec ()
+    (declare (optimize (speed 3) (debug 0)))
+    (ccl::rlet ((now :timeval)
+           (since :timeval))
+      (ccl::gettimeofday now (ccl:%null-ptr))
+      (ccl::%sub-timevals since now ccl::*lisp-start-timeval*)
+      (+ (* 1000000 (the (unsigned-byte 32) (ccl:pref since :timeval.tv_sec)))
+         (the fixnum (ccl:pref since :timeval.tv_usec)))))
 
  (defun adjust-to-standard-universal-time-usec (tm)
    (declare (integer tm))
