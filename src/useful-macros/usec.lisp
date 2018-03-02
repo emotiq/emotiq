@@ -42,12 +42,12 @@ THE SOFTWARE.
 
 ;;--- MAC OS/X ---
 
-#+(AND :LISPWORKS (OR :LINUX :MACOSX))
+#+(AND :LISPWORKS :MACOSX)
 (PROGN
  (fli:define-foreign-function (_get-time-of-day "gettimeofday" :source)
     ((tsinfo :pointer)
-     (tzinfo :pointer))
-   :result-type :long)
+     (tzinfo :pointer)
+			       ))
 
  (defun get-time-usec ()
    ;; time since midnight Jan 1, 1970, measured in microseconds
@@ -57,10 +57,10 @@ THE SOFTWARE.
 		:type   '(:unsigned :long)
 		:nelems 2
 		:fill   0)))
-	 (if (zerop (_get-time-of-day arr fli:*null-pointer*))
-             (+ (* 1000000 (the integer (fli:dereference arr :index 0)))
-                (the integer (fli:dereference arr :index 1)))
-           (error "Can't perform Posix gettimeofday()"))
+	 
+	 (_get-time-of-day arr fli:*null-pointer*)
+	 (+ (* 1000000 (the integer (fli:dereference arr :index 0)))
+	    (the integer (fli:dereference arr :index 1)))
 	 )))
 
  (defun adjust-to-standard-universal-time-usec (tm)

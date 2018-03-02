@@ -38,9 +38,9 @@ THE SOFTWARE.
   :components  ((:file "managed-buffers")
 		(:file "ubyte-streams")
                 (:file "lisp-object-encoder")
-                #+(AND :COM.RAL :LISPWORKS) (:file "persistent-store")
-		#+(AND :COM.RAL :LISPWORKS) (:file "prevalent-metaclass")
-                #+(AND :COM.RAL :LISPWORKS) (:file "prevalent-objects")
+                #+:LISPWORKS (:file "persistent-store")
+		#+:LISPWORKS (:file "prevalent-metaclass")
+                #+:LISPWORKS (:file "prevalent-objects")
                 )
 
   :SERIAL T

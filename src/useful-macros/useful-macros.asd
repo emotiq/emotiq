@@ -32,9 +32,9 @@ THE SOFTWARE.
 		#+:ALLEGRO (:file "allegro-compat")
                 (:file "packages")
 		(:file "comprehensions")
-                #+(AND :COM.RAL :LISPWORKS) (:file "lexb4")
+                #+:LISPWORKS (:file "lexb4")
                 ;; (:file "freev")
-                #+(AND :COM.RAL :LISPWORKS) (:file "safe-call-system")
+                #+:LISPWORKS (:file "safe-call-system")
                 (:file "hierarchical-packages")
                 (:file "package-aliases")
                 (:file "basic-useful")
@@ -43,7 +43,7 @@ THE SOFTWARE.
                 (:file "ppcre-reader")
                 (:file "reader-macros")
                 (:file "safe-read-from-string")
-                #+(AND :COM.RAL :LISPWORKS) (:file "ctypes")
+                #+:LISPWORKS (:file "ctypes")
                 (:file "dlambder")
                 (:file "bb")
                 (:file "useful-macros")
@@ -55,7 +55,7 @@ THE SOFTWARE.
                 (:file "critical-section")
                 ;; (:file "dispatch-queues") ;; what do we need these for?
                 ;; (:file "lazy") ;; supplanted by Actors
-                #+(AND :COM.RAL :LISPWORKS) (:file "remembered-filenames")
+                #+:LISPWORKS (:file "remembered-filenames")
                 ;; (:file "useful-macros-old")
                 ;; (:file "match-macro")
 
@@ -75,8 +75,6 @@ THE SOFTWARE.
                 (:file "computed-metaclass")
                 #+(AND :LISPWORKS :MACOSX) (:file "OSX-UUID-Generate")
                 #+(AND :ALLEGRO :MACOSX)   (:file "OSX-UUID-Generate-Allegro")
-                #-(OR (AND :MACOSX :LISPWORKS)
-                      (AND :MACOSX :ALLEGRO)) (:file "OSX-UUID-Generate")
                 ;; (:file "xfli")
 		;; (:file "rubber-objects")
                 )
