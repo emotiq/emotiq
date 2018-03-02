@@ -413,13 +413,7 @@ THE SOFTWARE.
        (:pltwin (sym)
         (setf pltsym sym))
        (:plt ()
-<<<<<<< variant A
-       #+(and lispworks (not lispworks7.1))
->>>>>>> variant B
        #+(AND :COM.RAL :LISPWORKS)
-####### Ancestor
-       #+:LISPWORKS
-======= end
        (progn
 	 (plt:histogram pltsym data
 			:clear  t

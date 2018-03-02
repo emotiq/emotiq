@@ -343,27 +343,14 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; -----------------------------------------------------------------------
 
-<<<<<<< variant A
-#-(or (and lispworks (not lispworks7.1))
-      (not lispworks))
->>>>>>> variant B
 #-(AND :COM.RAL :LISPWORKS)
-####### Ancestor
-#-:LISPWORKS
-======= end
 (defparameter *dly-instr*
   (ac:make-actor
    (lambda (&rest args)
      (declare (ignore args))
      t)))
 
-<<<<<<< variant A
-#+(and lispworks (not lispworks7.1))
->>>>>>> variant B
 #+(AND :COM.RAL :LISPWORKS)
-####### Ancestor
-#+:LISPWORKS
-======= end
 (defparameter *dly-instr*
   ;; Very useful for timeout tuning. If timeouts are properly set,
   ;; then histogram will be entirely to left of red 1.0 Ratio, but not
