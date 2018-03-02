@@ -77,8 +77,6 @@
    :ed-pt=
    :ed-compress-pt
    :ed-decompress-pt
-   ;;; FIXME: convert-bytes-to-int symbol can't be in two IMPORT-FROM clauses under CCL
-   :convert-bytes-to-int
    :with-ed-curve
    :ed-nth-pt
    :ed-random-pair)
