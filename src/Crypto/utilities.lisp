@@ -489,6 +489,12 @@ THE SOFTWARE.
       (ironclad:update-digest dig (ensure-8bitv buf)))
     (ironclad:produce-digest dig)))
 
+(defun sha3/256-buffers (&rest bufs)
+  (let ((dig (ironclad:make-digest :sha3/256)))
+    (dolist (buf bufs)
+      (ironclad:update-digest dig (ensure-8bitv buf)))
+    (ironclad:produce-digest dig)))
+
 #|
 (defun sha3-buffers (&rest bufs)
   (let ((dig (sha3:sha3-init :output-bit-length 512)))
