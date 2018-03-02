@@ -1596,7 +1596,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------------
 ;; Macros to take the pain out of passing strings to DLL's
 ;;
-#+:lispworks
+#+(AND :COM.RAL :lispworks)
 (progn
   (defconstant *null-string*
     (fli:make-pointer :address 0))
