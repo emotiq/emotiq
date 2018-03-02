@@ -27,6 +27,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
+#|
+(defpackage :cosi-blkdef
+  (:use
+   :common-lisp)
+  (:export
+   :add-key-to-block
+   :add-transaction-to-block
+   :get-block-keys
+   :get-block-transactions
+   :publish-block
+   ))
+|#
+
 (in-package :cosi-blkdef)
 
 (defstruct cosi-block

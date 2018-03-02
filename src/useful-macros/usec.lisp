@@ -42,7 +42,7 @@ THE SOFTWARE.
 
 ;;--- MAC OS/X ---
 
-#+(AND :LISPWORKS (OR :LINUX :MACOSX))
+#+(AND :LISPWORKS :MACOSX)
 (PROGN
  (fli:define-foreign-function (_get-time-of-day "gettimeofday" :source)
     ((tsinfo :pointer)

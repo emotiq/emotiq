@@ -1,4 +1,4 @@
-(in-package cosi-test)
+#+(or) (in-package cosi-test)
 
 ;;; TODO
 ;;; Hmm… LISP-UNIT tests signalling an error on compilation

@@ -234,7 +234,7 @@ INTERNAL-TIME-UINITS-PER-SECOND which gives the ticks per count for the current 
                                                           (aref ends 0)))
                                       :radix 16)))))
 
-         #+(and :WINDOWS :LISPWORKS)
+         #+:LISPWORKS
          (let ((output (with-output-to-string (s)
                          (sys:call-system-showing-output "ipconfig /all"
                                                          :output-stream s))))
@@ -246,17 +246,6 @@ INTERNAL-TIME-UINITS-PER-SECOND which gives the ticks per count for the current 
                                                 (aref starts 0)
                                                 (aref ends 0)))
                             :radix 16)))
-
-         #+(and :linux :lispworks)
-         (let ((output (with-output-to-string (s)
-                         (sys:call-system-showing-output "ifconfig -a"
-                                                         :output-stream s))))
-           (let ((pos (search "HWaddr" output :test 'string-equal)))
-             (when pos
-               (parse-integer (delete #\: (subseq output (+ pos 6) (+ pos 37 6)))
-                              :radix 16
-                              :junk-allowed t))))
-
          ))
     (when (not node)
       (setf node (dpb #b01 (byte 8 0) (random #xffffffffffff))))
