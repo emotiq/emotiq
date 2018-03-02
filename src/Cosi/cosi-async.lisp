@@ -255,7 +255,8 @@ THE SOFTWARE.
 (defparameter *default-timeout-period*   ;; good for 1600 nodes on single machine
   #+:LISPWORKS   4
   #+:ALLEGRO     2
-  #+:CLOZURE     4)
+  #+:CLOZURE     4
+  #-(OR :LISPWORKS :ALLEGRO :CLOZURE) 4)
 
 ;; internal state of each node
 (defstruct (node-state
@@ -405,14 +406,14 @@ THE SOFTWARE.
          (pltsym 'plt))
      (um:dlambda
        (:incr (dly)
-        #+:LISPWORKS
+        #+(AND :COM.RAL :LISPWORKS)
         (push dly data))
        (:clr ()
         (setf data nil))
        (:pltwin (sym)
         (setf pltsym sym))
        (:plt ()
-       #+:LISPWORKS
+       #+(AND :COM.RAL :LISPWORKS)
        (progn
 	 (plt:histogram pltsym data
 			:clear  t
@@ -496,7 +497,7 @@ THE SOFTWARE.
     (let ((self (current-actor))
           (start (get-universal-time)))
       (labels ((!dly ()
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (send *dly-instr* :incr
                        (/ (- (get-universal-time) start)
                           timeout *default-timeout-period*))))
@@ -552,7 +553,7 @@ THE SOFTWARE.
     (let ((self (current-actor))
           (start (get-universal-time)))
       (labels ((!dly ()
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (send *dly-instr* :incr
                        (/ (- (get-universal-time) start)
                           timeout *default-timeout-period*))))
@@ -819,7 +820,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; for visual debugging...
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (progn
   (defmethod children ((node node-state) layout)
     (reverse (node-state-subs node)))
@@ -869,7 +870,7 @@ THE SOFTWARE.
   (set-executive-pool 4)
   (organic-build-tree n)
   (setf *nbr-nodes* n)
-  #+:LISPWORKS
+  #+(AND :COM.RAL :LISPWORKS)
   (view-tree *top-node*))
   
 (defun tst (&optional (n 100))
@@ -882,9 +883,9 @@ THE SOFTWARE.
   (let ((msg "this is a test"))
     (with-borrowed-mailbox (mbox)
       (labels ((doit ()
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (hcl:set-up-profiler :call-counter t)
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (hcl:start-profiling :processes ac::*executive-processes*
                                       :initialize t
                                       :time :extended)
@@ -899,7 +900,7 @@ THE SOFTWARE.
                            (format t "~%~D actual witnesses" (length (third (third *x*))))
                            ;; (format t "~%~D MP:MAILBOX-SEND/RECEIVE" ac::*mbsends*)
                            )))
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (hcl:stop-profiling)))
         (send *dly-instr* :clr)
         (send *dly-instr* :pltwin :histo-4)
