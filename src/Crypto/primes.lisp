@@ -34,7 +34,8 @@ THE SOFTWARE.
 (in-package #:primes)
 ;; -------------------------------------------
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))          (inline empty singleton create))
+(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))
+          (inline empty singleton create))
 
 ;; -----------------------------------------------------------------------------
 ;;
@@ -44,7 +45,7 @@ THE SOFTWARE.
   ;; return a random integer 0 <= val < ix
   #+:LISPWORKS (ecc-crypto-b571:basic-random ix)
   #+:ALLEGRO   (random ix);; Allegro uses Mersenne Twister already
-  #-:(OR :LISPWORKS :ALLEGRO) (error "Not-yet-implemented"))
+  #-(OR :LISPWORKS :ALLEGRO) (error "Not-yet-implemented"))
 
 (defun random-between (lower upper)
   ;; generate random integer in [lower, upper)
