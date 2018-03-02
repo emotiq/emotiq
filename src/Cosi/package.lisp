@@ -171,3 +171,5 @@
    :goback
    ))
 
+(defpackage :cosi-test
+  (:use :cl))
