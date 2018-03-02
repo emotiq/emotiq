@@ -33,8 +33,9 @@ THE SOFTWARE.
    :crypto-mod-math
    :edwards-ecc)
   (:export
-   :make-keypair
+   :make-random-keypair
    :make-deterministic-keypair
+   :make-subkey
    :validate-pkey
    :ed-dsa
    :ed-dsa-validate
@@ -45,7 +46,7 @@ THE SOFTWARE.
 (in-package :cosi-keying)
 
 ;; NOTE: The adopted standard for Emotiq (for now) is:
-;;    Hashes are hex strings, Binary data are base64 strings. And
+;;    Hashes are hex strings, Binary data are base58 strings. And
 ;;    while keying uses hashing internally, published keying info is
 ;;    binary, not hashes. So key info will be presented as base64
 ;;    strings.
@@ -78,7 +79,7 @@ THE SOFTWARE.
   (ed-convert-lev-to-int v))
 
 (defmethod need-integer-form ((v string)) ;; assumed to be base64 string
-  (need-integer-form (decode-bytes-from-base64 v)))
+  (need-integer-form (base58:decode v)))
 
 (defmethod need-integer-form ((v ecc-pt))
   (ed-compress-pt v))
@@ -86,65 +87,63 @@ THE SOFTWARE.
 (defmethod need-integer-form ((v ed-proj-pt))
   (need-integer-form (ed-affine v)))
 
+(defmethod need-integer-form (v)
+  (need-integer-form (loenc:encode v)))
+
 ;; -----------------
 
 (defmethod published-form ((v integer))
-  (published-form (ed-convert-int-to-lev v)))
+  (base58:encode v))
 
 (defmethod published-form ((v vector)) ;; assumed to be ub8v le
-  (encode-bytes-to-base64 v))
+  (published-form (need-integer-form v)))
 
 (defmethod published-form ((v ecc-pt))
-  (published-form (ed-compress-pt v)))
+  (published-form (need-integer-form v)))
 
 (defmethod published-form ((v ed-proj-pt))
-  (published-form (ed-compress-pt v)))
+  (published-form (need-integer-form v)))
 
 (defmethod published-form ((v string)) ;; assumed to be base64
   (if (ignore-errors
-        (decode-bytes-from-base64 v))
+        (base58:decode v))
       v
     (call-next-method)))
 
 (defmethod published-form (v)
-  (encode-bytes-to-base64 (loenc:encode v)))
+  (published-form (need-integer-form v)))
 
 ;; ---------------------------------------------------
 ;; The IRTF EdDSA standard as a primitive
 
 (defun ed-dsa (msg skey)
-  (let* ((skey  (need-integer-form skey))
-         (h     (ed-convert-lev-to-int
-                 (sha3-buffers
-                  ;; full 512 bits
-                  (ed-convert-int-to-lev skey))))
-         (a     0)
-         (bits  (byte (- *ed-nbits* 5) 3)))
-    (setf (ldb bits a) (ldb bits h)
-          (ldb (byte 1 (1- *ed-nbits*)) a) 1)
-    (let* ((msg-enc   (loenc:encode msg))
-           (pkey      (ed-nth-pt a))
-           (pkey-cmpr (ed-compress-pt pkey))
-           (r         (ed-convert-lev-to-int
+  (let* ((a         (compute-a-for-skey
+                     (need-integer-form skey)))
+         (msg-enc   (loenc:encode msg))
+         (pkey      (ed-nth-pt a))
+         (pkey-cmpr (ed-compress-pt pkey))
+         (r         (ed-convert-lev-to-int
+                     (sha3-buffers
+                      (ed-convert-int-to-lev a)
+                      msg-enc)))
+         (rpt       (ed-nth-pt r))
+         (rpt-cmpr  (ed-compress-pt rpt))
+         (s         (add-mod-r
+                     r
+                     (mult-mod-r
+                      a
+                      (ed-convert-lev-to-int
                        (sha3-buffers
-                        (ed-convert-int-to-lev (ldb (byte *ed-nbits* *ed-nbits*) h))
-                        msg-enc)))
-           (rpt       (ed-nth-pt r))
-           (rpt-cmpr  (ed-compress-pt rpt))
-           (s         (add-mod-r r
-                                 (mult-mod-r a
-                                             (ed-convert-lev-to-int
-                                              (sha3-buffers
-                                               (ed-convert-int-to-lev rpt-cmpr)
-                                               (ed-convert-int-to-lev pkey-cmpr)
-                                               msg-enc))
-                                             ))))
-      (list
-       :msg   msg
-       :pkey  (published-form pkey-cmpr)
-       :r     (published-form rpt-cmpr)
-       :s     (published-form s))
-      )))
+                        (ed-convert-int-to-lev rpt-cmpr)
+                        (ed-convert-int-to-lev pkey-cmpr)
+                        msg-enc))
+                      ))))
+    (list
+     :msg   msg
+     :pkey  (published-form pkey-cmpr)
+     :r     (published-form rpt-cmpr)
+     :s     (published-form s))
+    ))
 
 (defun ed-dsa-validate (msg pkey r s)
   (let ((pkey (need-integer-form pkey))
@@ -186,10 +185,18 @@ THE SOFTWARE.
   ;; random value in the top octave of the range
   (random-between (ash range -1) range))
 
-(defun make-keypair (seed)
+(defun make-random-keypair (seed)
   ;; seed can be anything at all, any Lisp object
   (make-deterministic-keypair (list seed
                                     (top-octave-rand *ed-r*))))
+
+(defun make-subkey (skey &rest sub-seeds)
+  (reduce (lambda (quad sub-seed)
+            (make-deterministic-keypair
+             (list (need-integer-form (getf quad :skey))
+                   sub-seed)))
+          sub-seeds
+          :initial-value (list :skey skey)))
 
 (defun validate-pkey (pkey r s)
   (ed-dsa-validate +keying-msg+ pkey r s))

@@ -27,51 +27,6 @@ THE SOFTWARE.
 |#
 
 
-(defpackage :cosi-simgen
-  (:use :common-lisp :cosi :crypto-mod-math)
-  (:import-from :edwards-ecc
-   :ed-add 
-   :ed-sub 
-   :ed-mul 
-   :ed-div 
-   :ed-affine
-   :ed-nth-pt
-   :*ed-r*
-   :*ed-q*
-   :ed-neutral-point
-   :ed-pt=
-   :with-ed-curve
-   :ed-compress-pt
-   :ed-decompress-pt
-   :ed-validate-point
-   :ed-hash
-   :ed-random-pair)
-  (:import-from :ecc-crypto-b571
-   :random-between
-   :convert-int-to-nbytesv
-   :convert-bytes-to-int)
-  (:import-from :actors
-   :=bind
-   :=values
-   :=defun
-   :=lambda
-   :=funcall
-   :=apply
-   :pmapcar
-   :spawn
-   :current-actor
-   :recv
-   :become
-   :do-nothing
-   :make-actor
-   :set-executive-pool
-   :with-borrowed-mailbox
-   :pr)
-  (:export
-   :generate-tree
-   :reconstruct-tree
-   :forwarding))
-
 (in-package :cosi-simgen)
 
 (declaim (optimize (debug 3)))
