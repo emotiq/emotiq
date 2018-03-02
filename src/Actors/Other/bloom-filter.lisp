@@ -1,5 +1,4 @@
-;; hashed-sync.lisp -- Synchronizing large data sets across a network
-;; with refined hashing probes
+;; bloom-filter.lisp -- Bloom filters
 ;;
 ;; DM/RAL 11/17
 ;; ----------------------------------------------------------------------
@@ -40,6 +39,7 @@ THE SOFTWARE.
   (:export
    #:make-bloom-filter
    #:hash32
+   #:hash64
    #:add-obj-to-bf
    #:test-obj-hash
    #:test-membership
@@ -47,8 +47,6 @@ THE SOFTWARE.
 
 
 ;; -----------------------------------------------------------------------
-
-(user::asdf :sha3)
 
 (in-package #:bloom-filter)
 
@@ -59,16 +57,15 @@ THE SOFTWARE.
 
 (defun hash32 (obj)
   (let ((seq (loenc:encode obj))
-        (dig (ironclad:make-digest :sha256)))
+        (dig (ironclad:make-digest :sha3/256)))
     (ironclad:update-digest dig seq)
     (ironclad:produce-digest dig)))
 
 (defun hash64 (obj)
-  ;; Q&D good for stringable args only (strings, symbols)
   (let ((seq (loenc:encode obj))
-        (state (sha3:sha3-init :output-bit-length 512)))
-    (sha3:sha3-update state seq)
-    (sha3:sha3-final state)))
+        (dig (ironclad:make-digest :sha3)))
+    (ironclad:update-digest dig seq)
+    (ironclad:produce-digest dig)))
 
 ;; --------------------------------------------------------------------------
 ;; Bloom Filter... Is this item a member of a set? No false negatives,
@@ -77,16 +74,16 @@ THE SOFTWARE.
 ;; Optimal sizing: For N items, we need M bits per item, and K hashing
 ;; algorithms, where, for false positive rate p we have:
 ;;
-;;  M = -1.44 N Log2 p
+;;  M = -1.44 Log2 p
 ;;  K = -Log2 p
 ;;
 ;; So, for N = 1000, p < 1%, we have M = 10 N = 10,000 bits, and K = 7
 ;;
 ;; We can use successive octets of a SHA256 hash to provide the K hash
-;; functions. Since we need 10,000 bits in the table, round that up to
-;; 16384 bits = 2^14, so we need 14 bits per hash, make that 2 octets
-;; per hash. We need 7 hashes, so that is 14 octets from the SHA256
-;; hash value, which offers 32 octets. That's doable....
+;; functions. Since we need 10,000 bits (= M*N) in the table, round
+;; that up to 16384 bits = 2^14, so we need 14 bits per hash, make
+;; that 2 octets per hash. We need 7 hashes, so that is 14 octets from
+;; the SHA256 hash value, which offers 32 octets. That's doable....
 ;;
 ;; Unfortunately... this mechanism is only applicable to sets as
 ;; collections without duplicate items. Linda expressly allows
@@ -112,6 +109,9 @@ THE SOFTWARE.
    (bf-m       ;; number of bits in table
     :reader  bf-m
     :initarg :bf-m)
+   (bf-mask    ;; bitmask for hash values
+    :reader  bf-mask
+    :initarg :bf-mask)
    (bf-ix-octets  ;; number of octets needed per hashing key
     :reader  bf-ix-octets
     :initarg :bf-ix-octets)
@@ -135,19 +135,24 @@ THE SOFTWARE.
            :ylog t)
 |#
 
-(defun make-bloom-filter (&key (pfalse 0.01) (nitems #N1_000))
-  (let* ((bf-k         (ceiling (- (log pfalse 2))))
-         (bf-m         (um:ceiling-pwr2 (ceiling (* -1.44 nitems (log pfalse 2)))))
-         (bf-ix-octets (ceiling (um:ceiling-log2 bf-m) 8))
-         (bf-hash      (if (> (* bf-ix-octets bf-k) 32)
-                           'hash64
-                         'hash32)))
-    (assert (<= (* bf-ix-octets bf-k) 64))
+(defun make-bloom-filter (&key (nitems 1000) (pfalse 0.01) hash-fn)
+  (let* ((mlg-pfalse   (- (log pfalse 2)))
+         (bf-k         (ceiling mlg-pfalse))          ;; nbr hashes
+         (bf-m         (um:ceiling-pwr2 (ceiling (* 1.44 nitems mlg-pfalse)))) ;; bits in table
+         (bf-mask      (1- bf-m))
+         (bf-ix-octets (ceiling (log bf-m 2) 8))              ;; octets of overall hash per indiv hash
+         (bf-hash      (or hash-fn
+                           (cond ((> (* bf-ix-octets bf-k) 64)
+                                  (error "parameters exceed 64-bit hash size"))
+                                 ((> (* bf-ix-octets bf-k) 32)  'hash64)
+                                 (t  'hash32)
+                                 ))))
     (make-instance 'bloom-filter
                    :nitems  nitems
                    :pfalse  pfalse
                    :bf-k    bf-k
                    :bf-m    bf-m
+                   :bf-mask bf-mask
                    :bf-ix-octets bf-ix-octets
                    :bf-hash bf-hash
                    :bf-bits (make-array bf-m
@@ -158,14 +163,15 @@ THE SOFTWARE.
 (defun compute-bix (bf hv ix)
   ;; bf points to Bloom Filter
   ;; hv is SHA32 hash octets vector
-  ;; ix is starting offset into octents vector
-  (mod
+  ;; ix is starting offset into hash octets vector
+  ;; hv is treated as little-endian vector of UB8
+  (logand
    (loop repeat (bf-ix-octets bf)
-         for jx from 0
+         for jx from ix
          for nsh from 0 by 8
          sum
-         (ash (aref hv (+ ix jx)) nsh))
-   (bf-m bf)))
+         (ash (aref hv jx) nsh))
+   (bf-mask bf)))df
   
 (defmethod add-obj-to-bf ((bf bloom-filter) obj)
   (let ((hv  (funcall (bf-hash bf) obj)))

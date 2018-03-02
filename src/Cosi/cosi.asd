@@ -36,7 +36,7 @@ THE SOFTWARE.
                usocket
                bloom-filter
                ads-clos)
-  :in-order-to ((test-op (test-op "cosi/t")))
+  :in-order-to ((test-op (test-op "cosi-test")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
