@@ -8,14 +8,14 @@
   :depends-on (emotiq lisp-unit)
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
-                          :all :emotiq-tests))
+                          :all :emotiq-test))
   :components ((:module package
                         :pathname "tests/"
                         :components ((:file "package")))
                (:module tests
                         :depends-on (package)
                         :pathname "tests/"
-                        :components ((:file "emotiq-tests")))))
+                        :components ((:file "emotiq-test")))))
 
 
 

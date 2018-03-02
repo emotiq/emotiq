@@ -11,5 +11,6 @@
   :in-order-to ((test-op (test-op "emotiq-test")))
   :components ((:file "package")
                (:file "utilities")
-               (:file "external")))
+               (:file "external")
+               (:file "blockchain")))
 

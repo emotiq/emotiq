@@ -43,7 +43,8 @@ THE SOFTWARE.
   (declare (integer ix))
   ;; return a random integer 0 <= val < ix
   #+:LISPWORKS (ecc-crypto-b571:basic-random ix)
-  #+:ALLEGRO   (random ix)) ;; Allegro uses Mersenne Twister already
+  #+:ALLEGRO   (random ix);; Allegro uses Mersenne Twister already
+  #-(OR :LISPWORKS :ALLEGRO) (error "Not-yet-implemented"))
 
 (defun random-between (lower upper)
   ;; generate random integer in [lower, upper)
@@ -1080,7 +1081,7 @@ THE SOFTWARE.
         (declare (integer p q))
       )))
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (defun par-gen-safe-prime (nbits)
   (declare (fixnum nbits))
   (rch:select ((rch:execEvt #'generate-safe-prime nbits)
@@ -1275,7 +1276,7 @@ THE SOFTWARE.
                                     (iter (+ p incr) (1+ ct))))
                     (t nil)) )) )) )
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (defun par-try (npar timeout fn &rest args)
   (declare (fixnum npar)
            (real timeout))
@@ -1478,7 +1479,7 @@ THE SOFTWARE.
   (/ (big-log n)))
 
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (defun sieve-2q+1 (nbits &optional (mr-iters 50))
   ;; If P = 2*Q+1, for Q prime, and all higher primes are 6*k+/-1, then
   ;;   if Q = 6*k-1 then P = 12*k-1

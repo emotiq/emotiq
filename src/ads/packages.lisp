@@ -32,6 +32,31 @@ THE SOFTWARE.
 (defpackage :ADS
   (:use :common-lisp)
   (:export
+   :auth-type
+   :digest
+   :prover
+   :auth
+   :unauth
+   :shallow
+   :fetch
+   :update
+   :discard
+   :prove
+   :verify
+   :compare
+   :hash
+   :prover-val
+   :prover-digest
    ))
 
+(defpackage :ads-treap
+  (:use :common-lisp
+   :ads)
+  (:export
+   :treap
+   :make-authenticated-treap
+   :insert
+   :treap-prio-for-item
+   :treap-key-for-item
+   ))
 

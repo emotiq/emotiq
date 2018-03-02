@@ -37,6 +37,7 @@ THE SOFTWARE.
    #:dlambda
    #:foreach)
   (:export
+   #:bloom-filter
    #:make-bloom-filter
    #:hash32
    #:hash64

@@ -1,13 +1,16 @@
 (in-package cl-user)
 
-(prove:plan 1)
-(let ((n 128) ;; ?? What is a reasonable range of values
-      (nbits 64))
-  (let* ((prover (range-proofs:make-range-prover :nbits nbits))
-         (proof (funcall prover n)))
-    (prove:ok
-     (range-proofs:validate-range-proof proof)
-     "Testing VALIDATE-RANGE-PROOF…")))
+(prove:plan 2)
+(prove:is-error
+ (let ((n 128) ;; ?? What is a reasonable range of values
+       (nbits 64))
+   (let* ((prover (range-proofs:make-range-prover :nbits nbits))
+          (proof (funcall prover n)))
+     (prove:ok
+      (range-proofs:validate-range-proof proof)
+      "Testing VALIDATE-RANGE-PROOF…")))
+ 'error
+ "Expecting badly hooked up make-range-prover to error…")
 
 #|     TODO: finish transcribing…
 (prove:plan 1)
