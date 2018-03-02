@@ -412,7 +412,7 @@ THE SOFTWARE.
        (:pltwin (sym)
         (setf pltsym sym))
        (:plt ()
-       #+:LISPWORKS
+       #+(and lispworks (not lispworks7.1))
        (progn
 	 (plt:histogram pltsym data
 			:clear  t
