@@ -34,8 +34,7 @@ THE SOFTWARE.
 (in-package #:primes)
 ;; -------------------------------------------
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))
-          (inline empty singleton create))
+(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))          (inline empty singleton create))
 
 ;; -----------------------------------------------------------------------------
 ;;

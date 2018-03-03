@@ -42,7 +42,7 @@ THE SOFTWARE.
 
 ;;--- MAC OS/X ---
 
-#+(AND :LISPWORKS :MACOSX)
+#+(AND :LISPWORKS (OR :LINUX :MACOSX))
 (PROGN
  (fli:define-foreign-function (_get-time-of-day "gettimeofday" :source)
     ((tsinfo :pointer)
@@ -82,6 +82,15 @@ THE SOFTWARE.
  (defun adjust-to-standard-universal-time-usec (tm)
    (declare (integer tm))
    (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
+
+#-(OR :CLOZURE
+      (AND :LISPWORKS (OR :LINUX :MACOSX)))
+(progn
+  (defun get-time-usec ()
+    (error "Not yet implemented"))
+  (defun adjust-to-standard-universal-time-usec (tm)
+    (declare (ignore tm))
+    (error "Not yet implemented")))
 
 (defun get-universal-time-usec ()
   (adjust-to-standard-universal-time-usec (get-time-usec)))
