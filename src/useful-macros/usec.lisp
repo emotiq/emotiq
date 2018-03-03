@@ -84,7 +84,7 @@ THE SOFTWARE.
    (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
 
 #-(OR :CLOZURE
-      (AND :LISPWORKS (OR :LINUX :MACOSx0)))
+      (AND :LISPWORKS (OR :LINUX :MACOSX)))
 (progn
   (defun get-time-usec ()
     (error "Not yet implemented"))
