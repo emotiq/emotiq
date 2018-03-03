@@ -109,7 +109,7 @@ THE SOFTWARE.
   `(cdr (cell ,ref)))
 
 ;; ------------------------------------
-                   
+ 
 (defun forcer (ref evalfn valfn)
   ;; FORCER - a generalized forcing function
   ;;
@@ -150,7 +150,8 @@ THE SOFTWARE.
               
               ;; In case of early exit, put the CAS flag back for another try later.
               ;; If we finished normally, then this step will silently fail.
-              (mpcompat:CAS (cell-casflag ref) :in-process :uneval)))
+              (mpcompat:CAS #-OPENMCL (cell-casflag ref)
+                            #+OPENMCL (cdr (car ref)) :in-process :uneval)))
            
            ((not *spin-wait*)
             ;; :CLOZURE ?? -- will default to spinning
@@ -273,7 +274,7 @@ THE SOFTWARE.
   ;;
   (forcer (future-ans x)
           'cant-happen
-          #'recover-ans-or-exne))
+          #'recover-ans-or-exn))
 
 (let ((abort-exn (load-time-value
                   (capture-ans-or-exn

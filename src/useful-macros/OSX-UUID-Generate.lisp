@@ -33,10 +33,12 @@ THE SOFTWARE.
 
 (in-package :uuidgen)
 
+#+(AND :LISPWORKS :MACOSX)
 (fli:define-foreign-function (_uuid_generate "uuid_generate" :source)
     ((out (:pointer (:unsigned :byte))))
   :documentation "FLI interface to OS X library")
 
+#+(AND :LISPWORKS :MACOSX)
 (defun generate ()
 "return a 16 element vector of unsigned 8-bit bytes
 containing an OS X UUID generated from the /dev/urandom entropy store
@@ -55,4 +57,7 @@ will be generated and returned."
                                    :start2 0
                                    :end2   16)
         ans))))
-                             
+
+#-(AND :LISPWORKS :MACOSX)
+(defun generate ()
+  (error "Not yet implemented"))

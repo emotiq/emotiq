@@ -26,48 +26,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :cosi-keying
-  (:use
-   :common-lisp
-   :ecc-crypto-b571
-   :crypto-mod-math
-   :edwards-ecc)
-  (:export
-   :make-keypair
-   :make-deterministic-keypair
-   :validate-pkey
-   :ed-dsa
-   :ed-dsa-validate
-   :need-integer-form
-   :published-form
-   ))
-
 (in-package :cosi-keying)
 
 ;; NOTE: The adopted standard for Emotiq (for now) is:
-;;    Hashes are hex strings, Binary data are base64 strings. And
+;;    Hashes are hex strings, Binary data are base58 strings. And
 ;;    while keying uses hashing internally, published keying info is
 ;;    binary, not hashes. So key info will be presented as base64
 ;;    strings.
 ;;
 ;;    Users are identified by public key.
-
-;; -----------------------------------------------
-
-(defun mod-r (v)
-  (mod v *ed-r*))
-
-(defun hash-to-int (vec)
-  (mod-r (ed-convert-lev-to-int vec)))
-
-(defun add-mod-r (a b)
-  (add-mod *ed-r* a b))
-
-(defun sub-mod-r (a b)
-  (sub-mod *ed-r* a b))
-
-(defun mult-mod-r (a b)
-  (mult-mod *ed-r* a b))
 
 ;; ---------------------------------------------------
 
@@ -78,7 +45,7 @@ THE SOFTWARE.
   (ed-convert-lev-to-int v))
 
 (defmethod need-integer-form ((v string)) ;; assumed to be base64 string
-  (need-integer-form (decode-bytes-from-base64 v)))
+  (need-integer-form (base58:decode v)))
 
 (defmethod need-integer-form ((v ecc-pt))
   (ed-compress-pt v))
@@ -86,113 +53,259 @@ THE SOFTWARE.
 (defmethod need-integer-form ((v ed-proj-pt))
   (need-integer-form (ed-affine v)))
 
+(defmethod need-integer-form (v)
+  (need-integer-form (loenc:encode v)))
+
 ;; -----------------
 
 (defmethod published-form ((v integer))
-  (published-form (ed-convert-int-to-lev v)))
+  (base58:encode v))
 
 (defmethod published-form ((v vector)) ;; assumed to be ub8v le
-  (encode-bytes-to-base64 v))
+  (published-form (need-integer-form v)))
 
 (defmethod published-form ((v ecc-pt))
-  (published-form (ed-compress-pt v)))
+  (published-form (need-integer-form v)))
 
 (defmethod published-form ((v ed-proj-pt))
-  (published-form (ed-compress-pt v)))
+  (published-form (need-integer-form v)))
 
 (defmethod published-form ((v string)) ;; assumed to be base64
   (if (ignore-errors
-        (decode-bytes-from-base64 v))
+        (base58:decode v))
       v
     (call-next-method)))
 
 (defmethod published-form (v)
-  (encode-bytes-to-base64 (loenc:encode v)))
+  (published-form (need-integer-form v)))
 
 ;; ---------------------------------------------------
-;; The IRTF EdDSA standard as a primitive
+;; The IETF EdDSA standard as a primitive
 
-(defun ed-dsa (msg skey)
-  (let* ((skey  (need-integer-form skey))
-         (h     (ed-convert-lev-to-int
-                 (sha3-buffers
-                  ;; full 512 bits
-                  (ed-convert-int-to-lev skey))))
-         (a     0)
-         (bits  (byte (- *ed-nbits* 5) 3)))
-    (setf (ldb bits a) (ldb bits h)
-          (ldb (byte 1 (1- *ed-nbits*)) a) 1)
-    (let* ((msg-enc   (loenc:encode msg))
-           (pkey      (ed-nth-pt a))
-           (pkey-cmpr (ed-compress-pt pkey))
-           (r         (ed-convert-lev-to-int
-                       (sha3-buffers
-                        (ed-convert-int-to-lev (ldb (byte *ed-nbits* *ed-nbits*) h))
-                        msg-enc)))
-           (rpt       (ed-nth-pt r))
-           (rpt-cmpr  (ed-compress-pt rpt))
-           (s         (add-mod-r r
-                                 (mult-mod-r a
-                                             (ed-convert-lev-to-int
-                                              (sha3-buffers
-                                               (ed-convert-int-to-lev rpt-cmpr)
-                                               (ed-convert-int-to-lev pkey-cmpr)
-                                               msg-enc))
-                                             ))))
-      (list
-       :msg   msg
-       :pkey  (published-form pkey-cmpr)
-       :r     (published-form rpt-cmpr)
-       :s     (published-form s))
-      )))
+(defun cosi-dsa (msg skey)
+  #-:ELLIGATOR
+  (let ((quad  (ed-dsa msg skey)))
+    (list
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :pkey))
+     :r    (published-form (getf quad :r))
+     :s    (published-form (getf quad :s))
+     ))
+  #+:ELLIGATOR
+  (let ((quad (elligator-ed-dsa msg skey)))
+    (list
+     :msg  (getf quad :msg)
+     :pkey (published-form (getf quad :tau-pub))
+     :r    (published-form (getf quad :tau-r))
+     :s    (published-form (getf quad :s))
+     )))
 
-(defun ed-dsa-validate (msg pkey r s)
+(defun cosi-dsa-validate (msg pkey r s)
   (let ((pkey (need-integer-form pkey))
         (r    (need-integer-form r))
         (s    (need-integer-form s)))
-    (ed-pt=
-     (ed-nth-pt s)
-     (ed-add (ed-decompress-pt r)
-             (ed-mul (ed-decompress-pt pkey)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers
-                       (ed-convert-int-to-lev r)
-                       (ed-convert-int-to-lev pkey)
-                       (loenc:encode msg)))
-                     )))))
+    (#-:ELLIGATOR ed-dsa-validate 
+     #+:ELLIGATOR elligator-ed-dsa-validate
+     msg pkey r s)))
 
 ;; --------------------------------------------
+;; Keying for attribution. User keys, and signatures. You really don't
+;; need such an elaborate system when generating keys for internal
+;; math operations like for range proofs and such. And range proofs
+;; also present special problems with respect to Elligator encodings.
 
 (defconstant +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
 
-(defun make-deterministic-keypair (seed)
+(defun make-deterministic-keypair (seed &optional (index 0))
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (let* ((skey  (ldb (byte (1+ *ed-nbits*) 0)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers (loenc:encode seed)))))
-         (plist (ed-dsa +keying-msg+ skey))
-         (pkey  (getf plist :pkey))
-         (s     (getf plist :s))
-         (r     (getf plist :r)))
+  #-:ELLIGATOR
+  (let* ((skey  (compute-deterministic-skey seed index))
+         (plist (cosi-dsa +keying-msg+ skey)))
     (list
-     :skey skey
-     :pkey (published-form pkey)
-     :r    (published-form r)
-     :s    (published-form s))))
+     :skey  skey
+     :pkey  (getf plist :pkey)
+     :index index
+     :r     (getf plist :r)
+     :s     (getf plist :s)))
+  #+:ELLIGATOR
+  (multiple-value-bind (skey tau ix)
+      (compute-deterministic-elligator-skey seed index)
+    ;; Note that Elligator encoding may have to search for a suitable
+    ;; key. Hence the index returned may be different from the index
+    ;; suggested.
+    (declare (ignore tau))
+    (let ((plist (cosi-dsa +keying-msg+ skey)))
+      (list
+       :skey  skey
+       :pkey  (getf plist :pkey)
+       :index ix
+       :r     (getf plist :r)
+       :s     (getf plist :s)
+       ))))
 
-(defun top-octave-rand (range)
-  ;; random value in the top octave of the range
-  (random-between (ash range -1) range))
+(defun make-unique-deterministic-keypair (seed)
+  ;; create a unique deterministic keypair, using a Bloom filter to
+  ;; record keys, and adding an incrementing index to the seed until
+  ;; we have uniqueness.
+  (um:nlet-tail iter ((ix  0))
+    (let* ((plist (make-deterministic-keypair seed ix))
+           (pkey  (getf plist :pkey))
+           (proof (list (getf plist :r) (getf plist :s))))
+      (if (unique-key-p pkey proof)
+          ;; when was unique, it also got added to table
+          plist
+        (iter (1+ ix))))))
 
-(defun make-keypair (seed)
+;; --------------------------------------------------------------
+
+(defun get-seed (seed)
+  (if seed
+      (ed-convert-int-to-lev (need-integer-form seed))
+    (ctr-drbg 256)))
+
+(defun get-salt (salt)
+  (let ((pref (loenc:encode "salt")))
+    (if salt
+        (concatenate 'vector
+                     pref 
+                     (ed-convert-int-to-lev (need-integer-form salt)))
+      pref)))
+
+;; --------------------------------------------------------------
+;; User level access functions for keying
+
+(defun make-random-keypair (&optional seed salt)
   ;; seed can be anything at all, any Lisp object
-  (make-deterministic-keypair (list seed
-                                    (top-octave-rand *ed-r*))))
+  ;; This is the normal entry point when making new user keys.
+  (let* ((seed  (get-seed seed))
+         (salt  (get-salt salt))
+         (rseed (ironclad:pbkdf2-hash-password seed
+                                               :salt       salt
+                                               :digest     :sha3
+                                               :iterations 2048)))
+    (make-unique-deterministic-keypair rseed)))
+
+(defun make-subkey (skey sub-seed)
+  ;; Need to do one at a time, since unique may have created an index
+  ;; value, and you can't retrace the path without that index value.
+  ;; That is to say, you really do need to keep a record of all the
+  ;; private keys along the way...
+  (make-unique-deterministic-keypair
+   (list (need-integer-form skey)
+         sub-seed)))
 
 (defun validate-pkey (pkey r s)
-  (ed-dsa-validate +keying-msg+ pkey r s))
+  (cosi-dsa-validate +keying-msg+ pkey r s))
         
 ;; ------------------------------------------------------
+
+;; Bloom filter sizing.... Suppose we want false positives rate
+;; P_false < 0.001, number of hashes needed is K = -log2 p = 9.97 =
+;; 10, and bits/item M/N = -1.44 Log2 p = 14.35. Suppose further, that
+;; we plan for N = 1M items in the filter.
+;;
+;; We can chop up the bits of a hash like SHA256 for use as the
+;; separate hash values, easier to do if we just use whole octets from
+;; the hash directly. And keeping M as a power of 2, enables just
+;; masking the hash value with 2^m-1 for indexing into the bit table..
+;;
+;; For 1M items, we need M = 14.35M bits => 16M or 24 bit addressing.
+;; With 10 hashes, we need 240 bits of hash overall. And the bit table
+;; will occupy 2 MB of memory.
+;;
+;; Pkeys are all at least 249 bits, so we are okay with just using the
+;; Pkey as the source of hash values for the Bloom filter. We just
+;; need to convert them into a little-endian vector of bytes.
+;;
+;; Note that no space is saved if we settle for p = 0.01 instead of
+;; 0.001. The only thing that happens with higher false positive
+;; probability is that we need only 7 hashes instead of 10.
+;;
+
+(defvar *pkey-filter*
+  (bloom-filter:make-bloom-filter :nitems  1000000
+                                  :pfalse  0.001
+                                  :hash-fn 'identity))
+(defvar *pkeys* (maps:empty)) ;; for now...
+
+(defun true-pkey (pkey)
+  (#-:ELLIGATOR identity
+   #+:ELLIGATOR to-elligator-range
+    (need-integer-form pkey)))
+
+(defun unique-key-p (pkey proof)
+  (let* ((pk    (true-pkey pkey))
+         (hashv (ed-convert-int-to-lev pk)))
+    (um:critical-section ;; for SMP safety
+      (unless (bloom-filter:test-membership *pkey-filter* hashv)
+        (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
+        (setf *pkeys* (maps:add pk proof *pkeys*))
+        (cosi-blkdef:add-key-to-block pkey proof)
+        t)
+      )))
+
+(defun lookup-pkey (pkey)
+  ;; return t if pkey found and valid, nil if not found or invalid
+  (let ((proof (maps:find (true-pkey pkey) *pkeys*)))
+    (when proof
+      (apply 'validate-pkey pkey proof))))
+
+
+(defun NYI (&rest args)
+  (error "Not yet implemented ~A" args))
+
+(defun #1=populate-pkey-database ()
+  ;; this should populate *pkeys* and *pkey-filter* from the blockchain at startup
+  (NYI '#1#))
+
+(defun #1=refresh-pkey-database ()
+  ;; periodically refresh the database from blockchain updates
+  (NYI '#1#))
+
+;; --------------------------------------------------------------------
+
+(defvar *wordlist-folder*  #P"~/Desktop/Emotiq/Research-Code/src/Cosi/wordlists/")
+
+(defun import-wordlist (filename)
+  ;; import a 2048 word list for use in wordlist encoding/decoding
+  ;; E.g., (import-wordlist "english.txt")
+  (um:accum acc
+    (with-open-file (f (merge-pathnames
+                        *wordlist-folder* 
+                        filename)
+                       :direction :input)
+      (um:nlet-tail iter ()
+        (let ((wrd (read-line f nil f)))
+          (cond ((eql wrd f))
+                (t (acc wrd)
+                   (iter))
+                )))
+      )))
+
+(defun convert-int-to-wordlist (val wref)
+  ;; convert a positive, or zero, integer value to a list of words
+  ;; representing little-endian encoding in 11-bit groups
+  (assert (= 2048 (length wref)))
+  (check-type val (integer 0))
+  (let ((nwrds (max 1 (ceiling (integer-length val) 11))))
+    (loop for ct from 0 below nwrds
+          for pos from 0 by 11
+          collect (nth (ldb (byte 11 pos) val) wref))))
+
+(defun convert-wordlist-to-int (wlist wref)
+  ;; convert a list of words from a wordlist into an integer with each
+  ;; word representing an 11-bit group presented in little-endian
+  ;; order
+  (assert (= 2048 (length wref)))
+  (assert (and (consp wlist)
+               (every 'stringp wlist)))
+  (let ((val 0))
+    (loop for wrd in wlist
+          for pos from 0 by 11
+          do
+          ;; this will error if word isn't found in list...
+          (setf (ldb (byte 11 pos) val) (position wrd wref)))
+    val))
 

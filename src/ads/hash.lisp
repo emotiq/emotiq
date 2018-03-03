@@ -50,7 +50,7 @@ THE SOFTWARE.
 ;; The SHA256 family was developed and certified c.a. 2001-2004. SHA3
 ;; was certified in 2015, giving 10 years of research effort more.
 
-(defun basic-hash (v)
+(defun basic-hash/512 (v)
   ;; Ironclad can only digest ub8 simple vectors. For now, we leave it
   ;; to Ironclad to issue errors if this is misused.
   ;; with SHA3:
@@ -59,7 +59,7 @@ THE SOFTWARE.
     (ironclad:update-digest dig (to-ub8v v))
     (ironclad:produce-digest dig)))
 
-(defun basic-hash-256 (v)
+(defun basic-hash/256 (v)
   ;; Ironclad can only digest ub8 simple vectors. For now, we leave it
   ;; to Ironclad to issue errors if this is misused.
   ;; with SHA256:

@@ -343,14 +343,14 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; -----------------------------------------------------------------------
 
-#-:LISPWORKS
+#-(AND :COM.RAL :LISPWORKS)
 (defparameter *dly-instr*
   (ac:make-actor
    (lambda (&rest args)
      (declare (ignore args))
      t)))
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (defparameter *dly-instr*
   ;; Very useful for timeout tuning. If timeouts are properly set,
   ;; then histogram will be entirely to left of red 1.0 Ratio, but not
