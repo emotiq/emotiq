@@ -85,8 +85,12 @@ THE SOFTWARE.
 
 #-(OR :CLOZURE
       (AND :LISPWORKS (OR :LINUX :MACOSx0)))
-(defun get-time-usec ()
-  (error "Not yet implemented"))
+(progn
+  (defun get-time-usec ()
+    (error "Not yet implemented"))
+  (defun adjust-to-standard-universal-time-usec (tm)
+    (declare (ignore tm))
+    (error "Not yet implemented")))
 
 (defun get-universal-time-usec ()
   (adjust-to-standard-universal-time-usec (get-time-usec)))
