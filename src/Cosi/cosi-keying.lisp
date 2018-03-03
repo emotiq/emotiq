@@ -329,7 +329,8 @@ THE SOFTWARE.
           for pos from 0 by 11
           do
           ;; this will error if word isn't found in list...
-          (setf (ldb (byte 11 pos) v) (position wrd wref)))
+          (setf (ldb (byte 11 pos) v) (position wrd wref
+                                                :test 'string-equal)))
     (let* ((val (ldb (byte 256 0) v))
            (h   (sha3/256-buffers (ed-convert-int-to-lev val 32))))
       (unless (= (aref h 0) (ldb (byte 8 256) v))
