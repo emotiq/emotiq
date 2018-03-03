@@ -85,10 +85,13 @@ THE SOFTWARE.
 #+cl-ppcre
 (set-dispatch-macro-character #\# #\~ '|reader-for-#~|)
 
-#| ;; example
-;; pattern matching
-(#~m/^[+-]?[0-9][0-9_,]*(\.[0-9_,]*([eEdD][+-]?[0-9]+)?)?/ s)
-;; pattern substitution
-(#~s/[0-9]/N/ s)
-|#
-
+;; example
+;;
+;;   pattern matching
+;;
+;;     (#~m/^[+-]?[0-9][0-9_,]*(\.[0-9_,]*([eEdD][+-]?[0-9]+)?)?/ s)
+;;
+;;
+;;   pattern substitution
+;;
+;;     (#~s/[0-9]/N/ s)
