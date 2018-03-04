@@ -127,13 +127,13 @@ INTERNAL-TIME-UINITS-PER-SECOND which gives the ticks per count for the current 
 		   :node (parse-integer uuid-string :start 24 :end 36 :radix 16))))
 
 ;; Those should be constants but I couldn't find a way to define a CLOS object to be constant
-(defconstant +namespace-dns+ (make-uuid-from-string "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+(um:defconstant+ +namespace-dns+ (make-uuid-from-string "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
   "The DNS Namespace. Can be used for the generation of uuids version 3 and 5")
-(defconstant +namespace-url+ (make-uuid-from-string "6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+(um:defconstant+ +namespace-url+ (make-uuid-from-string "6ba7b811-9dad-11d1-80b4-00c04fd430c8")
   "The URL Namespace. Can be used for the generation of uuids version 3 and 5")
-(defconstant +namespace-oid+ (make-uuid-from-string "6ba7b812-9dad-11d1-80b4-00c04fd430c8")
+(um:defconstant+ +namespace-oid+ (make-uuid-from-string "6ba7b812-9dad-11d1-80b4-00c04fd430c8")
   "The OID Namespace. Can be used for the generation of uuids version 3 and 5")
-(defconstant +namespace-x500+ (make-uuid-from-string "6ba7b814-9dad-11d1-80b4-00c04fd430c8")
+(um:defconstant+ +namespace-x500+ (make-uuid-from-string "6ba7b814-9dad-11d1-80b4-00c04fd430c8")
   "The x500+ Namespace. Can be used for the generation of uuids version 3 and 5")
 
 #+(AND :MACOSX :LISPWORKS)
