@@ -31,6 +31,7 @@ THE SOFTWARE.
 (declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
 
 ;; -----------------------------------------------------
+
 (defvar *blinders* (make-hash-table))
 
 (defun create-blinder (m)

@@ -3,7 +3,7 @@
 ;; supplanted by :COSI-SIMGEN
 ;; Does this mean we should eliminate this package definition? --MTE
 (defpackage :cosi
-  (:use :common-lisp :crypto-mod-math)
+  (:use :common-lisp :crypto/modular-arith)
   (:import-from :edwards-ecc
 		:ed-add 
 		:ed-sub 
@@ -29,7 +29,7 @@
    :verify-schnorr-signature))
 
 (defpackage :range-proofs
-  (:use :common-lisp :crypto-mod-math)
+  (:use :common-lisp :crypto/modular-arith)
   (:import-from :edwards-ecc
    :ed-mul
    :ed-add
@@ -60,7 +60,7 @@
 
 
 (defpackage :crypto-purchase
-  (:use :common-lisp :crypto-mod-math)
+  (:use :common-lisp :crypto/modular-arith)
   (:import-from :edwards-ecc
    :ed-mul
    :ed-add
@@ -87,7 +87,7 @@
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
-  (:use :common-lisp :cosi :crypto-mod-math)
+  (:use :common-lisp :cosi :crypto/modular-arith)
   (:import-from :edwards-ecc
    :ed-add 
    :ed-sub 
@@ -137,7 +137,7 @@
   (:use
    :common-lisp
    :ecc-crypto-b571
-   :crypto-mod-math
+   :crypto/modular-arith
    :edwards-ecc)
   (:export
    :need-integer-form

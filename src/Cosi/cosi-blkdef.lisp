@@ -121,7 +121,7 @@ THE SOFTWARE.
   (ads-treap:insert (make-transaction
                      :pkey   pkey
                      :trans  trans)
-                    (cosi-block-trans *currrent-block*)))
+                    (cosi-block-trans *current-block*)))
 
 (defun get-block-transactions ()
   (cosi-block-trans *current-block*))
