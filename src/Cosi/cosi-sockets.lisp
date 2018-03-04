@@ -128,8 +128,8 @@ THE SOFTWARE.
   ;; floor. So MITM modifications become tantamount to a DOS attack.
   (multiple-value-bind (v vpt) (ed-random-pair)
     (let* ((c   (hash-pt-msg vpt msg))
-           (r   (sub-mod *ed-r* v
-                         (mult-mod *ed-r* c skey))))
+           (r   (with-mod *ed-r*
+                  (m- v (m* c skey)))))
       (list msg r c uuid))))
 
 (defun verify-hmac (quad)

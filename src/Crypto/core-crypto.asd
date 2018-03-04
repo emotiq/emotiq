@@ -37,6 +37,7 @@ THE SOFTWARE.
                 (:file "kdf")
                 (:file "gf-571")
                 (:file "mod-math")
+                (:file "modular-arith")
                 (:file "edwards")
                 (:file "ecc-B571")
                 (:file "curve-gen")

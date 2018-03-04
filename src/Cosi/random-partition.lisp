@@ -1051,8 +1051,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;; floor. So MITM modifications become tantamount to a DOS attack.
   (multiple-value-bind (v vpt) (ed-random-pair)
     (let* ((c   (hash-pt-msg vpt msg))
-           (r   (sub-mod *ed-r* v
-                         (mult-mod *ed-r* c skey))))
+           (r   (with-mod *ed-r*
+                  (m- v (m* c skey)))))
       (list msg r c uuid))))
 
 (defun verify-hmac (quad)
@@ -1319,8 +1319,9 @@ Connecting to #$(NODE "10.0.1.6" 65000)
          (eql seq-id (node-seq node)))
     (labels
         ((compute-signage (challenge)
-           (sub-mod *ed-r* (node-v node)
-                    (mult-mod *ed-r* challenge (node-skey node)))))
+           (with-mod *ed-r*
+             (m- (node-v node)
+                 (m* challenge (node-skey node))))))
       
       (let* ((ok      (node-ok node)) ;; did we participate in phase 1?
              (subs    (mapcar 'first (node-parts node)))
@@ -1350,7 +1351,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                              ;; sub was ok, but if we had some missing
                              ;; subs, don't waste time computing
                              ;; anything
-                             (setf rsum (add-mod *ed-r* rsum sub-r)))
+                             (with-mod *ed-r*
+                               (setf rsum (m+ rsum sub-r))))
                          (progn
                            ;; sub gave a corrupt answer on the local challenge
                            (pr (format nil "Corrupt node: ~A" (node-ip sub)))
