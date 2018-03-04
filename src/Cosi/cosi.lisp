@@ -311,7 +311,8 @@
                (eql state-seq seq-id))
       (let ((r  (sub-mod *ed-r* state-v (mult-mod *ed-r* c state-skey))))
         (dolist (node state-parts)
-          (setf r (add-mod *ed-r* r (ask node :signing seq-id c))))
+          (with-mod *ed-r*
+            (setf r (m+ r (ask node :signing seq-id c)))))
         r))))
 
 (defun node-compute-cosi (state seq-id msg)
@@ -666,7 +667,8 @@
       (dolist (sig sigs)
         (destructuring-bind (c_i r_i) sig
           (assert (= c_i c)) ;; be sure we are using the same challenge val
-          (setf rt (add-mod *ed-r* rt r_i))))
+          (with-mod *ed-r*
+            (setf rt (m+ rt r_i)))))
       (list c rt))))
 
 ;; ---------------------------------------------------------------------
