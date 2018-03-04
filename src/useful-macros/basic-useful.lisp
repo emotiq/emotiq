@@ -149,3 +149,20 @@ THE SOFTWARE.
 
 ;; -------------------------------------------
 
+
+
+;;; DEFCONSTANT+: Defconstant PLUS a bit of common sense.
+
+(defmacro defconstant+ (name value &optional doc)
+  "Like DEFCONSTANT but does not allow you to (easily) change the
+  value once you've evaluated the form."
+  ;; In return, if you do something like 
+  ;;
+  ;;   (progn (defconstant foo "bar") (defconstant foo "bar"))
+  ;;
+  ;; SBCL (justified by Common Lisp) will not say things like
+  ;;
+  ;;   The constant FOO is being redefined (from "bar" to "bar")
+  `(defconstant ,name 
+     (if (boundp ',name) (symbol-value ',name) ,value)
+     ,@(if doc (list doc))))
