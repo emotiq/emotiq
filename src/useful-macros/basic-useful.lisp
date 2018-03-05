@@ -105,14 +105,25 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------
 
+#+sbcl
+(if (string-lessp (lisp-implementation-version) "1.2.2")
+    (pushnew :safe-sbcl *features*)
+    (setq *features* (remove :safe-sbcl *features*)))
+
 (defun flatten (x)
   ;; this is really a deep flatten
   (labels ((rec (x acc)
              (cond ((null x) acc)
+                   #+(and sbcl (not safe-sbcl))
+                   ((typep x 'sb-impl::comma) (rec (sb-impl::comma-expr x) acc))
                    ((atom x) (cons x acc))
                    (t  (rec (car x) (rec (cdr x) acc)))
                    )))
     (rec x nil)))
+
+;; #+sbcl code above adapted from
+;; #https://github.com/thephoeron/let-over-lambda/blob/a202167629cb421cbc2139cfce1db22a84278f9f/let-over-lambda.lisp
+
 
 (defmacro perform (name bindings &body body)
   (let ((args (mapcar 'first bindings))

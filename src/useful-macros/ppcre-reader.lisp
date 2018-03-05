@@ -85,10 +85,23 @@ THE SOFTWARE.
 #+cl-ppcre
 (set-dispatch-macro-character #\# #\~ '|reader-for-#~|)
 
-#| ;; example
-;; pattern matching
-(#~m/^[+-]?[0-9][0-9_,]*(\.[0-9_,]*([eEdD][+-]?[0-9]+)?)?/ s)
-;; pattern substitution
-(#~s/[0-9]/N/ s)
-|#
-
+;; Examples you can input to READ:
+;;
+;;   Pattern Matching:
+;;
+;;     (#~m/^[+-]?[0-9][0-9_,]*(\.[0-9_,]*([eEdD][+-]?[0-9]+)?)?/ s)
+;;
+;;     =>
+;;
+;;       ((LAMBDA (#:STR8281) (CL-PPCRE:SCAN "^[+-]?[0-9][0-9_,]*(\\.[0-9_,]*([eEdD][+-]?[0-9]+)?)?" #:STR8281)) S)
+;;
+;;
+;;   Pattern Substitution:
+;;
+;;     (#~s/[0-9]/N/ s)
+;;
+;;     =>
+;;
+;;      ((LAMBDA (#:STR8282) (CL-PPCRE:REGEX-REPLACE-ALL "[0-9]" #:STR8282 "N")) S)
+;;
+;; (Note: the uninterned symbols in the examples are not exact, just representative gensyms.)
