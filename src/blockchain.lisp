@@ -15,8 +15,8 @@
   "Print HASH-POINTER to OUTSTREAM in the form #<H(...) ITEM>, where ITEM is
    replaced by the printed representation of the item slot's value, and
    H(hhh..hh) shows an abbreviated hash digest hex string.  For example, a hash
-   pointer with a transaction as its item might print as follows: #<H(81b..e9)
-   #<transaction => 2bd..90/51000>>"
+   pointer with a transaction as its item might print as follows: #<H(81ba38..fe9)
+   #<transaction => 2bd479..290/51000>>"
   (print-unreadable-object (hash-pointer outstream)
     (with-slots (item digest-hex-string) hash-pointer
       (format outstream "H(")
@@ -43,9 +43,9 @@
 
 (defun abbrev-hash (hex-string outstream)
   (let ((end (length hex-string)))
-    (write-string hex-string outstream :end 3)
+    (write-string hex-string outstream :end 6)
     (write-string ".." outstream)
-    (write-string hex-string outstream :start (- end 2))))
+    (write-string hex-string outstream :start (- end 3))))
 
 
 
@@ -138,7 +138,7 @@
                                         ;   outputs (which gives the
                                         ;   unspent units from which
                                         ;   to spend); 0-indexed e.g.,
-                                        ;   ((1 0) (14 3))
+                                        ;   (("ec2..a2" 0) ("ec2..a2" 3))
   transaction-outputs                   ; sequence of 1 or more pairs,
                                         ;   each a sequence of account
                                         ;   and amount; 0-indexed
@@ -153,14 +153,17 @@
           (transaction-id transaction-inputs transaction-outputs)
         transaction
       (format outstream "~(~a~) " (type-of transaction))
-      (format outstream "[Tx ID=~a] " transaction-id)
+      (format outstream "[Tx ID=")
+      (abbrev-hash transaction-id outstream)
+      (format outstream "] ")
       (loop for transaction-input in  transaction-inputs
             as first-time = t then nil
             when (not first-time)
               do (format outstream ", ")
-            do (format 
-                outstream "~a[~d]"
-                (first transaction-input) (second transaction-input)))
+            do (abbrev-hash (first transaction-input) outstream)
+               (format 
+                outstream "[~d]"
+                (second transaction-input)))
       (if (null transaction-inputs)
           (format outstream "[] ")      ; COINBASE (no inputs)
           (format outstream " "))
@@ -169,7 +172,7 @@
             as first-time = t then nil
             when (not first-time)
               do (format outstream ", ")
-            do (write-string  (first transaction-output) outstream)
+            do (abbrev-hash (first transaction-output) outstream)
                (format outstream "/~d" (second transaction-output))))))
 
 ;; Note: to avoid describe output truncation, may need something like
@@ -266,23 +269,28 @@
     (setf (hash-pointer-of-previous-block b) nil)
     (setf (hash-pointer-of-transaction b)
           (make-hash-pointer-for-transaction transaction))
-    b))
+    (values transaction b)))
 
 
 (defvar *genesis-block* nil)
 
 (defvar *last-block* nil)
+(defvar *last-transaction* nil)
 
 (defun start-blockchain ()
-  (setq *genesis-block* (make-genesis-block))
-  (setq *last-block* *genesis-block*))
+  (multiple-value-bind (tx b)
+      (make-genesis-block)
+    (setq *genesis-block* b)
+    (setq *last-block* b)
+    (values tx b)))
 
 (defun restart-blockchain ()
   (start-blockchain))
 
 (defun reset-blockchain ()
   (setq *genesis-block* nil)
-  (setq *last-block* nil))
+  (setq *last-block* nil)
+  (setq *last-transaction* nil))
 
 
 (defun tx-ids= (id-1 id-2)
@@ -462,7 +470,65 @@ have been visited."
                       :hash-pointer-of-transaction
                       hash-pointer-of-transaction)))                      
              (setq *last-block* b)
-             (return b))))
+             (setq *last-transaction* new-transaction)
+             (return (values new-transaction b)))))
+
+
+
+(defun account-addresses= (address-1 address-2)
+  (string-equal address-1 address-2))
+
+(defun get-credits-per-account (account)
+  (let ((credits '()))
+    (do-blockchain (blk)
+      (do-transactions (tx blk)
+        (loop for (tx-output-account amount) in (transaction-outputs tx)
+              as index from 0
+              when (account-addresses= account tx-output-account)
+                do (push (list (transaction-id tx) index amount 
+                               (transaction-inputs tx)
+                               (transaction-outputs tx))
+                         credits))))
+    credits))
+
+(defun find-transaction-with-particular-input (input-tx-id input-index)
+  (do-blockchain (blk)
+    (do-transactions (tx blk)
+      (loop for (tx-id index) in (transaction-inputs tx)
+            when (and (tx-ids= tx-id input-tx-id)
+                      (= index input-index))
+              do (return-from find-transaction-with-particular-input 
+                   tx)))))
+
+(defun get-credit-redemptions (credits)
+  (loop for credit in credits
+        as (tx-id index) = credit
+        unless (find-transaction-with-particular-input tx-id index)
+          collect credit))
+
+(defun get-balance (account)
+  (let* ((credits (get-credits-per-account account))
+         (credits-after-redemptions (get-credit-redemptions credits)))
+    (loop for (tx-id nil amount inputs outputs) in credits
+          do (format t "~%In tx ~a:" tx-id)
+             (format t "~%  Coin amount IN: ~a" amount)
+             (format t "~%  ... in via: ")
+             (if (null inputs)
+                 (format t " COINBASE")
+                 (loop for (tx-id index) in inputs
+                       do (format t "Tx ~a, index = ~a" tx-id index)))
+             (format t "~%  Coin OUT")
+             (loop for (acct amt) in outputs
+                   do (format t "~%    amount ~d to ~Aacct~A ~a"
+                              amt
+                              (if (account-addresses= acct account) "*" "")
+                              (if (account-addresses= acct account) "*" "")
+                              acct)))
+    (list (loop for (nil nil amount) in credits
+                sum amount)
+          (loop for (nil nil amount) in credits-after-redemptions
+                sum amount))))
+          
 
 
 
@@ -498,73 +564,151 @@ have been visited."
 ;;; fine. The second are double-spends coming after this first set.  The third
 ;;; refer to transactions never were known.
 
-(defparameter *blockchain-test-args-1*
-  `(((("b1ee128b0bc45ced9957f84eb3d35c7e1151867b4632ab358bf4df74a8828201" 0))
-     ((,*bob-account* 40000)
-      (,*alice-account* ,(- 51000 40000))))
-    ((("c92446c3c37a46773065a9c8a8e8a8af62404b917949ac17842ee10f5941df15" 0)) 
-     ((,*david-account* 20000)
-      (,*bob-account* ,(- 40000 20000)))) 
-    ((("4a4eac4695454733a305a5f12a9819d0aab47d2d92da09134ac7d278022c1bdd" 0))
-     ((,*alice-account* 5000)
-      (,*bob-account* ,(- 20000 5000))))
-    ((("e6ab532d8c862802ab93bee93e1d211b95bb9eb6f601617c1daca2e8f15962ec" 1))
-     ((,*david-account* 1000)
-      (,*bob-account* ,(- 15000 1000))))))
+(defun blockchain-test-1 ()
+  "Test by resetting the blockchain, which issues 51000 to Alice,
+sending 40000 from Alice to Bob, 20000 from Bob to David, 5000 from
+Bob to Alice, and finally 1000 from Bob to David."
+  (multiple-value-bind (tx-0 b-0)
+      (restart-blockchain)
+    (format t "~%(GENESIS)~%  Tx-0: ~A~%  Block: ~A~%" tx-0 b-0)
+    ;; Genesis Block Coinbase Tx gives 510000 to Alice initially.
+    (multiple-value-bind (tx-1 b-1)
+        (next-transaction 
+         (list (list (transaction-id tx-0) 0))
+         `((,*bob-account* 40000) (,*alice-account* ,(- 51000 40000)))
+         '())
+      (format t "~%  Tx-1: ~A~%  Block: ~A~%" tx-1 b-1)
+      (multiple-value-bind (tx-2 b-2)
+          (next-transaction
+           (list (list (transaction-id tx-1) 0))
+           `((,*david-account* 20000) (,*bob-account* ,(- 40000 20000)))
+           '())
+        (format t "~%  Tx-2: ~A~%  Block: ~A~%" tx-2 b-2)
+        (multiple-value-bind (tx-3 b-3)
+            (next-transaction
+             (list (list (transaction-id tx-2) 0))
+             `((,*alice-account* 5000) (,*bob-account* ,(- 20000 5000)))
+             '())
+          (format t "~%  Tx-3: ~A~%  Block: ~A~%" tx-3 b-3)
+          (multiple-value-bind (tx-4 b-4)
+              (next-transaction
+               (list (list (transaction-id tx-3) 1))
+               `((,*david-account* 1000) (,*bob-account* ,(- 15000 1000)))
+               '())
+            (format t "~%  Tx-4: ~A~%  Block: ~A~%" tx-4 b-4)))))))
 
-(defparameter *blockchain-test-double-spends*
-  `(((("b1ee128b0bc45ced9957f84eb3d35c7e1151867b4632ab358bf4df74a8828201" 0))
-     ((,*bob-account* 40000)
-      (,*alice-account* ,(- 51000 40000))))
-    ((("4a4eac4695454733a305a5f12a9819d0aab47d2d92da09134ac7d278022c1bdd" 0))
-     ((,*alice-account* 5000)
-      (,*bob-account* ,(- 20000 5000))))))
+(defun blockchain-test-2 ()
+  "Test by first invoking function blockchain-test-1, q.v., and then attempting
+two double-spends: trying to send 40000 again from Alice to Bob (spending the
+output of the first transaction, which had already been spent), and then trying
+to send 1000 again from Bob to Alice, from the second-to-last transaction, which
+had just been used in the last transaction."
+  (blockchain-test-1)
+  (flet ((genesis-tx ()
+           (hash-pointer-item
+            (hash-pointer-of-transaction
+             *genesis-block*)))
+         (penultimate-tx ()
+           (hash-pointer-item
+            (hash-pointer-of-transaction
+             (hash-pointer-item
+              (hash-pointer-of-previous-block *last-block*))))))
+    (multiple-value-bind (tx-5 b-5)
+        (next-transaction
+         (list (list (transaction-id (genesis-tx)) 0)) ; <= bad - already used Tx!
+         `((,*bob-account* 40000) (,*alice-account* ,(- 51000 40000)))
+         '())
+      (format t "~%  Result: ~a (~a)~%" 
+              tx-5
+              (if (eq b-5 'nil)
+                  "as expected"
+                  (format nil "Bad - unexpected value: ~a."
+                          b-5)))
+      (multiple-value-bind (tx-6 b-6)
+          (next-transaction
+           (list (list (transaction-id (penultimate-tx)) 1)) ; <= bad - already used Tx!
+           `((,*david-account* 1000) (,*bob-account* 14000))
+           '())
+        (format t "~%  Result: ~a (~a)~%" 
+                tx-6
+                (if (eq b-6 'nil)
+                    "as expected"
+                    (format nil "Bad - unexpected value: ~a."
+                            b-6)))))))
 
-(defparameter *blockchain-test-overspends*
-  `(
-    ;; Try to spend 15,000 from this transaction's output to *bob-account*
-    ;; (sending it to *alice-account*), but this account had only gotten 14,000
-    ;; from this transaction:
-    ((("ec25ee7d0c99fc97ba077f7334d8c7b9dcdf1cef0b8ff710c7b9f6184de7ffa2" 1))
-     ((,*alice-account* 15000)))
+(defun blockchain-test-3 ()
+  "Test by first invoking function blockchain-test-2, q.v., and then attempting
+.... [See inline comments in code for full details.]"
+  (blockchain-test-2)
+
+  ;; Try to spend 15,000 from *last-transaction*'s output to *bob-account*
+  ;; (sending it to *alice-account*), but we  account had only gotten 14,000
+  ;; from this transaction:
+  (multiple-value-bind (tx-7 b-7)
+      (next-transaction
+       (list (list (transaction-id *last-transaction*) 1)) ; <= bad - overspend!
+       `((,*alice-account* 15000))
+       '())
+      (format t "~%  Result: ~a (~a)~%" 
+              tx-7
+              (if (eq b-7 'nil)
+                  "as expected"
+                  (format nil "Bad - unexpected value: ~a."
+                          b-7)))
+
     ;; Now try to spend exactly 14,000 from this transaction's output to
     ;; *bob-account* (sending it to *alice-account*). This account had gotten
     ;; exactly 14,000. So this will leave zero.  Note that this would leave zero
-    ;; (0) as a transaction fee (!), but review that issue later!
-    ((("ec25ee7d0c99fc97ba077f7334d8c7b9dcdf1cef0b8ff710c7b9f6184de7ffa2" 1))
-     ((,*alice-account* 14000)))
-    ;; Now try spending zero (0) from Bob back to Alice. Should be rejected:
-    ;; zero or negative amounts cannot be transferred.
-    ((("af84a1c4da82ac39cba074057790c651773412f827d429678d2a2388f91046ba" 0))
-     ((,*bob-account* 0)))
-    ;; Now try spending 1 million from Bob back to Alice. Should be rejected:
-    ;; zero or negative amounts cannot be transferred.
-    ((("af84a1c4da82ac39cba074057790c651773412f827d429678d2a2388f91046ba" 0))
-     ((,*bob-account* -10000000)))))
+    ;; (0) as a transaction fee (!). This will be allowed (for now).  Maybe zero
+    ;; transaction fees are kind of iffy, but review that issue later!
+    (multiple-value-bind (tx-8 b-8)
+        (next-transaction
+         (list (list (transaction-id *last-transaction*) 1))  ; <= GOOD TRANSACTION HERE
+         `((,*alice-account* 14000))
+         '())
+      (format t "~%  Tx-8: ~A~%  Block: ~A~%" tx-8 b-8)
+      
+      ;; Now try spending zero (0) from Alice back to Bob. Should be rejected:
+      ;; zero or negative amounts cannot be transferred.
+      (multiple-value-bind (tx-9 b-9)
+          (next-transaction
+           (list (list (transaction-id tx-8) 0)) ; <= bad (attempt to transfer zero amount)
+           `((,*bob-account* 0))
+           '())
+        (format t "~%  Result: ~a (~a)~%" 
+                tx-9
+                (if (eq b-9 'nil)
+                    "as expected"
+                    (format nil "Bad - unexpected value: ~a."
+                            b-9)))
 
+        ;; Now try spending negative (-1) million from Alice back to Bob. Should
+        ;; be rejected: zero or negative amounts cannot be transferred.
+        (multiple-value-bind (tx-10 b-10)
+            (next-transaction
+             (list (list (transaction-id tx-8) 0)) ; <= bad (attempt to transfer negative amount)
+             `((,*bob-account* 0))
+             '())
+          (format t "~%  Result: ~a (~a)~%" 
+                  tx-10
+                  (if (eq b-10 'nil)
+                      "as expected"
+                      (format nil "Bad - unexpected value: ~a."
+                              b-10))))))))
 
-(defparameter *blockchain-test-unknown-tx-output*
-  `(((("b1ee128b0bc45ced9957f84eb3d35c7e1151867b4632ab358bf4df74a8828201" 13)) ; index out of range
-     ((,*bob-account* 40000)
-      (,*alice-account* ,(- 51000 40000))))
-    ((("f0ee028f0fc45ced9957f84ef3d35c7e0050867f4632af358ff4df74a8828200" 0)) ; nonexistent tx
-     ((,*alice-account* 5000)
-      (,*bob-account* ,(- 20000 5000))))))
+;; Work these back into tests like the above!
+
+;; (defparameter *blockchain-test-unknown-tx-output*
+;;   `(((("b1ee128b0bc45ced9957f84eb3d35c7e1151867b4632ab358bf4df74a8828201" 13)) ; <= bad: index out of range
+;;      ((,*bob-account* 40000)
+;;       (,*alice-account* ,(- 51000 40000))))
+;;     ((("f0ee028f0fc45ced9957f84ef3d35c7e0050867f4632af358ff4df74a8828200" 0)) ; <= bad: nonexistent tx
+;;      ((,*alice-account* 5000)
+;;       (,*bob-account* ,(- 20000 5000))))))
   
 
 (defun test-blockchain ()
-  (restart-blockchain)
-  (loop with all-tx-args 
-          = (append
-             *blockchain-test-args-1*
-             *blockchain-test-double-spends*
-             *blockchain-test-unknown-tx-output*
-             *blockchain-test-overspends*)
-        as tx-count from 1
-        for (in out) in all-tx-args
-        do (terpri)
-           (format t "[Tx #~d:] ~(~s~)~%" in out)
-           (next-transaction in out nil))
+  (blockchain-test-3)
   (format t "~%---~%Transactions tests finished. Now printing blockchain...~%")
   (print-blockchain-info)
   (format t "~%DONE.~%"))
