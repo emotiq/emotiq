@@ -104,6 +104,7 @@ THE SOFTWARE.
    :mmod
    :mchi
    :quadratic-residue-p
+   :m!
    ))
 
 (defpackage :edwards-ecc
