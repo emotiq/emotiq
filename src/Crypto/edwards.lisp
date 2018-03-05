@@ -165,34 +165,6 @@ THE SOFTWARE.
   (mapcar 'ed-curve-name *known-curves*))
 
 ;; ----------------------------------------------------------------
-#|
-(defun ed+ (&rest args)
-  (with-mod *ed-q*
-    (apply #'m+ args)))
-
-(defun ed- (&rest args)
-  (with-mod *ed-q*
-    (apply #'m- args)))
-
-(defun ed* (&rest args)
-  (with-mod *ed-q*
-    (apply #'m* args)))
-
-(defun ed/ (&rest args)
-  (with-mod *ed-q*
-    (apply #'m/ args)))
-
-(defun ed-sqrt (arg)
-  (with-mod *ed-q*
-    (msqrt arg)))
-
-;; expt-mod not needed here, but convenient to define vs *ed-q*
-;; we use this in the elligator code below
-(defun ed^ (arg n)
-  (with-mod *ed-q*
-    (m^ arg n)))
-|#
-;; ----------------------------------------------------------------
 
 (defun ed-neutral-point ()
   (get-cached-symbol-data '*edcurve* :ed-neutral-point *ed-c*
