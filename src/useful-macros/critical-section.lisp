@@ -55,7 +55,13 @@ THE SOFTWARE.
 #+:ALLEGRO
 (defmacro! critical-section (&body body)
   `(excl:critical-section (:non-smp :without-interrupts)
-     ,@body))
+                          ,@body))
+
+#+(or sbcl)
+(defmacro! critical-section (&body body)
+  `(let ((,g!lock (load-time-value (sb-thread:make-mutex :name "Global critical section mutex lock"))))
+     (sb-thread:with-recursive-lock (,g!lock)
+        ,@body)))
 
 #+:LISPWORKS
 (defmacro! defmonitor (clauses)
@@ -104,8 +110,22 @@ THE SOFTWARE.
                clauses)
      ))
 
-;; ----------------------------------------------------------
+#+(or sbcl)
+(defmacro! defmonitor (clauses)
+  `(let* ((,g!lock (sb-thread:make-mutex))
+          (,g!lam  (lambda (&rest ,g!args)
+                     (sb-thread:with-recursive-lock (,g!lock)
+                       (dcase ,g!args
+                         ,@clauses)))
+                   ))
+     ,@(mapcar (lambda (clause)
+                 (let ((fname (first clause)))
+                   `(defun ,fname (&rest ,g!fargs)
+                      (apply ,g!lam ',fname ,g!fargs))))
+               clauses)
+     ))
 
+;; ----------------------------------------------------------
 #+:LISPWORKS
 (defun do-with-spinlock (cons fn)
   (unwind-protect
