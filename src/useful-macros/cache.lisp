@@ -30,8 +30,8 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------
 
-(defconstant +empty+      #())
-(defconstant +empty-cell+ (list +empty+))
+(um:defconstant+ +empty+      #())
+(um:defconstant+ +empty-cell+ (list +empty+))
 
 (defun cache (fn &key (test #'equal))
   ;; provide a simple 2-way associative cache on function fn
