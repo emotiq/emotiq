@@ -136,7 +136,8 @@ What about a dishonest vendor who accepts anything without checking?
            (kpt     (ed-nth-pt k))
            (msg-kpt (ed-mul p (- change paid)))
            (c       (hash-pts kpt msg-kpt p))
-           (r       (sub-mod *ed-r* k (mult-mod *ed-r* c skey)))
+           (r       (with-mod *ed-r*
+                      (m- k (m* c skey))))
            (msg     (ed-compress-pt (ed-add msg-kpt kpt))))
       (declare (integer k c r))
       (list :purchase

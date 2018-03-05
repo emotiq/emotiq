@@ -60,6 +60,8 @@ THE SOFTWARE.
 
    :encode-bytes-to-base64
    :decode-bytes-from-base64
+
+   :get-cached-symbol-data
    ))
 
 (defpackage :primes
@@ -85,16 +87,37 @@ THE SOFTWARE.
    #:decompose
    ))
 
+(defpackage :crypto/modular-arith
+  (:use :common-lisp)
+  (:import-from :ecc-crypto-b571
+   :get-cached-symbol-data)
+  (:export
+   :with-mod
+   :reset-blinders
+   :m^
+   :msqrt
+   :m+
+   :m-
+   :m*
+   :m/
+   :minv
+   :mmod
+   :mchi
+   :quadratic-residue-p
+   :m!
+   ))
+
 (defpackage :edwards-ecc
   (:nicknames :edec)
-  (:use :common-lisp :ecc-crypto-b571 :crypto-mod-math)
+  (:use :common-lisp :ecc-crypto-b571 :crypto/modular-arith)
   (:import-from :ecc-crypto-b571
 		:convert-int-to-nbytes
 		:convert-int-to-nbytesv
 		:convert-bytes-to-int
 		:ctr-drbg-int
 		:sha3-buffers
-		:random-between)
+		:random-between
+                :get-cached-symbol-data)
   (:export
    :ed-curve
    :with-ed-curve
@@ -141,18 +164,18 @@ THE SOFTWARE.
    :ed-schnorr-sig-verify
    
    ;; field numeric operators mod *ed-q*
-   :ed+
-   :ed-
-   :ed*
-   :ed/
-   :ed-sqrt
-   :ed-expt
+   ;; :ed+
+   ;; :ed-
+   ;; :ed*
+   ;; :ed/
+   ;; :ed-sqrt
+   ;; :ed-expt
 
-   :mod-r
+   ;; :mod-r
    :hash-to-int
-   :add-mod-r
-   :sub-mod-r
-   :mult-mod-r
+   ;; :add-mod-r
+   ;; :sub-mod-r
+   ;; :mult-mod-r
    
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
