@@ -40,23 +40,6 @@ THE SOFTWARE.
    :quadratic-residue-p
    ))
 
-(defpackage :crypto/modular-arith
-  (:use :common-lisp)
-  (:export
-   :with-mod
-   :reset-blinders
-   :m^
-   :msqrt
-   :m+
-   :m-
-   :m*
-   :m/
-   :minv
-   :mmod
-   :mchi
-   :quadratic-residue-p
-   ))
-
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
   (:export
@@ -77,6 +60,8 @@ THE SOFTWARE.
 
    :encode-bytes-to-base64
    :decode-bytes-from-base64
+
+   :get-cached-symbol-data
    ))
 
 (defpackage :primes
@@ -102,6 +87,25 @@ THE SOFTWARE.
    #:decompose
    ))
 
+(defpackage :crypto/modular-arith
+  (:use :common-lisp)
+  (:import-from :ecc-crypto-b571
+   :get-cached-symbol-data)
+  (:export
+   :with-mod
+   :reset-blinders
+   :m^
+   :msqrt
+   :m+
+   :m-
+   :m*
+   :m/
+   :minv
+   :mmod
+   :mchi
+   :quadratic-residue-p
+   ))
+
 (defpackage :edwards-ecc
   (:nicknames :edec)
   (:use :common-lisp :ecc-crypto-b571 :crypto/modular-arith)
@@ -111,7 +115,8 @@ THE SOFTWARE.
 		:convert-bytes-to-int
 		:ctr-drbg-int
 		:sha3-buffers
-		:random-between)
+		:random-between
+                :get-cached-symbol-data)
   (:export
    :ed-curve
    :with-ed-curve
