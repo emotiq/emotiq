@@ -171,7 +171,7 @@ THE SOFTWARE.
              
              (run ()
                (#+:LISPWORKS hcl:unwind-protect-blocking-interrupts-in-cleanups
-                #+(OR :ALLEGRO :CLOZURE)  unwind-protect
+                #+(OR :ALLEGRO :CLOZURE sbcl)  unwind-protect
                    (let ((*current-actor* self))
                      (loop for (msg ok) = (multiple-value-list
                                            (next-message mbox))
