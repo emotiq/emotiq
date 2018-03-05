@@ -43,25 +43,6 @@ THE SOFTWARE.
 (defstruct ed-curve
   name c d q h r gen)
 
-;; -----------------------------------------------------------------------------
-;; for cached values dependent only on curve
-
-(defun get-cached-symbol-data (sym key1 key2 fn-compute)
-  ;;
-  ;; defines a generalized 2-level cache lookup, defined in the
-  ;; symbol-plist of sym
-  ;;
-  ;; key1 = category
-  ;; key2 = instance
-  ;;
-  (let* ((alst  (get sym key1))
-         (item  (cdr (assoc key2 alst))))
-    (or item
-        (let ((item (funcall fn-compute)))
-          (setf (get sym key1)
-                (cons (cons key2 item) alst))
-          item))))
-
 ;; -----------------------------------------------------------
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
