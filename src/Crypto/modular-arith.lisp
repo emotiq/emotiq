@@ -82,25 +82,31 @@ THE SOFTWARE.
 (defun m^ (base exponent)
   ;; base^exponent mod modulus, for any modulus
   (declare (integer base exponent))
-  (let* ((exp (+ exponent (get-blinder (m-1))))
-         (n   (integer-length exp)))
-    (declare (fixnum n)
-             (integer exp))
-    (do ((b  (+ base (get-blinder *m*))
-             (m* b b))
-         (p  1)
-         (ix 0    (1+ ix)))
-        ((>= ix n) p)
-      (declare (integer b p)
-               (fixnum ix))
-      (when (logbitp ix exp)
-        (setf p (m* p b)))) ))
+  (let ((x (mmod base)))
+    (declare (integer x))
+    (if (< x 2)  ;; x = 0,1
+        x
+      ;; else
+      (let* ((exp (+ exponent (get-blinder (m-1))))
+             (n   (integer-length exp)))
+        (declare (fixnum n)
+                 (integer exp))
+        (do ((b  (+ x (get-blinder *m*))
+                 (m* b b))
+             (p  1)
+             (ix 0    (1+ ix)))
+            ((>= ix n) p)
+          (declare (integer b p)
+                   (fixnum ix))
+          (when (logbitp ix exp)
+            (setf p (m* p b)))) ))
+    ))
 
 ;; ------------------------------------------------------------
 
 (defun mchi (x)
-  ;; chi(x) -> {-1,0,+1}
-  ;; = +1 or 0 when x is square residue
+  ;; chi(x) -> {-1,+1}
+  ;; = +1 when x is square residue
   (m^ x (m/2l)))
 
 (defun quadratic-residue-p (x)
@@ -159,6 +165,15 @@ THE SOFTWARE.
         (setf p (fq2* p b))))
     ))
 
+(defun get-msqrt-fn ()
+  (get-cached-symbol-data '*m* :msqrt *m*
+                          (lambda ()
+                            (cond
+                             ((= 3 (mod *m* 4))
+                              (let ((p  (truncate (m+1) 4)))
+                                (um:rcurry 'm^ p)))
+                             (t 'cipolla)))))
+
 (defun msqrt (x)
   ;; assumes m is prime
   ;; a^(m-1) = 1 for m prime
@@ -167,28 +182,24 @@ THE SOFTWARE.
   ;; a^((m+1)/4) = a^(1/2) -- works nicely when m = 3 mod 4
   ;; 1/2 = 2/4 = 3/6 = 4/8 = 5/10 = 6/12 = 7/14 = 8/16
   ;; in general:  for m = (2k+1) mod 4k, use (m + (2k-1))/4k, k = 1,2,...
-  (let* ((xx  (mmod x)))
-    (cond ((= xx 1) 1)
-          (t (let ((ix (isqrt xx)))
-               (cond ((= xx (* ix ix)) ix)
-                     ((quadratic-residue-p xx)
-                      (let ((x (cond
-                                ((= 3 (mod *m* 4))
-                                 (m^ x (truncate (1+ *m*) 4)))
-                                ((= 5 (mod *m* 8))
-                                 (m^ x (truncate (+ 3 *m*) 8)))
-                                ((= 7 (mod *m* 12))
-                                 (m^ x (truncate (+ 5 *m*) 12)))
-                                ((= 9 (mod *m* 16))
-                                 (m^ x (truncate (+ 7 *m*) 16)))
-                                (t  (cipolla x))
-                                )))
-                        (assert (= xx (mmod (* x x))))
-                        x))
-
-                     (t (error "not a square"))
-                     )))
-          )))
+  (let ((xx  (mmod x)))
+    (declare (integer xx))
+    (if (< xx 2)
+        xx
+      ;; else
+      (let ((ix (isqrt xx)))
+        (declare (integer ix))
+        (cond ((= xx (* ix ix)) ix)
+              ((quadratic-residue-p xx)
+               (let* ((fn (get-msqrt-fn))
+                      (xr (funcall fn xx)))
+                 (declare (integer xr))
+                 (assert (= xx (m* xr xr)))
+                 xr))
+              
+              (t (error "not a square"))
+              )))
+    ))
 
 ;; ------------------------------------------------------------
 
