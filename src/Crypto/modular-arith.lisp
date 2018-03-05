@@ -59,6 +59,10 @@ THE SOFTWARE.
 (defun m/2u ()
   (truncate (m+1) 2))
 
+(defun m! (m)
+  ;; for REPL convenience, so we don't have to keep doing WITH-MOD
+  (setf *m* m))
+
 ;; -----------------------------------------------------
 
 (defvar *blinders* (make-hash-table))
