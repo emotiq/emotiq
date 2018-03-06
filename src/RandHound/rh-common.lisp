@@ -60,13 +60,68 @@ THE SOFTWARE.
                                    ;; accumulate nodes with the
                                    ;; numeric value of the public key
                                    ;; for use in sort
-                                   (acc (cons (cosi-keying:need-integer-form k) v)))
+                                   (acc (cons (need-integer-form k) v)))
                                  *node-table*))
                       'vector)
                      '<
                      :key 'first)))
     ;; discard the numeric pkeys used by sort
     (map-into nodes 'cdr nodes)))
+
+;; ------------------------------------------------------
+;; Simulation support
+
+(defvar *sim-pkey-skey-table* (make-hash-table
+                           :test 'equal))
+
+(defun dotted-ip-string (bytes)
+  (format nil "~{~d~^:~}" (coerce bytes 'list)))
+
+(defvar *sim-keys-file* (asdf:system-relative-pathname :randhound "sim-config/sim-keys.lisp"))
+
+(defun sim-skey-for-pkey (pkey)
+  (first (gethash pkey *sim-pkey-skey-table*)))
+
+(defun build-sim-nodes (&optional (nbr 16))
+  ;; NOTE: you don't want to run this very often. It takes a long time
+  ;; due to PKBF2 @ 2048 iters of SHA3. About 2sec/key.
+  (init-nodes)
+  (clrhash *sim-pkey-skey-table*)
+  (loop repeat nbr do
+        (let* ((lst   (make-random-keypair))
+               (pkey  (getf lst :pkey))
+               (skey  (getf lst :skey))
+               (r     (getf lst :r))
+               (s     (getf lst :s))
+               (ip    (dotted-ip-string (ctr-drbg 32)))
+               (port  (ctr-drbg-int 16)))
+          (add-node pkey ip port)
+          (setf (gethash pkey *sim-pkey-skey-table*) (list skey r s))))
+  (ensure-directories-exist *sim-keys-file* :verbose t)
+  (with-open-file (f *sim-keys-file*
+                     :direction :output
+                     :if-exists :rename
+                     :if-does-not-exist :create)
+    (with-standard-io-syntax
+      (pprint
+       (loop for assoc across (get-nodes-vector)
+             collect
+             (let ((sk  (gethash (node-assoc-pkey assoc) *sim-pkey-skey-table*)))
+               (cons assoc sk)))
+       f))))
+
+(defun load-sim-nodes ()
+  (let ((lst (with-open-file (f *sim-keys-file*
+                                :direction :input)
+               (read f))))
+    (init-nodes)
+    (clrhash *sim-pkey-skey-table*)
+    (dolist (grp lst)
+      (destructuring-bind (assoc &rest sk) grp
+        (let ((pkey (node-assoc-pkey assoc)))
+          (setf (gethash pkey *node-table*) assoc
+                (gethash pkey *sim-pkey-skey-table*) sk))
+        ))))
 
 ;; -------------------------------------------------------
 

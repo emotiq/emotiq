@@ -29,6 +29,10 @@ THE SOFTWARE.
 (defpackage :randhound/common
   (:use :common-lisp
    :core-crypto)
+  (:import-from :cosi-keying
+   :need-integer-form
+   :published-form
+   :make-random-keypair)
   (:export
    :node-assoc
    :node-assoc-pkey
