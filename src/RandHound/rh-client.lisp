@@ -26,11 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :randhound/client
-  (:use :common-lisp
-        :core-crypto)
-  (:export
-   ))
-
 (in-package :randhound/client)
+
 ;; ---------------------------------------------------------------
