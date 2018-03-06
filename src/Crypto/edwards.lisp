@@ -584,15 +584,17 @@ THE SOFTWARE.
   ;; key, (aka, a secret key), which is in the upper range of the
   ;; *ed-r* field, and which avoids potential small-group attacks
   ;;
-  (let* ((h     (ed-convert-lev-to-int
-                 (get-hash-bits (ed-nbits)
+  (let* ((nbits (integer-length *ed-r*))
+         (h     (ed-convert-lev-to-int
+                 (get-hash-bits nbits
                                 (list seed :generate-private-key index))))
-         (nbits (1- (integer-length (floor *ed-r* *ed-h*))))
-         (skey  (* *ed-h*  ;; avoid small-group attacks
-                   (dpb 1 (byte 1 nbits) ;; ensure non-zero
-                        (ldb (byte nbits 0) h)))))
-    ;; (assert (< skey *ed-r*)) ;; should be true by construction
-    skey))
+         (s     (dpb 1 (byte 1 (1- nbits)) ;; set hi bit
+                     (ldb (byte nbits 0) h)))
+         (skey  (- s (mod s *ed-h*))))
+    (if (< skey *ed-r*) ;; will be true with overwhelming probability (failure ~1e-38)
+        skey
+      (compute-deterministic-skey seed (1+ index)))
+    ))
 
 (defun ed-random-pair ()
   ;; select a random private and public key from the curve, abiding by
