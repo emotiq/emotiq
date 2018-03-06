@@ -721,6 +721,7 @@ THE SOFTWARE.
                           (lambda ()
                             (ceiling (elligator-nbits) 8))))
 
+#| ;; unused here
 (defun elligator-padding ()
   ;; generate random padding bits for the initial byte
   ;; of a big-endian octet Elligator encoding
@@ -728,6 +729,7 @@ THE SOFTWARE.
     (if (zerop nbits)
         0
       (ash (ctr-drbg-int (- 8 nbits)) nbits))))
+|#
 
 (defun elligator-int-padding ()
   ;; generate random padding bits for an elligator int
@@ -757,7 +759,7 @@ THE SOFTWARE.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
   (get-cached-symbol-data '*edcurve* :elligator-csr
-                          *edcurve* #'compute-csr))
+                          *edcurve* 'compute-csr))
 
 (defun to-elligator-range (x)
   (ldb (byte (elligator-nbits) 0) x))
@@ -770,6 +772,7 @@ THE SOFTWARE.
   ;;                            curve-E521    520        65
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   (let ((z (to-elligator-range z)))
+    (declare (integer z))
     (cond ((= z 1)
            (ed-neutral-point))
           
@@ -1152,6 +1155,7 @@ THE SOFTWARE.
   ;; values within the domain [0..(q-1)/2] are invalid.
   ;;
   (let ((r (to-elligator-range r))) ;; mask off top random
+    (declare (integer r))
     (cond  ((zerop r)  (ed-neutral-point))
            (t
             (with-mod *ed-q*
