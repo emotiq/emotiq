@@ -62,6 +62,7 @@ THE SOFTWARE.
 
 (defun m! (m)
   ;; for REPL convenience, so we don't have to keep doing WITH-MOD
+  (check-type m (integer 1))
   (setf *m* m))
 
 ;; -----------------------------------------------------
@@ -122,15 +123,6 @@ THE SOFTWARE.
 
 (defstruct fq2
   x y)
-
-#| ;; not needed here...
-(defun fq2+ (a b)
-  (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
-             (:struct-accessors fq2 ((bx x) (by y)) b))
-    (make-fq2
-     :x (m+ ax bx)
-     :y (m+ ay by))))
-|#
 
 (defun fq2* (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
