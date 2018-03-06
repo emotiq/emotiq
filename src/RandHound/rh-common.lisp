@@ -122,10 +122,14 @@ THE SOFTWARE.
 #|
 ;; gen up 300 sim nodes without tying up the REPL
 (ac:spawn (lambda ()
-            (build-sim-nodes 300)))
+            (ac:pr :start-build-sim-nodes)
+            (build-sim-nodes 300)
+            (ac:pr :done-build-sim-nodes)))
 |#
 
 (defun load-sim-nodes ()
+  ;; use this to load the keys database from disk.
+  ;; much faster for startup.
   (let ((lst (with-open-file (f *sim-keys-file*
                                 :direction :input)
                (read f))))
