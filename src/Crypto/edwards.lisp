@@ -987,8 +987,7 @@ THE SOFTWARE.
                     (elligator-tau-vector tau-pub)
                     msg)))
            (r     (getf lst :r))
-           (q     (* *ed-h* *ed-r*))
-           (s     (with-mod q
+           (s     (with-mod *ed-r*
                     (m+ r (m* h k-priv))))
            (smax  (elligator-limit)))
       (if (>= s smax)
