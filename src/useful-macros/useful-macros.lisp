@@ -1841,7 +1841,7 @@ This is C++ style enumerations."
   (values (read-from-string (apply #'mkstr args))))
 
 (defun explode (sym)
-  (map #'list (compose #'intern-symbol #'string) (symbol-name sym)))
+  (map 'list (compose #'intern-symbol #'string) (symbol-name sym)))
 
 ;; -------------------------------------------------------
 ;;
