@@ -180,19 +180,8 @@ THE SOFTWARE.
    :ed-schnorr-sig
    :ed-schnorr-sig-verify
    
-   ;; field numeric operators mod *ed-q*
-   ;; :ed+
-   ;; :ed-
-   ;; :ed*
-   ;; :ed/
-   ;; :ed-sqrt
-   ;; :ed-expt
-
-   ;; :mod-r
-   :hash-to-int
-   ;; :add-mod-r
-   ;; :sub-mod-r
-   ;; :mult-mod-r
+   :ed-hash
+   :get-hash-bits
    
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
@@ -226,3 +215,82 @@ THE SOFTWARE.
   (:export
    ))
 |#
+
+(defpackage :core-crypto
+  (:use :common-lisp
+   :crypto/modular-arith
+   :edwards-ecc)
+  (:import-from :ecc-crypto-b571
+   :convert-int-to-nbytes
+   :convert-int-to-nbytesv
+   :convert-bytes-to-int
+   :sha3-buffers
+   :sha3/256-buffers
+   :ctr-drbg
+   :ctr-drbg-int
+   :random-between
+   :get-cached-symbol-data)
+  (:export
+   ;; from crypto/modular-arith
+   :with-mod
+   :reset-blinders
+   :m^
+   :msqrt
+   :m+
+   :m-
+   :m*
+   :m/
+   :minv
+   :mmod
+   :mchi
+   :quadratic-residue-p
+   :m!
+   ;; from edwards-ecc
+   :with-ed-curve
+   :*edcurve*
+   :*ed-r*
+   :*ed-q*
+   :*ed-gen*
+   :ed-curve-name
+   :ed-mul
+   :ed-add
+   :ed-sub
+   :ed-div
+   :ed-negate
+   :ed-pt=
+   :ed-affine
+   :random-between
+   :ed-compress-pt
+   :ed-decompress-pt
+   :ed-nth-pt
+   :ed-random-pair
+   
+   :elli2-encode
+   :elli2-decode
+   :elli2-random-pt
+   
+   :ed-convert-int-to-lev
+   :ed-convert-lev-to-int
+   :compute-deterministic-skey
+   :compute-schnorr-deterministic-random
+   :ed-dsa
+   :ed-dsa-validate
+   
+   :compute-deterministic-elligator-skey
+   :compute-elligator-summed-pkey
+   :compute-elligator-schnorr-deterministic-random
+   :elligator-ed-dsa
+   :elligator-ed-dsa-validate
+
+   ;; from ecc-crypto-b571
+   :convert-int-to-nbytes
+   :convert-int-to-nbytesv
+   :convert-bytes-to-int
+   :sha3-buffers
+   :sha3/256-buffers
+   :ctr-drbg
+   :ctr-drbg-int
+   :random-between
+   :get-cached-symbol-data
+   ))
+   
