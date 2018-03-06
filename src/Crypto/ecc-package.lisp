@@ -40,23 +40,6 @@ THE SOFTWARE.
    :quadratic-residue-p
    ))
 
-(defpackage :crypto/modular-arith
-  (:use :common-lisp)
-  (:export
-   :with-mod
-   :reset-blinders
-   :m^
-   :msqrt
-   :m+
-   :m-
-   :m*
-   :m/
-   :minv
-   :mmod
-   :mchi
-   :quadratic-residue-p
-   ))
-
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
   (:export

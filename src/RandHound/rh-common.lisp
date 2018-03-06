@@ -108,8 +108,22 @@ THE SOFTWARE.
        (loop for assoc across (get-nodes-vector)
              collect
              (let ((sk  (gethash (node-assoc-pkey assoc) *sim-pkey-skey-table*)))
-               (cons assoc sk)))
+               (list
+                ;; use a non-brittle format for external store, just
+                ;; basic Lisp data
+                :pkey  (node-assoc-pkey assoc)
+                :ip    (node-assoc-ip   assoc)
+                :port  (node-assoc-port assoc)
+                :skey  (pop sk)
+                :r     (getf sk :r)
+                :s     (getf sk :s))))
        f))))
+
+#|
+;; gen up 300 sim nodes without tying up the REPL
+(ac:spawn (lambda ()
+            (build-sim-nodes 300)))
+|#
 
 (defun load-sim-nodes ()
   (let ((lst (with-open-file (f *sim-keys-file*
@@ -118,10 +132,19 @@ THE SOFTWARE.
     (init-nodes)
     (clrhash *sim-pkey-skey-table*)
     (dolist (grp lst)
-      (destructuring-bind (assoc &rest sk) grp
-        (let ((pkey (node-assoc-pkey assoc)))
-          (setf (gethash pkey *node-table*) assoc
-                (gethash pkey *sim-pkey-skey-table*) sk))
+      (let ((pkey (getf grp :pkey))
+            (ip   (getf grp :ip))
+            (port (getf grp :port))
+            (skey (getf grp :skey))
+            (r    (getf grp :r))
+            (s    (getf grp :s)))
+        (setf (gethash pkey *node-table*) (make-node-assoc
+                                           :pkey  pkey
+                                           :ip    ip
+                                           :port  port)
+              (gethash pkey *sim-pkey-skey-table*) (list skey
+                                                         :r  r
+                                                         :s  s))
         ))))
 
 ;; -------------------------------------------------------
