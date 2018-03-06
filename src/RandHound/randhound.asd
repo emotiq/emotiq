@@ -35,7 +35,8 @@ THE SOFTWARE.
                useful-macros
                usocket
                bloom-filter
-               ads-clos)
+               ads-clos
+               cosi)
   :in-order-to ((test-op (test-op "randhound-test")))
   :components ((:module package
                         :pathname "./"
@@ -46,6 +47,7 @@ THE SOFTWARE.
                         :serial t
                         :components (
                                      ;; (:file "randhound")
+                                     (:file "rh-common")
                                      (:file "rh-client")
                                      (:file "rh-server")
                                      ))))
