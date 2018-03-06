@@ -26,15 +26,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
+(defpackage :randhound/common
+  (:use :common-lisp
+   :core-crypto)
+  (:export
+   :node-assoc
+   :node-assoc-pkey
+   :node-assoc-ip
+   :node-assoc-port
+   :init-nodes
+   :add-node
+   :remove-node
+   :find-node
+   :get-nodes-vector
+   ))
+
 (defpackage :randhound/client
   (:use :common-lisp
-        :core-crypto)
+        :core-crypto
+        :randhound/common)
   (:export
    ))
 
 (defpackage :randhound/server
   (:use :common-lisp
-        :core-crypto)
+        :core-crypto
+        :randhound/common)
   (:export
    ))
 
