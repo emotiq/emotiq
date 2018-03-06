@@ -96,7 +96,7 @@ THE SOFTWARE.
              (n   (integer-length exp)))
         (declare (fixnum n)
                  (integer exp))
-        (do ((b  (+ x (get-blinder *m*))
+        (do ((b  (+ x (get-blinder))
                  (m* b b))
              (p  1)
              (ix 0    (1+ ix)))
@@ -123,16 +123,19 @@ THE SOFTWARE.
 (defstruct fq2
   x y)
 
+#| ;; not needed here...
 (defun fq2+ (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
              (:struct-accessors fq2 ((bx x) (by y)) b))
     (make-fq2
      :x (m+ ax bx)
      :y (m+ ay by))))
+|#
 
 (defun fq2* (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
              (:struct-accessors fq2 ((bx x) (by y)) b))
+    (declare (integer ax bx ay by))
     (make-fq2
      :x (m+ (m* ax bx)
             (m* ay by (cadr *fq2-red*)))
@@ -141,6 +144,7 @@ THE SOFTWARE.
      )))
 
 (defun cipolla (x)
+  (declare (integer x))
   ;; Cipolla method for finding square root of x over prime field m
   (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
                       (declare (integer a))
@@ -187,6 +191,7 @@ THE SOFTWARE.
   ;; a^((m+1)/4) = a^(1/2) -- works nicely when m = 3 mod 4
   ;; 1/2 = 2/4 = 3/6 = 4/8 = 5/10 = 6/12 = 7/14 = 8/16
   ;; in general:  for m = (2k+1) mod 4k, use (m + (2k-1))/4k, k = 1,2,...
+  (declare (integer x))
   (let ((xx  (mmod x)))
     (declare (integer xx))
     (if (< xx 2)
