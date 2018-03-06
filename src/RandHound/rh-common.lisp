@@ -96,13 +96,14 @@ THE SOFTWARE.
                (ip    (dotted-ip-string (ctr-drbg 32)))
                (port  (ctr-drbg-int 16)))
           (add-node pkey ip port)
-          (setf (gethash pkey *sim-pkey-skey-table*) (list skey r s))))
+          (setf (gethash pkey *sim-pkey-skey-table*) (list skey :r r :s s))))
   (ensure-directories-exist *sim-keys-file* :verbose t)
   (with-open-file (f *sim-keys-file*
                      :direction :output
                      :if-exists :rename
                      :if-does-not-exist :create)
     (with-standard-io-syntax
+      (format f ";; file of ~A simulation keys" nbr)
       (pprint
        (loop for assoc across (get-nodes-vector)
              collect
