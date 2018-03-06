@@ -31,10 +31,24 @@ THE SOFTWARE.
 (declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
 
 ;; -----------------------------------------------------
-(defvar *m*  1)
+
+(defvar *m*  1) ;; current mod base
+
+(defstruct monty-form
+  val)
+
+;; define primitive access to integer values
+;; without conversion to/from monty-form scaled values
+(defmethod int-val ((xm monty-form))
+  (monty-form-val xm))
+
+(defmethod int-val ((x integer))
+  x)
+
+;; ---------------------------------------------
 
 (declaim (integer *m*)
-         (inline mmod m-1 m/2l m+1 m/2u))
+         (inline mmod m-1 m/2l m+1 m/2u rsh))
 
 (defmacro with-mod (base &body body)
   `(let ((*m* ,base))
@@ -42,6 +56,19 @@ THE SOFTWARE.
 
 #+:LISPWORKS
 (editor:setup-indent "with-mod" 1)
+
+(defun rsh (x nsh)
+  ;; right shift x by nsh bits
+  (declare (integer x)
+           (fixnum  nsh))
+  (ash x (- nsh)))
+
+(defmethod range-reduce ((x integer))
+  ;; bring x into range 0 <= x < *m* (= mod base)
+  (if (and (<= 0 x)
+           (< x *m*))
+      x
+    (mmod x)))
 
 (defun mmod (x)
   (declare (integer x))
@@ -63,6 +90,65 @@ THE SOFTWARE.
   ;; for REPL convenience, so we don't have to keep doing WITH-MOD
   (setf *m* m))
 
+;; --------------------------------------------------------------
+;; Montgomery forms
+
+(defconstant +monty-exp+  30) ;; small enough for squared max to be fixnum
+
+(defun get-monty-info (&rest arglist)
+  (let* ((m  *m*)
+         (lst  (get-cached-symbol-data '+monty-exp+ :info m
+                                       (lambda ()
+                                         ;; We code carefully to avoid overt
+                                         ;; modular arithmetic functions except
+                                         ;; for mod.  The Montgomery primitives
+                                         ;; will depend on this info.
+                                         (let* ((limit  (ceiling (integer-length m) +monty-exp+))
+                                                (byt    (ash 1 +monty-exp+))
+                                                (r      (range-reduce (ash 1 (* limit +monty-exp+))))
+                                                (r^2    (range-reduce (* r r)))
+                                                (byte-0 (byte +monty-exp+ 0))
+                                                (mp     (with-mod byt
+                                                          (- byt (%minv-int m)))))
+                                           ;; we never really need byt and r, but here for debug
+                                           (list
+                                            :limit  limit   ;; count of 30-bit blocks per number
+                                            :mprime mp      ;; = -1/m mod byte  (byte = 30 bit block)
+                                            :byte-0 byte-0  ;; = (byte 30 0)
+                                            :byte   byt     ;; value of 2^30
+                                            :r      (make-monty-form ;; pseudo Monty form for R
+                                                                     :val r)
+                                            :r^2    (make-monty-form ;; pseudo Monty form for R^2
+                                                                     :val r^2))
+                                           ))
+                                       )))
+    (if arglist
+        (mapcar (um:curry 'getf lst) arglist)
+      lst)))
+
+;; -------------------------------------------------------------------
+;; special values in Montgomery form
+
+(defun monty-zero ()
+  (make-monty-form
+   :val 0))
+
+(defun monty-one ()
+  ;; = 1*R in monty-form
+  (destructuring-bind (r) (get-monty-info :r)
+    r))
+
+(defmethod monty= ((m1 monty-form) (m2 monty-form))
+  (= (monty-form-val m1) (monty-form-val m2)))
+
+(defmethod monty= ((m1 integer) (m2 monty-form))
+  (= m1 (to-int-form m2)))
+
+(defmethod monty= ((m1 monty-form) (m2 integer))
+  (= (to-int-form m1) m2))
+
+(defgeneric monty* (a b))
+
 ;; -----------------------------------------------------
 
 (defvar *blinders* (make-hash-table))
@@ -77,33 +163,39 @@ THE SOFTWARE.
       (gethash m *blinders*)
       (setf (gethash m *blinders*) (create-blinder m))))
 
+(defun get-monty-blinder (&optional (m *m*))
+  (make-monty-form
+   :val (get-blinder m)))
+
 (defun reset-blinders ()
   (clrhash *blinders*))
 
 ;; -----------------------------------------------------
 ;; Prime-Field Arithmetic
 
-(defun m^ (base exponent)
-  ;; base^exponent mod modulus, for any modulus
-  (declare (integer base exponent))
-  (let ((x (mmod base)))
+(defmethod m^ ((base integer) exponent)
+  (let ((x (range-reduce base)))
     (declare (integer x))
-    (if (< x 2)  ;; x = 0,1
+    (if (< x 2) ;; x = 0,1
         x
-      ;; else
-      (let* ((exp (+ exponent (get-blinder (m-1))))
-             (n   (integer-length exp)))
-        (declare (fixnum n)
-                 (integer exp))
-        (do ((b  (+ x (get-blinder *m*))
-                 (m* b b))
-             (p  1)
-             (ix 0    (1+ ix)))
-            ((>= ix n) p)
-          (declare (integer b p)
-                   (fixnum ix))
-          (when (logbitp ix exp)
-            (setf p (m* p b)))) ))
+      (m^ (to-monty-form (+ x (get-blinder))) exponent))
+    ))
+
+(defmethod m^ ((base monty-form) exponent)
+  ;; base^exponent mod modulus, for any modulus
+  (let* ((exp (+ (to-int-form exponent) (get-blinder (m-1))))
+         (n   (integer-length exp)))
+    (declare (fixnum n)
+             (integer exp))
+    (do ((b  base
+             (monty* b b))
+         (p  (monty-one))
+         (ix 0    (1+ ix)))
+        ((>= ix n) p)
+      (declare (monty-form b p)
+               (fixnum ix))
+      (when (logbitp ix exp)
+        (setf p (monty* p b))))
     ))
 
 ;; ------------------------------------------------------------
@@ -115,19 +207,21 @@ THE SOFTWARE.
 
 (defun quadratic-residue-p (x)
   ;; aka Legendre Symbol (x|m)
-  (= 1 (mchi x)))
+    (monty= (monty-one) (mchi x)))
 
 (defvar *fq2-red*)
 
 (defstruct fq2
   x y)
 
+#| ;; not needed...
 (defun fq2+ (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
              (:struct-accessors fq2 ((bx x) (by y)) b))
     (make-fq2
      :x (m+ ax bx)
      :y (m+ ay by))))
+|#
 
 (defun fq2* (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
@@ -140,19 +234,21 @@ THE SOFTWARE.
      )))
 
 (defun cipolla (x)
+  (declare (integer x))
   ;; Cipolla method for finding square root of x over prime field m
   (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
                       (declare (integer a))
-                      (let ((v  (mmod (- (* a a) x))))
+                      (let ((v  (range-reduce (- (* a a) x))))
                         (declare (integer v))
                         (if (quadratic-residue-p v)
                             (iter (1+ a))
                           (list a v))
                         )))
          ;; exponentiation in Fq^2: (a, sqrt(a^2 - n))^((q-1)/2)
+         (one  (monty-one))
          (xx   (make-fq2
-                :x (car *fq2-red*)
-                :y 1))
+                :x (to-monty-form (car *fq2-red*))
+                :y one))
          (exp  (m/2u))
          (n    (integer-length exp)))
     (declare (fixnum n)
@@ -160,8 +256,8 @@ THE SOFTWARE.
     (do ((b  xx
              (fq2* b b))
          (p  (make-fq2
-              :x 1
-              :y 0))
+              :x one
+              :y (monty-zero)))
          (ix 0    (1+ ix)))
         ((>= ix n) (fq2-x p))
       (declare (fixnum ix))
@@ -178,188 +274,239 @@ THE SOFTWARE.
                                 (um:rcurry 'm^ p)))
                              (t 'cipolla)))))
 
-(defun msqrt (x)
+(defun %msqrt (x)
+  (declare (integer x))
+  (if (< x 2)
+      x
+    ;; else
+    (let ((ix (isqrt x)))
+      (declare (integer ix))
+      (cond ((= x (* ix ix)) ix)
+            ((quadratic-residue-p x)
+             (let* ((fn (get-msqrt-fn))
+                    (xr (funcall fn x)))
+                 (declare (integer xr))
+                 (assert (monty= x (m* xr xr)))
+                 xr))
+            
+            (t (error "not a square"))
+            ))))
+
+(defmethod msqrt ((x integer))
   ;; assumes m is prime
   ;; a^(m-1) = 1 for m prime
   ;; a^m = a
   ;; a^(m+1) = a^2
   ;; a^((m+1)/4) = a^(1/2) -- works nicely when m = 3 mod 4
   ;; 1/2 = 2/4 = 3/6 = 4/8 = 5/10 = 6/12 = 7/14 = 8/16
-  ;; in general:  for m = (2k+1) mod 4k, use (m + (2k-1))/4k, k = 1,2,...
-  (let ((xx  (mmod x)))
-    (declare (integer xx))
-    (if (< xx 2)
-        xx
-      ;; else
-      (let ((ix (isqrt xx)))
-        (declare (integer ix))
-        (cond ((= xx (* ix ix)) ix)
-              ((quadratic-residue-p xx)
-               (let* ((fn (get-msqrt-fn))
-                      (xr (funcall fn xx)))
-                 (declare (integer xr))
-                 (assert (= xx (m* xr xr)))
-                 xr))
-              
-              (t (error "not a square"))
-              )))
-    ))
+  ;; in general:  for m = (2k+1) mod 4k, use (em + (2k-1))/4k, k = 1,2,...
+  (%msqrt (range-reduce x)))
+
+(defmethod msqrt ((x monty-form))
+  (to-monty-form (%msqrt (to-int-form x))))
 
 ;; ------------------------------------------------------------
 
-(defun m* (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder)))
-    (declare (integer blinder))
-    (dolist (opnd args arg)
-      (declare (integer opnd))
-      (setf arg (mmod (* arg (+ opnd blinder)))))
-    ))
+(defmethod m* ((arg integer) &rest args)
+  (if (some 'monty-form-p args)
+      (apply 'm* (to-monty-form arg) args)
+    ;; else -- all integers
+    (let* ((blinder (get-blinder)))
+      (declare (integer blinder))
+      (dolist (opnd args arg)
+        (declare (integer opnd))
+        (setf arg (mmod (* arg (+ opnd blinder)))))
+      )))
+
+(defmethod m* ((arg monty-form) &rest args)
+  (dolist (opnd args arg)
+    (setf arg (monty* opnd arg))))
 
 ;; ------------------------------------------------------------
 
-(defun m+ (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (+ arg blinder)))
-    (declare (integer blinder ans))
-    (dolist (opnd args)
-      (declare (integer opnd))
-      (incf ans (+ opnd blinder)))
-    (mmod ans)))
+(defmethod m+ ((arg integer) &rest args)
+  (if (some 'monty-form-p args)
+      (apply 'm+ (to-monty-form arg) args)
+    ;; else - all integers
+    (let* ((blinder (get-blinder))
+           (ans     (+ arg blinder)))
+      (declare (integer blinder ans))
+      (dolist (opnd args)
+        (declare (integer opnd))
+        (incf ans (+ opnd blinder)))
+      (mmod ans))))
 
-(defun m- (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (- arg blinder)))
-    (declare (integer blinder ans))
-    (if args
-        (dolist (opnd args)
-          (declare (integer opnd))
-          (decf ans (+ opnd blinder)))
-      (setf ans (- ans)))
-    (mmod ans)))
+(defmethod m+ ((arg monty-form) &rest args)
+  (let ((ans (monty-form-val arg)))
+    (dolist (opnd (mapcar 'to-monty-form args))
+      (declare (monty-form opnd))
+      (incf ans (monty-form-val opnd)))
+    (unless (< ans *m*)
+      (decf ans *m*))
+    (make-monty-form
+     :val ans)))
+
+(defmethod m- ((arg integer) &rest args)
+  (if (some 'monty-form-p args)
+      (apply 'm- (to-monty-form arg) args)
+    ;; else -- all integers
+    (let* ((blinder (get-blinder))
+           (ans     (- arg blinder)))
+      (declare (integer blinder ans))
+      (if args
+          (dolist (opnd args)
+            (declare (integer opnd))
+            (decf ans (+ opnd blinder)))
+        (setf ans (- ans)))
+      (mmod ans))))
+
+(defmethod m- ((arg monty-form) &rest args)
+  (let ((ans (monty-form-val arg)))
+    (dolist (opnd (mapcar 'to-monty-form args))
+      (declare (monty-form opnd))
+      (decf ans (monty-form-val opnd)))
+    (when (minusp ans)
+      (incf ans *m*))
+    (make-monty-form
+     :val ans)))
 
 ;; ------------------------------------------------------------
 
-(defun minv (a)
-  (declare (integer a))
-  (let* ((u  (mmod a))
-         (v  *m*)
-         (x1 1)
-         (x2 0))
-    (declare (integer u v x1 x2))
+(defmethod minv ((a integer))
+  (%minv (range-reduce a)))
+
+(defmethod minv ((a monty-form))
+  ;; we are given a*R and must produce (1/a)*R
+  (%minv (to-int-form a)))
+
+(defun %minv (u)
+  ;; Euclid's algorithm
+  ;; (or Chinese Remainder Theorem, can't remember which...)
+  (declare (integer u))
+  (let* ((v  *m*)
+         (x1 (monty-one))
+         (x2 (monty-zero)))
+    (declare (integer v))
     (do ()
         ((= u 1) x1)
       (multiple-value-bind (q r) (truncate v u)
         (declare (integer q r))
-        (let ((x (m- x2 (m* q x1))))
-          (declare (integer x))
+        (let ((x (m- x2 (monty* q x1))))
           (shiftf v u r)
-          (shiftf x2 x1 x)) ))))
+          (shiftf x2 x1 x)) ))
+    ))
 
+(defun %minv-int (u)
+  ;; special int-only version needed for setting up Montgomery info
+  (declare (integer u))
+  (let* ((v  *m*)
+         (x1 1)
+         (x2 0))
+    (declare (integer v x1 x2))
+    (do ()
+        ((= u 1) x1)
+      (multiple-value-bind (q r) (truncate v u)
+        (declare (integer q r))
+        (let ((x (mmod (- x2 (* q x1)))))
+          (shiftf v u r)
+          (shiftf x2 x1 x)) ))
+    ))
 
 (defun m/ (arg &rest args)
-  (declare (integer arg))
   (dolist (opnd args
                 (if args arg (minv arg)))
-    (declare (integer opnd))
-    (setf arg (m* arg (minv opnd)))))
+    (setf arg (m* (minv opnd) arg))))
 
 ;; --------------------------------------------------------------
-;; Montgomery forms
 
-(defconstant +montgy-exp+  29) ;; small enough for squared max to be fixnum
-
-(defun get-montgy-info (&optional (m *m*))
-  (get-cached-symbol-data '+montgy-exp+ :info m
-                          (lambda ()
-                            (with-mod m
-                              (let* ((limit  (ceiling (integer-length m) +montgy-exp+))
-                                     (byt    (ash 1 +montgy-exp+))
-                                     (r      (m^ byt limit))
-                                     (r^2    (m* r r))
-                                     (byte-0 (byte +montgy-exp+ 0))
-                                     (mp     (with-mod byt
-                                               (m- (m/ m)))))
-                                ;; we never really need byt and r, but here for debug
-                                (list limit mp byte-0 r^2 byt r))))
-                          ))
-
-(declaim (inline rsh))
-
-(defun rsh (x nsh)
-  (declare (integer x)
-           (fixnum  nsh))
-  (ash x (- nsh)))
-
-(defun range-reduce (x)
-  (declare (integer x))
-  (if (and (<= 0 x)
-           (< x *m*))
-      x
-    (mmod x)))
-
-(defun montgy-reduction (x)
-  (declare (integer x))
-  (let ((x  (range-reduce x))
+(defmethod monty-reduction ((xm monty-form))
+  ;; produce xval/R
+  ;; produce plain integer value for xm,
+  ;; scales monty-form x*R by 1/R mod q -> x
+  (let ((xv (monty-form-val xm))
         (m  *m*))
-    (declare (integer x m))
-    (destructuring-bind (limit mp byte-0 r^2 byt r) (get-montgy-info m)
-      (declare (fixnum limit mp)
-               (ignore byt r r^2))
-      (let ((a  x))
+    (declare (integer xv m))
+    (destructuring-bind (limit mp byte-0) (get-monty-info :limit :mprime :byte-0)
+      (declare (fixnum limit mp))
+      (let ((a  xv))
         (declare (integer a))
         (loop for ix fixnum from 0 below limit
               do
               (let ((u (ldb byte-0 (the fixnum (* (the fixnum (ldb byte-0 a))
                                                   mp)))))
                 (declare (fixnum u))
-                (setf a (rsh (+ a (* u m)) +montgy-exp+))
+                (setf a (rsh (+ a (* u m)) +monty-exp+))
                 ))
         (unless (< a m)
           (decf a m))
         a))))
 
-(defun montgy* (x y)
-  (declare (integer x y))
-  (let ((x  (range-reduce x))
-        (y  (range-reduce y))
-        (m  *m*))
-    (declare (integer x y m))
-    (destructuring-bind (limit mp byte-0 r^2 byt r) (get-montgy-info m)
-      (declare (fixnum limit mp)
-               (ignore byt r r^2))
+(defgeneric %monty-rev* (x y))
+
+(defmethod monty* ((x integer) y)
+  (%monty-rev* y (to-monty-form x)))
+
+(defmethod monty* ((x monty-form) y)
+  (%monty-rev* y x))
+
+(defmethod %monty-rev* ((y integer) x)
+  (%monty* x (to-monty-form y)))
+
+(defmethod %monty-rev* ((y monty-form) x)
+  (%monty* x y))
+
+(defun %monty* (xm ym)
+  ;; produce monty-form for x*R*y*R/R mod q = x*y*R mod q
+  (let ((m  *m*)
+        (xv (monty-form-val xm))
+        (yv (monty-form-val ym)))
+    (declare (integer xv yv m))
+    (destructuring-bind (limit mp byte-0) (get-monty-info :limit :mprime :byte-0)
+      (declare (fixnum limit mp))
       (let ((a  0)
-            (y0 (ldb byte-0 y)))
+            (y0 (ldb byte-0 yv)))
         (declare (fixnum y0)
                  (integer a))
         (loop for ix fixnum from 0 below limit
-              for pos fixnum from 0 by +montgy-exp+
+              for pos fixnum from 0 by +monty-exp+
               do
-              (let* ((xi (ldb (byte +montgy-exp+ pos) x))
-                     (ui (ldb +byte-0+
+              (let* ((xi (ldb (byte +monty-exp+ pos) xv))
+                     (ui (ldb byte-0
                               (the fixnum
                                    (* mp
                                       (the fixnum
-                                           (+ (the fixnum (ldb +byte-0+ a))
+                                           (+ (the fixnum (ldb byte-0 a))
                                               (the fixnum (* xi y0)))))
                                    ))))
                 (declare (fixnum xi ui))
-                (setf a (rsh (+ a (* xi y) (* ui m)) +montgy-exp+))
+                (setf a (rsh (+ a (* xi yv) (* ui m)) +monty-exp+))
                 ))
         (unless (< a m)
           (decf a m))
-        a))))
+        (make-monty-form
+         :val a)
+        ))))
 
-(defun to-montgy-form (x)
-  (declare (integer x))
-  (destructuring-bind (limit mp byte-0 r^2 byt r) (get-montgy-info)
-    (declare (ignore limit mp byte-0 byt r)
-             (integer r^2))
-    (montgy* x r^2)))
+;; --------------------------------------------------------------------
+;; Conversion to Montgomery form
 
-(defun from-montgy-form (x)
-  (declare (integer x))
-  (montgy* x 1))
+(defmethod to-monty-form ((x integer))
+  ;; produce Monty form x*R
+  (destructuring-bind (r^2) (get-monty-info :r^2)
+    (monty* (make-monty-form
+              :val (range-reduce x))
+             r^2)))
+
+(defmethod to-monty-form  ((x monty-form))
+  x)
+
+;; --------------------------------------------------------------------
+;; Conversion back to raw integer form
+
+(defmethod to-int-form ((x integer))
+  x)
+
+(defmethod to-int-form ((x monty-form))
+  ;; produce integer corresponding to monty-form value
+  (monty-reduction x))
 

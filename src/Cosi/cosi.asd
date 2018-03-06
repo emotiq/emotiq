@@ -48,7 +48,7 @@ THE SOFTWARE.
                                      (:file "cosi-blkdef")
                                      (:file "cosi-keying")
 
-				     (:file "cosi-async")
+				     ;; (:file "cosi-async")
                                      
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
