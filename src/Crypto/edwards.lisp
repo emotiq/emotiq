@@ -167,7 +167,8 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------------
 
 (defun ed-neutral-point ()
-  (get-cached-symbol-data '*edcurve* :ed-neutral-point *ed-c*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-neutral-point *ed-c*
                           (lambda ()
                             (make-ecc-pt
                              :x 0
@@ -460,12 +461,14 @@ THE SOFTWARE.
 ;; conversion between integers and little-endian UB8 vectors
 
 (defun ed-nbits ()
-  (get-cached-symbol-data '*edcurve* :ed-nbits *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-nbits *edcurve*
                           (lambda ()
                             (integer-length *ed-q*))))
 
 (defun ed-nbytes ()
-  (get-cached-symbol-data '*edcurve* :ed-nbytes *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-nbytes *edcurve*
                           (lambda ()
                             (ceiling (ed-nbits) 8))))
 
@@ -491,12 +494,14 @@ THE SOFTWARE.
 ;; ----------------------------------------
 
 (defun ed-compressed-nbits ()
-  (get-cached-symbol-data '*edcurve* :ed-compressed-nbits *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-compressed-nbits *edcurve*
                           (lambda ()
                             (1+ (ed-nbits)))))
 
 (defun ed-compressed-nbytes ()
-  (get-cached-symbol-data '*edcurve* :ed-compressed-nbytes *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-compressed-nbytes *edcurve*
                           (lambda ()
                             (ceiling (ed-compressed-nbits) 8))))
 
@@ -758,8 +763,9 @@ THE SOFTWARE.
   ;; Bernstein's Elligator c,s,r depend only on the curve.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
-  (get-cached-symbol-data '*edcurve* :elligator-csr
-                          *edcurve* 'compute-csr))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-csr *edcurve*
+                          'compute-csr))
 
 (defun to-elligator-range (x)
   (ldb (byte (elligator-nbits) 0) x))
@@ -1114,8 +1120,9 @@ THE SOFTWARE.
   ;; Bernstein's Elligator c,s,r depend only on the curve.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
-  (get-cached-symbol-data '*edcurve* :elligator2-ab
-                          *edcurve* #'compute-elli2-ab))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator2-ab *edcurve*
+                          'compute-elli2-ab))
 
 (defun montgy-pt-to-ed (pt)
   ;; v = w * Sqrt(c^4*d-1)
