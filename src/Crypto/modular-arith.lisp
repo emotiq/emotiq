@@ -31,7 +31,8 @@ THE SOFTWARE.
 (declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
 
 ;; -----------------------------------------------------
-(defvar *m*  1)
+
+(defvar *m*  1)   ;; current modular base
 
 (declaim (integer *m*)
          (inline mmod m-1 m/2l m+1 m/2u))
@@ -61,6 +62,7 @@ THE SOFTWARE.
 
 (defun m! (m)
   ;; for REPL convenience, so we don't have to keep doing WITH-MOD
+  (check-type m (integer 1))
   (setf *m* m))
 
 ;; -----------------------------------------------------
@@ -95,7 +97,7 @@ THE SOFTWARE.
              (n   (integer-length exp)))
         (declare (fixnum n)
                  (integer exp))
-        (do ((b  (+ x (get-blinder *m*))
+        (do ((b  (+ x (get-blinder))
                  (m* b b))
              (p  1)
              (ix 0    (1+ ix)))
@@ -122,16 +124,10 @@ THE SOFTWARE.
 (defstruct fq2
   x y)
 
-(defun fq2+ (a b)
-  (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
-             (:struct-accessors fq2 ((bx x) (by y)) b))
-    (make-fq2
-     :x (m+ ax bx)
-     :y (m+ ay by))))
-
 (defun fq2* (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
              (:struct-accessors fq2 ((bx x) (by y)) b))
+    (declare (integer ax bx ay by))
     (make-fq2
      :x (m+ (m* ax bx)
             (m* ay by (cadr *fq2-red*)))
@@ -140,6 +136,7 @@ THE SOFTWARE.
      )))
 
 (defun cipolla (x)
+  (declare (integer x))
   ;; Cipolla method for finding square root of x over prime field m
   (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
                       (declare (integer a))
@@ -186,6 +183,7 @@ THE SOFTWARE.
   ;; a^((m+1)/4) = a^(1/2) -- works nicely when m = 3 mod 4
   ;; 1/2 = 2/4 = 3/6 = 4/8 = 5/10 = 6/12 = 7/14 = 8/16
   ;; in general:  for m = (2k+1) mod 4k, use (m + (2k-1))/4k, k = 1,2,...
+  (declare (integer x))
   (let ((xx  (mmod x)))
     (declare (integer xx))
     (if (< xx 2)
@@ -265,101 +263,4 @@ THE SOFTWARE.
                 (if args arg (minv arg)))
     (declare (integer opnd))
     (setf arg (m* arg (minv opnd)))))
-
-;; --------------------------------------------------------------
-;; Montgomery forms
-
-(defconstant +montgy-exp+  29) ;; small enough for squared max to be fixnum
-
-(defun get-montgy-info (&optional (m *m*))
-  (get-cached-symbol-data '+montgy-exp+ :info m
-                          (lambda ()
-                            (with-mod m
-                              (let* ((limit  (ceiling (integer-length m) +montgy-exp+))
-                                     (byt    (ash 1 +montgy-exp+))
-                                     (r      (m^ byt limit))
-                                     (r^2    (m* r r))
-                                     (byte-0 (byte +montgy-exp+ 0))
-                                     (mp     (with-mod byt
-                                               (m- (m/ m)))))
-                                ;; we never really need byt and r, but here for debug
-                                (list limit mp byte-0 r^2 byt r))))
-                          ))
-
-(declaim (inline rsh))
-
-(defun rsh (x nsh)
-  (declare (integer x)
-           (fixnum  nsh))
-  (ash x (- nsh)))
-
-(defun range-reduce (x)
-  (declare (integer x))
-  (if (and (<= 0 x)
-           (< x *m*))
-      x
-    (mmod x)))
-
-(defun montgy-reduction (x)
-  (declare (integer x))
-  (let ((x  (range-reduce x))
-        (m  *m*))
-    (declare (integer x m))
-    (destructuring-bind (limit mp byte-0 r^2 byt r) (get-montgy-info m)
-      (declare (fixnum limit mp)
-               (ignore byt r r^2))
-      (let ((a  x))
-        (declare (integer a))
-        (loop for ix fixnum from 0 below limit
-              do
-              (let ((u (ldb byte-0 (the fixnum (* (the fixnum (ldb byte-0 a))
-                                                  mp)))))
-                (declare (fixnum u))
-                (setf a (rsh (+ a (* u m)) +montgy-exp+))
-                ))
-        (unless (< a m)
-          (decf a m))
-        a))))
-
-(defun montgy* (x y)
-  (declare (integer x y))
-  (let ((x  (range-reduce x))
-        (y  (range-reduce y))
-        (m  *m*))
-    (declare (integer x y m))
-    (destructuring-bind (limit mp byte-0 r^2 byt r) (get-montgy-info m)
-      (declare (fixnum limit mp)
-               (ignore byt r r^2))
-      (let ((a  0)
-            (y0 (ldb byte-0 y)))
-        (declare (fixnum y0)
-                 (integer a))
-        (loop for ix fixnum from 0 below limit
-              for pos fixnum from 0 by +montgy-exp+
-              do
-              (let* ((xi (ldb (byte +montgy-exp+ pos) x))
-                     (ui (ldb +byte-0+
-                              (the fixnum
-                                   (* mp
-                                      (the fixnum
-                                           (+ (the fixnum (ldb +byte-0+ a))
-                                              (the fixnum (* xi y0)))))
-                                   ))))
-                (declare (fixnum xi ui))
-                (setf a (rsh (+ a (* xi y) (* ui m)) +montgy-exp+))
-                ))
-        (unless (< a m)
-          (decf a m))
-        a))))
-
-(defun to-montgy-form (x)
-  (declare (integer x))
-  (destructuring-bind (limit mp byte-0 r^2 byt r) (get-montgy-info)
-    (declare (ignore limit mp byte-0 byt r)
-             (integer r^2))
-    (montgy* x r^2)))
-
-(defun from-montgy-form (x)
-  (declare (integer x))
-  (montgy* x 1))
 
