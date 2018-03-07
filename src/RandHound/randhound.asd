@@ -48,6 +48,8 @@ THE SOFTWARE.
                         :components (
                                      ;; (:file "randhound")
                                      (:file "rh-common")
+                                     (:file "rh-timestamps")
+                                     (:file "rh-logging")
                                      (:file "rh-init")
                                      (:file "rh-sim")
                                      (:file "rh-client")

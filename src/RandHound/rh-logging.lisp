@@ -1,4 +1,4 @@
-;; package.lisp - Package Defs for Randhound
+;; rh-logging.lisp - Randhound Logging Service
 ;;
 ;; DM/Emotiq  03/18
 ;; ---------------------------------------------------------------
@@ -26,45 +26,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :randhound/common
-  (:use :common-lisp
-   :core-crypto)
-  (:import-from :cosi-keying
-   :need-integer-form
-   :published-form
-   :make-random-keypair
-   :validate-pkey)
-  (:export
-   :*max-bft*
-   :node-assoc
-   :node-assoc-pkey
-   :node-assoc-ip
-   :node-assoc-port
-   :init-nodes
-   :add-node
-   :remove-node
-   :find-node
-   :get-nodes-vector
-   :need-integer-form
-   :published-form
-   :record-to-log
-   :broadcast-message
-   :send-message
-   :get-timestamp
-   :NYI
-   ))
+(in-package :randhound/common)
 
-(defpackage :randhound/client
-  (:use :common-lisp
-        :core-crypto
-        :randhound/common)
-  (:export
-   ))
+(defvar *sim-log* nil) ;; in-memory log for sim, FIFO order
 
-(defpackage :randhound/server
-  (:use :common-lisp
-        :core-crypto
-        :randhound/common)
-  (:export
-   ))
+(defun record-to-log (msg)
+  ;; this should actually be handed off to an Actor service
+  ;; should probably timestamp all log entries
+  (push msg *sim-log*))
 

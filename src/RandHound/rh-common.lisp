@@ -75,13 +75,8 @@ THE SOFTWARE.
 (defun NYI (&rest args)
   (error "Not yet implemented: ~A" args))
 
-(defvar *sim-log* nil) ;; in-memory log for sim, FIFO order
-
-(defun record-to-log (msg)
-  ;; this should actually be handed off to an Actor service
-  (push msg *sim-log*))
-
 (defun broadcast-message (msg nodes)
+  ;; think about reply-to etc
   (loop for node across nodes do
         (send-message msg (node-assoc-ip node) (node-assoc-port node))))
 

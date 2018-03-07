@@ -1,4 +1,4 @@
-;; package.lisp - Package Defs for Randhound
+;; rh-timestamps.lisp - Randhound Timestamping
 ;;
 ;; DM/Emotiq  03/18
 ;; ---------------------------------------------------------------
@@ -26,45 +26,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :randhound/common
-  (:use :common-lisp
-   :core-crypto)
-  (:import-from :cosi-keying
-   :need-integer-form
-   :published-form
-   :make-random-keypair
-   :validate-pkey)
-  (:export
-   :*max-bft*
-   :node-assoc
-   :node-assoc-pkey
-   :node-assoc-ip
-   :node-assoc-port
-   :init-nodes
-   :add-node
-   :remove-node
-   :find-node
-   :get-nodes-vector
-   :need-integer-form
-   :published-form
-   :record-to-log
-   :broadcast-message
-   :send-message
-   :get-timestamp
-   :NYI
-   ))
+(in-package :randhound/common)
 
-(defpackage :randhound/client
-  (:use :common-lisp
-        :core-crypto
-        :randhound/common)
-  (:export
-   ))
+(defun day-name (day)
+  (cdr (assoc day '((0 . "Mon")
+                    (1 . "Tue")
+                    (2 . "Wed")
+                    (3 . "Thu")
+                    (4 . "Fri")
+                    (5 . "Sat")
+                    (6 . "Sun")))))
 
-(defpackage :randhound/server
-  (:use :common-lisp
-        :core-crypto
-        :randhound/common)
-  (:export
-   ))
+(defun month-name (mon)
+  (cdr (assoc mon '(( 1 . "Jan")
+                    ( 2 . "Feb")
+                    ( 3 . "Mar")
+                    ( 4 . "Apr")
+                    ( 5 . "May")
+                    ( 6 . "Jun")
+                    ( 7 . "Jul")
+                    ( 8 . "Aug")
+                    ( 9 . "Sep")
+                    (10 . "Oct")
+                    (11 . "Nov")
+                    (12 . "Dec")))))
+
+(defun format-timestamp (time)
+  (multiple-value-bind (sec min hr date mon yr day) (decode-universal-time time)
+    (format nil "~A ~2,'0d ~A ~d  ~2,'0d:~2,'0d:~2,'0d"
+            (day-name day)
+            date (month-name mon) yr
+            hr min sec)))
+    
+(defun get-timestamp ()
+  (format-timestamp (get-universal-time)))
 

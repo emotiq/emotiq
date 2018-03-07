@@ -52,43 +52,13 @@ THE SOFTWARE.
 (defstruct session-config
   pkeys tgrps max-bft purpose tstamp)
 
-(defun day-name (day)
-  (cdr (assoc day '((0 . "Mon")
-                    (1 . "Tue")
-                    (2 . "Wed")
-                    (3 . "Thu")
-                    (4 . "Fri")
-                    (5 . "Sat")
-                    (6 . "Sun")))))
-
-(defun month-name (mon)
-  (cdr (assoc mon '(( 1 . "Jan")
-                    ( 2 . "Feb")
-                    ( 3 . "Mar")
-                    ( 4 . "Apr")
-                    ( 5 . "May")
-                    ( 6 . "Jun")
-                    ( 7 . "Jul")
-                    ( 8 . "Aug")
-                    ( 9 . "Sep")
-                    (10 . "Oct")
-                    (11 . "Nov")
-                    (12 . "Dec")))))
-
-(defun format-timestamp (time)
-  (multiple-value-bind (sec min hr date mon yr day) (decode-universal-time time)
-    (format nil "~A ~2,'0d ~A ~d  ~2,'0d:~2,'0d:~2,'0d"
-            (day-name day)
-            date (month-name mon) yr
-            hr min sec)))
-    
 (defun construct-session-config (vnodes tgrps max-bft purpose)
   (make-session-config
    :pkeys   (map 'vector 'node-assoc-pkey vnodes)
    :tgrps   tgrps
    :max-bft max-bft
    :purpose purpose
-   :tstamp  (format-timestamp (get-universal-time))))
+   :tstamp  (get-timestamp)))
 
 (defstruct session-config-message
   hash-config tgrps purpose tstamp)
