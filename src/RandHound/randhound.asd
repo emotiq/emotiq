@@ -1,5 +1,5 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
-;;;; cosi.asd -- ASDF File for Cosigning
+;;;; randhound.asd -- ASDF File for Randhound protocol
 
 #|
 Copyright (c) 2018 Emotiq AG
@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defsystem "cosi"
-  :description "Cosi: Authenticated multi-signatures in Lisp"
+(defsystem "randhound"
+  :description "Randhound: Unbiasable Randomness Generation in Lisp"
   :version     "1.0.3"
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
@@ -35,8 +35,9 @@ THE SOFTWARE.
                useful-macros
                usocket
                bloom-filter
-               ads-clos)
-  :in-order-to ((test-op (test-op "cosi-test")))
+               ads-clos
+               cosi)
+  :in-order-to ((test-op (test-op "randhound-test")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
@@ -44,23 +45,20 @@ THE SOFTWARE.
                         :depends-on (package)
                         :pathname "./"
                         :serial t
-                        :components ((:file "base58")
-                                     (:file "cosi-blkdef")
-                                     (:file "cosi-keying")
+                        :components (
+                                     ;; (:file "randhound")
+                                     (:file "rh-common")
+                                     (:file "rh-timestamps")
+                                     (:file "rh-logging")
+                                     (:file "rh-init")
+                                     (:file "rh-sim")
+                                     (:file "rh-client")
+                                     (:file "rh-server")
+                                     ))))
 
-				     ;; (:file "cosi-async")
-                                     
-				     (:file "cosi-construction")
-                                     (:file "cosi-sockets")
-                                     (:file "cosi-handlers")
-                                     
-                                     (:file "confidential-purchase")
-
-                                     (:file "range-proofs")))))
-
-(defsystem "cosi/test/allegro"
+(defsystem "randhound/test/allegro"
   :description "Allegro specific CAS timing code from dbm."
-  :depends-on (cosi)
+  :depends-on (randhound)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "test-cas")))))
