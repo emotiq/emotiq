@@ -33,7 +33,8 @@ THE SOFTWARE.
 ;; --------------------------------------------------
 (in-package #:mp-compatibility)
 
-(require :sb-concurrency)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :sb-concurrency))
 
 ;; equiv to #F
 (declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
@@ -69,7 +70,8 @@ THE SOFTWARE.
 
 (defun process-run-function (name flags proc &rest args)
   "Spawn a new Lisp thread and run the indicated function with inital args."
-  (declare (ignore flags))
+  (declare (ignore flags)
+           (type function proc))
   (sb-thread:make-thread (lambda ()
 			   (apply proc args))
 			 :name name))
@@ -84,6 +86,7 @@ THE SOFTWARE.
 
 (defun process-interrupt (proc fn &rest args)
   "Interrupt the indicated Lisp process to have it perform a function."
+  (declare (type function fn))
   (sb-thread:interrupt-thread proc (lambda ()
 				     (apply fn args))))
 
@@ -105,9 +108,9 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------------
 
 (defun do-with-lock (lock timeout fn)
+  (declare (type function fn))
   (cond ((eq sb-thread:*current-thread* (sb-thread:mutex-owner lock))
 	 (funcall fn))
-
 	(timeout
 	 (tagbody
 	    (sb-sys:without-interrupts
@@ -142,42 +145,6 @@ THE SOFTWARE.
 
 (defun lock-owner (lock)
   (sb-thread:mutex-owner lock))
-
-;; --------------------------------------------------------------------------
-
-(defun process-lock (lock &optional whostate timeout)
-  (declare (ignore whostate))
-  (cond ((eq sb-thread:*current-thread* (sb-thread:mutex-owner lock))
-	 (funcall fn))
-	
-	(timeout
-	 (tagbody
-	    (sb-sys:without-interrupts
-	      (handler-case
-		  (sb-ext:with-timeout timeout
-		    (sb-sys:allow-with-interrupts
-		      (sb-thread:get-mutex lock nil t))
-		    (go have-lock))
-		(timeout (cx)
-		  (declare (ignore cx))
-		  (return-from process-lock nil))
-		))
-	  have-lock
-	    (unwind-protect
-		 (funcall fn)
-	      (sb-sys:without-interrupts
-		(sb-thread:release-mutex lock)))
-	  beyond))
-	
-	(t (sb-thread:with-mutex (lock)
-	     (funcall fn)))
-	))
-
-;; --------------------------------------------------------------------------
-
-(defun process-unlock (lock)
-  (sb-sys:without-interrupts
-    (sb-thread:release-mutex lock)))
 
 ;; --------------------------------------------------------------------------
 

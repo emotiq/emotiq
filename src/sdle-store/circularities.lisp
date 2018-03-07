@@ -20,9 +20,6 @@
 
 (in-package :sdle-store)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (import '(um:lazy um:force um:make-setter)))
-
 (defvar *check-for-circs* t)
 
 ;; Restoration.
@@ -82,7 +79,7 @@
   (if (referrer-p value)
       (progn
         (%must-be-in-circs)
-        (push (lazy
+        (push (um.lazy:lazy
                   (funcall setter
                            (referred-value value
                                            *restored-values*)))
@@ -98,7 +95,7 @@
   (if (referrer-p key)
       (progn
         (%must-be-in-circs)
-        (push (lazy
+        (push (um.lazy:lazy
                   (setf (gethash (referred-value key *restored-values*)
                                  hashtable)
                         (if (referrer-p value)
@@ -106,13 +103,13 @@
                           value)))
               *need-to-fix*))
     ;; else - not referrer-p
-    (%setting (make-setter (gethash key hashtable)) value)))
+    (%setting (um:make-setter (gethash key hashtable)) value)))
 
 (defmacro resolving-object ((var create) &body body)
   "Execute body attempting to resolve circularities found in 
    form CREATE."
   `(macrolet ((setting (place getting)
-                `(%setting (make-setter ,place) ,getting))
+                `(%setting (um:make-setter ,place) ,getting))
               (setting-hash (getting-key getting-place)
                 `(%setting-hash ,getting-key ,getting-place ,',var)))
      (let ((,var ,create))
@@ -277,7 +274,7 @@ hash-tables as produced by the function create-serialize-hash."
     (check-magic-number backend place)
     (prog1
       (backend-restore-object backend place)
-      (um:foreach #'force *need-to-fix*)
+      (um:foreach #'um.lazy:force *need-to-fix*)
       )))
 
 (defun update-restored (spot val)
