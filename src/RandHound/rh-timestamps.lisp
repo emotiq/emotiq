@@ -59,5 +59,8 @@ THE SOFTWARE.
             hr min sec)))
     
 (defun get-timestamp ()
-  (format-timestamp (get-universal-time)))
+  (let ((now (get-universal-time)))
+    (values (format-timestamp now)
+            now))) ;; return numeric value in case we need ordering
+
 
