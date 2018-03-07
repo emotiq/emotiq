@@ -83,4 +83,16 @@ THE SOFTWARE.
         (record-to-log init-msg)
         (broadcast-message init-msg vnodes)))
     ))
-         
+
+(defun NYI (&rest args)
+  (error "Not yet implemented: ~A" args))
+
+(defun record-to-log (msg)
+  (declare (ignore msg))
+  (NYI :record-to-log))
+
+(defun broadcast-message (msg nodes)
+  (declare (ignore msg nodes))
+  (NYI :broadcast-message))
+
+
