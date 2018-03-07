@@ -37,10 +37,10 @@ THE SOFTWARE.
   ;; With N available servers, divide into Sqrt(N) groups, each with
   ;; approx Sqrt(N) servers / group
   ;;
-  (let ((nel    (length vnodes))
-        (ngrp   (isqrt nel))
-        (tgrp   (make-array ngrp))   ;; vector of server lists
-        (r      (ctr-drbg-int 256))) ;; random seed
+  (let* ((nel    (length vnodes))
+         (ngrp   (isqrt nel))
+         (tgrp   (make-array ngrp))   ;; vector of server lists
+         (r      (ctr-drbg-int 256))) ;; random seed
     (loop for node across vnodes do
           ;; cheap hash is xor
           (let* ((pkey  (node-assoc-pkey node))
@@ -52,13 +52,43 @@ THE SOFTWARE.
 (defstruct session-config
   pkeys tgrps max-bft purpose tstamp)
 
+(defun day-name (day)
+  (cdr (assoc day '((0 . "Mon")
+                    (1 . "Tue")
+                    (2 . "Wed")
+                    (3 . "Thu")
+                    (4 . "Fri")
+                    (5 . "Sat")
+                    (6 . "Sun")))))
+
+(defun month-name (mon)
+  (cdr (assoc mon '(( 1 . "Jan")
+                    ( 2 . "Feb")
+                    ( 3 . "Mar")
+                    ( 4 . "Apr")
+                    ( 5 . "May")
+                    ( 6 . "Jun")
+                    ( 7 . "Jul")
+                    ( 8 . "Aug")
+                    ( 9 . "Sep")
+                    (10 . "Oct")
+                    (11 . "Nov")
+                    (12 . "Dec")))))
+
+(defun format-timestamp (time)
+  (multiple-value-bind (sec min hr date mon yr day) (decode-universal-time time)
+    (format nil "~A ~2,'0d ~A ~d  ~2,'0d:~2,'0d:~2,'0d"
+            (day-name day)
+            date (month-name mon) yr
+            hr min sec)))
+    
 (defun construct-session-config (vnodes tgrps max-bft purpose)
   (make-session-config
    :pkeys   (map 'vector 'node-assoc-pkey vnodes)
    :tgrps   tgrps
    :max-bft max-bft
    :purpose purpose
-   :tstamp  (get-universal-time)))
+   :tstamp  (format-timestamp (get-universal-time))))
 
 (defstruct session-config-message
   hash-config tgrps purpose tstamp)
@@ -73,7 +103,7 @@ THE SOFTWARE.
       (let* ((vnodes   (subseq vnodes 0 nneed))
              (tgrps    (create-server-groups vnodes))
              (config   (construct-session-config vnodes tgrps max-bft purpose))
-             (hconfig  (sha3/256-buffers config))
+             (hconfig  (published-form (sha3/256-buffers config)))
              (init-msg (make-session-config-message
                         :hash-config hconfig
                         :tgrps       tgrps

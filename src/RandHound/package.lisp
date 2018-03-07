@@ -46,6 +46,7 @@ THE SOFTWARE.
    :find-node
    :get-nodes-vector
    :need-integer-form
+   :published-form
    :record-to-log
    :broadcast-message
    :send-message

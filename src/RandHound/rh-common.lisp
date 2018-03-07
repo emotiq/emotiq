@@ -78,6 +78,7 @@ THE SOFTWARE.
 (defvar *sim-log* nil) ;; in-memory log for sim, FIFO order
 
 (defun record-to-log (msg)
+  ;; this should actually be handed off to an Actor service
   (push msg *sim-log*))
 
 (defun broadcast-message (msg nodes)
@@ -85,6 +86,8 @@ THE SOFTWARE.
         (send-message msg (node-assoc-ip node) (node-assoc-port node))))
 
 (defun send-message (msg ip port)
+  ;; need to think about message format - reply to, etc. Also an Actor
+  ;; service
   (declare (ignore msg ip port))
   (NYI :send-message))
 
