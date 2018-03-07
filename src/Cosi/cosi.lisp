@@ -3,33 +3,6 @@
 ;; DM/Emotiq  01/18
 ;; ------------------------------------------------------------------------
 
-(defpackage :cosi
-  (:use :common-lisp :crypto-mod-math)
-  (:import-from :edwards-ecc
-		:ed-add 
-		:ed-sub 
-		:ed-mul 
-		:ed-div 
-		:ed-affine
-		:ed-nth-pt
-		:*ed-r*
-		:*ed-q*
-                :ed-neutral-point
-                :ed-pt=
-		:with-ed-curve
-		:ed-compress-pt
-		:ed-decompress-pt
-		:ed-validate-point
-		:ed-hash
-		:ed-random-pair)
-  (:import-from :ecc-crypto-b571
-		:convert-int-to-nbytesv
-		:convert-bytes-to-int)
-  (:export
-   :schnorr-signature
-   :verify-schnorr-signature
-   ))
-
 ;; -------------------------------------------------------
 
 (in-package :cosi)
@@ -338,7 +311,8 @@
                (eql state-seq seq-id))
       (let ((r  (sub-mod *ed-r* state-v (mult-mod *ed-r* c state-skey))))
         (dolist (node state-parts)
-          (setf r (add-mod *ed-r* r (ask node :signing seq-id c))))
+          (with-mod *ed-r*
+            (setf r (m+ r (ask node :signing seq-id c)))))
         r))))
 
 (defun node-compute-cosi (state seq-id msg)
@@ -693,7 +667,8 @@
       (dolist (sig sigs)
         (destructuring-bind (c_i r_i) sig
           (assert (= c_i c)) ;; be sure we are using the same challenge val
-          (setf rt (add-mod *ed-r* rt r_i))))
+          (with-mod *ed-r*
+            (setf rt (m+ rt r_i)))))
       (list c rt))))
 
 ;; ---------------------------------------------------------------------

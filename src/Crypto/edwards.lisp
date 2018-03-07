@@ -40,40 +40,10 @@ THE SOFTWARE.
 ;; See paper: "Elligator: Elliptic-curve points indistinguishable from uniform random strings"
 ;; by Bernstein, Hamburg, Krasnova, and Lange
 
-(defstruct (ed-curve
-            (:constructor %make-ed-curve))
-  name c d q h r gen
-  nbits nb) ;; cached values for faster compress/decompress
+(defstruct ed-curve
+  name c d q h r gen)
 
-(defun make-ed-curve (&key name c d q h r gen)
-  (let ((nbits (integer-length q)))
-    (%make-ed-curve
-     :name  name
-     :c     c
-     :d     d
-     :q     q
-     :h     h
-     :r     r
-     :gen   gen
-     :nbits nbits
-     :nb    (ceiling nbits 8)
-     )))
-
-(defvar *edcurve*)
-
-(defmacro with-ed-curve (curve &body body)
-  `(let ((*edcurve* (select-curve ,curve)))
-     ,@body))
-
-(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
-(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
-(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
-(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
-(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
-(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
-(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
-(define-symbol-macro *ed-nbits* (ed-curve-nbits *edcurve*))
-(define-symbol-macro *ed-nb*    (ed-curve-nb    *edcurve*))
+;; -----------------------------------------------------------
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)
@@ -97,19 +67,20 @@ THE SOFTWARE.
   ;; rho-security (security by Pollard's rho attack) = 2^124.3
   ;; rho-security = (* 0.886 (sqrt *ed-r*))  (0.886 = (sqrt (/ pi 4)))
   ;; x^2 + y^2 = 1 - 1174 x^2 y^2
-  (setf *edcurve*
-        (make-ed-curve
-         :name :Curve1174
-         :c    1
-         :d    -1174
-         :q    (- (ash 1 251) 9)
-         :r    904625697166532776746648320380374280092339035279495474023489261773642975601
-                 ;; = 2^249 - 11332719920821432534773113288178349711
-         :h    4  ;; cofactor -- #E(K) = h*r
-         :gen  (make-ecc-pt
-                :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
-                :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
-        )))
+  (make-ed-curve
+   :name :Curve1174
+   :c    1
+   :d    -1174
+   :q    (- (ash 1 251) 9)
+   :r    904625697166532776746648320380374280092339035279495474023489261773642975601
+   ;; = 2^249 - 11332719920821432534773113288178349711
+   :h    4  ;; cofactor -- #E(K) = h*r
+   :gen  (make-ecc-pt
+          :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
+          :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
+   ))
+
+;; ---------------------------
 
 (defvar *curve-E382*
   ;; rho-security = 2^188.8
@@ -126,6 +97,8 @@ THE SOFTWARE.
           :y  17)
    ))
 
+;; ---------------------------
+
 (defvar *curve41417*
   ;; rho-security = 2^205.3
   (make-ed-curve
@@ -140,6 +113,8 @@ THE SOFTWARE.
           :x  17319886477121189177719202498822615443556957307604340815256226171904769976866975908866528699294134494857887698432266169206165
           :y  34)
    ))
+
+;; ---------------------------
 
 (defvar *curve-E521*
   ;; rho-security = 2^259.3
@@ -156,44 +131,48 @@ THE SOFTWARE.
           :y  12)
    ))
 
+;; ------------------------------------------------------
+
+(defvar *edcurve* *curve1174*)
+
+(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
+(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
+(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
+(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
+(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
+(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
+(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
+
+;; ------------------------------------------------------
+
+(defvar *known-curves*
+  (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
+
 (defmethod select-curve ((curve ed-curve))
   curve)
 
 (defmethod select-curve ((curve symbol))
-  (find curve (list *curve1174* *curve-e382* *curve41417* *curve-e521*)
+  (find curve *known-curves*
         :key 'ed-curve-name))
 
+(defmacro with-ed-curve (curve &body body)
+  `(let ((*edcurve* (select-curve ,curve)))
+     ,@body))
+
 (defun ed-curves ()
-  (list :curve-1174 :curve-E382 :curve-41417 :curve-E521))
+  ;; present caller with a list of symbols that can be used to select
+  ;; a curve using WITH-ED-CURVE
+  (mapcar 'ed-curve-name *known-curves*))
 
 ;; ----------------------------------------------------------------
 
-(defun ed+ (&rest args)
-  (apply #'add-mod *ed-q* args))
-
-(defun ed- (&rest args)
-  (apply #'sub-mod *ed-q* args))
-
-(defun ed* (&rest args)
-  (apply #'mult-mod *ed-q* args))
-
-(defun ed/ (&rest args)
-  (apply #'div-mod *ed-q* args))
-
-(defun ed-sqrt (arg)
-  (sqrt-mod *ed-q* arg))
-
-;; expt-mod not needed here, but convenient to define vs *ed-q*
-;; we use this in the elligator code below
-(defun ed-expt (arg n)
-  (expt-mod *ed-q* arg n))
-
-;; ----------------------------------------------------------------
-
-(def-cached-var ed-neutral-point
-  (make-ecc-pt
-   :x 0
-   :y *ed-c*))
+(defun ed-neutral-point ()
+  (get-cached-symbol-data '*edcurve*
+                          :ed-neutral-point *ed-c*
+                          (lambda ()
+                            (make-ecc-pt
+                             :x 0
+                             :y *ed-c*))))
 
 (defun ed-neutral-point-p (pt)
   (optima:ematch pt
@@ -205,36 +184,40 @@ THE SOFTWARE.
   (optima:ematch pt
     ((ecc-pt-) pt)
     ((ed-proj-pt- :x x :y y :z z)
+     (with-mod *ed-q*
        (make-ecc-pt
-        :x (ed/ x z)
-        :y (ed/ y z)))))
+        :x (m/ x z)
+        :y (m/ y z))))))
 
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
        (let* ((alpha (random-between 1 *ed-q*)))
-         (make-ed-proj-pt
-          :x (ed* alpha x)
-          :y (ed* alpha y)
-          :z alpha)
-         ))
+         (with-mod *ed-q*
+           (make-ed-proj-pt
+            :x (m* alpha x)
+            :y (m* alpha y)
+            :z alpha)
+           )))
     ((ed-proj-pt-) pt)
     ))
 
 (defun ed-random-projective (pt)
-  (let* ((alpha (random-between 1 *ed-q*)))
-    (optima:ematch pt
-      ((ecc-pt- :x x :y y)
+  (with-mod *ed-q*
+    (let* ((alpha (random-between 1 *ed-q*)))
+      (declare (integer alpha))
+      (optima:ematch pt
+        ((ecc-pt- :x x :y y)
          (make-ed-proj-pt
-          :x (ed* alpha x)
-          :y (ed* alpha y)
+          :x (m* alpha x)
+          :y (m* alpha y)
           :z alpha))
-      ((ed-proj-pt- :x x :y y :z z)
+        ((ed-proj-pt- :x x :y y :z z)
          (make-ed-proj-pt
-          :x (ed* alpha x)
-          :y (ed* alpha y)
-          :z (ed* alpha z)))
-      )))
+          :x (m* alpha x)
+          :y (m* alpha y)
+          :z (m* alpha z)))
+        ))))
 
 (defun ed-unify-pair-type (pt1 pt2)
   ;; contageon to projective coords
@@ -268,10 +251,11 @@ THE SOFTWARE.
       ((ed-proj-pt- :x x1 :y y1 :z z1)
        (optima:match upt2
          ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (and (= (ed* x1 z2)
-                  (ed* x2 z1))
-               (= (ed* y1 z2)
-                  (ed* y2 z1))))
+          (with-mod *ed-q*
+            (and (= (m* x1 z2)
+                    (m* x2 z1))
+                 (= (m* y1 z2)
+                    (m* y2 z1)))))
          ))
       )))
 
@@ -291,71 +275,75 @@ THE SOFTWARE.
          ((ecc-pt-)
             (ed-pt= pt1 (ed-projective pt2)))
          ((ed-proj-pt- :x x2 :y y2 :z z2)
-            (and (= (ed* x1 z2)
-                    (ed* x2 z1))
-                 (= (ed* y1 z2)
-                    (ed* y2 z1))))
+          (with-mod *ed-q*
+            (and (= (m* x1 z2)
+                    (m* x2 z1))
+                 (= (m* y1 z2)
+                    (m* y2 z1)))))
          ))
     ))
 |#
 
 (defun ed-satisfies-curve (pt)
-  (optima:ematch pt
-    ((ecc-pt- :x x :y y)
+  (with-mod *ed-q*
+    (optima:ematch pt
+      ((ecc-pt- :x x :y y)
        ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
-       (= (ed+ (ed* x x)
-               (ed* y y))
-          (ed* *ed-c* *ed-c*
-               (ed+ 1 (ed* *ed-d* x x y y)))
+       (= (m+ (m* x x)
+              (m* y y))
+          (m* *ed-c* *ed-c*
+              (m+ 1 (m* *ed-d* x x y y)))
           ))
-    ((ed-proj-pt- :x x :y y :z z)
-       (= (ed* z z (ed+ (ed* x x) (ed* y y)))
-          (ed* *ed-c* *ed-c*
-               (ed+ (ed* z z z z)
-                    (ed* *ed-d* x x y y)))))
-    ))
+      ((ed-proj-pt- :x x :y y :z z)
+       (= (m* z z (m+ (m* x x) (m* y y)))
+          (m* *ed-c* *ed-c*
+              (m+ (m* z z z z)
+                  (m* *ed-d* x x y y)))))
+      )))
 
 (defun ed-affine-add (pt1 pt2)
   ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
-  (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y)) pt1)
-             (:struct-accessors ecc-pt ((x2 x) (y2 y)) pt2)
-             (y1y2  (ed* y1 y2))
-             (x1x2  (ed* x1 x2))
-             (x1x2y1y2 (ed* *ed-d* x1x2 y1y2))
-             (denx  (ed* *ed-c* (ed+ 1 x1x2y1y2)))
-             (deny  (ed* *ed-c* (ed- 1 x1x2y1y2)))
-             (numx  (ed+ (ed* x1 y2)
-                         (ed* y1 x2)))
-             (numy  (ed- y1y2 x1x2)))
-    (make-ecc-pt
-     :x  (ed/ numx denx)
-     :y  (ed/ numy deny))
-    ))
+  (with-mod *ed-q*
+    (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y)) pt1)
+               (:struct-accessors ecc-pt ((x2 x) (y2 y)) pt2)
+               (y1y2  (m* y1 y2))
+               (x1x2  (m* x1 x2))
+               (x1x2y1y2 (m* *ed-d* x1x2 y1y2))
+               (denx  (m* *ed-c* (m+ 1 x1x2y1y2)))
+               (deny  (m* *ed-c* (m- 1 x1x2y1y2)))
+               (numx  (m+ (m* x1 y2)
+                          (m* y1 x2)))
+               (numy  (m- y1y2 x1x2)))
+      (make-ecc-pt
+       :x  (m/ numx denx)
+       :y  (m/ numy deny))
+      )))
 
 (defun ed-projective-add (pt1 pt2)
-  (um:bind* ((:struct-accessors ed-proj-pt ((x1 x)
-                                            (y1 y)
-                                            (z1 z)) pt1)
-             (:struct-accessors ed-proj-pt ((x2 x)
-                                            (y2 y)
-                                            (z2 z)) pt2)
-             (a  (ed* z1 z2))
-             (b  (ed* a a))
-             (c  (ed* x1 x2))
-             (d  (ed* y1 y2))
-             (e  (ed* *ed-d* c d))
-             (f  (ed- b e))
-             (g  (ed+ b e))
-             (x3 (ed* a f (ed- (ed* (ed+ x1 y1)
-                                    (ed+ x2 y2))
+  (with-mod *ed-q*
+    (um:bind* ((:struct-accessors ed-proj-pt ((x1 x)
+                                              (y1 y)
+                                              (z1 z)) pt1)
+               (:struct-accessors ed-proj-pt ((x2 x)
+                                              (y2 y)
+                                              (z2 z)) pt2)
+               (a  (m* z1 z2))
+               (b  (m* a a))
+               (c  (m* x1 x2))
+               (d  (m* y1 y2))
+               (e  (m* *ed-d* c d))
+               (f  (m- b e))
+               (g  (m+ b e))
+               (x3 (m* a f (m- (m* (m+ x1 y1)
+                                   (m+ x2 y2))
                                c d)))
-             (y3 (ed* a g (ed- d c)))
-             (z3 (ed* *ed-c* f g)))
-    (make-ed-proj-pt
-     :x  x3
-     :y  y3
-     :z  z3)
-    ))
+               (y3 (m* a g (m- d c)))
+               (z3 (m* *ed-c* f g)))
+      (make-ed-proj-pt
+       :x  x3
+       :y  y3
+       :z  z3)
+      )))
 
 (defun ed-add (pt1 pt2)
   ;; contageon to randomized projective coords for added security
@@ -385,17 +373,18 @@ THE SOFTWARE.
 |#
 
 (defun ed-negate (pt)
-  (optima:ematch pt
-    ((ecc-pt- :x x :y y)
+  (with-mod *ed-q*
+    (optima:ematch pt
+      ((ecc-pt- :x x :y y)
        (make-ecc-pt
-        :x (ed- x)
+        :x (m- x)
         :y y))
-    ((ed-proj-pt- :x x :y y :z z)
+      ((ed-proj-pt- :x x :y y :z z)
        (make-ed-proj-pt
-        :x (ed- x)
+        :x (m- x)
         :y y
         :z z))
-    ))
+      )))
 
 (defun ed-sub (pt1 pt2)
   (ed-add pt1 (ed-negate pt2)))
@@ -462,17 +451,33 @@ THE SOFTWARE.
     (ed-basic-mul pt (+ n alpha))))
 
 (defun ed-div (pt n)
-  (ed-mul pt (ed/ n)))
+  (with-mod *ed-q*
+    (ed-mul pt (m/ n))))
 
 (defun ed-nth-pt (n)
   (ed-affine (ed-mul *ed-gen* n)))
 
 ;; ---------------------------------------------------------------
+;; conversion between integers and little-endian UB8 vectors
 
-(defun ed-convert-int-to-lev (v)
-  (let ((vec (make-array *ed-nb*
+(defun ed-nbits ()
+  (get-cached-symbol-data '*edcurve*
+                          :ed-nbits *edcurve*
+                          (lambda ()
+                            (integer-length *ed-q*))))
+
+(defun ed-nbytes ()
+  (get-cached-symbol-data '*edcurve*
+                          :ed-nbytes *edcurve*
+                          (lambda ()
+                            (ceiling (ed-nbits) 8))))
+
+(defun ed-convert-int-to-lev (v &optional (nel (ed-nbytes)))
+  (unless (<= (integer-length v) (* 8 nel))
+    (error "Truncation implied"))
+  (let ((vec (make-array nel
                          :element-type '(unsigned-byte 8))))
-    (loop for ix from 0 below *ed-nb*
+    (loop for ix from 0 below nel
           for pos from 0 by 8
           do
           (setf (aref vec ix) (ldb (byte 8 pos) v)))
@@ -485,7 +490,21 @@ THE SOFTWARE.
           do
           (setf (ldb (byte 8 pos) ans) v))
     ans))
-        
+
+;; ----------------------------------------
+
+(defun ed-compressed-nbits ()
+  (get-cached-symbol-data '*edcurve*
+                          :ed-compressed-nbits *edcurve*
+                          (lambda ()
+                            (1+ (ed-nbits)))))
+
+(defun ed-compressed-nbytes ()
+  (get-cached-symbol-data '*edcurve*
+                          :ed-compressed-nbytes *edcurve*
+                          (lambda ()
+                            (ceiling (ed-compressed-nbits) 8))))
+
 (defun ed-compress-pt (pt &key lev) ;; lev = little-endian vector
   ;;
   ;; Standard encoding for EdDSA is X in little-endian notation, with
@@ -497,12 +516,10 @@ THE SOFTWARE.
   (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt)))
     (let ((enc
            (if (oddp y)
-               (let ((v  (ldb (byte *ed-nbits* 0) x)))
-                 (setf (ldb (byte 1 *ed-nbits*) v) 1)
-                 v)
+               (dpb 1 (byte 1 (ed-nbits)) x)
              x)))
       (if lev
-          (let ((enc (ed-convert-int-to-lev enc)))
+          (let ((enc (ed-convert-int-to-lev enc (ed-compressed-nbytes))))
             (if (eq lev :base64)
                 (encode-bytes-to-base64 enc)
               enc))
@@ -515,23 +532,25 @@ THE SOFTWARE.
   (ed-decompress-pt (ed-convert-lev-to-int v)))
 
 (defmethod ed-decompress-pt ((v integer))
-  (let* ((sgn   (ldb (byte 1 *ed-nbits*) v))
-         (x     (ldb (byte *ed-nbits* 0) v))
-         (yy    (ed/ (ed* (ed+ *ed-c* x)
-                          (ed- *ed-c* x))
-                     (ed* (ed- 1 (ed* x x *ed-c* *ed-c* *ed-d*)))))
-         (y     (ed-sqrt yy))
-         (y     (if (eql sgn (ldb (byte 1 0) y))
-                    y
-                  (ed- y))))
-    (assert (= yy (ed* y y))) ;; check that yy was a square
-    ;; if yy was not a square then y^2 will equal -yy, not yy.
-    (ed-validate-point
-     (ed-projective
-      (make-ecc-pt
-       :x  x
-       :y  y)))
-    ))
+  (with-mod *ed-q*
+    (let* ((nbits (ed-nbits))
+           (sgn   (ldb (byte 1 nbits) v))
+           (x     (dpb 0 (byte 1 nbits) v))
+           (yy    (m/ (m* (m+ *ed-c* x)
+                          (m- *ed-c* x))
+                      (m* (m- 1 (m* x x *ed-c* *ed-c* *ed-d*)))))
+           (y     (msqrt yy))
+           (y     (if (eql sgn (ldb (byte 1 0) y))
+                      y
+                    (m- y))))
+      (assert (= yy (m* y y))) ;; check that yy was a square
+      ;; if yy was not a square then y^2 will equal -yy, not yy.
+      (ed-validate-point
+       (ed-projective
+        (make-ecc-pt
+         :x  x
+         :y  y)))
+      )))
 
 ;; -----------------------------------------------------------------
 
@@ -547,15 +566,104 @@ THE SOFTWARE.
 (defun ed-hash (pt)
   (sha3-buffers (ed-compress-pt pt :lev t)))
 
+(defun get-hash-bits (nbits seed)
+  ;; concatenated SHA3 until we collect enough bits
+  (labels ((hash-part (ix)
+             (sha3-buffers
+              (loenc:encode (list ix seed)))))
+    (um:nlet-tail iter ((ix   1)
+                        (bits #()))
+      (if (>= (* 8 (length bits)) nbits)
+          bits
+        (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
+    ))
+
+(defun compute-deterministic-skey (seed &optional (index 0))
+  ;;
+  ;; Return a value based on seed, to be used for generating a public
+  ;; key, (aka, a secret key), which is in the upper range of the
+  ;; *ed-r* field, and which avoids potential small-group attacks
+  ;;
+  (let* ((nbits (integer-length *ed-r*))
+         (h     (ed-convert-lev-to-int
+                 (get-hash-bits nbits
+                                (list seed :generate-private-key index))))
+         (s     (dpb 1 (byte 1 (1- nbits)) ;; set hi bit
+                     (ldb (byte nbits 0) h)))
+         (skey  (- s (mod s *ed-h*))))
+    (if (< skey *ed-r*) ;; will be true with overwhelming probability (failure ~1e-38)
+        skey
+      (compute-deterministic-skey seed (1+ index)))
+    ))
+
 (defun ed-random-pair ()
-  (let* ((r  (random-between 1 *ed-r*))
-         (pt (ed-nth-pt r)))
-    (values r pt)))
+  ;; select a random private and public key from the curve, abiding by
+  ;; the precautions discussed for COMPUTE-DETERMINISTIC-SKEY
+  (let* ((seed (ctr-drbg 256))
+         (skey (compute-deterministic-skey seed))
+         (pt   (ed-nth-pt skey)))
+    (values skey pt)))
 
 (defun ed-random-generator ()
   ;; every point on the curve is a generator
-  (cadr (multiple-value-list (ed-random-pair))))
-    
+  (second (multiple-value-list (ed-random-pair))))
+
+;; ---------------------------------------------------
+;; The IETF EdDSA standard as a primitive
+
+(defun compute-schnorr-deterministic-random (msgv k-priv)
+  (um:nlet-tail iter ((ix 0))
+    (let ((r   (with-mod *ed-r*
+                 (mmod
+                  (ed-convert-lev-to-int
+                   (sha3-buffers
+                    (ed-convert-int-to-lev ix 4)
+                    (ed-convert-int-to-lev k-priv (ed-compressed-nbytes))
+                    msgv))))))
+      (if (plusp r)
+          (values r (ed-nth-pt r) ix)
+        (iter (1+ ix)))
+      )))
+
+(defun ed-dsa (msg skey)
+  (let* ((msg-enc   (loenc:encode msg))
+         (pkey      (ed-nth-pt skey))
+         (pkey-cmpr (ed-compress-pt pkey)))
+    (multiple-value-bind (r rpt)
+        (compute-schnorr-deterministic-random msg-enc skey)
+      (let* ((rpt-cmpr  (ed-compress-pt rpt))
+             (nbcmpr    (ed-compressed-nbytes))
+             (s         (with-mod *ed-r*
+                          (m+ r
+                              (m* skey
+                                  (ed-convert-lev-to-int
+                                   (sha3-buffers
+                                    (ed-convert-int-to-lev rpt-cmpr  nbcmpr)
+                                    (ed-convert-int-to-lev pkey-cmpr nbcmpr)
+                                    msg-enc))
+                                  )))))
+        (list
+         :msg   msg
+         :pkey  pkey-cmpr
+         :r     rpt-cmpr
+         :s     s)
+        ))))
+
+(defun ed-dsa-validate (msg pkey r s)
+  (let ((nbcmpr (ed-compressed-nbytes)))
+    (ed-pt=
+     (ed-nth-pt s)
+     (ed-add (ed-decompress-pt r)
+             (ed-mul (ed-decompress-pt pkey)
+                     (ed-convert-lev-to-int
+                      (sha3-buffers
+                       (ed-convert-int-to-lev r    nbcmpr)
+                       (ed-convert-int-to-lev pkey nbcmpr)
+                       (loenc:encode msg)))
+                     )))))
+
+;; -----------------------------------------------------------
+
 #|
 (let* ((*edcurve* *curve41417*)
        ;; (*edcurve* *curve1174*)
@@ -603,18 +711,32 @@ THE SOFTWARE.
 ;; Elligator encoding of curve points
 
 (defun elligator-limit ()
-  (floor (1+ *ed-q*) 2))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-limit *edcurve*
+                          (lambda ()
+                            (floor (1+ *ed-q*) 2))))
 
 (defun elligator-nbits ()
-  (integer-length (1- (elligator-limit))))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-nbits *edcurve*
+                          (lambda ()
+                            (integer-length (1- (elligator-limit))))))
 
+(defun elligator-nbytes ()
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-nbytes *edcurve*
+                          (lambda ()
+                            (ceiling (elligator-nbits) 8))))
+
+#| ;; unused here
 (defun elligator-padding ()
   ;; generate random padding bits for the initial byte
-  ;; of an octet Elligator encoding
+  ;; of a big-endian octet Elligator encoding
   (let* ((nbits (mod (elligator-nbits) 8)))
     (if (zerop nbits)
         0
       (ash (ctr-drbg-int (- 8 nbits)) nbits))))
+|#
 
 (defun elligator-int-padding ()
   ;; generate random padding bits for an elligator int
@@ -625,42 +747,30 @@ THE SOFTWARE.
       (ash (ctr-drbg-int (- 8 nbits)) enb))
     ))
 
-(defun chi (x)
-  ;; chi(x) -> {-1,0,+1}
-  ;; = +1 or 0 when x is square residue
-  (ed-expt x (floor (1- *ed-q*) 2)))
-
 (defun compute-csr ()
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
-  (let* ((dp1  (ed+ *ed-d* 1))
-         (dm1  (ed- *ed-d* 1))
-         (dsqrt (ed* 2 (ed-sqrt (ed- *ed-d*))))
-         (c    (ed/ (ed+ dsqrt dm1) dp1))
-         (c    (if (quadratic-residue-p *ed-q* c)
-                   c
-                 (ed/ (ed- dsqrt dm1) dp1)))
-         (r    (ed+ c (ed/ c)))
-         (s    (ed-sqrt (ed/ 2 c))))
-    (list c s r )))
-
-(defun get-cached-symbol-data (sym key1 key2 fn-compute)
-  (let* ((alst  (get sym key1))
-         (item  (cdr (assoc key2 alst))))
-    (or item
-        (let ((item (funcall fn-compute)))
-          (setf (get sym key1)
-                (cons (cons key2 item) alst))
-          item))))
+  (with-mod *ed-q*
+    (let* ((dp1  (m+ *ed-d* 1))
+           (dm1  (m- *ed-d* 1))
+           (dsqrt (m* 2 (msqrt (m- *ed-d*))))
+           (c    (m/ (m+ dsqrt dm1) dp1))
+           (c    (if (quadratic-residue-p c)
+                     c
+                   (m/ (m- dsqrt dm1) dp1)))
+           (r    (m+ c (m/ c)))
+           (s    (msqrt (m/ 2 c))))
+      (list c s r ))))
 
 (defun csr ()
   ;; Bernstein's Elligator c,s,r depend only on the curve.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
-  (get-cached-symbol-data '*edcurve* :elligator-csr
-                          *edcurve* #'compute-csr))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-csr *edcurve*
+                          'compute-csr))
 
 (defun to-elligator-range (x)
-  (logand x (1- (ash 1 (elligator-nbits)))))
+  (ldb (byte (elligator-nbits) 0) x))
 
 (defun elligator-decode (z)
   ;; z in (1,2^(floor(log2 *ed-q*/2)))
@@ -670,77 +780,188 @@ THE SOFTWARE.
   ;;                            curve-E521    520        65
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   (let ((z (to-elligator-range z)))
+    (declare (integer z))
     (cond ((= z 1)
            (ed-neutral-point))
           
           (t
-           (um:bind* (((c s r) (csr))
-                      (u     (ed/ (ed- 1 z) (ed+ 1 z)))
-                      (u^2   (ed* u u))
-                      (c^2   (ed* c c))
-                      (u2c2  (ed+ u^2 c^2))
-                      (u2cm2 (ed+ u^2 (ed/ c^2)))
-                      (v     (ed* u u2c2 u2cm2))
-                      (chiv (chi v))
-                      (xx   (ed* chiv u))
-                      (yy   (ed* (ed-expt (ed* chiv v) (truncate (1+ *ed-q*) 4))
-                                 chiv
-                                 (chi u2cm2)))
-                      (1+xx (ed+ xx 1))
-                      (x    (ed/ (ed* (ed- c 1)
-                                      s
-                                      xx
-                                      1+xx)
-                                 yy))
-                      (y   (ed/ (ed- (ed* r xx)
-                                     (ed* 1+xx 1+xx))
-                                (ed+ (ed* r xx)
-                                     (ed* 1+xx 1+xx))))
-                      (pt  (ed-projective
-                            (make-ecc-pt
-                             :x  x
-                             :y  y))))
-             ;; (assert (ed-satisfies-curve pt))
-             pt
-             ))
+           (with-mod *ed-q*
+             (um:bind* (((c s r) (csr))
+                        (u     (m/ (m- 1 z) (m+ 1 z)))
+                        (u^2   (m* u u))
+                        (c^2   (m* c c))
+                        (u2c2  (m+ u^2 c^2))
+                        (u2cm2 (m+ u^2 (m/ c^2)))
+                        (v     (m* u u2c2 u2cm2))
+                        (chiv  (mchi v))
+                        (xx    (m* chiv u))
+                        (yy    (m* (m^ (m* chiv v) (truncate (1+ *ed-q*) 4))
+                                   chiv
+                                   (mchi u2cm2)))
+                        (1+xx  (m+ xx 1))
+                        (x     (m/ (m* (m- c 1)
+                                       s
+                                       xx
+                                       1+xx)
+                                   yy))
+                        (y     (m/ (m- (m* r xx)
+                                       (m* 1+xx 1+xx))
+                                   (m+ (m* r xx)
+                                       (m* 1+xx 1+xx))))
+                        (pt    (ed-projective
+                                (make-ecc-pt
+                                 :x  x
+                                 :y  y))))
+               ;; (assert (ed-satisfies-curve pt))
+               pt
+               )))
           )))
-
+ 
 (defun elligator-encode (pt)
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   ;; return encoding tau for point pt, or nil if pt not in image of phi(tau)
   (if (ed-neutral-point-p pt)
-      1
+      (logior 1 (elligator-int-padding))
     ;; else
-    (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
-               (yp1  (ed+ y 1)))
-      (unless (zerop yp1)
-        (um:bind* (((c s r) (csr))
-                   (etar       (ed* r (ed/ (ed- y 1) (ed* 2 yp1))))
-                   (etarp1     (ed+ 1 etar))
-                   (etarp1sqm1 (ed- (ed* etarp1 etarp1) 1))
-                   (scm1       (ed* s (ed- c 1))))
-          (when (and (quadratic-residue-p *ed-q* etarp1sqm1)
-                     (or (not (zerop (ed+ etar 2)))
-                         (= x (ed/ (ed* 2 scm1 (chi c))
-                                   r))))
-            (um:bind* ((xx    (ed- (ed-expt etarp1sqm1 (floor (1+ *ed-q*) 4))
-                                   etarp1))
-                       (z     (chi (ed* scm1
-                                        xx
-                                        (ed+ xx 1)
-                                        x
-                                        (ed+ (ed* xx xx) (ed/ (ed* c c))))))
-                       (u     (ed* z xx))
-                       (enc   (ed/ (ed- 1 u) (ed+ 1 u)))
-                       (tau   (min enc (ed- enc))))
-              ;; (assert (ed-pt= pt (elligator-decode enc))) ;; check that pt is in the Elligator set
-              ;; (assert (< tau (elligator-limit)))
-              tau
-              ))
-          )))
+    (with-mod *ed-q*
+      (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
+                 (yp1  (m+ y 1)))
+        (unless (zerop yp1)
+          (um:bind* (((c s r) (csr))
+                     (etar       (m* r (m/ (m- y 1) (m* 2 yp1))))
+                     (etarp1     (m+ 1 etar))
+                     (etarp1sqm1 (m- (m* etarp1 etarp1) 1))
+                     (scm1       (m* s (m- c 1))))
+            (when (and (quadratic-residue-p etarp1sqm1)
+                       (or (not (zerop (m+ etar 2)))
+                           (= x (m/ (m* 2 scm1 (mchi c))
+                                    r))))
+              (um:bind* ((xx    (m- (m^ etarp1sqm1 (floor (1+ *ed-q*) 4))
+                                    etarp1))
+                         (z     (mchi (m* scm1
+                                          xx
+                                          (m+ xx 1)
+                                          x
+                                          (m+ (m* xx xx) (m/ (m* c c))))))
+                         (u     (m* z xx))
+                         (enc   (m/ (m- 1 u) (m+ 1 u)))
+                         (tau   (min enc (m- enc))))
+                ;; (assert (ed-pt= pt (elligator-decode enc))) ;; check that pt is in the Elligator set
+                ;; (assert (< tau (elligator-limit)))
+                (logior tau (elligator-int-padding))
+                ))
+            ))))
     ))
 
 ;; -------------------------------------------------------
+
+(defun compute-deterministic-elligator-skey (seed &optional (index 0))
+  ;; compute a private key from the seed that is safe, and produces an
+  ;; Elligator-capable public key.
+  (um:nlet-tail iter ((ix  index))
+    (let* ((skey (compute-deterministic-skey seed ix))
+           (pkey (ed-nth-pt skey))
+           (tau  (elli2-encode pkey)))
+      (if tau
+          (values skey tau ix)
+        (iter (1+ ix))))))
+
+(defun compute-elligator-summed-pkey (sum-pkey)
+  ;; post-processing step after summing public keys. This corrects the
+  ;; summed key to become an Elligator-capable public key. Can only be
+  ;; used on final sum, not on intermediate partial sums.
+  (um:nlet-tail iter ((ix 0))
+    (let ((p  (ed-add sum-pkey (ed-nth-pt ix))))
+      (or (elli2-encode p)
+          (iter (1+ ix))))))
+#|
+(multiple-value-bind (skey1 pkey1) (compute-elligator-skey :dave)
+  (multiple-value-bind (skey2 pkey2) (compute-elligator-skey :dan)
+    (let ((p  (ed-add pkey1 pkey2)))
+      (compute-elligator-summed-pkey p))))
+
+(defun tst (nel)
+  (let ((ans nil)
+        (dict (make-hash-table)))
+    (loop for ix from 0 below nel do
+          (multiple-value-bind (skey tau ct)
+              (compute-elligator-skey (ed-convert-int-to-lev ix 4))
+            (if (gethash skey dict)
+                (print "Collision")
+              (setf (gethash skey dict) tau))
+            (when (plusp ct)
+              (push (cons ix ct) ans))))
+    ans))
+ |#
+             
+(defun compute-elligator-schnorr-deterministic-random (msgv k-priv)
+  (um:nlet-tail iter ((ix 0))
+    (let* ((r     (with-mod *ed-r*
+                    (mmod
+                     (ed-convert-lev-to-int
+                      (sha3-buffers
+                       (ed-convert-int-to-lev ix 4)
+                       (ed-convert-int-to-lev k-priv (elligator-nbytes))
+                       msgv)))))
+           (rpt   (ed-nth-pt r))
+           (tau-r (elli2-encode rpt)))
+      (if (and (plusp r) tau-r)
+          (values r tau-r ix)
+        (iter (1+ ix)))
+      )))
+
+#|
+(defun tst (nel)
+  (let ((ans  nil)
+        (skey (compute-elligator-skey :dave)))
+    (loop for ix from 0 below nel do
+          (multiple-value-bind (r rpt ct)
+              (compute-elligator-schnorr-deterministic-random
+               (ed-convert-int-to-lev ix 4) skey)
+            (declare (ignore r rpt))
+            (when (plusp ct)
+              (push (cons ix ct) ans))))
+    ans))
+ |#
+
+(defun elligator-ed-dsa (msg k-priv)
+  (let ((msg-enc (loenc:encode msg))
+        (tau-pub (elli2-encode (ed-nth-pt k-priv))))
+    (unless tau-pub
+      (error "Not an Elligator key"))
+    (multiple-value-bind (r tau-r)
+        (compute-elligator-schnorr-deterministic-random msg-enc k-priv)
+      (let* ((nbytes (elligator-nbytes))
+             (s      (with-mod *ed-r*
+                       (m+ r
+                           (m* k-priv
+                               (ed-convert-lev-to-int
+                                (sha3-buffers
+                                 (ed-convert-int-to-lev tau-r   nbytes)
+                                 (ed-convert-int-to-lev tau-pub nbytes)
+                                 msg-enc))
+                               )))))
+        (list
+         :msg     msg
+         :tau-pub tau-pub
+         :tau-r   tau-r
+         :s       s)
+        ))))
+
+(defun elligator-ed-dsa-validate (msg tau-pub tau-r s)
+  (let ((nbytes (elligator-nbytes)))
+    (ed-pt=
+     (ed-nth-pt s)
+     (ed-add (elli2-decode tau-r)
+             (ed-mul (elli2-decode tau-pub)
+                     (ed-convert-lev-to-int
+                      (sha3-buffers
+                       (ed-convert-int-to-lev tau-r   nbytes)
+                       (ed-convert-int-to-lev tau-pub nbytes)
+                       (loenc:encode msg)))
+                     )))))
+
+;; ------------------------------------------------------------
 
 (defun do-elligator-random-pt (fn-gen)
   ;; search for a random multiple of *ed-gen*
@@ -751,38 +972,41 @@ THE SOFTWARE.
   ;;  :tau = the Elligator encoding of the random point
   ;;  :pad = bits to round out the integer length to multiple octets
   (um:nlet-tail iter ()
-    (let* ((ix  (random-between 1 (* *ed-h* *ed-r*)))
-           (pt  (ed-mul *ed-gen* ix))
-           (tau (and (not (ed-neutral-point-p pt))
-                     (funcall fn-gen pt)))) ;; elligatorable? - only about 50% are
-      (if tau
-          (list :r   ix
-                :pt  pt
-                :tau tau
-                :pad (elligator-int-padding))
-        (iter))
-      )))
-  
+    (multiple-value-bind (skey pkey) (ed-random-pair)
+      (let ((tau  (and (plusp skey)
+                       (funcall fn-gen pkey)))) ;; elligatorable? - only about 50% are
+        (if tau
+            (list :r   skey
+                  :tau tau)
+          (iter))
+        ))))
+
+(defun elligator-tau-vector (tau)
+  ;; lst should be the property list returned by elligator-random-pt
+  (convert-int-to-nbytesv tau (elligator-nbytes)))
+
 (defun do-elligator-schnorr-sig (msg tau-pub k-priv fn-gen)
   ;; msg is a message vector suitable for hashing
   ;; tau-pub is the Elligator vector encoding for public key point pt-pub
   ;; k-priv is the private key integer for pt-pub = k-priv * *ec-gen*
   (um:nlet-tail iter ()
     (let* ((lst   (funcall fn-gen))
-           (vtau  (elligator-tau-vector lst))
-           (h     (convert-bytes-to-int (sha3-buffers vtau tau-pub msg)))
+           (vtau  (elligator-tau-vector (getf lst :tau)))
+           (h     (convert-bytes-to-int
+                   (sha3-buffers
+                    vtau
+                    (elligator-tau-vector tau-pub)
+                    msg)))
            (r     (getf lst :r))
-           (q     (* *ed-h* *ed-r*))
-           (s     (add-mod q r (mult-mod q h k-priv)))
+           (s     (with-mod *ed-r*
+                    (m+ r (m* h k-priv))))
            (smax  (elligator-limit)))
       (if (>= s smax)
           (progn
             ;; (print "restart ed-schnorr-sig")
             (iter))
-        (let* ((nbits (integer-length smax))
-               (nb    (ceiling nbits 8))
-               (spad  (logior s (elligator-int-padding)))
-               (svec  (convert-int-to-nbytes spad nb)))
+        (let* ((spad  (logior s (elligator-int-padding)))
+               (svec  (elligator-tau-vector spad)))
           (list vtau svec))
         ))))
 
@@ -793,9 +1017,13 @@ THE SOFTWARE.
   (um:bind* (((vtau svec) sig)
              (pt-pub (funcall fn-decode tau-pub))
              (pt-r   (funcall fn-decode (convert-bytes-to-int vtau)))
-             (h      (convert-bytes-to-int (sha3-buffers vtau tau-pub msg)))
+             (h      (convert-bytes-to-int
+                      (sha3-buffers
+                       vtau
+                       (elligator-tau-vector tau-pub)
+                       msg)))
              (s      (to-elligator-range (convert-bytes-to-int svec)))
-             (pt     (ed-mul *ed-gen* s))
+             (pt     (ed-nth-pt s))
              (ptchk  (ed-add pt-r (ed-mul pt-pub h))))
     (ed-pt= pt ptchk)))
 
@@ -803,13 +1031,6 @@ THE SOFTWARE.
 
 (defun elligator-random-pt ()
   (do-elligator-random-pt #'elligator-encode))
-
-(defun elligator-tau-vector (lst)
-  ;; lst should be the property list returned by elligator-random-pt
-  (let* ((tau (getf lst :tau))
-         (pad (getf lst :pad))
-         (nb  (ceiling (elligator-nbits) 8)))
-    (convert-int-to-nbytesv (+ tau pad) nb)))
 
 (defun ed-schnorr-sig (m tau-pub k-priv)
   (do-elligator-schnorr-sig m tau-pub k-priv #'elligator-random-pt))
@@ -862,17 +1083,18 @@ THE SOFTWARE.
 |#
 
 #|
-(let* ((c4d  (ed* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
-       (a    (ed/ (ed* 2 (ed+ c4d 1)) (ed- c4d 1)))
-       (b    1))
-  (ed* a b (ed- (ed* a a) (ed* 4 b)))) ;; must not be zero
+(with-mod *ed-q*
+  (let* ((c4d  (m* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
+         (a    (m/ (m* 2 (m+ c4d 1)) (m- c4d 1)))
+         (b    1))
+    (m* a b (m- (m* a a) (m* 4 b))))) ;; must not be zero
 |#
 
 ;; --------------------------------------------------------
 
-(defun find-quadratic-nonresidue (m)
+(defun find-quadratic-nonresidue ()
   (um:nlet-tail iter ((n  -1))
-    (if (quadratic-residue-p m n)
+    (if (quadratic-residue-p n)
         (iter (1- n))
       n)))
 
@@ -885,22 +1107,24 @@ THE SOFTWARE.
   ;; to get: w^2 = u^3 + A*u^2 + B*u
   ;; we precompute c4d = c^4*d, A = 2*(c^4*d+1)/(c^4*d-1), and B = 1
   ;; must have: A*B*(A^2 - 4*B) != 0
-  (let* ((c4d        (ed* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
-         (sqrt-c4dm1 (ed-sqrt (ed- c4d 1))) ;; used during coord conversion
-         (a          (ed/ (ed* 2 (ed+ c4d 1)) (ed- c4d 1)))
-         (b          1)
-         (u          (find-quadratic-nonresidue *ed-q*))
-         (dscr       (ed- (ed* a a) (ed* 4 b))))
-    ;; (assert (not (quadratic-residue-p *ed-q* dscr)))
-    (assert (not (zerop (ed* a b dscr))))
-    (list sqrt-c4dm1 a b u)))
-
+  (with-mod *ed-q*
+    (let* ((c4d        (m* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
+           (sqrt-c4dm1 (msqrt (m- c4d 1))) ;; used during coord conversion
+           (a          (m/ (m* 2 (m+ c4d 1)) (m- c4d 1)))
+           (b          1)
+           (u          (find-quadratic-nonresidue))
+           (dscr       (m- (m* a a) (m* 4 b))))
+      ;; (assert (not (quadratic-residue-p *ed-q* dscr)))
+      (assert (not (zerop (m* a b dscr))))
+      (list sqrt-c4dm1 a b u))))
+  
 (defun elli2-ab ()
   ;; Bernstein's Elligator c,s,r depend only on the curve.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
-  (get-cached-symbol-data '*edcurve* :elligator2-ab
-                          *edcurve* #'compute-elli2-ab))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator2-ab *edcurve*
+                          'compute-elli2-ab))
 
 (defun montgy-pt-to-ed (pt)
   ;; v = w * Sqrt(c^4*d-1)
@@ -915,14 +1139,15 @@ THE SOFTWARE.
       ;; else
       (destructuring-bind (sqrt-c4dm1 a b u) (elli2-ab)
         (declare (ignore a b u))
-        (let* ((yv   (ed* sqrt-c4dm1 yw))
-               (x    (ed/ (ed* -2 *ed-c* xu) yv))
-               (y    (ed/ (ed* *ed-c* (ed+ 1 xu)) (ed- 1 xu)))
-               (pt   (make-ecc-pt
-                      :x  x
-                      :y  y)))
-          (assert (ed-satisfies-curve pt))
-          pt)))))
+        (with-mod *ed-q*
+          (let* ((yv   (m* sqrt-c4dm1 yw))
+                 (x    (m/ (m* -2 *ed-c* xu) yv))
+                 (y    (m/ (m* *ed-c* (m+ 1 xu)) (m- 1 xu)))
+                 (pt   (make-ecc-pt
+                        :x  x
+                        :y  y)))
+            (assert (ed-satisfies-curve pt))
+            pt))))))
               
 (defun elli2-decode (r)
   ;; protocols using the output of elli2-decode must validate the
@@ -938,50 +1163,52 @@ THE SOFTWARE.
   ;; torsion points, apart from the neutral point. But certain random
   ;; values within the domain [0..(q-1)/2] are invalid.
   ;;
-  (let ((r (to-elligator-range r)))
+  (let ((r (to-elligator-range r))) ;; mask off top random
+    (declare (integer r))
     (cond  ((zerop r)  (ed-neutral-point))
-           (t 
-            (um:bind* (((sqrt-c4dm1 a b u) (elli2-ab))
-                       (ur2   (ed* u r r))
-                       (1pur2 (ed+ 1 ur2)))
-              
-              ;; the following error can never trigger when fed with
-              ;; r from elli2-encode. But random values fed to us
-              ;; could cause it to trigger the error.
-              
-              (when (or (zerop 1pur2)     ;; this could happen for r^2 = -1/u
-                        (= (ed* a a ur2)  ;; this can never happen: B=1 so RHS is square
-                           (ed* b 1pur2 1pur2)))  ;; and LHS is not square.
-                (error "invalid argument"))
-              
-              (let* ((v    (ed- (ed/ a 1pur2)))
-                     (eps  (chi (ed+ (ed* v v v)
-                                     (ed* a v v)
-                                     (ed* b v))))
-                     (xu   (ed- (ed* eps v)
-                                (ed/ (ed* (ed- 1 eps) a) 2)))
-                     (rhs  (ed* xu
-                                (ed+ (ed* xu xu)
-                                     (ed* a xu)
+           (t
+            (with-mod *ed-q*
+              (um:bind* (((sqrt-c4dm1 a b u) (elli2-ab))
+                         (u*r^2   (m* u r r))
+                         (1+u*r^2 (m+ 1 u*r^2)))
+                
+                ;; the following error can never trigger when fed with
+                ;; r from elli2-encode. But random values fed to us
+                ;; could cause it to trigger the error.
+                
+                (when (or (zerop 1+u*r^2)     ;; this could happen for r^2 = -1/u
+                          (= (m* a a u*r^2)   ;; this can never happen: B=1 so RHS is square
+                             (m* b 1+u*r^2 1+u*r^2)))  ;; and LHS is not square.
+                  (error "invalid argument"))
+                
+                (let* ((v    (m- (m/ a 1+u*r^2)))
+                       (eps  (mchi (m+ (m* v v v)
+                                       (m* a v v)
+                                       (m* b v))))
+                       (xu   (m- (m* eps v)
+                                 (m/ (m* (m- 1 eps) a) 2)))
+                       (rhs  (m* xu
+                                 (m+ (m* xu xu)
+                                     (m* a xu)
                                      b)))
-                     (yw   (ed- (ed* eps (ed-sqrt rhs))))
-                     ;; now we have (xu, yw) as per Bernstein: yw^2 = xu^3 + A*xu^2 + B*xu
-                     ;; Now convert to our Edwards coordinates:
-                     ;;   (xu,yw) --> (x,y): x^2 + y^2 = c^2*(1 + d*x^2*y^2)
-                     (yv   (ed* sqrt-c4dm1 yw))
-                     (x    (ed/ (ed* -2 *ed-c* xu) yv))
-                     (y    (ed/ (ed* *ed-c* (ed+ 1 xu)) (ed- 1 xu)))
-                     (pt   (ed-projective
-                            (make-ecc-pt
-                             :x  x
-                             :y  y))))
-                #|
-                (assert (ed-satisfies-curve pt)) ;; true by construction
-                (assert (not (zerop (ed* v eps xu yw)))) ;; true by construction
-                (assert (= (ed* yw yw) rhs))     ;; true by construction
-                |#
-                pt
-                )))
+                       (yw   (m- (m* eps (msqrt rhs))))
+                       ;; now we have (xu, yw) as per Bernstein: yw^2 = xu^3 + A*xu^2 + B*xu
+                       ;; Now convert- to our Edwards coordinates:
+                       ;;   (xu,yw) --> (x,y): x^2 + y^2 = c^2*(1 + d*x^2*y^2)
+                       (yv   (m* sqrt-c4dm1 yw))
+                       (x    (m/ (m* -2 *ed-c* xu) yv))
+                       (y    (m/ (m* *ed-c* (m+ 1 xu)) (m- 1 xu)))
+                       (pt   (ed-projective
+                              (make-ecc-pt
+                               :x  x
+                               :y  y))))
+                  #|
+                  (assert (ed-satisfies-curve pt)) ;; true by construction
+                  (assert (not (zerop (m* v eps xu yw)))) ;; true by construction
+                  (assert (= (m* yw yw) rhs))     ;; true by construction
+                  |#
+                  pt
+                  ))))
            )))
   
 (defun ed-pt-to-montgy (pt)
@@ -994,61 +1221,66 @@ THE SOFTWARE.
        :x 0
        :y 0)
     ;; else
-    (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
-               ((sqrt-c4dm1 a b u) (elli2-ab))
-               (declare (ignore u))
-               (xu   (ed/ (ed- y *ed-c*) (ed+ y *ed-c*)))
-               (yv   (ed/ (ed* -2 *ed-c* xu) x ))
-               (yw   (ed/ yv sqrt-c4dm1)))
-      (assert (= (ed* yw yw)
-                 (ed+ (ed* xu xu xu)
-                      (ed* a xu xu)
-                      (ed* b xu))))
-      (make-ecc-pt
-       :x xu
-       :y yw))))
+    (with-mod *ed-q*
+      (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
+                 ((sqrt-c4dm1 a b u) (elli2-ab))
+                 (declare (ignore u))
+                 (xu   (m/ (m- y *ed-c*) (m+ y *ed-c*)))
+                 (yv   (m/ (m* -2 *ed-c* xu) x ))
+                 (yw   (m/ yv sqrt-c4dm1)))
+        (assert (= (m* yw yw)
+                   (m+ (m* xu xu xu)
+                       (m* a xu xu)
+                       (m* b xu))))
+        (make-ecc-pt
+         :x xu
+         :y yw)))))
              
 (defun elli2-encode (pt)
-  (cond ((ed-neutral-point-p pt)  0)
-        (t 
-         (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
-                    ((sqrt-c4dm1 a b u) (elli2-ab))
-                    (declare (ignore b))
-                    ;; convert our Edwards coords to the form needed by Elligator-2
-                    ;; for Montgomery curves
-                    (xu   (ed/ (ed- y *ed-c*) (ed+ y *ed-c*)))
-                    (yv   (ed/ (ed* -2 *ed-c* xu) x ))
-                    (yw   (ed/ yv sqrt-c4dm1))
-                    (xu+a (ed+ xu a)))
-           ;; now we have (x,y) --> (xu,yw) for:  yw^2 = xu^3 + A*xu^2 + B*xu
-           (when (and (not (zerop xu+a))
-                      (or (not (zerop yw))
-                          (zerop xu))
-                      (quadratic-residue-p *ed-q* (ed- (ed* u xu xu+a))))
-             (let* ((e2    (if (quadratic-residue-p *ed-q* yw)
-                               (ed/ xu xu+a)
-                             (ed/ xu+a xu)))
-                    (enc   (ed-sqrt (ed/ e2 (ed- u))))
-                    (tau   (min enc (ed- enc)))
-                    ;; (ur2   (ed* u tau tau))
-                    ;; (1pur2 (ed+ 1 ur2))
-                    )
-               
-               ;; (assert (< tau (elligator-limit)))
-               #|
-               (when (zerop 1pur2) ;; never happens, by construction
-                 (format t "~%Hit magic #1: tau = ~A" tau))
-               (when (= (ed* a a ur2) ;; never happens, by construction
-                        (ed* b 1pur2 1pur2))
-                 (format t "~%Hit magic #2: tau = ~A" tau))
-               
-               (unless (or (zerop 1pur2) ;; never happens, by construction
-                           (= (ed* a a ur2)
-                              (ed* b 1pur2 1pur2)))
-                 tau)
-               |#
-               tau
-          ))))
+  ;; Elligator2 mapping of pt to Zk
+  ;; return Zk or nil
+  (cond ((ed-neutral-point-p pt)
+         (elligator-int-padding))
+        (t
+         (with-mod *ed-q*
+           (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
+                      ((sqrt-c4dm1 a b u) (elli2-ab))
+                      (declare (ignore b))
+                      ;; convert our Edwards coords to the form needed by Elligator-2
+                      ;; for Montgomery curves
+                      (xu   (m/ (m- y *ed-c*) (m+ y *ed-c*)))
+                      (yv   (m/ (m* -2 *ed-c* xu) x ))
+                      (yw   (m/ yv sqrt-c4dm1))
+                      (xu+a (m+ xu a)))
+             ;; now we have (x,y) --> (xu,yw) for:  yw^2 = xu^3 + A*xu^2 + B*xu
+             (when (and (not (zerop xu+a))
+                        (or (not (zerop yw))
+                            (zerop xu))
+                        (quadratic-residue-p (m- (m* u xu xu+a))))
+               (let* ((e2    (if (quadratic-residue-p yw)
+                                 (m/ xu xu+a)
+                               (m/ xu+a xu)))
+                      (enc   (msqrt (m/ e2 (m- u))))
+                      (tau   (min enc (m- enc)))
+                      ;; (ur2   (m* u tau tau))
+                      ;; (1pur2 (m+ 1 ur2))
+                      )
+                 
+                 ;; (assert (< tau (elligator-limit)))
+                 #|
+                  (when (zerop 1pur2) ;; never happens, by construction
+                    (format t "~%Hit magic #1: tau = ~A" tau))
+                  (when (= (m* a a ur2) ;; never happens, by construction
+                           (m* b 1pur2 1pur2))
+                    (format t "~%Hit magic #2: tau = ~A" tau))
+                  
+                  (unless (or (zerop 1pur2) ;; never happens, by construction
+                              (= (m* a a ur2)
+                                 (m* b 1pur2 1pur2)))
+                    tau)
+                  |#
+                 (logior tau (elligator-int-padding))
+                 )))))
         ))
                 
 (defun elli2-random-pt ()

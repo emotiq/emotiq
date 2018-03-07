@@ -1596,7 +1596,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------------
 ;; Macros to take the pain out of passing strings to DLL's
 ;;
-#+:lispworks
+#+(AND :COM.RAL :lispworks)
 (progn
   (defconstant *null-string*
     (fli:make-pointer :address 0))
@@ -1841,7 +1841,7 @@ This is C++ style enumerations."
   (values (read-from-string (apply #'mkstr args))))
 
 (defun explode (sym)
-  (map #'list (compose #'intern-symbol #'string) (symbol-name sym)))
+  (map 'list (compose #'intern-symbol #'string) (symbol-name sym)))
 
 ;; -------------------------------------------------------
 ;;

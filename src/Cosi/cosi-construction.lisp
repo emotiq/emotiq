@@ -27,51 +27,6 @@ THE SOFTWARE.
 |#
 
 
-(defpackage :cosi-simgen
-  (:use :common-lisp :cosi :crypto-mod-math)
-  (:import-from :edwards-ecc
-   :ed-add 
-   :ed-sub 
-   :ed-mul 
-   :ed-div 
-   :ed-affine
-   :ed-nth-pt
-   :*ed-r*
-   :*ed-q*
-   :ed-neutral-point
-   :ed-pt=
-   :with-ed-curve
-   :ed-compress-pt
-   :ed-decompress-pt
-   :ed-validate-point
-   :ed-hash
-   :ed-random-pair)
-  (:import-from :ecc-crypto-b571
-   :random-between
-   :convert-int-to-nbytesv
-   :convert-bytes-to-int)
-  (:import-from :actors
-   :=bind
-   :=values
-   :=defun
-   :=lambda
-   :=funcall
-   :=apply
-   :pmapcar
-   :spawn
-   :current-actor
-   :recv
-   :become
-   :do-nothing
-   :make-actor
-   :set-executive-pool
-   :with-borrowed-mailbox
-   :pr)
-  (:export
-   :generate-tree
-   :reconstruct-tree
-   :forwarding))
-
 (in-package :cosi-simgen)
 
 (declaim (optimize (debug 3)))
@@ -213,6 +168,70 @@ THE SOFTWARE.
 (defun need-to-specify (&rest args)
   (declare (ignore args))
   (error "Need to specify..."))
+
+;; --------------------------------------------
+;; Hashing with SHA3
+
+(defun select-sha3-hash ()
+  (let ((nb  (1+ (integer-length *ed-q*))))
+    (cond ((> nb 384) :sha3)
+          ((> nb 256) :sha3/384)
+          (t          :sha3/256)
+          )))
+
+(defun sha3-buffers (&rest bufs)
+  ;; assumes all buffers are UB8
+  (let ((dig  (ironclad:make-digest (select-sha3-hash))))
+    (dolist (buf bufs)
+      (ironclad:update-digest dig buf))
+    (ironclad:produce-digest dig)))
+
+(defun convert-pt-to-v (pt)
+  (let ((nb (ceiling (1+ (integer-length *ed-q*)) 8)))
+    (convert-int-to-nbytesv (ed-compress-pt pt) nb)))
+  
+(defun hash-pt-pt (p1 p2)
+  (convert-bytes-to-int
+   (sha3-buffers (convert-pt-to-v p1)
+                 (convert-pt-to-v p2))))
+
+(defun hash-pt-msg (pt msg) 
+  ;; We hash an ECC point by first converting to compressed form, then
+  ;; to a UB8 vector. A message is converted to a UB8 vector by calling
+  ;; on LOENC:ENCODE.
+  ;;
+  ;; Max compressed point size is 1 bit more than the integer-length
+  ;; of the underlying curve field prime modulus.
+  ;;
+  ;; We return the SHA3 hash as a big-integer
+  ;;
+  ;; This is callled with the *ed-curve* binding in effect. Client
+  ;; functions should call this function from within a WITH-ED-CURVE.
+  ;;
+  (let ((v  (convert-pt-to-v pt))
+        (mv (loenc:encode msg)))
+    (convert-bytes-to-int (sha3-buffers v mv))))
+
+;; --------------------------------------------------------------
+
+(defun compute-pkey-zkp (skey pkey)
+  ;; from private skey and public ECC pt pkey, compute the pkey ZKP
+  (multiple-value-bind (v vpt) (ed-random-pair)
+    (let* ((c     (hash-pt-pt vpt pkey)) ;; Fiat-Shamir NIZKP challenge
+           (r     (with-mod *ed-r*
+                    (m- v (m* skey c))))
+           (pcmpr (ed-compress-pt pkey)))
+      (list r c pcmpr)))) ;; NIZKP and public key
+
+(defun check-pkey (zkp)
+  ;; verify pkey zkp, return decompressed pkey ECC point
+  (destructuring-bind (r c pcmpr) zkp
+    (let* ((pt   (ed-decompress-pt pcmpr)) ;; node's public key
+           (vpt  (ed-add (ed-nth-pt r)    ;; validate with NIZKP 
+                         (ed-mul pt c))))
+      (values pt
+              (= c (hash-pt-pt vpt pt)))
+      )))
 
 #+:ALLEGRO
 (defun allegro-dotted-to-integer (string)

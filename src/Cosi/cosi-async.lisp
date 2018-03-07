@@ -26,8 +26,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :cosi
-  (:use :common-lisp :crypto-mod-math)
+(defpackage :cosi/async-test
+  (:use :common-lisp :crypto/modular-arith)
   (:import-from :edwards-ecc
 		:ed-add 
 		:ed-sub 
@@ -75,7 +75,7 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------
 
-(in-package :cosi)
+(in-package :cosi/async-test)
 
 ;; ------------------------------------------------------- 
 ;; EC points are transported (stored in memory, sent over networks) as
@@ -206,8 +206,8 @@ THE SOFTWARE.
   ;;
   ;; Returns secret commitment seed v as second value. Transport it
   ;; securely. Signature pair (c r) is okay to publish.
-  (let ((r  (sub-mod *ed-r* v
-                     (mult-mod *ed-r* c skey))))
+  (let ((r  (with-mod *ed-r*
+              (m- v (m* c skey)))))
     (list c r))) ;; the signature pair
 
 ;; ---------------------------------------------------------------
@@ -255,7 +255,8 @@ THE SOFTWARE.
 (defparameter *default-timeout-period*   ;; good for 1600 nodes on single machine
   #+:LISPWORKS   4
   #+:ALLEGRO     2
-  #+:CLOZURE     4)
+  #+:CLOZURE     4
+  #-(OR :LISPWORKS :ALLEGRO :CLOZURE) 4)
 
 ;; internal state of each node
 (defstruct (node-state
@@ -352,8 +353,8 @@ THE SOFTWARE.
   ;; from private skey and public ECC pt pkey, compute the pkey ZKP
   (multiple-value-bind (v vpt) (ed-random-pair)
     (let* ((c     (hash-pt-pt vpt pkey)) ;; Fiat-Shamir NIZKP challenge
-           (r     (sub-mod *ed-r* v
-                           (mult-mod *ed-r* skey c)))
+           (r     (with-mod *ed-r*
+                    (m- v (m* skey c))))
            (pcmpr (ed-compress-pt pkey)))
       (list r c pcmpr)))) ;; NIZKP and public key
 
@@ -405,14 +406,14 @@ THE SOFTWARE.
          (pltsym 'plt))
      (um:dlambda
        (:incr (dly)
-        #+:LISPWORKS
+        #+(AND :COM.RAL :LISPWORKS)
         (push dly data))
        (:clr ()
         (setf data nil))
        (:pltwin (sym)
         (setf pltsym sym))
        (:plt ()
-       #+:LISPWORKS
+       #+(AND :COM.RAL :LISPWORKS)
        (progn
 	 (plt:histogram pltsym data
 			:clear  t
@@ -496,7 +497,7 @@ THE SOFTWARE.
     (let ((self (current-actor))
           (start (get-universal-time)))
       (labels ((!dly ()
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (send *dly-instr* :incr
                        (/ (- (get-universal-time) start)
                           timeout *default-timeout-period*))))
@@ -552,7 +553,7 @@ THE SOFTWARE.
     (let ((self (current-actor))
           (start (get-universal-time)))
       (labels ((!dly ()
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (send *dly-instr* :incr
                        (/ (- (get-universal-time) start)
                           timeout *default-timeout-period*))))
@@ -586,7 +587,8 @@ THE SOFTWARE.
   (with-node-state state
     (if (and state-v
              (eql state-seq seq-id))
-      (let ((r  (sub-mod *ed-r* state-v (mult-mod *ed-r* c state-skey)))
+      (let ((r  (with-mod *ed-r*
+                  (m- state-v (m* c state-skey))))
             (missing nil))
         (=bind (lst)
             (pmapcar (sub-signing seq-id c state-load) state-parts)
@@ -595,7 +597,8 @@ THE SOFTWARE.
                             (mark-node-no-response state node)
                             (setf missing t))
                            ((not missing)
-                            (setf r (add-mod *ed-r* r ans)))
+                            (with-mod *ed-r*
+                              (setf r (m+ r ans))))
                            )))
             (mapc #'fold-answer lst state-parts)
             (if missing
@@ -819,7 +822,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; for visual debugging...
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (progn
   (defmethod children ((node node-state) layout)
     (reverse (node-state-subs node)))
@@ -869,7 +872,7 @@ THE SOFTWARE.
   (set-executive-pool 4)
   (organic-build-tree n)
   (setf *nbr-nodes* n)
-  #+:LISPWORKS
+  #+(AND :COM.RAL :LISPWORKS)
   (view-tree *top-node*))
   
 (defun tst (&optional (n 100))
@@ -882,9 +885,9 @@ THE SOFTWARE.
   (let ((msg "this is a test"))
     (with-borrowed-mailbox (mbox)
       (labels ((doit ()
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (hcl:set-up-profiler :call-counter t)
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (hcl:start-profiling :processes ac::*executive-processes*
                                       :initialize t
                                       :time :extended)
@@ -899,7 +902,7 @@ THE SOFTWARE.
                            (format t "~%~D actual witnesses" (length (third (third *x*))))
                            ;; (format t "~%~D MP:MAILBOX-SEND/RECEIVE" ac::*mbsends*)
                            )))
-                 #+:LISPWORKS
+                 #+(AND :COM.RAL :LISPWORKS)
                  (hcl:stop-profiling)))
         (send *dly-instr* :clr)
         (send *dly-instr* :pltwin :histo-4)
@@ -1109,7 +1112,8 @@ THE SOFTWARE.
       (dolist (sig sigs)
         (destructuring-bind (c_i r_i) sig
           (assert (= c_i c)) ;; be sure we are using the same challenge val
-          (setf rt (add-mod *ed-r* rt r_i))))
+          (with-mod *ed-r*
+            (setf rt (m+ rt r_i)))))
       (list c rt))))
 
 ;; ---------------------------------------------------------------------
@@ -1222,8 +1226,8 @@ THE SOFTWARE.
 (defun make-hmac (msg skey uuid)
   (multiple-value-bind (v vpt) (ed-random-pair)
     (let* ((c   (hash-pt-msg vpt msg))
-           (r   (sub-mod *ed-r* v
-                         (mult-mod *ed-r* c skey))))
+           (r   (with-mod *ed-r*
+                  (m- v (m* c skey)))))
       (list msg r c uuid))))
 
 (defun verify-hmac (quad)

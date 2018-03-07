@@ -7,17 +7,17 @@ We intend to do our work transparently and openly in full public view
 to this repository.
 
 We assert an MIT license over this source aggregation; see
-<file:./LICENSE.txt>.
+<https://github.com/emotiq/emotiq/blob/master/LICENSE.txt>.
 
 ## Developer installation instructions to test the basic EMOTIQ-TESTS system
 
 This is a predominantly Common Lisp code base.
 
-We are currently targeting the commercial Allegro Common Lisp 10.1
+We aim to work on as many ANSI implementation as possible.  We are
+currently targeting the commercial Allegro Common Lisp 10.1
 implementation but we also test our code with `sbcl-1.4.4` and
 `ccl-1.11`.  Currently not all ASDF systems run cleanly outside of
 `acl`.
-
 
 ### Tell ASDF where to find the Emotiq systems 
 
@@ -57,14 +57,17 @@ first download and install it via the instructions available at
 
 After Quicklisp has been installed, then issuing 
 
-    (ql:quickload :emotiq-tests)
+    (ql:quickload :emotiq-test)
     
-will download all the dependencies needed by the `EMOTIQ-TESTS`
-system. 
+will download all the dependencies needed by the tests gathered into
+the `emotiq-test` ASDF system.
 
-We have many ASDF descriptions within this repository and available
-via `ql:quickload` other than `EMOTIQ-TESTS`.  Currently we are
-working many systems simultaneously, among them the `cosi` system.
+We have many ASDF descriptions within this repository whose
+dependencies may need to be satisfied by via `ql:quickload` other than
+`emotiq-test`.  
+
+Currently we are working many systems simultaneously, most noteworthy
+among them being the work in the `cosi` system.
 
 If in exploring the code one finds a missing dependency, say for the
 system `cosi`, a simple
@@ -79,7 +82,7 @@ dependencies).
     (asdf:test-system :emotiq)
 
 At end you should see a result like
-  
+
     Unit Test Summary
      | 12 assertions total
      | 12 passed
@@ -90,9 +93,8 @@ At end you should see a result like
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
-
 # Colophon
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-02-20 Tue 10:59Z>
+    Revised: <2018-02-24 Sat 07:28Z>

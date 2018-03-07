@@ -343,14 +343,14 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; -----------------------------------------------------------------------
 
-#-:LISPWORKS
+#-(AND :COM.RAL :LISPWORKS)
 (defparameter *dly-instr*
   (ac:make-actor
    (lambda (&rest args)
      (declare (ignore args))
      t)))
 
-#+:LISPWORKS
+#+(AND :COM.RAL :LISPWORKS)
 (defparameter *dly-instr*
   ;; Very useful for timeout tuning. If timeouts are properly set,
   ;; then histogram will be entirely to left of red 1.0 Ratio, but not
@@ -583,8 +583,9 @@ Connecting to #$(NODE "10.0.1.6" 65000)
          (eql seq-id (node-seq node)))
     (labels
         ((compute-signage (challenge)
-           (sub-mod *ed-r* (node-v node)
-                    (mult-mod *ed-r* challenge (node-skey node)))))
+           (with-mod *ed-r*
+             (m- (node-v node)
+                 (m* challenge (node-skey node))))))
       
       (let* ((ok      (node-ok node)) ;; did we participate in phase 1?
              (subs    (mapcar 'first (node-parts node)))
@@ -611,7 +612,9 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                            ;; sub was ok, but if we had some missing
                            ;; subs, don't waste time computing
                            ;; anything
-                           (setf rsum (add-mod *ed-r* rsum sub-r)))
+                           (with-mod *ed-r*
+                             (setf rsum (m+ rsum sub-r))))
+                       ;; else
                        (progn
                          ;; sub gave a corrupt answer on the local challenge
                          (pr (format nil "Corrupt node: ~A" (node-ip sub)))

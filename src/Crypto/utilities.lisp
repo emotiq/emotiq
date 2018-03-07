@@ -489,6 +489,12 @@ THE SOFTWARE.
       (ironclad:update-digest dig (ensure-8bitv buf)))
     (ironclad:produce-digest dig)))
 
+(defun sha3/256-buffers (&rest bufs)
+  (let ((dig (ironclad:make-digest :sha3/256)))
+    (dolist (buf bufs)
+      (ironclad:update-digest dig (ensure-8bitv buf)))
+    (ironclad:produce-digest dig)))
+
 #|
 (defun sha3-buffers (&rest bufs)
   (let ((dig (sha3:sha3-init :output-bit-length 512)))
@@ -794,4 +800,23 @@ THE SOFTWARE.
     (+ lmin (mod (ctr-drbg-int (integer-length rng))
                  rng))))
 
+
+;; -----------------------------------------------------------------------------
+;; for cached values dependent only on curve
+
+(defun get-cached-symbol-data (sym key1 key2 fn-compute)
+  ;;
+  ;; defines a generalized 2-level cache lookup, defined in the
+  ;; symbol-plist of sym
+  ;;
+  ;; key1 = category
+  ;; key2 = instance
+  ;;
+  (let* ((alst  (get sym key1))
+         (item  (cdr (assoc key2 alst))))
+    (or item
+        (let ((item (funcall fn-compute)))
+          (setf (get sym key1)
+                (acons key2 item alst))
+          item))))
 

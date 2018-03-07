@@ -26,35 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :crypto-purchase
-  (:use :common-lisp :crypto-mod-math)
-  (:import-from :edwards-ecc
-   :ed-mul
-   :ed-add
-   :ed-sub
-   :ed-div
-   :ed-negate
-   :ed-affine
-   :*edcurve*
-   :*ed-r*
-   :*ed-q*
-   :*ed-gen*
-   :ed-curve-name
-   :random-between
-   :ed-pt=
-   :ed-compress-pt
-   :ed-decompress-pt
-   :convert-bytes-to-int
-   :with-ed-curve
-   :ed-nth-pt
-   :ed-random-pair
-   )
-  (:import-from :ecc-crypto-b571
-   :convert-int-to-nbytesv
-   :convert-bytes-to-int)
-  (:export
-   ))
-
 (in-package :crypto-purchase)
 
 
@@ -165,7 +136,8 @@ What about a dishonest vendor who accepts anything without checking?
            (kpt     (ed-nth-pt k))
            (msg-kpt (ed-mul p (- change paid)))
            (c       (hash-pts kpt msg-kpt p))
-           (r       (sub-mod *ed-r* k (mult-mod *ed-r* c skey)))
+           (r       (with-mod *ed-r*
+                      (m- k (m* c skey))))
            (msg     (ed-compress-pt (ed-add msg-kpt kpt))))
       (declare (integer k c r))
       (list :purchase
