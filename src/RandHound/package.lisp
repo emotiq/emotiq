@@ -32,7 +32,8 @@ THE SOFTWARE.
   (:import-from :cosi-keying
    :need-integer-form
    :published-form
-   :make-random-keypair)
+   :make-random-keypair
+   :validate-pkey)
   (:export
    :*max-bft*
    :node-assoc

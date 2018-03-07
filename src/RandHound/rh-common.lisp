@@ -152,6 +152,8 @@ THE SOFTWARE.
               (skey (getf grp :skey))
               (r    (getf grp :r))
               (s    (getf grp :s)))
+          (unless (validate-pkey pkey r s)
+            (error "Invalid public key: ~A" pkey))
           (setf (gethash pkey *node-table*) (make-node-assoc
                                              :pkey  pkey
                                              :ip    ip
@@ -162,11 +164,39 @@ THE SOFTWARE.
           )))))
 
 ;; -------------------------------------------------------
+;; For non-sim world
+
+(defvar *keys-file* (asdf:system-relative-pathname :randhound "config/keys.lisp"))
+
+(defun load-nodes ()
+  ;; use this to load the keys database from disk.
+  (let ((lst (with-open-file (f *keys-file*
+                                :direction :input)
+               (read f))))
+    (init-nodes)
+    (let* ((nnodes  (length lst))
+           (max-bft (floor (1- nnodes) 3)))
+      (setf *max-bft* max-bft)
+      (dolist (grp lst)
+        (let ((pkey (getf grp :pkey))
+              (ip   (getf grp :ip))
+              (port (getf grp :port))
+              (r    (getf grp :r))
+              (s    (getf grp :s)))
+          (unless (validate-pkey pkey r s)
+            (error "Invalid public key: ~A" pkey))
+          (setf (gethash pkey *node-table*) (make-node-assoc
+                                             :pkey  pkey
+                                             :ip    ip
+                                             :port  port))
+          )))))
+
+;; -------------------------------------------------------------
 
 (defun NYI (&rest args)
   (error "Not yet implemented: ~A" args))
 
-(defvar *sim-log* nil) ;; in-memory log for sim FIFO order
+(defvar *sim-log* nil) ;; in-memory log for sim, FIFO order
 
 (defun record-to-log (msg)
   (push msg *sim-log*))
