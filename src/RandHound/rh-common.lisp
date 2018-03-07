@@ -31,6 +31,8 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------
 ;; Nodes Directory
 
+(defvar *max-bft*  0) ;; max number of Byzantine nodes
+
 (defstruct node-assoc
   pkey ip port)
 
@@ -97,27 +99,32 @@ THE SOFTWARE.
                (port  (ctr-drbg-int 16)))
           (add-node pkey ip port)
           (setf (gethash pkey *sim-pkey-skey-table*) (list skey :r r :s s))))
-  (ensure-directories-exist *sim-keys-file* :verbose t)
-  (with-open-file (f *sim-keys-file*
-                     :direction :output
-                     :if-exists :rename
-                     :if-does-not-exist :create)
-    (with-standard-io-syntax
-      (format f ";; file of ~A simulation keys" nbr)
-      (pprint
-       (loop for assoc across (get-nodes-vector)
-             collect
-             (let ((sk  (gethash (node-assoc-pkey assoc) *sim-pkey-skey-table*)))
-               (list
-                ;; use a non-brittle format for external store, just
-                ;; basic Lisp data
-                :pkey  (node-assoc-pkey assoc)
-                :ip    (node-assoc-ip   assoc)
-                :port  (node-assoc-port assoc)
-                :skey  (pop sk)
-                :r     (getf sk :r)
-                :s     (getf sk :s))))
-       f))))
+  (let* ((vnodes  (get-nodes-vector))
+         (nnodes  (length vnodes))
+         (max-bft (floor (1- nnodes) 3))
+         (lst     (loop for assoc across vnodes
+                        collect
+                        (let ((sk  (gethash (node-assoc-pkey assoc) *sim-pkey-skey-table*)))
+                          (list
+                           ;; use a non-brittle format for external store, just
+                           ;; basic Lisp data
+                           :pkey  (node-assoc-pkey assoc)
+                           :ip    (node-assoc-ip   assoc)
+                           :port  (node-assoc-port assoc)
+                           :skey  (pop sk)
+                           :r     (getf sk :r)
+                           :s     (getf sk :s))))
+                  ))
+    (setf *max-bft* max-bft)
+    (ensure-directories-exist *sim-keys-file* :verbose t)
+    (with-open-file (f *sim-keys-file*
+                       :direction :output
+                       :if-exists :rename
+                       :if-does-not-exist :create)
+      (with-standard-io-syntax
+        (format f ";; file of ~A simulation keys" nbr)
+        (pprint lst f))
+      )))
 
 #|
 ;; gen up 300 sim nodes without tying up the REPL
@@ -135,28 +142,31 @@ THE SOFTWARE.
                (read f))))
     (init-nodes)
     (clrhash *sim-pkey-skey-table*)
-    (dolist (grp lst)
-      (let ((pkey (getf grp :pkey))
-            (ip   (getf grp :ip))
-            (port (getf grp :port))
-            (skey (getf grp :skey))
-            (r    (getf grp :r))
-            (s    (getf grp :s)))
-        (setf (gethash pkey *node-table*) (make-node-assoc
-                                           :pkey  pkey
-                                           :ip    ip
-                                           :port  port)
-              (gethash pkey *sim-pkey-skey-table*) (list skey
-                                                         :r  r
-                                                         :s  s))
-        ))))
+    (let* ((nnodes  (length lst))
+           (max-bft (floor (1- nnodes) 3)))
+      (setf *max-bft* max-bft)
+      (dolist (grp lst)
+        (let ((pkey (getf grp :pkey))
+              (ip   (getf grp :ip))
+              (port (getf grp :port))
+              (skey (getf grp :skey))
+              (r    (getf grp :r))
+              (s    (getf grp :s)))
+          (setf (gethash pkey *node-table*) (make-node-assoc
+                                             :pkey  pkey
+                                             :ip    ip
+                                             :port  port)
+                (gethash pkey *sim-pkey-skey-table*) (list skey
+                                                           :r  r
+                                                           :s  s))
+          )))))
 
 ;; -------------------------------------------------------
 
 (defun NYI (&rest args)
   (error "Not yet implemented: ~A" args))
 
-(defvar *sim-log* nil)
+(defvar *sim-log* nil) ;; in-memory log for sim FIFO order
 
 (defun record-to-log (msg)
   (push msg *sim-log*))

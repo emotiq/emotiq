@@ -34,6 +34,7 @@ THE SOFTWARE.
    :published-form
    :make-random-keypair)
   (:export
+   :*max-bft*
    :node-assoc
    :node-assoc-pkey
    :node-assoc-ip
