@@ -34,7 +34,8 @@ THE SOFTWARE.
 (in-package #:primes)
 ;; -------------------------------------------
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))          (inline empty singleton create))
+(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))
+          (inline empty singleton create))
 
 ;; -----------------------------------------------------------------------------
 ;;
@@ -44,7 +45,8 @@ THE SOFTWARE.
   ;; return a random integer 0 <= val < ix
   #+:LISPWORKS (ecc-crypto-b571:basic-random ix)
   #+:ALLEGRO   (random ix);; Allegro uses Mersenne Twister already
-  #-(OR :LISPWORKS :ALLEGRO) (error "Not-yet-implemented"))
+  #+sbcl (random ix)   ;; <http://www.sbcl.org/manual/#Random-Number-Generation>
+  #-(OR :LISPWORKS :ALLEGRO :SBCL) (error "Not-yet-implemented"))
 
 (defun random-between (lower upper)
   ;; generate random integer in [lower, upper)
@@ -499,7 +501,8 @@ THE SOFTWARE.
   (do ((e 0 (1+ e))
        (r number (/ r divisor)))
       ((/= (mod r divisor) 0) (values r e))
-    (declare (integer e r)) ))
+    (declare (integer e r))
+    (values r e)))
 
 (defun perfect-square? (c)
   (declare (integer c))
@@ -1297,6 +1300,7 @@ THE SOFTWARE.
           (iter))
       )))
 
+#+(AND :COM.RAL :LISPWORKS)
 (defun par-make-2kp+1-prime (nbits &optional (mr-iters 50))
   (declare (fixnum nbits mr-iters))
   (par-try 4 300 #'make-2kp+1-prime nbits mr-iters))

@@ -105,6 +105,10 @@ THE SOFTWARE.
                    (make-hash-table
                     :test 'equal
                     :single-thread t)
+                   #+:SBCL
+                   (make-hash-table
+                    :test 'equal
+                    :synchronized nil)
                    #+:ALLEGRO
                    (make-hash-table
                     :test 'equal))
@@ -113,6 +117,10 @@ THE SOFTWARE.
                    (make-hash-table
                     :test 'eq
                     :single-thread t)
+                   #+:SBCL
+                   (make-hash-table
+                    :test 'eq
+                    :synchronized nil)
                    #+:ALLEGRO
                    (make-hash-table
                     :test 'eq)))

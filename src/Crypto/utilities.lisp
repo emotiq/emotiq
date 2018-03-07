@@ -73,7 +73,7 @@ THE SOFTWARE.
 (def-cached-var my-random-state
   #+:LISPWORKS
   (lw:make-mt-random-state t)
-  #+(or :ALLEGRO :CLOZURE)
+  #-lispworks
   (make-random-state t))
 
 (um:defmonitor
