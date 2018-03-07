@@ -43,6 +43,7 @@ THE SOFTWARE.
    :remove-node
    :find-node
    :get-nodes-vector
+   :need-integer-form
    ))
 
 (defpackage :randhound/client

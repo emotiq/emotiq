@@ -84,7 +84,7 @@ THE SOFTWARE.
 
 (defun build-sim-nodes (&optional (nbr 16))
   ;; NOTE: you don't want to run this very often. It takes a long time
-  ;; due to PKBF2 @ 2048 iters of SHA3. About 2sec/key.
+  ;; due to PKBF2 @ 2048 iters of SHA3. About 2.6 sec/key.
   (init-nodes)
   (clrhash *sim-pkey-skey-table*)
   (loop repeat nbr do
