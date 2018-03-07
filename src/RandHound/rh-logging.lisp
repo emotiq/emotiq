@@ -28,10 +28,32 @@ THE SOFTWARE.
 
 (in-package :randhound/common)
 
-(defvar *sim-log* nil) ;; in-memory log for sim, FIFO order
+(defvar *log-file* (asdf:system-relative-pathname :randhound "logs/log-file.lisp"))
+
+(defun lfs-log-message (msg)
+  (multiple-value-bind (tsfmt ts) (get-timestamp)
+    (let ((lmsg (list
+                 :id    ts
+                 :time  tsfmt
+                 :msg   msg)))
+      (ensure-directories-exist *log-file* :verbose t)
+      (with-open-file (f *log-file*
+                         :direction :output
+                         :if-exists :append
+                         :if-does-not-exist :create)
+        (with-standard-io-syntax
+          (pprint lmsg f))
+        ))))
+
+(defvar *logfile-service*
+  (ac:make-actor
+   (um:dlambda
+     (:log-msg (msg)
+      (lfs-log-message msg))
+     )))
 
 (defun record-to-log (msg)
   ;; this should actually be handed off to an Actor service
   ;; should probably timestamp all log entries
-  (push msg *sim-log*))
+  (ac:send *logfile-service* :log-msg msg))
 

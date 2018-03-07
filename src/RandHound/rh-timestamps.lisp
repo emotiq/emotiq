@@ -51,16 +51,18 @@ THE SOFTWARE.
                     (11 . "Nov")
                     (12 . "Dec")))))
 
-(defun format-timestamp (time)
-  (multiple-value-bind (sec min hr date mon yr day) (decode-universal-time time)
-    (format nil "~A ~2,'0d ~A ~d  ~2,'0d:~2,'0d:~2,'0d"
-            (day-name day)
-            date (month-name mon) yr
-            hr min sec)))
+(defun format-timestamp (uuid)
+  (multiple-value-bind (ut frac) (uuid:uuid-to-universal-time uuid)
+    (multiple-value-bind (sec min hr date mon yr day) (decode-universal-time ut)
+      (format nil "~A ~2,'0d ~A ~d  ~{~2,'0d~^\:~}.~3,'0d"
+              (day-name day)
+              date (month-name mon) yr
+              (list hr min sec) (round frac 10000))
+      )))
     
 (defun get-timestamp ()
-  (let ((now (get-universal-time)))
-    (values (format-timestamp now)
-            now))) ;; return numeric value in case we need ordering
+  (let ((uuid (uuid:make-v1-uuid)))
+    (values (format-timestamp uuid)
+            uuid))) ;; return numeric value in case we need ordering
 
 
