@@ -37,6 +37,7 @@ THE SOFTWARE.
                 (:file "kdf")
                 (:file "gf-571")
                 (:file "mod-math")
+                (:file "modular-arith")
                 (:file "edwards")
                 (:file "ecc-B571")
                 (:file "curve-gen")
@@ -47,7 +48,7 @@ THE SOFTWARE.
   :depends-on   ("ironclad"
                  #+:COM.RAL "aesx"
                  "useful-macros"
-				 "mpcompat"
+                 "mpcompat"
                  "lisp-object-encoder"
                  "s-base64"
                  ))

@@ -172,7 +172,7 @@ THE SOFTWARE.
          for nsh from 0 by 8
          sum
          (ash (aref hv jx) nsh))
-   (bf-mask bf)))df
+   (bf-mask bf)))
   
 (defmethod add-obj-to-bf ((bf bloom-filter) obj)
   (let ((hv  (funcall (bf-hash bf) obj)))
