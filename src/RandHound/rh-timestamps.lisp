@@ -54,10 +54,10 @@ THE SOFTWARE.
 (defun format-timestamp (uuid)
   (multiple-value-bind (ut frac) (uuid:uuid-to-universal-time uuid)
     (multiple-value-bind (sec min hr date mon yr day) (decode-universal-time ut)
-      (format nil "~A ~2,'0d ~A ~d  ~{~2,'0d~^\:~}.~3,'0d"
+      (format nil "~A ~2,'0d ~A ~d  ~{~2,'0d~^\:~}.~7,'0d"
               (day-name day)
               date (month-name mon) yr
-              (list hr min sec) (round frac 10000))
+              (list hr min sec) frac)
       )))
     
 (defun get-timestamp ()
