@@ -48,6 +48,8 @@ THE SOFTWARE.
                         :components (
                                      ;; (:file "randhound")
                                      (:file "rh-common")
+                                     (:file "rh-init")
+                                     (:file "rh-sim")
                                      (:file "rh-client")
                                      (:file "rh-server")
                                      ))))

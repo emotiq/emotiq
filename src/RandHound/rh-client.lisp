@@ -63,7 +63,7 @@ THE SOFTWARE.
 (defstruct session-config-message
   hash-config tgrps purpose tstamp)
 
-(defun initialization (purpose max-bft)
+(defun initialization (purpose &key (max-bft *max-bft*))
   (let* ((vnodes  (get-nodes-vector))
          (nnodes  (length vnodes))
          (nneed   (1+ (* 3 max-bft))))
