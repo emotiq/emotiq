@@ -153,5 +153,23 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------
 
+(defun NYI (&rest args)
+  (error "Not yet implemented: ~A" args))
+
+(defvar *sim-log* nil)
+
+(defun record-to-log (msg)
+  (push msg *sim-log*))
+
+(defun broadcast-message (msg nodes)
+  (loop for node across nodes do
+        (send-message msg (node-assoc-ip node) (node-assoc-port node))))
+
+(defun send-message (msg ip port)
+  (declare (ignore msg ip port))
+  (NYI :send-message))
+
+
+
 
                 

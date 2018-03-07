@@ -44,6 +44,10 @@ THE SOFTWARE.
    :find-node
    :get-nodes-vector
    :need-integer-form
+   :record-to-log
+   :broadcast-message
+   :send-message
+   :NYI
    ))
 
 (defpackage :randhound/client
