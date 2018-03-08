@@ -52,7 +52,7 @@ THE SOFTWARE.
          ))
     ))
        
-(defun ecc-projective (pt &key alpha)
+(defun ecc-projective (pt &key (alpha 1))
   (optima:match pt
     ((ecc-infinite-)  pt)
     ((ecc-pt- :x x :y y)
