@@ -127,6 +127,20 @@ THE SOFTWARE.
 (defun fq2* (a b)
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
              (:struct-accessors fq2 ((bx x) (by y)) b))
+    #-(or ccl)
+    #|
+While compiling FQ2* :
+The DECLARE expression (DECLARE
+                        (INTEGER
+                         AX
+                         BX
+                         AY
+                         BY)) is being treated as a form,
+possibly because it's the result of macroexpansion. DECLARE expressions
+can only appear in specified contexts and must be actual subexpressions
+of the containing forms.
+   [Condition of type CCL::COMPILE-TIME-PROGRAM-ERROR]
+    |#
     (declare (integer ax bx ay by))
     (make-fq2
      :x (m+ (m* ax bx)
