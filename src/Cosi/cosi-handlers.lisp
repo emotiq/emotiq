@@ -614,6 +614,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                            ;; anything
                            (with-mod *ed-r*
                              (setf rsum (m+ rsum sub-r))))
+                       ;; else
                        (progn
                          ;; sub gave a corrupt answer on the local challenge
                          (pr (format nil "Corrupt node: ~A" (node-ip sub)))

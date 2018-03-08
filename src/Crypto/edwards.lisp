@@ -167,7 +167,8 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------------
 
 (defun ed-neutral-point ()
-  (get-cached-symbol-data '*edcurve* :ed-neutral-point *ed-c*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-neutral-point *ed-c*
                           (lambda ()
                             (make-ecc-pt
                              :x 0
@@ -460,12 +461,14 @@ THE SOFTWARE.
 ;; conversion between integers and little-endian UB8 vectors
 
 (defun ed-nbits ()
-  (get-cached-symbol-data '*edcurve* :ed-nbits *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-nbits *edcurve*
                           (lambda ()
                             (integer-length *ed-q*))))
 
 (defun ed-nbytes ()
-  (get-cached-symbol-data '*edcurve* :ed-nbytes *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-nbytes *edcurve*
                           (lambda ()
                             (ceiling (ed-nbits) 8))))
 
@@ -491,12 +494,14 @@ THE SOFTWARE.
 ;; ----------------------------------------
 
 (defun ed-compressed-nbits ()
-  (get-cached-symbol-data '*edcurve* :ed-compressed-nbits *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-compressed-nbits *edcurve*
                           (lambda ()
                             (1+ (ed-nbits)))))
 
 (defun ed-compressed-nbytes ()
-  (get-cached-symbol-data '*edcurve* :ed-compressed-nbytes *edcurve*
+  (get-cached-symbol-data '*edcurve*
+                          :ed-compressed-nbytes *edcurve*
                           (lambda ()
                             (ceiling (ed-compressed-nbits) 8))))
 
@@ -579,15 +584,17 @@ THE SOFTWARE.
   ;; key, (aka, a secret key), which is in the upper range of the
   ;; *ed-r* field, and which avoids potential small-group attacks
   ;;
-  (let* ((h     (ed-convert-lev-to-int
-                 (get-hash-bits (ed-nbits)
+  (let* ((nbits (integer-length *ed-r*))
+         (h     (ed-convert-lev-to-int
+                 (get-hash-bits nbits
                                 (list seed :generate-private-key index))))
-         (nbits (1- (integer-length (floor *ed-r* *ed-h*))))
-         (skey  (* *ed-h*  ;; avoid small-group attacks
-                   (dpb 1 (byte 1 nbits) ;; ensure non-zero
-                        (ldb (byte nbits 0) h)))))
-    ;; (assert (< skey *ed-r*)) ;; should be true by construction
-    skey))
+         (s     (dpb 1 (byte 1 (1- nbits)) ;; set hi bit
+                     (ldb (byte nbits 0) h)))
+         (skey  (- s (mod s *ed-h*))))
+    (if (< skey *ed-r*) ;; will be true with overwhelming probability (failure ~1e-38)
+        skey
+      (compute-deterministic-skey seed (1+ index)))
+    ))
 
 (defun ed-random-pair ()
   ;; select a random private and public key from the curve, abiding by
@@ -721,13 +728,15 @@ THE SOFTWARE.
                           (lambda ()
                             (ceiling (elligator-nbits) 8))))
 
+#| ;; unused here
 (defun elligator-padding ()
   ;; generate random padding bits for the initial byte
-  ;; of an octet Elligator encoding
+  ;; of a big-endian octet Elligator encoding
   (let* ((nbits (mod (elligator-nbits) 8)))
     (if (zerop nbits)
         0
       (ash (ctr-drbg-int (- 8 nbits)) nbits))))
+|#
 
 (defun elligator-int-padding ()
   ;; generate random padding bits for an elligator int
@@ -756,11 +765,12 @@ THE SOFTWARE.
   ;; Bernstein's Elligator c,s,r depend only on the curve.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
-  (get-cached-symbol-data '*edcurve* :elligator-csr
-                          *edcurve* #'compute-csr))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator-csr *edcurve*
+                          'compute-csr))
 
 (defun to-elligator-range (x)
-  (logand x (1- (ash 1 (elligator-nbits)))))
+  (ldb (byte (elligator-nbits) 0) x))
 
 (defun elligator-decode (z)
   ;; z in (1,2^(floor(log2 *ed-q*/2)))
@@ -770,6 +780,7 @@ THE SOFTWARE.
   ;;                            curve-E521    520        65
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   (let ((z (to-elligator-range z)))
+    (declare (integer z))
     (cond ((= z 1)
            (ed-neutral-point))
           
@@ -966,11 +977,13 @@ THE SOFTWARE.
                        (funcall fn-gen pkey)))) ;; elligatorable? - only about 50% are
         (if tau
             (list :r   skey
-                  :pt  pkey
-                  :tau tau
-                  :pad (elligator-int-padding))
+                  :tau tau)
           (iter))
         ))))
+
+(defun elligator-tau-vector (tau)
+  ;; lst should be the property list returned by elligator-random-pt
+  (convert-int-to-nbytesv tau (elligator-nbytes)))
 
 (defun do-elligator-schnorr-sig (msg tau-pub k-priv fn-gen)
   ;; msg is a message vector suitable for hashing
@@ -978,21 +991,22 @@ THE SOFTWARE.
   ;; k-priv is the private key integer for pt-pub = k-priv * *ec-gen*
   (um:nlet-tail iter ()
     (let* ((lst   (funcall fn-gen))
-           (vtau  (elligator-tau-vector lst))
-           (h     (convert-bytes-to-int (sha3-buffers vtau tau-pub msg)))
+           (vtau  (elligator-tau-vector (getf lst :tau)))
+           (h     (convert-bytes-to-int
+                   (sha3-buffers
+                    vtau
+                    (elligator-tau-vector tau-pub)
+                    msg)))
            (r     (getf lst :r))
-           (q     (* *ed-h* *ed-r*))
-           (s     (with-mod q
+           (s     (with-mod *ed-r*
                     (m+ r (m* h k-priv))))
            (smax  (elligator-limit)))
       (if (>= s smax)
           (progn
             ;; (print "restart ed-schnorr-sig")
             (iter))
-        (let* ((nbits (integer-length smax))
-               (nb    (ceiling nbits 8))
-               (spad  (logior s (elligator-int-padding)))
-               (svec  (convert-int-to-nbytes spad nb)))
+        (let* ((spad  (logior s (elligator-int-padding)))
+               (svec  (elligator-tau-vector spad)))
           (list vtau svec))
         ))))
 
@@ -1003,9 +1017,13 @@ THE SOFTWARE.
   (um:bind* (((vtau svec) sig)
              (pt-pub (funcall fn-decode tau-pub))
              (pt-r   (funcall fn-decode (convert-bytes-to-int vtau)))
-             (h      (convert-bytes-to-int (sha3-buffers vtau tau-pub msg)))
+             (h      (convert-bytes-to-int
+                      (sha3-buffers
+                       vtau
+                       (elligator-tau-vector tau-pub)
+                       msg)))
              (s      (to-elligator-range (convert-bytes-to-int svec)))
-             (pt     (ed-mul *ed-gen* s))
+             (pt     (ed-nth-pt s))
              (ptchk  (ed-add pt-r (ed-mul pt-pub h))))
     (ed-pt= pt ptchk)))
 
@@ -1013,13 +1031,6 @@ THE SOFTWARE.
 
 (defun elligator-random-pt ()
   (do-elligator-random-pt #'elligator-encode))
-
-(defun elligator-tau-vector (lst)
-  ;; lst should be the property list returned by elligator-random-pt
-  (let* ((tau (getf lst :tau))
-         (pad (getf lst :pad))
-         (nb  (ceiling (elligator-nbits) 8)))
-    (convert-int-to-nbytesv (+ tau pad) nb)))
 
 (defun ed-schnorr-sig (m tau-pub k-priv)
   (do-elligator-schnorr-sig m tau-pub k-priv #'elligator-random-pt))
@@ -1111,8 +1122,9 @@ THE SOFTWARE.
   ;; Bernstein's Elligator c,s,r depend only on the curve.
   ;; Compute once and cache in the property list of *edcurve*
   ;; associating the list: (c s r) with the curve currently in force.
-  (get-cached-symbol-data '*edcurve* :elligator2-ab
-                          *edcurve* #'compute-elli2-ab))
+  (get-cached-symbol-data '*edcurve*
+                          :elligator2-ab *edcurve*
+                          'compute-elli2-ab))
 
 (defun montgy-pt-to-ed (pt)
   ;; v = w * Sqrt(c^4*d-1)
@@ -1151,27 +1163,28 @@ THE SOFTWARE.
   ;; torsion points, apart from the neutral point. But certain random
   ;; values within the domain [0..(q-1)/2] are invalid.
   ;;
-  (let ((r (to-elligator-range r)))
+  (let ((r (to-elligator-range r))) ;; mask off top random
+    (declare (integer r))
     (cond  ((zerop r)  (ed-neutral-point))
            (t
             (with-mod *ed-q*
               (um:bind* (((sqrt-c4dm1 a b u) (elli2-ab))
-                         (ur2   (m* u r r))
-                         (1pur2 (m+ 1 ur2)))
+                         (u*r^2   (m* u r r))
+                         (1+u*r^2 (m+ 1 u*r^2)))
                 
                 ;; the following error can never trigger when fed with
                 ;; r from elli2-encode. But random values fed to us
                 ;; could cause it to trigger the error.
                 
-                (when (or (zerop 1pur2)     ;; this could happen for r^2 = -1/u
-                          (= (m* a a ur2)  ;; this can never happen: B=1 so RHS is square
-                             (m* b 1pur2 1pur2)))  ;; and LHS is not square.
+                (when (or (zerop 1+u*r^2)     ;; this could happen for r^2 = -1/u
+                          (= (m* a a u*r^2)   ;; this can never happen: B=1 so RHS is square
+                             (m* b 1+u*r^2 1+u*r^2)))  ;; and LHS is not square.
                   (error "invalid argument"))
                 
-                (let* ((v    (m- (m/ a 1pur2)))
+                (let* ((v    (m- (m/ a 1+u*r^2)))
                        (eps  (mchi (m+ (m* v v v)
-                                      (m* a v v)
-                                      (m* b v))))
+                                       (m* a v v)
+                                       (m* b v))))
                        (xu   (m- (m* eps v)
                                  (m/ (m* (m- 1 eps) a) 2)))
                        (rhs  (m* xu
@@ -1224,6 +1237,8 @@ THE SOFTWARE.
          :y yw)))))
              
 (defun elli2-encode (pt)
+  ;; Elligator2 mapping of pt to Zk
+  ;; return Zk or nil
   (cond ((ed-neutral-point-p pt)
          (elligator-int-padding))
         (t
