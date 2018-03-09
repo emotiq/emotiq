@@ -26,11 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage base58
-  (:use :cl)
-  (:export :encode
-           :decode))
-
 (in-package :base58)
 
 ;; from https://bitcointalk.org/index.php?topic=1026.0
