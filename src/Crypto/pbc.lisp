@@ -33,10 +33,26 @@ THE SOFTWARE.
                      
 
 (fli:define-foreign-function (_echo "echo" :source)
-    ((msg-in (:pointer :char))
-     (msg-out (:pointer :char))
-     (nel     :long))
+    ((nel     :long)
+     (msg     (:pointer (:unsigned :char)))
+     (ret-msg (:pointer (:unsigned :char))))
   :result-type :long
   :language :ansi-c
   :module :pbclib)
 
+(defun echo ()
+  (let ((msg "Hello Dave!"))
+    (fli:with-dynamic-foreign-objects ()
+      (let ((buf (fli:allocate-dynamic-foreign-object
+                  :type '(:unsigned :char) :nelems 1024)))
+        (let ((nel  (_echo (length msg)
+                           (fli:convert-to-dynamic-foreign-string
+                            msg
+                            :external-format :ASCII)
+                           buf)))
+          (list nel (subseq (fli:convert-from-foreign-string
+                             buf
+                             :external-format :ASCII)
+                            0 nel))
+          )))))
+         
