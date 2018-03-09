@@ -27,14 +27,42 @@ THE SOFTWARE.
 #include <memory.h>
 #include <pbc/pbc.h>
 
-long echo(char* msg_in, char* msg_out, long nel)
+// ---------------------------------------------------
+// for initial interface testing...
+
+extern "C"
+long echo(long nel, char* msg_in, char* msg_out)
 {
   memcpy(msg_out, msg_in, nel);
   return nel;
 }
 
-/*
+// ---------------------------------------------------
+
+bool      init_flag = false;
 pairing_t pairing;
-char param[1024];
-size_t count = fread(param, 1, 1024, stdin);
-*/
+element_t g, h;
+element_t public_key, secret_key;
+element_t sig;
+element_t temp1, temp2;
+
+extern "C"
+void init_pairing(long nel, char *params)
+{
+  if(init_flag)
+  {
+  pairing_init_set_buf(pairing, params, nel);
+  element_init_G2(g, pairing);
+  element_init_G2(public_key, pairing);
+  element_init_G1(h, pairing);
+  element_init_G1(sig, pairing);
+  element_init_GT(temp1, pairing);
+  element_init_GT(temp2, pairing);
+  element_init_Zr(secret_key, pairing);
+}
+
+extern "C"
+void get_G1_ord(unsigned char* pbuf, long *pnel)
+{
+   int len = pairing_length_in_bytes_G1(pairing);
+   
