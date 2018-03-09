@@ -40,6 +40,11 @@ THE SOFTWARE.
    :quadratic-residue-p
    ))
 
+(defpackage base58
+  (:use :cl)
+  (:export :encode
+           :decode))
+
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
   (:export
@@ -60,6 +65,13 @@ THE SOFTWARE.
 
    :encode-bytes-to-base64
    :decode-bytes-from-base64
+
+   :convert-int-to-lev
+   :convert-lev-to-int
+   :encode-object-to-base58
+   :decode-object-from-base58
+   :encode-bytes-to-base58
+   :decode-bytes-from-base58
 
    :get-cached-symbol-data
    ))
@@ -114,6 +126,8 @@ THE SOFTWARE.
 		:convert-int-to-nbytes
 		:convert-int-to-nbytesv
 		:convert-bytes-to-int
+                :convert-int-to-lev
+                :convert-lev-to-int
 		:ctr-drbg-int
 		:sha3-buffers
 		:random-between

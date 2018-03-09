@@ -475,21 +475,10 @@ THE SOFTWARE.
 (defun ed-convert-int-to-lev (v &optional (nel (ed-nbytes)))
   (unless (<= (integer-length v) (* 8 nel))
     (error "Truncation implied"))
-  (let ((vec (make-array nel
-                         :element-type '(unsigned-byte 8))))
-    (loop for ix from 0 below nel
-          for pos from 0 by 8
-          do
-          (setf (aref vec ix) (ldb (byte 8 pos) v)))
-    vec))
+  (convert-int-to-lev v nel))
 
 (defun ed-convert-lev-to-int (vec)
-  (let ((ans  0))
-    (loop for v across vec
-          for pos from 0 by 8
-          do
-          (setf (ldb (byte 8 pos) ans) v))
-    ans))
+  (convert-lev-to-int vec))
 
 ;; ----------------------------------------
 
@@ -520,13 +509,13 @@ THE SOFTWARE.
              x)))
       (if lev
           (let ((enc (ed-convert-int-to-lev enc (ed-compressed-nbytes))))
-            (if (eq lev :base64)
-                (encode-bytes-to-base64 enc)
+            (if (eq lev :base58)
+                (encode-bytes-to-base58 enc)
               enc))
         enc))))
 
-(defmethod ed-decompress-pt ((s string)) ;; assumed Base64
-  (ed-decompress-pt (decode-bytes-from-base64 s)))
+(defmethod ed-decompress-pt ((s string)) ;; assumed Base58
+  (ed-decompress-pt (decode-bytes-from-base58 s)))
 
 (defmethod ed-decompress-pt ((v vector)) ;; assumed LE UB8V
   (ed-decompress-pt (ed-convert-lev-to-int v)))
