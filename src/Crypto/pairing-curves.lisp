@@ -89,8 +89,9 @@ sign0 1
 
 ;; ------------------------------------------------
 
-;; Type A curves are symmetric singular curves of specified order
-;; in a specified group order
+;; Type A curves are symmetric super-singular curves of specified order
+;; in a specified group order q prime.
+;; Curve order r prime, #E = r*h = q+1, embedding order 2
 (defclass type-a-curve (pairing-curve)
   ((exp2  :reader a-curve-exp2
           :initarg :exp2)
@@ -124,6 +125,7 @@ sign0 1
    :q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791
    :h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776
    :r 730750818665451621361119245571504901405976559617
+   ;; r = 2^159 + 2^107 + 1
    :exp2 159
    :exp1 107
    :sign1 1
