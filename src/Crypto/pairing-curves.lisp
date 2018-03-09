@@ -69,25 +69,28 @@ sign0 1
 ;; ------------------------------------------------
 
 ;; for general curves:  y^2 = x^3 + a*x + b
+;; this always describes the smaller curve in the pairing
 (defclass pairing-curve ()
   ((name  :reader curve-name
           :initarg :name)
-   (q     :reader curve-q
+   (q     :reader curve-q   ;; prime nbr field of curve embeddings
           :initarg :q)
-   (h     :reader curve-h
+   (h     :reader curve-h   ;; cofactor of field order #E(q) = h*r
           :initarg :h)
-   (r     :reader curve-r
+   (r     :reader curve-r   ;; prime nbr order of curve
           :initarg :r)
-   (gen   :reader curve-gen
+   (gen   :reader curve-gen ;; a generator for the curve field
           :initarg :gen)
-   (a     :reader curve-a
+   (a     :reader curve-a   ;; the "a" coefficient
           :initarg :a)
-   (b     :reader curve-b
+   (b     :reader curve-b   ;; the "b" coefficient
           :initarg :b)
    ))
 
 ;; ------------------------------------------------
 
+;; Type A curves are symmetric singular curves of specified order
+;; in a specified group order
 (defclass type-a-curve (pairing-curve)
   ((exp2  :reader a-curve-exp2
           :initarg :exp2)
@@ -159,6 +162,7 @@ alpha0 1576061949578048250905246385233018019497083378228095739178496970464298364
 alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
 |#
 
+;; Type F curves have embedding degree 12, are asymmetric pairings
 (defclass type-f-curve (pairing-curve)
   ((beta   :reader f-curve-beta
            :initarg :beta)
@@ -230,79 +234,168 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 ;; ----------------------------------------------------------------
 
-(defun pt-negate (pt)
-  (cond ((ecc-infinite-p pt) pt)
-        (t (with-mod *q*
-             (make-ecc-pt
-              :x  (ecc-pt-x pt)
-              :y  (m- (ecc-pt-y pt)))
-             ))
-        ))
+(defmethod pt= ((p1 ecc-infinity) (p2 ecc-infinity))
+  t)
 
-(defun pt= (pt1 pt2)
-  (cond ((ecc-infinite-p pt1)
-         (ecc-infinite-p pt2))
-        ((ecc-infinite-p pt2) nil)
-        (t  (and (= (ecc-pt-x pt1)
-                    (ecc-pt-x pt2))
-                 (= (ecc-pt-y pt1)
-                    (ecc-pt-y pt2))
-                 ))
-        ))
+(defmethod pt= ((p1 ecc-pt) (p2 ecc-pt))
+  (with-mod *q*
+    (and (zerop (m- (ecc-pt-x p1)
+                    (ecc-pt-x p2)))
+         (zerop (m- (ecc-pt-y p1)
+                    (ecc-pt-y p2)))
+         )))
+
+(defmethod pt= (p1 p2)
+  nil)
 
 ;; -------------------------------------------
 
-(defun pt-double (pt)
-  (cond ((ecc-infinite-p pt)   pt)
-        ((zerop (ecc-pt-y pt)) (ecc-infinity))
-        (t  (with-mod *q*
-              (um:bind* ((:struct-accessors ecc-pt ((x x)
-                                                    (y y)) pt)
-                         
-                         (s  (m/ (m+ *a* (m* 3 x x)) 2 y))
-                         (x2 (m- (m* s s) x x))
-                         (y2 (m- (m* s (m- x x2)) y)))
-                (make-ecc-pt
-                 :x x2
-                 :y y2))))
-        ))
+(defmethod pt-negate ((pt ecc-infinity))
+  pt)
 
-(defun pt-add (pt1 pt2)
-  (cond ((ecc-infinite-p pt1) pt2)
-        ((ecc-infinite-p pt2) pt1)
-        ((pt= pt1 pt2)
-         (pt-double pt1))
-        ((pt= pt1 (pt-negate pt2))
-         (ecc-infinity))
-        (t  (with-mod *q*
-              (um:bind* ((:struct-accessors ecc-pt ((x1 x)
-                                                    (y1 y)) pt1)
-                         (:struct-accessors ecc-pt ((x2 x)
-                                                    (y2 y)) pt2)
-                         (s  (m/ (m- y2 y1) (m- x2 x1)))
+(defmethod pt-negate ((pt ecc-pt))
+  (with-mod *q*
+    (make-ecc-pt
+     :x  (ecc-pt-x pt)
+     :y  (m- (ecc-pt-y pt)))
+    ))
+
+;; ---------------------------------------
+;; Faster doubling for pt-mul using Jacobi projective coords
+#|
+(defstruct proj-pt
+  x y z)
+
+(defun to-proj-pt (pt)
+  (make-proj-pt
+   :x (ecc-pt-x pt)
+   :y (ecc-pt-y pt)
+   :z 1))
+
+(defmethod to-affine-pt ((pt proj-pt))
+  (with-mod *q*
+    (let* ((1/z   (m/ (proj-pt-z pt)))
+           (1/z^2 (m* 1/z 1/z)))
+      (make-ecc-pt
+       :x  (m* (proj-pt-x pt) 1/z^2)
+       :y  (m* (proj-pt-y pt) 1/z^2 1/z))
+      )))
+
+(defmethod to-affine-pt ((pt ecc-infinity))
+  pt)
+
+
+(defmethod proj-pt-double ((pt proj-pt))
+  (um:bind* ((:struct-accessors proj-pt (x y z) pt)
+             (tmpa (m* y y))
+             (tmpb (m* 4 x tmpa))
+             (tmpc (m* 8 tmpa tmpa))
+             (tmpd (m+ (m* 3 x x) (m* *a* z z z z)))
+             (x3   (m- (m* tmpd tmpd) (m* 2 tmpb)))
+             (y3   (m- (m* tmpd (m- tmpb x3)) tmpc))
+             (z3   (m* 2 y z)))
+    (if (zerop z3)
+        (ecc-infinity)
+      (make-proj-pt
+       :x  x3
+       :y  y3
+       :z  z3))
+    ))
+
+(defmethod proj-pt-double ((pt ecc-infinity))
+  pt)
+
+(defmethod proj-pt-add ((pt1 ecc-infinity) pt2)
+  pt2)
+
+(defmethod proj-pt-add (pt1 (pt2 ecc-infinity))
+  pt1)
+
+(defmethod proj-pt-add ((pt1 proj-pt) (pt2 proj-pt))
+  (um:bind* ((:struct-accessors proj-pt ((x1 x)
+                                         (y1 y)
+                                         (z1 z)) pt1)
+             (:struct-accessors proj-pt ((x2 x)
+                                         (y2 y)
+                                         (z2 z)) pt2)
+             )))
+|#              
+;; ----------------------------------------------
+
+(defmethod pt-double ((pt ecc-infinity))
+  pt)
+
+(defmethod pt-double ((pt ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt (x y) pt))
+    (with-mod *q*
+      (if (zerop (setf y (mmod y)))
+          (ecc-infinity)
+        (let* ((s  (m/ (m+ *a* (m* 3 x x)) 2 y))
+               (x2 (m- (m* s s) x x))
+               (y2 (m- (m* s (m- x x2)) y)))
+          (make-ecc-pt
+           :x x2
+           :y y2)))
+      )))
+
+(defmethod pt-add ((pt1 ecc-infinity) pt2)
+  pt2)
+
+(defmethod pt-add (pt1 (pt2 ecc-infinity))
+  pt1)
+
+(defmethod pt-add ((pt1 ecc-pt) (pt2 ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x1 x)
+                                        (y1 y)) pt1)
+             (:struct-accessors ecc-pt ((x2 x)
+                                        (y2 y)) pt2))
+    (with-mod *q*
+      (let ((den (m- x2 x1))
+            (num (m- y2 y1)))
+        (cond ((zerop den)
+               (if (zerop num)
+                   (pt-double pt1)
+                 (if (zerop (m+ y1 y2))
+                     (ecc-infinity)
+                   (error "Shouldn't happen"))))
+              (t  (let* ((s  (m/ num den))
                          (x3 (m- (m* s s) x1 x2))
                          (y3 (m- (m* s (m- x1 x3)) y1)))
-                (make-ecc-pt
-                 :x  x3
-                 :y  y3)
-                )))
-        ))
+                    (make-ecc-pt
+                     :x  x3
+                     :y  y3)
+                    ))
+              )))))
 
 (defun pt-sub (pt1 pt2)
   (pt-add pt1 (pt-negate pt2)))
-                          
+
+#|
 (defun pt-mul (pt x)
   (cond ((ecc-infinite-p pt) pt)
         ((zerop x)  (ecc-infinity))
-        (t (with-mod *q*
-             (let ((nbits (integer-length x))
-                   (ptsum (ecc-infinity)))
-               (do ((p pt (pt-double p))
-                    (ix 0 (1+ ix)))
-                   ((>= ix nbits) ptsum)
-                 (when (logbitp ix x)
-                   (setf ptsum (pt-add ptsum p)))
-                 ))))
+        (t (let ((nbits (integer-length x))
+                 (ptsum (ecc-infinity)))
+             (do ((p  (to-proj-pt pt) (proj-pt-double p))
+                  (ix 0 (1+ ix)))
+                 ((>= ix nbits) (to-affine-pt ptsum))
+               (when (logbitp ix x)
+                 (setf ptsum (proj-pt-add ptsum p)))
+               )))
+        ))
+|#
+
+(defun pt-mul (pt x)
+  (cond ((ecc-infinite-p pt) pt)
+        ((zerop x)  (ecc-infinity))
+        (t (let ((nbits (integer-length x))
+                 (ptsum (ecc-infinity)))
+             (do ((p  pt (pt-double p))
+                  (ix 0  (1+ ix)))
+                 ((>= ix nbits) ptsum)
+               (when (logbitp ix x)
+                 (setf ptsum (pt-add ptsum p)))
+               )))
         ))
 
 (defun pt-div (pt x)
@@ -419,6 +512,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; -----------------------------------------------------------------
 
 (defun pt-solution-p (pt)
+  ;; return true if pt satisfies the curve equation
   (unless (ecc-infinite-p pt)
     (with-mod *q*
       (um:bind* ((:struct-accessors ecc-pt ((x x)
@@ -428,14 +522,16 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
         t))))
 
 (defun validate-point (pt)
-  (assert (not (ecc-infinite-p pt)))
-  (assert (pt-solution-p pt))
-  (assert (ecc-infinite-p (pt^ pt *r*)))
-  (assert (not (ecc-infinite-p (pt^ pt *h*))))
-  pt)
+  (assert (not (ecc-infinite-p pt)))           ;; can't be pt at infinity
+  (assert (pt-solution-p pt))                  ;; must satisfy curve equation
+  (assert (ecc-infinite-p (pt^ pt *r*)))       ;; should be in our *r* group
+  (assert (not (ecc-infinite-p (pt^ pt *h*)))) ;; must not be in *h* subgroup
+  pt) ;; return point
 
 
 (defun find-generator (a b q h)
+  ;; search for a generator pt, given coeffs a, b
+  ;; and group parameters q and cofactor h
   (with-mod q
     (um:nlet-tail iter ()
       (let* ((x   (random-between 2 q))
@@ -452,6 +548,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       )))
 
 (defun find-embedding-degree (q r)
+  ;; find N such that r divides (q^N - 1)
   (um:nlet-tail iter ((ix 1))
     (when (< ix 1000)
       (if (zerop (mod (1- (expt q ix)) r))
