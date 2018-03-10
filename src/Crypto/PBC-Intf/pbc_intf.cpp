@@ -48,8 +48,10 @@ element_t temp1, temp2;
 pairing_pp_t pp;
 
 extern "C"
-void init_pairing(char* param_str, long nel)
+long init_pairing(char* param_str, long nel)
 {
+  long ans;
+  
   if(init_flag)
     {
       pairing_pp_clear(pp);
@@ -62,30 +64,35 @@ void init_pairing(char* param_str, long nel)
       element_clear(h);
       pairing_clear(pairing);
     }
-  pairing_init_set_buf(pairing, param_str, nel);
-  element_init_G2(g, pairing);
-  element_init_G2(public_key, pairing);
-  element_init_G1(h, pairing);
-  element_init_G1(sig, pairing);
-  element_init_GT(temp1, pairing);
-  element_init_GT(temp2, pairing);
-  element_init_Zr(secret_key, pairing);
-  element_random(g); // default values
-  element_random(h);
-  element_random(secret_key);
-  init_flag = true;
+  ans = pairing_init_set_buf(pairing, param_str, nel);
+  if(0 == ans)
+    {
+      element_init_G2(g, pairing);
+      element_init_G2(public_key, pairing);
+      element_init_G1(h, pairing);
+      element_init_G1(sig, pairing);
+      element_init_GT(temp1, pairing);
+      element_init_GT(temp2, pairing);
+      element_init_Zr(secret_key, pairing);
+      element_random(g); // default random values
+      element_random(h);
+      element_random(secret_key);
+      element_pow_zn(public_key, g, secret_key);
+      init_flag = true;
+    }
+  return ans;
 }
 
 extern "C"
 long set_g(unsigned char* pbuf)
 {
-  return element_from_bytes(g, pbuf);
+  return element_from_bytes_compressed(g, pbuf);
 }
 
 extern "C"
 long set_h(unsigned char* pbuf)
 {
-  return element_from_bytes(h, pbuf);
+  return element_from_bytes_compressed(h, pbuf);
 }
 
 extern "C"
@@ -98,7 +105,7 @@ void set_secret_key (unsigned char* pbuf)
 extern "C"
 long set_public_key (unsigned char* pbuf)
 {
-  return element_from_bytes(public_key, pbuf);
+  return element_from_bytes_compressed(public_key, pbuf);
 }
 
 // --------------------------------------------
@@ -117,9 +124,15 @@ void sign_hash(unsigned char* phash, long nhash)
   element_pow_zn(sig, h, secret_key);
 }
 
-static long get_datum(element_t elt, unsigned char* pbuf, long *plen)
+static long get_datum(element_t elt, unsigned char* pbuf, long *plen, bool cmpr = true)
 {
-  long len = element_length_in_bytes(elt);
+  long len;
+
+  if(cmpr)
+    len = element_length_in_bytes_compressed(elt);
+  else
+    len = element_length_in_bytes(elt);
+
   if (NULL == pbuf)
     {
       if(NULL != plen)
@@ -132,7 +145,10 @@ static long get_datum(element_t elt, unsigned char* pbuf, long *plen)
 	return 0;
       if(*plen < len)
 	return 0;
-      element_to_bytes(pbuf, elt);
+      if(cmpr)
+	element_to_bytes_compressed(pbuf, elt);
+      else
+	element_to_bytes(pbuf, elt);
       return (*plen = len);
      }
 }
@@ -140,7 +156,7 @@ static long get_datum(element_t elt, unsigned char* pbuf, long *plen)
 extern "C"
 long get_secret_key(unsigned char* pbuf, long *plen)
 {
-  return get_datum(secret_key, pbuf, plen);
+  return get_datum(secret_key, pbuf, plen, false);
 }
 
 extern "C"
@@ -162,9 +178,9 @@ long get_h(unsigned char* pbuf, long *plen)
 }
 
 extern "C"
-void get_signature(unsigned char* pbuf, long *plen)
+long get_signature(unsigned char* pbuf, long *plen)
 {
-  get_datum(sig, pbuf, plen);
+  return get_datum(sig, pbuf, plen);
 }
 
 // ------------------------------------------------
@@ -172,14 +188,62 @@ void get_signature(unsigned char* pbuf, long *plen)
 extern "C"
 long check_signature(unsigned char* psig, unsigned char* phash, long nhash, unsigned char *pkey)
 {
-  element_from_bytes(sig, psig);
+  element_from_bytes_compressed(sig, psig);
   element_from_hash(h, phash, nhash);
-  element_from_bytes(public_key, pkey);
+  element_from_bytes_compressed(public_key, pkey);
   pairing_apply(temp1, sig, g, pairing);
   pairing_apply(temp2, h, public_key, pairing);
   return element_cmp(temp1, temp2);
 }
 
+extern "C"
+void mul_G1_pts(unsigned char* pt_sum, unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2, psum;
+  element_init_G1(p1, pairing);
+  element_init_G1(p2, pairing);
+  element_init_G1(psum, pairing);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_mul(psum, p1, p2);
+  element_to_bytes_compressed(pt_sum, psum);
+  element_clear(p1);
+  element_clear(p2);
+  element_clear(psum);
+}
+  
+extern "C"
+void mul_G2_pts(unsigned char* pt_sum, unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2, psum;
+  element_init_G2(p1, pairing);
+  element_init_G2(p2, pairing);
+  element_init_G2(psum, pairing);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_mul(psum, p1, p2);
+  element_to_bytes_compressed(pt_sum, psum);
+  element_clear(p1);
+  element_clear(p2);
+  element_clear(psum);
+}
+  
+extern "C"
+void add_Zr_vals(unsigned char* zr_sum, unsigned char* zr1, unsigned char* zr2)
+{
+  element_t z1, z2, zsum;
+  element_init_Zr(z1, pairing);
+  element_init_Zr(z2, pairing);
+  element_init_Zr(zsum, pairing);
+  element_from_bytes(z1, zr1);
+  element_from_bytes(z2, zr2);
+  element_add(zsum, z1, z2);
+  element_to_bytes(zr_sum, zsum);
+  element_clear(z1);
+  element_clear(z2);
+  element_clear(zsum);
+}
+  
 // -- end of pbc_intf.cpp -- //
 
 
