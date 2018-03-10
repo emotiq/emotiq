@@ -63,6 +63,7 @@ long init_pairing(char* param_str, long nel)
       element_clear(g);
       element_clear(h);
       pairing_clear(pairing);
+      init_flag = false;
     }
   ans = pairing_init_set_buf(pairing, param_str, nel);
   if(0 == ans)
@@ -124,7 +125,7 @@ void sign_hash(unsigned char* phash, long nhash)
   element_pow_zn(sig, h, secret_key);
 }
 
-static long get_datum(element_t elt, unsigned char* pbuf, long *plen, bool cmpr = true)
+static long get_datum(element_t elt, unsigned char* pbuf, long buflen, bool cmpr = true)
 {
   long len;
 
@@ -133,54 +134,46 @@ static long get_datum(element_t elt, unsigned char* pbuf, long *plen, bool cmpr 
   else
     len = element_length_in_bytes(elt);
 
-  if (NULL == pbuf)
+  if (NULL != pbuf)
     {
-      if(NULL != plen)
-	*plen = len;
-      return len;
-    }
-  else
-    {
-      if(NULL == plen)
-	return 0;
-      if(*plen < len)
+      if(buflen < len)
 	return 0;
       if(cmpr)
 	element_to_bytes_compressed(pbuf, elt);
       else
 	element_to_bytes(pbuf, elt);
-      return (*plen = len);
-     }
+    }
+  return len;
 }
 
 extern "C"
-long get_secret_key(unsigned char* pbuf, long *plen)
+long get_secret_key(unsigned char* pbuf, long buflen)
 {
-  return get_datum(secret_key, pbuf, plen, false);
+  return get_datum(secret_key, pbuf, buflen, false);
 }
 
 extern "C"
-long get_public_key(unsigned char* pbuf, long *plen)
+long get_public_key(unsigned char* pbuf, long buflen)
 {
-  return get_datum(public_key, pbuf, plen);
+  return get_datum(public_key, pbuf, buflen);
 }
 
 extern "C"
-long get_g(unsigned char* pbuf, long *plen)
+long get_g(unsigned char* pbuf, long buflen)
 {
-  return get_datum(g, pbuf, plen);
+  return get_datum(g, pbuf, buflen);
 }
 
 extern "C"
-long get_h(unsigned char* pbuf, long *plen)
+long get_h(unsigned char* pbuf, long buflen)
 {
-  return get_datum(h, pbuf, plen);
+  return get_datum(h, pbuf, buflen);
 }
 
 extern "C"
-long get_signature(unsigned char* pbuf, long *plen)
+long get_signature(unsigned char* pbuf, long buflen)
 {
-  return get_datum(sig, pbuf, plen);
+  return get_datum(sig, pbuf, buflen);
 }
 
 // ------------------------------------------------

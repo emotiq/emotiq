@@ -98,14 +98,14 @@ THE SOFTWARE.
 
 (fli:define-foreign-function (_get-g "get_g" :source)
     ((pbuf        (:pointer :void))
-     (pnel        (:pointer :long)))
+     (nbuf        :long))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
 
 (fli:define-foreign-function (_get-h "get_h" :source)
     ((pbuf        (:pointer :void))
-     (pnel        (:pointer :long)))
+     (nbuf        :long))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
@@ -136,14 +136,14 @@ THE SOFTWARE.
 
 (fli:define-foreign-function (_get-secret-key "get_secret_key" :source)
     ((pbuf        (:pointer :void))
-     (pnel        (:pointer :long)))
+     (nbuf        :long))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
 
 (fli:define-foreign-function (_get-public-key "get_public_key" :source)
     ((pbuf        (:pointer :void))
-     (pnel        (:pointer :long)))
+     (nbuf        :long))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
@@ -163,13 +163,13 @@ THE SOFTWARE.
 
 (fli:define-foreign-function (_sign-hash "sign_hash" :source)
     ((pbuf   (:pointer (:unsigned :char)))
-     (nel    :long))
+     (nbuf   :long))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_get-signature "get_signature" :source)
     ((pbuf        (:pointer :void))
-     (pnel        (:pointer :long)))
+     (nbuf        :long))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
@@ -232,6 +232,7 @@ THE SOFTWARE.
   pairing-text
   gen)
 
+;; from: genfparam 256
 (defvar *curve-fr256-params*
   (make-curve-params
    :pairing-text
@@ -334,24 +335,16 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun get-element (nb-sym get-fn)
   (need-pairing)
-  (fli:with-dynamic-foreign-objects ()
-    (let* ((nb (symbol-value nb-sym))
-           (lenbuf (fli:allocate-dynamic-foreign-object
-                    :type :long)))
-      (if nb
-          (let ((buf (make-fli-buffer nb)))
-            (setf (fli:dereference lenbuf) nb)
-            (assert (eql nb (funcall get-fn buf lenbuf)))
-            (xfer-foreign-to-lisp buf nb))
-        ;; else - size unknown
-        (progn
-          (setf nb
-                (setf (symbol-value nb-sym)
-                      (funcall get-fn fli:*null-pointer* lenbuf)))
-          (let ((buf (make-fli-buffer nb)))
-            (assert (eql nb (funcall get-fn buf lenbuf)))
-            (xfer-foreign-to-lisp buf nb)))
-        ))))
+  (let ((nb (symbol-value nb-sym)))
+    (unless nb
+      ;; size unknown - query first
+      (setf nb
+            (setf (symbol-value nb-sym)
+                  (funcall get-fn fli:*null-pointer* 0))))
+    (with-fli-buffers ((buf nb))
+      (assert (eql nb (funcall get-fn buf nb)))
+      (xfer-foreign-to-lisp buf nb))
+    ))
               
 ;; -------------------------------------------------
 
@@ -395,10 +388,15 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 ;; -------------------------------------------------
 
+(defun hash (&rest args)
+  ;; produce a UB8V of the args
+  (let ((hv  (apply 'sha3/256-buffers args)))
+    (values hv (length hv))))
+        
 (defun make-key-pair (seed)
+  ;; seed can be literally anything at all...
   (need-generator)
-  (let* ((hsh  (sha3/256-buffers seed))
-         (hlen (length hsh)))
+  (multiple-value-bind (hsh hlen) (hash seed)
     (with-fli-buffers ((hbuf hlen hsh))
       (_make-key-pair hbuf hlen)
       (setf *zr-init* t
@@ -408,6 +406,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       )))
 
 (defun sign-hash (hash-bytes)
+  ;; hash-bytes is UB8V
   (need-keying)
   (let ((nhash (length hash-bytes)))
     (with-fli-buffers ((hbuf nhash hash-bytes))
@@ -416,6 +415,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       )))
 
 (defun check-hash (hash-bytes sig-bytes pkey-bytes)
+  ;; hash-bytes is UB8V
   (need-generator)
   (let ((nhash  (length hash-bytes)))
     (with-fli-buffers ((sbuf *g1-size* sig-bytes)
@@ -429,12 +429,12 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun sign-message (msg)
   (list msg
-        (sign-hash (sha3/256-buffers msg))
+        (sign-hash (hash msg))
         (get-public-key)))
 
 (defun check-message (msg-list)
   (destructuring-bind (msg sig-bytes pkey-bytes) msg-list
-    (check-hash (sha3/256-buffers msg)
+    (check-hash (hash msg)
                 sig-bytes
                 pkey-bytes)))
 
@@ -512,8 +512,8 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
     (destructuring-bind (msg2 sig2 pkey2) msg-list2
       ;; no point combining signatures unless the message was the
       ;; same for both...
-      (assert (equalp (sha3/256-buffers msg1)
-                      (sha3/256-buffers msg2)))
+      (assert (equalp (hash msg1)
+                      (hash msg2)))
       (list msg1
         (mul-g1-pts sig1  sig2)
         (mul-g2-pts pkey1 pkey2))
@@ -528,7 +528,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; check BLS Signatures
 (multiple-value-bind (pkey skey) (make-key-pair :dave)
   (let* ((msg  :hello-dave)
-         (hash (sha3/256-buffers msg)))
+         (hash (hash msg)))
     (sign-hash hash)
     (let* ((sig (get-signature)))
       (check-hash hash sig pkey))))
@@ -547,7 +547,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; verify multi-sig BLS -- YES!!
 (multiple-value-bind (pkey1 skey1) (make-key-pair :key1)
   (let* ((msg    :this-is-a-test)
-         (hsh    (sha3/256-buffers msg))
+         (hsh    (hash msg))
          (sig1   (sign-hash hsh)))
     (assert (check-hash hsh sig1 pkey1))
     (multiple-value-bind (pkey2 skey2) (make-key-pair :key2)
@@ -570,7 +570,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; check that sig(sum) = sum(sig)
 (multiple-value-bind (pk1 sk1) (make-key-pair :key1)
   (let* ((msg  :testing)
-         (hsh  (sha3/256-buffers msg))
+         (hsh  (hash msg))
          (sig1 (sign-hash hsh)))
   (multiple-value-bind (pk2 sk2) (make-key-pair :key2)
     (let* ((pksum (mul-g2-pts pk1 pk2))
