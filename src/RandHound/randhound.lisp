@@ -259,7 +259,6 @@ type RandHound struct {
               :faulty faulty
               :groups groups
               :purpose purpose)))
-    (init rh)
     rh
     ))
 

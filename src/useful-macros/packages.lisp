@@ -309,6 +309,8 @@ THE SOFTWARE.
    #:dcase)
   (:export
 
+   :defconstant+
+
    #:lc
    #:def-typed-fn
    

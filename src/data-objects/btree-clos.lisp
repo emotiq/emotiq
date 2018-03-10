@@ -102,7 +102,7 @@ Allocate a new tree node with the given height and return the node."))
   (:documentation "(discard-node btree node)
 Discard the node, doing whatever may be necessary to recycle storage."))
 
-(defgeneric get-cache (btree t)
+(defgeneric get-cache (btree constructor-fn)
   (:documentation "(get-cache btree constructor-fn)
 Return the cache to be used for this BTree."))
 
