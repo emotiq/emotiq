@@ -260,9 +260,11 @@ THE SOFTWARE.
           (setf ans (dpb b (byte 8 pos) ans)))
     ans))
 
-(defun convert-int-to-lev (val &optional (nb (ceiling (integer-length val) 8)))
-  (let ((ans (make-array nb
-                         :element-type '(unsigned-byte 8))))
+(defun convert-int-to-lev (val &optional nb)
+  (let* ((nb (or nb
+                 (ceiling (integer-length val) 8)))
+         (ans (make-array nb
+                          :element-type '(unsigned-byte 8))))
     (loop for ix from 0 below nb
           for pos from 0 by 8
           do
@@ -275,8 +277,8 @@ THE SOFTWARE.
 (defun encode-object-to-base58 (obj)
   (encode-bytes-to-base58 (loenc:encode obj)))
 
-(defun decode-bytes-from-base58 (str)
-  (base58:decode str))
+(defun decode-bytes-from-base58 (str &optional nb)
+  (convert-int-to-lev (base58:decode str) nb))
   
 (defun decode-object-from-base58 (str)
   (loenc:decode (decode-bytes-from-base58 str)))
