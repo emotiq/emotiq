@@ -72,6 +72,7 @@ void init_pairing(char* param_str, long nel)
   element_init_Zr(secret_key, pairing);
   element_random(g); // default values
   element_random(h);
+  element_random(secret_key);
   init_flag = true;
 }
 
