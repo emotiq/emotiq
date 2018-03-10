@@ -244,6 +244,52 @@ void add_Zr_vals(unsigned char* zr_sum, unsigned char* zr1, unsigned char* zr2)
   element_clear(zsum);
 }
   
+extern "C"
+void inv_Zr_val(unsigned char* zr_inv, unsigned char* zr)
+{
+  element_t z, zinv;
+  element_init_Zr(z, pairing);
+  element_init_Zr(zinv, pairing);
+  element_from_bytes(z, zr);
+  element_invert(zinv, z);
+  element_to_bytes(zr_inv, zinv);
+  element_clear(z);
+  element_clear(zinv);
+}
+
+extern "C"
+void exp_G1z(unsigned char* g1_exp, unsigned char* g1, unsigned char* zr)
+{
+  element_t z, g, gexp;
+  element_init_Zr(z, pairing);
+  element_init_G1(g, pairing);
+  element_init_G1(gexp, pairing);
+  element_from_bytes(z, zr);
+  element_from_bytes_compressed(g, g1);
+  element_pow_zn(gexp, g, z);
+  element_to_bytes_compressed(g1_exp, gexp);
+  element_clear(z);
+  element_clear(g);
+  element_clear(gexp);
+}
+  
+extern "C"
+void exp_G2z(unsigned char* g2_exp, unsigned char* g2, unsigned char* zr)
+{
+  element_t z, g, gexp;
+  element_init_Zr(z, pairing);
+  element_init_G2(g, pairing);
+  element_init_G2(gexp, pairing);
+  element_from_bytes(z, zr);
+  element_from_bytes_compressed(g, g2);
+  element_pow_zn(gexp, g, z);
+  element_to_bytes_compressed(g2_exp, gexp);
+  element_clear(z);
+  element_clear(g);
+  element_clear(gexp);
+}
+  
+
 // -- end of pbc_intf.cpp -- //
 
 

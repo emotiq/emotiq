@@ -38,8 +38,11 @@ THE SOFTWARE.
    :set-secret-key
    :set-public-key
 
-   :sign-message
+   :sign-message       ;; BLS Sigs
    :check-message
+   :combine-signatures ;; for BLS MultiSigs
+
+   :with-crypto
    ))
 
 (in-package :pbc-interface)
@@ -203,6 +206,26 @@ THE SOFTWARE.
   :language :ansi-c
   :module   :pbclib)
 
+(fli:define-foreign-function (_inv-zr-val "inv_Zr_val" :source)
+    ((zinv  (:pointer (:unsigned :char)))
+     (z     (:pointer (:unsigned :char))))
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_exp-G1z "exp_G1z" :source)
+    ((gexp  (:pointer (:unsigned :char)))
+     (g     (:pointer (:unsigned :char)))
+     (z     (:pointer (:unsigned :char))))
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_exp-G2z "exp_G2z" :source)
+    ((gexp  (:pointer (:unsigned :char)))
+     (g     (:pointer (:unsigned :char)))
+     (z     (:pointer (:unsigned :char))))
+  :language :ansi-c
+  :module   :pbclib)
+
 ;; -------------------------------------------------
 
 (defstruct curve-params
@@ -230,6 +253,22 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (defparameter *pairing-init*  nil) ;; t if we have done init-pairing
 (defparameter *g2-init*       nil) ;; t if we have done set-generator
 (defparameter *zr-init*       nil) ;; t if we have done set-secret-key
+
+;; -------------------------------------------------
+
+(defun need-pairing ()
+  (unless *pairing-init*
+    (error "Pairing not initialized. Use INIT-PAIRING.")))
+
+(defun need-keying ()
+  (need-pairing)
+  (unless *zr-init*
+    (error "Keying not established. Use SET-SECRET-KEY.")))
+
+(defun need-generator ()
+  (need-pairing)
+  (unless *g2-init*
+    (error "Generator not established. Use SET-GENERATOR.")))
 
 ;; -------------------------------------------------
 
@@ -294,7 +333,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; the :LONG count buffer. Then we proceed as normal.
 
 (defun get-element (nb-sym get-fn)
-  (assert *pairing-init*)
+  (need-pairing)
   (fli:with-dynamic-foreign-objects ()
     (let* ((nb (symbol-value nb-sym))
            (lenbuf (fli:allocate-dynamic-foreign-object
@@ -334,25 +373,22 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; -------------------------------------------------
 
 (defun set-element (bytes set-fn nb)
+  (need-pairing)
   (with-fli-buffers ((buf nb bytes))
     (funcall set-fn buf)))
 
 (defun set-generator (g-bytes)
-  (assert *pairing-init*)
   (set-element g-bytes '_set-g *g2-size*)
   (setf *g2-init* t))
 
 (defun set-h (h-bytes)
-  (assert *pairing-init*)
   (set-element h-bytes '_set-h *g1-size*))
 
 (defun set-public-key (pkey-bytes)
-  (assert *pairing-init*)
   (set-element pkey-bytes '_set-public-key *g2-size*))
 
 (defun set-secret-key (skey-bytes)
-  (assert *pairing-init*)
-  (assert *g2-init*)
+  (need-generator)
   (set-element skey-bytes '_set-secret-key *zr-size*)
   (setf *zr-init* t
         *g2-init* t))
@@ -360,21 +396,19 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; -------------------------------------------------
 
 (defun make-key-pair (seed)
-  (assert *pairing-init*)
-  (assert *g2-init*)
+  (need-generator)
   (let* ((hsh  (sha3/256-buffers seed))
          (hlen (length hsh)))
     (with-fli-buffers ((hbuf hlen hsh))
       (_make-key-pair hbuf hlen)
       (setf *zr-init* t
             *g2-init* t)
-      (list (get-secret-key)
-            (get-public-key))
+      (values (get-public-key)
+              (get-secret-key))
       )))
 
 (defun sign-hash (hash-bytes)
-  (assert *pairing-init*)
-  (assert *zr-init*)
+  (need-keying)
   (let ((nhash (length hash-bytes)))
     (with-fli-buffers ((hbuf nhash hash-bytes))
       (_sign-hash hbuf nhash)
@@ -382,8 +416,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       )))
 
 (defun check-hash (hash-bytes sig-bytes pkey-bytes)
-  (assert *pairing-init*)
-  (assert *g2-init*)
+  (need-generator)
   (let ((nhash  (length hash-bytes)))
     (with-fli-buffers ((sbuf *g1-size* sig-bytes)
                        (hbuf nhash     hash-bytes)
@@ -413,7 +446,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun mul-g1-pts (pt1 pt2)
   ;; multiply two elements from G1 field (always the shorter field rep)
-  (assert *pairing-init*)
+  (need-pairing)
   (with-fli-buffers ((p1-buf   *g1-size* pt1)
                      (p2-buf   *g1-size* pt2)
                      (psum-buf *g1-size*))
@@ -423,7 +456,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun mul-g2-pts (pt1 pt2)
   ;; multiply two elements from G2 field
-  (assert *pairing-init*)
+  (need-pairing)
   (with-fli-buffers ((p1-buf   *g2-size* pt1)
                      (p2-buf   *g2-size* pt2)
                      (psum-buf *g2-size*))
@@ -433,12 +466,40 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun add-zr-vals (z1 z2)
   ;; add two elements from Zr ring
-  (assert *pairing-init*)
+  (need-pairing)
   (with-fli-buffers ((z1-buf   *zr-size* z1)
                      (z2-buf   *zr-size* z2)
                      (zsum-buf *zr-size*))
     (_add-zr-vals zsum-buf z1-buf z2-buf)
     (xfer-foreign-to-lisp zsum-buf *zr-size*)
+    ))
+
+(defun inv-zr-val (z)
+  ;; compute inverse of z over Zr
+  (need-pairing)
+  (with-fli-buffers ((zinv-buf  *zr-size*)
+                     (z-buf     *zr-size* z))
+    (_inv-zr-val zinv-buf z-buf)
+    (xfer-foreign-to-lisp zinv-buf *zr-size*)))
+
+(defun exp-G1z (g1 z)
+  ;; exponentiate an element of G1 by element z of ring Zr
+  (need-pairing)
+  (with-fli-buffers ((g1-buf   *g1-size* g1)
+                     (z-buf    *zr-size* z)
+                     (g1^z-buf *g1-size*))
+    (_exp-G1z g1^z-buf g1-buf z-buf)
+    (xfer-foreign-to-lisp g1^z-buf *g1-size*)
+    ))
+
+(defun exp-G2z (g2 z)
+  ;; exponentiate an element of G2 by element z of ring Zr
+  (need-pairing)
+  (with-fli-buffers ((g2-buf   *g2-size* g2)
+                     (z-buf    *zr-size* z)
+                     (g2^z-buf *g2-size*))
+    (_exp-G2z g2^z-buf g2-buf z-buf)
+    (xfer-foreign-to-lisp g2^z-buf *g2-size*)
     ))
 
 ;; --------------------------------------------------------
@@ -465,7 +526,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (init-pairing)
 
 ;; check BLS Signatures
-(destructuring-bind (skey pkey) (make-key-pair :dave)
+(multiple-value-bind (pkey skey) (make-key-pair :dave)
   (let* ((msg  :hello-dave)
          (hash (sha3/256-buffers msg)))
     (sign-hash hash)
@@ -473,23 +534,23 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       (check-hash hash sig pkey))))
 
 ;; verify multi-sig BLS -- YES!!
-(destructuring-bind (skey1 pkey1) (make-key-pair :key1)
+(multiple-value-bind (pkey skey) (make-key-pair :key1)
   (let* ((msg    :this-is-a-test)
          (smsg1  (sign-message msg)))
     (assert (check-message smsg1))
-    (destructuring-bind (skey2 pkey2) (make-key-pair :key2)
+    (multiple-value-bind (pkey2 skey2) (make-key-pair :key2)
       (let ((smsg2 (sign-message msg)))
         (assert (check-message smsg2))
         (check-message (combine-signatures smsg1 smsg2))
         ))))
 
 ;; verify multi-sig BLS -- YES!!
-(destructuring-bind (skey1 pkey1) (make-key-pair :key1)
+(multiple-value-bind (pkey1 skey1) (make-key-pair :key1)
   (let* ((msg    :this-is-a-test)
          (hsh    (sha3/256-buffers msg))
          (sig1   (sign-hash hsh)))
     (assert (check-hash hsh sig1 pkey1))
-    (destructuring-bind (skey2 pkey2) (make-key-pair :key2)
+    (multiple-value-bind (pkey2 skey2) (make-key-pair :key2)
       (let ((sig2 (sign-hash hsh)))
         (assert (check-hash hsh sig2 pkey2))
         (let ((sig   (mul-g1-pts sig1 sig2))
@@ -498,8 +559,8 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
           )))))
 
 ;; check that p1 + p2 = (s1 + s2)*g
-(destructuring-bind (sk1 pk1) (make-key-pair :key1)
-  (destructuring-bind (sk2 pk2) (make-key-pair :key2)
+(multiple-value-bind (pk1 sk1) (make-key-pair :key1)
+  (multiple-value-bind (pk2 sk2) (make-key-pair :key2)
     (let* ((pksum (mul-g2-pts pk1 pk2))
            (zsum  (add-zr-vals sk1 sk2)))
       (set-secret-key zsum)
@@ -507,11 +568,11 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
         (list pksum pk)))))
 
 ;; check that sig(sum) = sum(sig)
-(destructuring-bind (sk1 pk1) (make-key-pair :key1)
+(multiple-value-bind (pk1 sk1) (make-key-pair :key1)
   (let* ((msg  :testing)
          (hsh  (sha3/256-buffers msg))
          (sig1 (sign-hash hsh)))
-  (destructuring-bind (sk2 pk2) (make-key-pair :key2)
+  (multiple-value-bind (pk2 sk2) (make-key-pair :key2)
     (let* ((pksum (mul-g2-pts pk1 pk2))
            (zsum  (add-zr-vals sk1 sk2))
            (sig2  (sign-hash hsh))
@@ -521,3 +582,37 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       (list (sign-hash hsh) ssum)
       ))))
 |#
+
+;; ------------------------------------------------------
+;;
+;; The PBC & GNU MP libs are possibly not thread-safe nor reentrant.
+;; The PBC interface in LibLispPBCInterface is certainly not
+;; reentrant, as it depends on C global values. And it is not
+;; thread-safe since those globals could change from activities in
+;; other threads.
+;;
+;; Hence we need a way to ensure that all use of it goes through a
+;; single thread. Actors to the resuce...
+;;
+;; Note that because of activities requested by other client code, the
+;; values of PBC elements may be arbitrary. If you need a known
+;; environment, you should reestablish it on entry. This applies
+;; in particular to the secret and public keying in effect.
+
+(defvar *crypto-boss*
+  (ac:make-actor
+   (lambda (fn)
+     (funcall fn))))
+
+(defmacro with-crypto ((&key skey pkey) &body body)
+  `(ac:ask *crypto-boss* (lambda ()
+                            ,@(when skey
+                                `(set-secret-key ,skey))
+                            ,@(when pkey
+                                `(set-public-key ,pkey))
+                            ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-crypto" 1)
+
+ 
