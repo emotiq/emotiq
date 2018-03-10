@@ -45,13 +45,24 @@ element_t g, h;
 element_t public_key, secret_key;
 element_t sig;
 element_t temp1, temp2;
+pairing_pp_t pp;
 
 extern "C"
-void init_pairing(long nel, char *params)
+void init_pairing(char* param_str, long nel)
 {
   if(init_flag)
-  {
-  pairing_init_set_buf(pairing, params, nel);
+    {
+      pairing_pp_clear(pp);
+      element_clear(temp1);
+      element_clear(temp2);
+      element_clear(public_key);
+      element_clear(secret_key);
+      element_clear(sig);
+      element_clear(g);
+      element_clear(h);
+      pairing_clear(pairing);
+    }
+  pairing_init_set_buf(pairing, param_str, nel);
   element_init_G2(g, pairing);
   element_init_G2(public_key, pairing);
   element_init_G1(h, pairing);
@@ -59,10 +70,116 @@ void init_pairing(long nel, char *params)
   element_init_GT(temp1, pairing);
   element_init_GT(temp2, pairing);
   element_init_Zr(secret_key, pairing);
+  element_random(g); // default values
+  element_random(h);
+  init_flag = true;
 }
 
 extern "C"
-void get_G1_ord(unsigned char* pbuf, long *pnel)
+long set_g(unsigned char* pbuf)
 {
-   int len = pairing_length_in_bytes_G1(pairing);
-   
+  return element_from_bytes(g, pbuf);
+}
+
+extern "C"
+long set_h(unsigned char* pbuf)
+{
+  return element_from_bytes(h, pbuf);
+}
+
+extern "C"
+void set_secret_key (unsigned char* pbuf)
+{
+  element_from_bytes(secret_key, pbuf);
+  element_pow_zn(public_key, g, secret_key);
+}
+
+extern "C"
+long set_public_key (unsigned char* pbuf)
+{
+  return element_from_bytes(public_key, pbuf);
+}
+
+// --------------------------------------------
+
+extern "C"
+void make_key_pair(unsigned char* phash, long nhash)
+{
+  element_from_hash(secret_key, phash, nhash);
+  element_pow_zn(public_key, g, secret_key);
+}
+
+extern "C"
+void sign_hash(unsigned char* phash, long nhash)
+{
+  element_from_hash(h, phash, nhash);
+  element_pow_zn(sig, h, secret_key);
+}
+
+static long get_datum(element_t elt, unsigned char* pbuf, long *plen)
+{
+  long len = element_length_in_bytes(elt);
+  if (NULL == pbuf)
+    {
+      if(NULL != plen)
+	*plen = len;
+      return len;
+    }
+  else
+    {
+      if(NULL == plen)
+	return 0;
+      if(*plen < len)
+	return 0;
+      element_to_bytes(pbuf, elt);
+      return (*plen = len);
+     }
+}
+
+extern "C"
+long get_secret_key(unsigned char* pbuf, long *plen)
+{
+  return get_datum(secret_key, pbuf, plen);
+}
+
+extern "C"
+long get_public_key(unsigned char* pbuf, long *plen)
+{
+  return get_datum(public_key, pbuf, plen);
+}
+
+extern "C"
+long get_g(unsigned char* pbuf, long *plen)
+{
+  return get_datum(g, pbuf, plen);
+}
+
+extern "C"
+long get_h(unsigned char* pbuf, long *plen)
+{
+  return get_datum(h, pbuf, plen);
+}
+
+extern "C"
+void get_signature(unsigned char* pbuf, long *plen)
+{
+  get_datum(sig, pbuf, plen);
+}
+
+// ------------------------------------------------
+
+extern "C"
+long check_signature(unsigned char* psig, unsigned char* phash, long nhash, unsigned char *pkey)
+{
+  element_from_bytes(sig, psig);
+  element_from_hash(h, phash, nhash);
+  element_from_bytes(public_key, pkey);
+  pairing_apply(temp1, sig, g, pairing);
+  pairing_apply(temp2, h, public_key, pairing);
+  return element_cmp(temp1, temp2);
+}
+
+// -- end of pbc_intf.cpp -- //
+
+
+
