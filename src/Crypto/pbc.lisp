@@ -349,7 +349,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
               for ix from 0
               do
               (setf (fli:dereference pbuf :index ix) v))
-        (_check-signature sbuf hbuf nhash pbuf)
+        (zerop (_check-signature sbuf hbuf nhash pbuf))
         ))))
 
 ;; --------------------------------------------------------
