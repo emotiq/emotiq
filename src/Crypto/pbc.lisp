@@ -186,6 +186,9 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
                     :external-format :ASCII)
                    (length param-text))
     (setf *pairing-init* t)
+    (get-secret-key)
+    (get-g)
+    (get-h)
     ))
 
 ;; -------------------------------------------------
@@ -236,6 +239,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun set-generator (g-bytes)
   (assert *pairing-init*)
+  (assert (eql (length g-bytes) *g2-size*))
   (fli:with-dynamic-foreign-objects ()
     (let ((gbuf  (fli:allocate-dynamic-foreign-object
                   :type '(:unsigned :char) :nelems (length g-bytes))))
@@ -249,6 +253,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun set-h (h-bytes)
   (assert *pairing-init*)
+  (assert (eql (length h-bytes) *g1-size*))
   (fli:with-dynamic-foreign-objects ()
     (let ((hbuf  (fli:allocate-dynamic-foreign-object
                   :type '(:unsigned :char) :nelems (length h-bytes))))
@@ -261,6 +266,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 
 (defun set-public-key (pkey-bytes)
   (assert *pairing-init*)
+  (assert (eql (length pkey-bytes) *g2-size*))
   (fli:with-dynamic-foreign-objects ()
     (let ((pbuf  (fli:allocate-dynamic-foreign-object
                   :type '(:unsigned :char) :nelems (length pkey-bytes))))
@@ -274,6 +280,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (defun set-secret-key (skey-bytes)
   (assert *pairing-init*)
   (assert *g2-init*)
+  (assert (eql (length skey-bytes) *zr-size*))
   (fli:with-dynamic-foreign-objects ()
     (let ((sbuf  (fli:allocate-dynamic-foreign-object
                   :type '(:unsigned :char) :nelems (length skey-bytes))))
@@ -317,19 +324,19 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
         (_sign-hash hbuf nhash)
         ))))
 
-(defun check-signature (sig-bytes hash-bytes public-key)
+(defun check-signature (sig-bytes hash-bytes pkey-bytes)
   (assert *pairing-init*)
   (assert *g2-init*)
-  (let ((nsig  (length sig-bytes))
-        (nhash (length hash-bytes))
-        (nkey  (length public-key)))
+  (assert (eql (length sig-bytes)  *g1-size*))
+  (assert (eql (length pkey-bytes) *g2-size*))
+  (let ((nhash (length hash-bytes)))
     (fli:with-dynamic-foreign-objects ()
       (let ((sbuf  (fli:allocate-dynamic-foreign-object
-                    :type '(:unsigned :char) :nelems nsig))
+                    :type '(:unsigned :char) :nelems (length sig-bytes)))
             (hbuf  (fli:allocate-dynamic-foreign-object
                     :type '(:unsigned :char) :nelems nhash))
             (pbuf  (fli:allocate-dynamic-foreign-object
-                    :type '(:unsigned :char) :nelems nkey)))
+                    :type '(:unsigned :char) :nelems (length pkey-bytes))))
         (loop for v across sig-bytes
               for ix from 0
               do
@@ -338,7 +345,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
               for ix from 0
               do
               (setf (fli:dereference hbuf :index ix) v))
-        (loop for v across public-key
+        (loop for v across pkey-bytes
               for ix from 0
               do
               (setf (fli:dereference pbuf :index ix) v))
