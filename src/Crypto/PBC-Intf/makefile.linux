@@ -1,0 +1,11 @@
+GCC=g++ -shared -fpic -I/usr/local/include -I/usr/include -O2 -msse3 -mfpmath=sse -m64 -L/usr/local/lib
+
+all: pbc_intf
+
+pbc_intf: pbc_intf.cpp
+	$(GCC) -o libLispPBCIntf.so \
+		pbc_intf.cpp \
+	-Wl,-rpath /usr/local/lib -l pbc
+	mv libLispPBCIntf.so /usr/local/lib
+
+
