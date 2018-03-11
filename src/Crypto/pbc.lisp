@@ -54,7 +54,10 @@ THE SOFTWARE.
 
 (fli:register-module :pbclib
                      :dlopen-flags t
-                     :real-name  "/usr/local/lib64/libLispPBCIntf.dylib")
+                     :real-name
+                     #+:MACOSX "/usr/local/lib64/libLispPBCIntf.dylib"
+                     #+:LINUX  "/usr/local/lib/libLispPBCIntf.so"
+                     )
 
 ;; -----------------------------------------------------------------------
 ;; for initial test of strings transfer to/from C/Lisp
