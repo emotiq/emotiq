@@ -57,7 +57,9 @@ THE SOFTWARE.
 (defparameter *default-timeout-period*   ;; good for 1600 nodes on single machine
   #+:LISPWORKS   10
   #+:ALLEGRO     70
-  #+:CLOZURE     70)
+  #+:CLOZURE     70
+  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
+  70)
 
 ;; ----------------------------------------------------------------------
 ;; Network Tree Nodes
@@ -260,12 +262,16 @@ THE SOFTWARE.
 (defun dotted-string-to-integer (string)
   #+:LISPWORKS (comm:string-ip-address string)
   #+:OPENMCL   (ccl::dotted-to-ipaddr string)
-  #+:ALLEGRO   (allegro-dotted-to-integer string))
+  #+:ALLEGRO   (allegro-dotted-to-integer string)
+  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
+  (usocket:host-byte-order string))
 
 (defun integer-to-dotted-string (val)
   #+:LISPWORKS (comm:ip-address-string val)
   #+:OPENMCL (CCL::ipaddr-to-dotted val)
-  #+:ALLEGRO (allegro-integer-to-dotted val))
+  #+:ALLEGRO (allegro-integer-to-dotted val)
+  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
+  (usocket:host-byte-order val))
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
