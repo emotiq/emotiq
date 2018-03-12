@@ -420,9 +420,9 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
 
 (defun sign-message (msg)
-  (list msg
-        (sign-hash (hash msg))
-        (get-public-key)))
+  (list msg                     ;; original message
+        (sign-hash (hash msg))  ;; signature
+        (get-public-key)))      ;; public key of signature
 
 (defun check-message (msg-list)
   (destructuring-bind (msg sig-bytes pkey-bytes) msg-list
@@ -441,9 +441,10 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       (_make-key-pair hbuf hlen)
       (setf *zr-init* t
             *g2-init* t)
-      (let* ((pkey (get-public-key))
-             (skey (get-secret-key))
-             (sig  (sign-hash (hash pkey))))
+      (let* ((pkey (get-public-key)) ;; public key
+             (skey (get-secret-key)) ;; secret key
+             (sig  (sign-hash (hash pkey)))) ;; signature on public key
+        ;; return 3 values: public key, signature on public key, secret key
         (values pkey sig skey))
       )))
 

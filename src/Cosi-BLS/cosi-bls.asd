@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defsystem "cosi"
+(defsystem "cosi-bls"
   :description "Cosi: Authenticated multi-signatures in Lisp"
   :version     "1.0.3"
   :author      "D.McClain <dbm@emotiq.ch>"
@@ -44,8 +44,7 @@ THE SOFTWARE.
                         :depends-on (package)
                         :pathname "./"
                         :serial t
-                        :components ((:file "base58")
-                                     (:file "cosi-blkdef")
+                        :components ((:file "cosi-blkdef")
                                      (:file "cosi-keying")
 
 				     ;; (:file "cosi-async")
@@ -58,9 +57,9 @@ THE SOFTWARE.
 
                                      (:file "range-proofs")))))
 
-(defsystem "cosi/test/allegro"
+(defsystem "cosi-bls/test/allegro"
   :description "Allegro specific CAS timing code from dbm."
-  :depends-on (cosi)
+  :depends-on (cosi-bls)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "test-cas")))))

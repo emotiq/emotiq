@@ -1,7 +1,7 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
-(defsystem "cosi-test"
-  :depends-on (cosi lisp-unit)
+(defsystem "cosi-schnorr-test"
+  :depends-on (cosi-schnorr lisp-unit)
   :perform (test-op (o c) (symbol-call :lisp-unit :run-tests
                                        :all :cosi-test))
   :components ((:module package
