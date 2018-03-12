@@ -31,6 +31,7 @@ THE SOFTWARE.
   :depends-on (ironclad
                actors
                core-crypto
+               crypto-pairings
                lisp-object-encoder
                useful-macros
                usocket
