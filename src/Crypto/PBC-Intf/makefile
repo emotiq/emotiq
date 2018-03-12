@@ -1,0 +1,11 @@
+GCC=g++ -dynamiclib -I$(HOME)/projects/include -I/usr/local/include -I/usr/include -O2 -msse3 -mfpmath=sse -m64
+
+all: pbc_intf
+
+pbc_intf: pbc_intf.cpp
+	$(GCC) -o libLispPBCIntf.dylib \
+		pbc_intf.cpp \
+		-lpbc -lgmp
+	mv libLispPBCIntf.dylib /usr/local/lib64
+
+
