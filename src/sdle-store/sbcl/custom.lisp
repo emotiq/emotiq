@@ -21,10 +21,28 @@
   (store-type-object obj stream))
 
 (defrestore-sdle-store (structure-object stream)
-  (restore-type-object stream))
+  (restore-type-object stream 'structure-object))
 
 
 ;; Structure definition storing
+
+#|
+From <https://github.com/skypher/cl-store/commit/9372d3e1a1c16120f08be64729816a4bee9484af>:
+
+Remove support for struct definitions in SBCL.
+
+This feature attempted to store/restore entire struct
+definitions, including :constructor, :copier, etc. It used
+internal symbols from SB-KERNEL and had not worked since
+SBCL-1.1.17, producing a failure in tests.lisp. With the
+next SBCL release it doesn't even compile.
+
+cl-store had only offered this feature with SBCL and CMUCL;
+now only CMUCL.
+
+Struct instances continue to be supported, of course.
+
+
 (defun get-layout (obj)
   (slot-value obj 'sb-pcl::wrapper))
 
@@ -160,3 +178,4 @@
                                   (coerce *sbcl-struct-inherits* 'vector)))))
 
 ;; EOF
+|#

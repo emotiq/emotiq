@@ -105,14 +105,25 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------
 
+#+sbcl
+(if (string-lessp (lisp-implementation-version) "1.2.2")
+    (pushnew :safe-sbcl *features*)
+    (setq *features* (remove :safe-sbcl *features*)))
+
 (defun flatten (x)
   ;; this is really a deep flatten
   (labels ((rec (x acc)
              (cond ((null x) acc)
+                   #+(and sbcl (not safe-sbcl))
+                   ((typep x 'sb-impl::comma) (rec (sb-impl::comma-expr x) acc))
                    ((atom x) (cons x acc))
                    (t  (rec (car x) (rec (cdr x) acc)))
                    )))
     (rec x nil)))
+
+;; #+sbcl code above adapted from
+;; #https://github.com/thephoeron/let-over-lambda/blob/a202167629cb421cbc2139cfce1db22a84278f9f/let-over-lambda.lisp
+
 
 (defmacro perform (name bindings &body body)
   (let ((args (mapcar 'first bindings))
@@ -138,3 +149,20 @@ THE SOFTWARE.
 
 ;; -------------------------------------------
 
+
+
+;;; DEFCONSTANT+: Defconstant PLUS a bit of common sense.
+
+(defmacro defconstant+ (name value &optional doc)
+  "Like DEFCONSTANT but does not allow you to (easily) change the
+  value once you've evaluated the form."
+  ;; In return, if you do something like 
+  ;;
+  ;;   (progn (defconstant foo "bar") (defconstant foo "bar"))
+  ;;
+  ;; SBCL (justified by Common Lisp) will not say things like
+  ;;
+  ;;   The constant FOO is being redefined (from "bar" to "bar")
+  `(defconstant ,name 
+     (if (boundp ',name) (symbol-value ',name) ,value)
+     ,@(if doc (list doc))))

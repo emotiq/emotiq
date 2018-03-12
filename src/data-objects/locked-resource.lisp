@@ -30,7 +30,8 @@ THE SOFTWARE.
 
 (defclass <lockable-mixin> ()
   ((lock  :reader lm-lock  
-	  :initform 
+	  :initform
+          #+:sbcl (sb-thread:make-mutex) 
 	  #+:LISPWORKS (mp:make-lock :sharing t)
 	  #+:ALLEGRO   (mp:make-sharable-lock)
           #+:CLOZURE   (ccl:make-read-write-lock))))
@@ -118,14 +119,20 @@ THE SOFTWARE.
   )
 
 (defgeneric set-kv (key obj val)
-  #-:CLOZURE
+  #-(or CLOZURE sbcl) ;; assuming the meaning is LispWorks?
   (:method (key (obj <lockable-mixin>) val)
    (mp:with-exclusive-lock ((lm-lock obj))
      (call-next-method)))
 
+  #+(or sbcl)
+  (:method (key (obj <lockable-mixin>) val)
+   (sb-thread:with-recursive-lock ((lm-lock obj))
+     (call-next-method)))
+  
+
   #+:CLOZURE
   (:method (key (obj <lockable-mixin>) val)
-   (ccl:with-write-lock ((lm-lock obj))
+x4   (ccl:with-write-lock ((lm-lock obj))
      (call-next-method)))
   
   (:method (key (obj <plist>) val)
@@ -153,7 +160,11 @@ THE SOFTWARE.
   #+:CLOZURE
   (:method (key (obj hash-table) val)
      (setf (gethash key obj) val))
-  
+
+  #+(or sbcl)
+  (:method (key (obj hash-table) val)
+     (setf (gethash key obj) val))
+
   ;; ALLEGRO-FIXME - need a variant for hash-tables here...
    )
 
@@ -173,6 +184,11 @@ THE SOFTWARE.
   #+:CLOZURE
   (:method ((obj <lockable-mixin>) fn)
    (ccl:with-read-lock ((lm-lock obj))
+     (call-next-method)))
+
+  #+(or sbcl)
+  (:method ((obj <lockable-mixin>) fn)
+   (sb-thread:with-recursive-lock ((lm-lock obj))
      (call-next-method)))
 
   (:method ((obj <plist>) fn)
@@ -200,7 +216,7 @@ THE SOFTWARE.
   )
                        
 (defgeneric ensure-kv (key obj val)
-  #-:CLOZURE
+  #-(or CLOZURE sbcl) ;; assuming the meaning is LispWorks?
   (:method (key (obj <lockable-mixin>) val)
     (mp:with-exclusive-lock ((lm-lock val))
       (call-next-method)))
@@ -208,6 +224,11 @@ THE SOFTWARE.
   #+:CLOZURE
   (:method (key (obj <lockable-mixin>) val)
     (ccl:with-write-lock ((lm-lock val))
+      (call-next-method)))
+
+  #+(or sbcl)
+  (:method (key (obj <lockable-mixin>) val)
+    (sb-thread:with-recursive-lock ((lm-lock val))
       (call-next-method)))
   
   (:method (key (obj <plist>) val)
@@ -248,7 +269,7 @@ THE SOFTWARE.
 
 
 (defgeneric remove-key (key obj)
-  #-:CLOZURE
+  #-(or CLOZURE sbcl) ;; assuming the meaning is LispWorks?
   (:method (key (obj <lockable-mixin>))
    (mp:with-exclusive-lock ((lm-lock obj))
      (call-next-method)))
@@ -256,6 +277,11 @@ THE SOFTWARE.
   #+:CLOZURE
   (:method (key (obj <lockable-mixin>))
    (ccl:with-write-lock ((lm-lock obj))
+     (call-next-method)))
+
+  #+(or sbcl)
+  (:method (key (obj <lockable-mixin>))
+   (sb-thread:with-recursive-lock ((lm-lock obj))
      (call-next-method)))
   
   (:method (key (obj <plist>))
@@ -333,7 +359,8 @@ THE SOFTWARE.
 
 (defgeneric merge-kvs (obj new-kvs)
   ;; new-kvs should be a canonical plist
-  #-:CLOZURE
+
+  #-(or CLOZURE sbcl) ;; assuming the meaning is LispWorks?
   (:method ((obj <lockable-mixin>) new-kvs)
    (mp:with-exclusive-lock ((lm-lock obj))
      (call-next-method)))
@@ -341,6 +368,11 @@ THE SOFTWARE.
   #+:CLOZURE
   (:method ((obj <lockable-mixin>) new-kvs)
    (ccl:with-write-lock ((lm-lock obj))
+     (call-next-method)))
+
+  #+(or sbcl)
+  (:method ((obj <lockable-mixin>) new-kvs)
+   (sb-thread:with-recursive-lock ((lm-lock obj))
      (call-next-method)))
 
   (:method ((obj <plist>) new-kvs)
@@ -371,7 +403,8 @@ THE SOFTWARE.
 
 (defgeneric set-kvs (obj new-kvs)
   ;; new-kvs should be canonical plist
-  #-:CLOZURE
+
+  #-(or CLOZURE sbcl) ;; assuming the meaning is LispWorks?
   (:method ((obj <lockable-mixin>) new-kvs)
    (mp:with-exclusive-lock ((lm-lock obj))
      (call-next-method)))
@@ -380,6 +413,11 @@ THE SOFTWARE.
   (:method ((obj <lockable-mixin>) new-kvs)
    (ccl:with-write-lock ((lm-lock obj))
      (call-next-method)))
+
+  #+(or sbcl)
+  (:method ((obj <lockable-mixin>) new-kvs)
+    (sb-thread:with-recursive-lock ((lm-lock obj))
+      (call-next-method)))
 
   (:method ((obj <plist>) new-kvs)
    (setf (lm-val obj) (map-to-plist (plist-to-map new-kvs))))
