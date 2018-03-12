@@ -47,6 +47,7 @@ THE SOFTWARE.
 
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
+  (:nicknames :ecc)
   (:export
    :ctr-hash-prng
    :basic-random
