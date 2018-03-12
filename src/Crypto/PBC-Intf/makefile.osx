@@ -2,6 +2,9 @@ GCC=g++ -dynamiclib -I$(HOME)/projects/include -I/usr/local/include -I/usr/inclu
 
 all: pbc_intf
 
+z.o: z.c
+	$(GCC) -c z.c
+     
 pbc_intf: pbc_intf.cpp
 	$(GCC) -o libLispPBCIntf.dylib \
 		pbc_intf.cpp \

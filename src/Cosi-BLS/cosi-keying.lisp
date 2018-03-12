@@ -82,31 +82,15 @@ THE SOFTWARE.
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
 
-(defun cosi-dsa (msg skey)
-  #-:ELLIGATOR
-  (let ((quad  (ed-dsa msg skey)))
-    (list
-     :msg  (getf quad :msg)
-     :pkey (published-form (getf quad :pkey))
-     :r    (published-form (getf quad :r))
-     :s    (published-form (getf quad :s))
-     ))
-  #+:ELLIGATOR
-  (let ((quad (elligator-ed-dsa msg skey)))
-    (list
-     :msg  (getf quad :msg)
-     :pkey (published-form (getf quad :tau-pub))
-     :r    (published-form (getf quad :tau-r))
-     :s    (published-form (getf quad :s))
-     )))
+(defun cosi-signature (msg skey)
+  (pbc:with-crypto (:skey skey)
+    (pbc:sign-message msg)))
 
-(defun cosi-dsa-validate (msg pkey r s)
-  (let ((pkey (need-integer-form pkey))
-        (r    (need-integer-form r))
-        (s    (need-integer-form s)))
-    (#-:ELLIGATOR ed-dsa-validate 
-     #+:ELLIGATOR elligator-ed-dsa-validate
-     msg pkey r s)))
+(defun cosi-validate (msg sig pkey)
+  (pbc:with-crypto (:pkey pkey)
+    (pbc:check-message (list :msg  msg
+                             :sig  sig
+                             :pkey pkey))))
 
 ;; --------------------------------------------
 ;; Keying for attribution. User keys, and signatures. You really don't
@@ -114,49 +98,17 @@ THE SOFTWARE.
 ;; math operations like for range proofs and such. And range proofs
 ;; also present special problems with respect to Elligator encodings.
 
-(defconstant +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
-
-(defun make-deterministic-keypair (seed &optional (index 0))
+(defun make-deterministic-keypair (seed)
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  #-:ELLIGATOR
-  (let* ((skey  (compute-deterministic-skey seed index))
-         (plist (cosi-dsa +keying-msg+ skey)))
+  (multiple-value-bind (pkey psig skey)
+      (pbc:with-crypto ()
+        (pbc:make-key-pair seed))
     (list
      :skey  skey
-     :pkey  (getf plist :pkey)
-     :index index
-     :r     (getf plist :r)
-     :s     (getf plist :s)))
-  #+:ELLIGATOR
-  (multiple-value-bind (skey tau ix)
-      (compute-deterministic-elligator-skey seed index)
-    ;; Note that Elligator encoding may have to search for a suitable
-    ;; key. Hence the index returned may be different from the index
-    ;; suggested.
-    (declare (ignore tau))
-    (let ((plist (cosi-dsa +keying-msg+ skey)))
-      (list
-       :skey  skey
-       :pkey  (getf plist :pkey)
-       :index ix
-       :r     (getf plist :r)
-       :s     (getf plist :s)
-       ))))
-
-(defun make-unique-deterministic-keypair (seed)
-  ;; create a unique deterministic keypair, using a Bloom filter to
-  ;; record keys, and adding an incrementing index to the seed until
-  ;; we have uniqueness.
-  (um:nlet-tail iter ((ix  0))
-    (let* ((plist (make-deterministic-keypair seed ix))
-           (pkey  (getf plist :pkey))
-           (proof (list (getf plist :r) (getf plist :s))))
-      (if (unique-key-p pkey proof)
-          ;; when was unique, it also got added to table
-          plist
-        (iter (1+ ix))))))
+     :pkey  pkey
+     :psig  psig)))
 
 ;; --------------------------------------------------------------
 
@@ -185,19 +137,20 @@ THE SOFTWARE.
                                                :salt       salt
                                                :digest     :sha3
                                                :iterations 2048)))
-    (make-unique-deterministic-keypair rseed)))
+    (make-deterministic-keypair rseed)))
 
-(defun make-subkey (skey sub-seed)
+(defun make-public-subkey (pkey sub-seed)
   ;; Need to do one at a time, since unique may have created an index
   ;; value, and you can't retrace the path without that index value.
   ;; That is to say, you really do need to keep a record of all the
   ;; private keys along the way...
-  (make-unique-deterministic-keypair
+  (let ((hsh  (pbc:hash sub-seed)))
+  (make-deterministic-keypair
    (list (need-integer-form skey)
          sub-seed)))
 
-(defun validate-pkey (pkey r s)
-  (cosi-dsa-validate +keying-msg+ pkey r s))
+(defun validate-pkey (pkey psig)
+  (cosi-validate pkey psig pkey))
         
 ;; ------------------------------------------------------
 

@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <strings.h>
 #include <stdlib.h>
 #include <memory.h>
+
 #include <pbc/pbc.h>
 
 // ---------------------------------------------------
@@ -41,7 +42,7 @@ long echo(long nel, char* msg_in, char* msg_out)
 
 bool      init_flag = false;
 pairing_t pairing;
-element_t g, h;
+element_t g1, g2; // base generators for G1 and G2
 element_t public_key, secret_key;
 element_t sig;
 element_t temp1, temp2;
@@ -60,47 +61,47 @@ long init_pairing(char* param_str, long nel)
       element_clear(public_key);
       element_clear(secret_key);
       element_clear(sig);
-      element_clear(g);
-      element_clear(h);
+      element_clear(g1);
+      element_clear(g2);
       pairing_clear(pairing);
       init_flag = false;
     }
   ans = pairing_init_set_buf(pairing, param_str, nel);
   if(0 == ans)
     {
-      element_init_G2(g, pairing);
+      element_init_G2(g2, pairing);
       element_init_G2(public_key, pairing);
-      element_init_G1(h, pairing);
+      element_init_G1(g1, pairing);
       element_init_G1(sig, pairing);
       element_init_GT(temp1, pairing);
       element_init_GT(temp2, pairing);
       element_init_Zr(secret_key, pairing);
-      element_random(g); // default random values
-      element_random(h);
+      element_random(g1); // default random values
+      element_random(g2);
       element_random(secret_key);
-      element_pow_zn(public_key, g, secret_key);
+      element_pow_zn(public_key, g2, secret_key);
       init_flag = true;
     }
   return ans;
 }
 
 extern "C"
-long set_g(unsigned char* pbuf)
+long set_g2(unsigned char* pbuf)
 {
-  return element_from_bytes_compressed(g, pbuf);
+  return element_from_bytes_compressed(g2, pbuf);
 }
 
 extern "C"
-long set_h(unsigned char* pbuf)
+long set_g1(unsigned char* pbuf)
 {
-  return element_from_bytes_compressed(h, pbuf);
+  return element_from_bytes_compressed(g1, pbuf);
 }
 
 extern "C"
 void set_secret_key (unsigned char* pbuf)
 {
   element_from_bytes(secret_key, pbuf);
-  element_pow_zn(public_key, g, secret_key);
+  element_pow_zn(public_key, g2, secret_key);
 }
 
 extern "C"
@@ -115,15 +116,143 @@ extern "C"
 void make_key_pair(unsigned char* phash, long nhash)
 {
   element_from_hash(secret_key, phash, nhash);
-  element_pow_zn(public_key, g, secret_key);
+  element_pow_zn(public_key, g2, secret_key);
 }
 
 extern "C"
 void sign_hash(unsigned char* phash, long nhash)
 {
+  element_t h;
+
+  element_init_G1(h, pairing);
   element_from_hash(h, phash, nhash);
   element_pow_zn(sig, h, secret_key);
+  element_clear(h);
 }
+
+extern "C"
+void make_public_subkey(unsigned char* abuf,
+			unsigned char* pkey,
+			unsigned char* phash_id, long nhash)
+{
+  element_t z;
+  element_t gx, gp;
+  
+  element_init_Zr(z, pairing);
+  element_init_G2(gx, pairing);
+  element_init_G2(gp, pairing);
+  element_from_bytes_compressed(gp, pkey);
+  element_from_hash(z, phash_id, nhash);
+  element_mul_zn(gx, g2, z);
+  element_add(gp, gx, gp);
+  element_to_bytes_compressed(abuf, gp); // ans is G2
+  element_clear(z);
+  element_clear(gx);
+  element_clear(gp);
+}
+
+extern "C"
+void make_secret_subkey(unsigned char* abuf,
+			unsigned char* skey,
+			unsigned char* phash_id, long nhash)
+{
+  element_t z, zs, s;
+
+  element_init_Zr(z, pairing);
+  element_init_Zr(zs, pairing);
+  element_init_G1(s, pairing);
+  element_from_hash(z, phash_id, nhash);   // get ID
+  element_from_bytes(zs, skey);            // user's secret key
+  element_add(z, z, zs);
+  element_invert(z, z);
+  element_mul_zn(s, g1, z);
+  element_to_bytes_compressed(abuf, s);    // ans is G1
+  element_clear(z);
+  element_clear(zs);
+  element_clear(s);
+}
+
+extern "C"
+void compute_pairing(unsigned char* hbuf, unsigned char* gbuf)
+{
+  element_t hh, gg;
+
+  element_init_G1(hh, pairing);
+  element_init_G2(gg, pairing);
+  element_from_bytes_compressed(hh, hbuf);
+  element_from_bytes_compressed(gg, gbuf);
+  pairing_apply(temp1, hh, gg, pairing);
+  element_clear(hh);
+  element_clear(gg);
+}
+
+extern "C"
+void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
+			    unsigned char* pbuf, // pairing result in GT
+			    unsigned char* pkey, // public subkey in G2
+			    unsigned char* phash, long nhash)
+{
+  element_t zr, gt, pk;
+
+  element_init_G2(pk, pairing);
+  element_init_Zr(zr, pairing);
+  element_init_GT(gt, pairing);
+  element_from_bytes_compressed(pk, pkey);
+  element_from_hash(zr, phash, nhash);
+  element_mul_zn(pk, pk, zr);
+  element_to_bytes_compressed(rbuf, pk);
+
+  element_mul_zn(pk, g2, zr);
+  pairing_apply(gt, g1, zr, pairing);
+  element_to_bytes(pbuf, gt);
+
+  element_clear(zr);
+  element_clear(gt);
+  element_clear(pk);
+}
+
+extern "C"
+void sakai_kasahara_decrypt(unsigned char* pbuf, // pairing result in GT
+			    unsigned char* rbuf, // R pt in G2
+			    unsigned char* sbuf) // secret subkey in G1
+{
+  element_t gt, sk, rk;
+
+  element_init_G1(sk, pairing);
+  element_init_G2(rk, pairing);
+  element_init_GT(gt, pairing);
+  element_from_bytes_compressed(sk, sbuf);
+  element_from_bytes_compressed(rk, rbuf);
+  pairing_apply(gt, sk, rk, pairing);
+  element_to_bytes(pbuf, gt);
+  element_clear(sk);
+  element_clear(rk);
+  element_clear(gt);
+}
+			    
+extern "C"
+long sakai_kasahara_check(unsigned char* rkey, // R in G2
+			  unsigned char* pkey, // public subkey in G2
+			  unsigned char* phash, long nhash)
+{
+  element_t zr, pk1, pk2;
+  long      ans;
+  
+  element_init_G2(pk1, pairing);
+  element_init_G2(pk2, pairing);
+  element_init_Zr(zr, pairing);
+  element_from_bytes_compressed(pk1, pkey);
+  element_from_bytes_compressed(pk2, rkey);
+  element_from_hash(zr, phash, nhash);
+  element_mul_zn(pk1, pk1, zr);
+  ans = element_cmp(pk1, pk2);
+  element_clear(pk1);
+  element_clear(pk2);
+  element_clear(zr);
+  return ans;
+}
+
+// -----------------------------------------------------------------
 
 static long get_datum(element_t elt, unsigned char* pbuf, long buflen, bool cmpr = true)
 {
@@ -159,15 +288,15 @@ long get_public_key(unsigned char* pbuf, long buflen)
 }
 
 extern "C"
-long get_g(unsigned char* pbuf, long buflen)
+long get_g2(unsigned char* pbuf, long buflen)
 {
-  return get_datum(g, pbuf, buflen);
+  return get_datum(g2, pbuf, buflen);
 }
 
 extern "C"
-long get_h(unsigned char* pbuf, long buflen)
+long get_g1(unsigned char* pbuf, long buflen)
 {
-  return get_datum(h, pbuf, buflen);
+  return get_datum(g1, pbuf, buflen);
 }
 
 extern "C"
@@ -176,16 +305,22 @@ long get_signature(unsigned char* pbuf, long buflen)
   return get_datum(sig, pbuf, buflen);
 }
 
+extern "C"
+long get_pairing(unsigned char* pbuf, long buflen)
+{
+  return get_datum(temp1, pbuf, buflen, false);
+}
+  
 // ------------------------------------------------
 
 extern "C"
 long check_signature(unsigned char* psig, unsigned char* phash, long nhash, unsigned char *pkey)
 {
   element_from_bytes_compressed(sig, psig);
-  element_from_hash(h, phash, nhash);
+  element_from_hash(g1, phash, nhash);
   element_from_bytes_compressed(public_key, pkey);
-  pairing_apply(temp1, sig, g, pairing);
-  pairing_apply(temp2, h, public_key, pairing);
+  pairing_apply(temp1, sig, g2, pairing);
+  pairing_apply(temp2, g1, public_key, pairing);
   return element_cmp(temp1, temp2);
 }
 
