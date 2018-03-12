@@ -3,9 +3,9 @@
 ;;; TODO figure out how to get ql:quickload to satisfy
 ;;; :defsystem-depends-on clause *before* the ASDF definition is
 ;;; interpreted.
-(defsystem "cosi-prove"
+(defsystem "cosi-bls-prove"
   :defsystem-depends-on (prove-asdf) 
-  :depends-on (prove cosi)
+  :depends-on (prove cosi-bls)
   :perform (test-op (o c)
               (uiop:symbol-call :prove-asdf :run-test-system c))
   :components ((:module range
