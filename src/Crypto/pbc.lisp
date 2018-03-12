@@ -35,6 +35,7 @@ THE SOFTWARE.
    :set-generator
    
    :make-key-pair
+   :check-public-key
    :set-secret-key
    :set-public-key
 
@@ -396,18 +397,6 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   (let ((hv  (apply 'sha3/256-buffers args)))
     (values hv (length hv))))
         
-(defun make-key-pair (seed)
-  ;; seed can be literally anything at all...
-  (need-generator)
-  (multiple-value-bind (hsh hlen) (hash seed)
-    (with-fli-buffers ((hbuf hlen hsh))
-      (_make-key-pair hbuf hlen)
-      (setf *zr-init* t
-            *g2-init* t)
-      (values (get-public-key)
-              (get-secret-key))
-      )))
-
 (defun sign-hash (hash-bytes)
   ;; hash-bytes is UB8V
   (need-keying)
@@ -440,6 +429,28 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
     (check-hash (hash msg)
                 sig-bytes
                 pkey-bytes)))
+
+;; --------------------------------------------------------------
+;; Keying - generate secret and authenticated public keys
+
+(defun make-key-pair (seed)
+  ;; seed can be literally anything at all...
+  (need-generator)
+  (multiple-value-bind (hsh hlen) (hash seed)
+    (with-fli-buffers ((hbuf hlen hsh))
+      (_make-key-pair hbuf hlen)
+      (setf *zr-init* t
+            *g2-init* t)
+      (let* ((pkey (get-public-key))
+             (skey (get-secret-key))
+             (sig  (sign-hash (hash pkey))))
+        (values pkey sig skey))
+      )))
+
+(defun check-public-key (pkey psig)
+  (check-hash (hash pkey)
+              psig
+              pkey))
 
 ;; --------------------------------------------------------
 ;; Curve field operations -- to match academic papers, we utilize the
@@ -529,7 +540,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (init-pairing)
 
 ;; check BLS Signatures
-(multiple-value-bind (pkey skey) (make-key-pair :dave)
+(multiple-value-bind (pkey psig skey) (make-key-pair :dave)
   (let* ((msg  :hello-dave)
          (hash (hash msg)))
     (sign-hash hash)
@@ -537,23 +548,23 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       (check-hash hash sig pkey))))
 
 ;; verify multi-sig BLS -- YES!!
-(multiple-value-bind (pkey skey) (make-key-pair :key1)
+(multiple-value-bind (pkey psig skey) (make-key-pair :key1)
   (let* ((msg    :this-is-a-test)
          (smsg1  (sign-message msg)))
     (assert (check-message smsg1))
-    (multiple-value-bind (pkey2 skey2) (make-key-pair :key2)
+    (multiple-value-bind (pkey2 psig skey2) (make-key-pair :key2)
       (let ((smsg2 (sign-message msg)))
         (assert (check-message smsg2))
         (check-message (combine-signatures smsg1 smsg2))
         ))))
 
 ;; verify multi-sig BLS -- YES!!
-(multiple-value-bind (pkey1 skey1) (make-key-pair :key1)
+(multiple-value-bind (pkey1 psig skey1) (make-key-pair :key1)
   (let* ((msg    :this-is-a-test)
          (hsh    (hash msg))
          (sig1   (sign-hash hsh)))
     (assert (check-hash hsh sig1 pkey1))
-    (multiple-value-bind (pkey2 skey2) (make-key-pair :key2)
+    (multiple-value-bind (pkey2 psig skey2) (make-key-pair :key2)
       (let ((sig2 (sign-hash hsh)))
         (assert (check-hash hsh sig2 pkey2))
         (let ((sig   (mul-g1-pts sig1 sig2))
@@ -562,8 +573,8 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
           )))))
 
 ;; check that p1 + p2 = (s1 + s2)*g
-(multiple-value-bind (pk1 sk1) (make-key-pair :key1)
-  (multiple-value-bind (pk2 sk2) (make-key-pair :key2)
+(multiple-value-bind (pk1 psig sk1) (make-key-pair :key1)
+  (multiple-value-bind (pk2 psig sk2) (make-key-pair :key2)
     (let* ((pksum (mul-g2-pts pk1 pk2))
            (zsum  (add-zr-vals sk1 sk2)))
       (set-secret-key zsum)
@@ -571,11 +582,11 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
         (list pksum pk)))))
 
 ;; check that sig(sum) = sum(sig)
-(multiple-value-bind (pk1 sk1) (make-key-pair :key1)
+(multiple-value-bind (pk1 psig sk1) (make-key-pair :key1)
   (let* ((msg  :testing)
          (hsh  (hash msg))
          (sig1 (sign-hash hsh)))
-  (multiple-value-bind (pk2 sk2) (make-key-pair :key2)
+  (multiple-value-bind (pk2 psig sk2) (make-key-pair :key2)
     (let* ((pksum (mul-g2-pts pk1 pk2))
            (zsum  (add-zr-vals sk1 sk2))
            (sig2  (sign-hash hsh))
