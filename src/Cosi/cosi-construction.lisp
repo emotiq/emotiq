@@ -271,7 +271,7 @@ THE SOFTWARE.
   #+:OPENMCL (CCL::ipaddr-to-dotted val)
   #+:ALLEGRO (allegro-integer-to-dotted val)
   #-(or :LISPWORKS :ALLEGRO :CLOZURE)
-  (usocket:host-byte-order val))
+  (usocket:hbo-to-dotted-quad val))
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
