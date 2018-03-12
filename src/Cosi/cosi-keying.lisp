@@ -114,7 +114,7 @@ THE SOFTWARE.
 ;; math operations like for range proofs and such. And range proofs
 ;; also present special problems with respect to Elligator encodings.
 
-(defconstant +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
+(um:defconstant+ +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
 
 (defun make-deterministic-keypair (seed &optional (index 0))
   ;; WARNING!! This version is for testing only. Two different users
