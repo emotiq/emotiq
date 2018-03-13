@@ -129,11 +129,11 @@ THE SOFTWARE.
 ;; ----------------------------------------
 
 (defun vis-hash (&rest args)
-  (cosi-keying:published-form
-   (apply 'sha3/256-buffers args)))
+  (base58:to-base58
+   (apply 'pbc:hash args)))
 
 (defun convert-vis-to-vec (hash)
-  (ed-convert-int-to-lev (cosi-keying:need-integer-form hash) 32))
+  (base58:to-levn hash 32))
 
 (defun hash-element (item)
   (vis-hash (loenc:encode item)))
@@ -163,7 +163,7 @@ THE SOFTWARE.
 
 (defun treap-digest (treap)
   (if treap
-      (cosi-keying:published-form (ads:prover-digest treap))
+      (base58:to-base58 (ads:prover-digest treap))
     (hash-element nil)))
 
 (defun publish-block ()

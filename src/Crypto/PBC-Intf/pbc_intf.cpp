@@ -49,7 +49,7 @@ element_t temp1, temp2;
 pairing_pp_t pp;
 
 extern "C"
-long init_pairing(char* param_str, long nel)
+long init_pairing(char* param_str, long nel, long* psize)
 {
   long ans;
   
@@ -80,6 +80,12 @@ long init_pairing(char* param_str, long nel)
       element_random(g2);
       element_random(secret_key);
       element_pow_zn(public_key, g2, secret_key);
+
+      psize[0] = element_length_in_bytes_compressed(g1);
+      psize[1] = element_length_in_bytes_compressed(g2);
+      psize[2] = element_length_in_bytes(temp1);
+      psize[3] = element_length_in_bytes(secret_key);
+      
       init_flag = true;
     }
   return ans;
@@ -173,7 +179,9 @@ void make_secret_subkey(unsigned char* abuf,
 }
 
 extern "C"
-void compute_pairing(unsigned char* hbuf, unsigned char* gbuf)
+void compute_pairing(unsigned char* hbuf,
+		     unsigned char* gbuf,
+		     unsigned char* gtbuf)
 {
   element_t hh, gg;
 
@@ -182,6 +190,7 @@ void compute_pairing(unsigned char* hbuf, unsigned char* gbuf)
   element_from_bytes_compressed(hh, hbuf);
   element_from_bytes_compressed(gg, gbuf);
   pairing_apply(temp1, hh, gg, pairing);
+  element_to_bytes(gtbuf, temp1);
   element_clear(hh);
   element_clear(gg);
 }
@@ -315,16 +324,12 @@ long get_signature(unsigned char* pbuf, long buflen)
   return get_datum(sig, pbuf, buflen);
 }
 
-extern "C"
-long get_pairing(unsigned char* pbuf, long buflen)
-{
-  return get_datum(temp1, pbuf, buflen, false);
-}
-  
 // ------------------------------------------------
 
 extern "C"
-long check_signature(unsigned char* psig, unsigned char* phash, long nhash, unsigned char *pkey)
+long check_signature(unsigned char* psig,
+		     unsigned char* phash, long nhash,
+		     unsigned char *pkey)
 {
   element_from_bytes_compressed(sig, psig);
   element_from_hash(g1, phash, nhash);
@@ -335,96 +340,84 @@ long check_signature(unsigned char* psig, unsigned char* phash, long nhash, unsi
 }
 
 extern "C"
-void mul_G1_pts(unsigned char* pt_sum, unsigned char* pt1, unsigned char* pt2)
+void mul_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
-  element_t p1, p2, psum;
+  element_t p1, p2;
   element_init_G1(p1, pairing);
   element_init_G1(p2, pairing);
-  element_init_G1(psum, pairing);
   element_from_bytes_compressed(p1, pt1);
   element_from_bytes_compressed(p2, pt2);
-  element_mul(psum, p1, p2);
-  element_to_bytes_compressed(pt_sum, psum);
+  element_mul(p1, p1, p2);
+  element_to_bytes_compressed(pt1, p1);
   element_clear(p1);
   element_clear(p2);
-  element_clear(psum);
 }
   
 extern "C"
-void mul_G2_pts(unsigned char* pt_sum, unsigned char* pt1, unsigned char* pt2)
+void mul_G2_pts(unsigned char* pt1, unsigned char* pt2)
 {
-  element_t p1, p2, psum;
+  element_t p1, p2;
   element_init_G2(p1, pairing);
   element_init_G2(p2, pairing);
-  element_init_G2(psum, pairing);
   element_from_bytes_compressed(p1, pt1);
   element_from_bytes_compressed(p2, pt2);
-  element_mul(psum, p1, p2);
-  element_to_bytes_compressed(pt_sum, psum);
+  element_mul(p1, p1, p2);
+  element_to_bytes_compressed(pt1, p1);
   element_clear(p1);
   element_clear(p2);
-  element_clear(psum);
 }
   
 extern "C"
-void add_Zr_vals(unsigned char* zr_sum, unsigned char* zr1, unsigned char* zr2)
+void add_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 {
-  element_t z1, z2, zsum;
+  element_t z1, z2;
   element_init_Zr(z1, pairing);
   element_init_Zr(z2, pairing);
-  element_init_Zr(zsum, pairing);
   element_from_bytes(z1, zr1);
   element_from_bytes(z2, zr2);
-  element_add(zsum, z1, z2);
-  element_to_bytes(zr_sum, zsum);
+  element_add(z1, z1, z2);
+  element_to_bytes(zr1, z1);
   element_clear(z1);
   element_clear(z2);
-  element_clear(zsum);
 }
   
 extern "C"
-void inv_Zr_val(unsigned char* zr_inv, unsigned char* zr)
+void inv_Zr_val(unsigned char* zr)
 {
-  element_t z, zinv;
+  element_t z;
   element_init_Zr(z, pairing);
-  element_init_Zr(zinv, pairing);
   element_from_bytes(z, zr);
-  element_invert(zinv, z);
-  element_to_bytes(zr_inv, zinv);
+  element_invert(z, z);
+  element_to_bytes(zr, z);
   element_clear(z);
-  element_clear(zinv);
 }
 
 extern "C"
-void exp_G1z(unsigned char* g1_exp, unsigned char* g1, unsigned char* zr)
+void exp_G1z(unsigned char* g1, unsigned char* zr)
 {
-  element_t z, g, gexp;
+  element_t z, g;
   element_init_Zr(z, pairing);
   element_init_G1(g, pairing);
-  element_init_G1(gexp, pairing);
   element_from_bytes(z, zr);
   element_from_bytes_compressed(g, g1);
-  element_pow_zn(gexp, g, z);
-  element_to_bytes_compressed(g1_exp, gexp);
+  element_pow_zn(g, g, z);
+  element_to_bytes_compressed(g1, g);
   element_clear(z);
   element_clear(g);
-  element_clear(gexp);
 }
   
 extern "C"
-void exp_G2z(unsigned char* g2_exp, unsigned char* g2, unsigned char* zr)
+void exp_G2z(unsigned char* g2, unsigned char* zr)
 {
-  element_t z, g, gexp;
+  element_t z, g;
   element_init_Zr(z, pairing);
   element_init_G2(g, pairing);
-  element_init_G2(gexp, pairing);
   element_from_bytes(z, zr);
   element_from_bytes_compressed(g, g2);
-  element_pow_zn(gexp, g, z);
-  element_to_bytes_compressed(g2_exp, gexp);
+  element_pow_zn(g, g, z);
+  element_to_bytes_compressed(g2, g);
   element_clear(z);
   element_clear(g);
-  element_clear(gexp);
 }
   
 

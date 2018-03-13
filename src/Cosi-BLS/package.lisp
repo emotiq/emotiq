@@ -139,13 +139,17 @@
   (:export
    :need-integer-form
    :published-form
-   :cosi-dsa
-   :cosi-dsa-validate
+   :cosi-signature
+   :cosi-validate
+   :cosi-validate-signed-message
    :make-random-keypair
    :make-deterministic-keypair
-   :make-unique-deterministic-keypair
-   :make-subkey
+   :make-public-subkey
+   :make-secret-subkey
    :validate-pkey
+
+   :convert-int-to-wordlist
+   :convert-wordlist-to-int
    
    :add-key-to-blockchain
    :populate-pkey-database
