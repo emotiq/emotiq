@@ -43,6 +43,8 @@ THE SOFTWARE.
 (defpackage base58
   (:use :common-lisp)
   (:export
+   :ub8v
+   :ub8v-vec
    :lev
    :lev-vec
    :make-lev

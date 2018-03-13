@@ -36,25 +36,54 @@ THE SOFTWARE.
   (length +alphabet+)) ;; should be 58
 
 ;; ----------------------------------------------------------
+
+(defclass ub8v ()
+  ((val :reader  ub8v-vec
+        :initarg vec)))
+
+;; ----------------------------------------------------------
 ;; Base58 encodes UB8 vectors and integers into character strings of
 ;; the restricted alphabet. Encoding has a 6-character prefix that
 ;; represents the total number of bytes in the vector, up to 2^32
 ;; elements.
 
-(defstruct base58
-  str)
+(defclass base58 (ub8v)
+  ((val  :reader   base58-str
+         :initarg  :str)
+   ))
+
+(defun make-base58 (&key str)
+  (make-instance 'base58
+                 :str  str))
 
 ;; -----------------------------------------------------------
 ;; LEV-UB8 are little-endian vectors of UB8 elements
 
-(defstruct lev
-  vec)
+(defclass lev (ub8v)
+  ((val  :reader   lev-vec
+         :initarg  :vec)
+   ))
+
+(defun make-lev (&key vec)
+  (make-instance 'lev
+                 :vec vec))
 
 ;; -----------------------------------------------------------
 ;; BEV-UB8 are big-endian vectors of UB8 elements
 
-(defstruct bev
-  vec)
+(defclass bev (ub8v)
+  ((val  :reader   bev-vec
+         :initarg  :vec)
+   ))
+
+(defun make-bev (&key vec)
+  (make-instance 'bev
+                 :vec vec))
+
+(defmethod print-object ((obj ub8v) out-stream)
+  (format out-stream "#<~A ~A>"
+          (class-name (class-of obj))
+          (ub8v-vec obj)))
 
 ;; ---------------------------------------------------------
 ;; Encode to Base58 string
@@ -234,3 +263,18 @@ THE SOFTWARE.
 
 (defmethod to-int ((x base58))
   (to-int (to-lev x)))
+
+;; -------------------------------------------------------------------
+;; these compare operators are "bent" - doing just lexicographical
+;; comparison, instead of magnitude comparison. Probably good enough
+;; for most needs.
+
+(defmethod ord:compare ((a base58) b)
+  (ord:compare (base58-str a) (base58-str (to-base58 b))))
+
+(defmethod ord:compare ((a lev) b)
+  (ord:compare (lev-vec a) (lev-vec (to-lev b))))
+
+(defmethod ord:compare ((a bev) b)
+  (ord:compare (bev-vec a) (bev-vec (to-bev b))))
+

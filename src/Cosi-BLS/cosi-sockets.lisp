@@ -121,31 +121,21 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------
 
-(defun make-hmac (msg skey uuid)
+(defun make-hmac (msg skey)
   ;; Every packet sent to another node is accompanied by an HMAC that
   ;; is unforgeable. If a MITM attack occurs, the receiving node will
   ;; fail HMAC verification and just drop the incoming packet on the
   ;; floor. So MITM modifications become tantamount to a DOS attack.
-  (multiple-value-bind (v vpt) (ed-random-pair)
-    (let* ((c   (hash-pt-msg vpt msg))
-           (r   (with-mod *ed-r*
-                  (m- v (m* c skey)))))
-      (list msg r c uuid))))
+  (cosi-keying:cosi-signature msg skey))
 
-(defun verify-hmac (quad)
+(defun verify-hmac (tuple)
   ;; Every incoming packet is scrutinized for a valid HMAC. If it
   ;; checks out then the packet is dispatched to an operation.
   ;; Otherwise it is just dropped on the floor.
-  (when (and (consp quad)
-             (= 4 (length quad)))
-    (destructuring-bind (msg r c uuid) quad
-      (let* ((node (gethash uuid *uuid-node-tbl*))
-             (pkey (node-pkey node))
-             (vpt  (ed-add (ed-nth-pt r)
-                           (ed-mul pkey c)))
-             (cc   (hash-pt-msg vpt msg)))
-        (values msg (= cc c))
-        ))))
+  (when (ignore-errors
+          (pbc:with-crypto ()
+            (pbc:check-message tuple)))
+    (values (getf tuple :msg) t)))
 
 ;; -----------------------------------------------------
 ;; THE SOCKET INTERFACE...
@@ -180,10 +170,9 @@ THE SOFTWARE.
       (socket-send me me port '(:SHUTDOWN-SERVER)))))
 
 (defun socket-send (ip real-ip real-port msg)
-  (let* ((quad     (make-hmac (list* ip msg)
-                              (node-skey *my-node*)
-                              (node-uuid *my-node*)))
-         (packet   (loenc:encode quad)))
+  (let* ((tuple   (make-hmac (list* ip msg)
+                             (node-skey *my-node*)))
+         (packet  (loenc:encode quad)))
     (internal-send-socket real-ip real-port packet)))
 
 ;; ------------------------------------------------------------------
@@ -205,13 +194,12 @@ THE SOFTWARE.
   ;; Client side
   (defun socket-send (ip real-ip msg)
     ;; replace this with USOCKETS protocol
-    (let* ((quad     (make-hmac msg
-                                (node-skey *my-node*)
-                                (node-uuid *my-node*)))
+    (let* ((tuple    (make-hmac msg
+                                (node-skey *my-node*)))
            (agent-ip (format nil "eval@~A" real-ip)))
       ;; (format t "~%SOCKET-SEND: ~A ~A ~A" ip real-ip msg)
       #+:LISPWORKS
-      (bfly:! agent-ip `(forwarding ,ip ',quad))))
+      (bfly:! agent-ip `(forwarding ,ip ',tuple))))
 
   ;; -------------
   ;; Server side

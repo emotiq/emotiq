@@ -30,7 +30,32 @@ THE SOFTWARE.
         :base58)
   (:nicknames :pbc)
   (:export
+   ;; classes and their slot readers
+   :crypto-val
+   :crypto-val-vec
+   :g1-cmpr
+   :g1-cmpr-pt
+   :g2-cmpr
+   :g2-cmpr-pt
+   :zr
+   :zr-val
+   :gt
+   :gt-val
+   :public-key
+   :public-key-val
+   :secret-key
+   :secret-key-val
+   :signature
+   :signature-val
+   :pairing
+   :pairing-val
+   :hash
+   :hash-val
+   :crypto-text
+   :crypto-text-vec
+   
    :init-pairing
+   :set-generator  ;; 1 each for G1, and G2 groups
    
    :make-key-pair
    :check-public-key
@@ -43,12 +68,26 @@ THE SOFTWARE.
    :ibe-encrypt
    :ibe-decrypt
    
-   :hash
    :sign-message       ;; BLS Sigs
    :check-message
    :combine-signatures ;; for BLS MultiSigs
 
    :with-crypto
+
+   :mul-pts  ;; bent nomenclature for ECC
+   :add-zrs
+   :inv-zr
+   :expt-pt-zr
+
+   :keying-triple
+   :keying-triple-pkey
+   :keying-triple-sig
+   :keying-triple-skey
+   
+   :signed-message
+   :signed-message-msg
+   :signed-message-sig
+   :signed-message-pkey
    ))
 
 (in-package :pbc-interface)
@@ -97,7 +136,8 @@ THE SOFTWARE.
 
 (fli:define-foreign-function (_init-pairing "init_pairing" :source)
     ((param-text  (:pointer (:unsigned :char)))
-     (ntext       :long))
+     (ntext       :long)
+     (psizes      (:pointer :long)))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
@@ -113,13 +153,6 @@ THE SOFTWARE.
   :module      :pbclib)
 
 (fli:define-foreign-function (_get-g1 "get_g1" :source)
-    ((pbuf        (:pointer :void))
-     (nbuf        :long))
-  :result-type :long
-  :language    :ansi-c
-  :module      :pbclib)
-
-(fli:define-foreign-function (_get-pairing "get_pairing" :source)
     ((pbuf        (:pointer :void))
      (nbuf        :long))
   :result-type :long
@@ -246,51 +279,155 @@ THE SOFTWARE.
 ;; -------------------------------------------------
 
 (fli:define-foreign-function (_mul-g1-pts "mul_G1_pts" :source)
-    ((psum  (:pointer (:unsigned :char)))
-     (p1    (:pointer (:unsigned :char)))
+    ((p1    (:pointer (:unsigned :char)))
      (p2    (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_mul-g2-pts "mul_G2_pts" :source)
-    ((psum  (:pointer (:unsigned :char)))
-     (p1    (:pointer (:unsigned :char)))
+    ((p1    (:pointer (:unsigned :char)))
      (p2    (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_add-zr-vals "add_Zr_vals" :source)
-    ((zsum  (:pointer (:unsigned :char)))
-     (z1    (:pointer (:unsigned :char)))
+    ((z1    (:pointer (:unsigned :char)))
      (z2    (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_inv-zr-val "inv_Zr_val" :source)
-    ((zinv  (:pointer (:unsigned :char)))
-     (z     (:pointer (:unsigned :char))))
+    ((z     (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_exp-G1z "exp_G1z" :source)
-    ((gexp  (:pointer (:unsigned :char)))
-     (g     (:pointer (:unsigned :char)))
+    ((g     (:pointer (:unsigned :char)))
      (z     (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_exp-G2z "exp_G2z" :source)
-    ((gexp  (:pointer (:unsigned :char)))
-     (g     (:pointer (:unsigned :char)))
+    ((g     (:pointer (:unsigned :char)))
      (z     (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
 
 (fli:define-foreign-function (_compute-pairing "compute_pairing" :source)
-    ((hbuf  (:pointer (:unsigned :char)))
+    ((gtbuf (:pointer (:unsigned :char)))  ;; result returned here
+     (hbuf  (:pointer (:unsigned :char)))
      (gbuf  (:pointer (:unsigned :char))))
   :language :ansi-c
   :module   :pbclib)
+
+;; -------------------------------------------------
+
+(defclass crypto-val ()
+  ((val  :reader   crypto-val-vec
+         :initarg  :value)))
+
+(defclass g1-cmpr (crypto-val)
+  ((val :reader g1-cmpr-pt
+       :initarg  :pt)
+   ))
+
+(defclass signature (g1-cmpr)
+  ((val :reader signature-val
+       :initarg  :val)))
+
+(defclass g2-cmpr (crypto-val)
+  ((val  :reader g2-cmpr-pt
+        :initarg  :pt)
+   ))
+
+(defclass public-key (g2-cmpr)
+  ((val  :reader public-key-val
+        :initarg  :val)))
+
+(defclass gt (crypto-val)
+  ((val  :reader  gt-val
+         :initarg   :val)))
+
+(defclass pairing (gt)
+  ((val  :reader pairing-val
+         :initarg  :val)))
+
+(defclass zr (crypto-val)
+  ((val  :reader  zr-val
+         :initarg   :val)))
+
+(defclass secret-key (zr)
+  ((val :reader secret-key-val
+        :initarg  :val)))
+
+(defclass hash (crypto-val)
+  ((val  :reader hash-val
+         :initarg  :val)))
+
+(defclass crypto-text (crypto-val)
+  ((val  :reader  crypto-text-vec
+         :initarg :vec)))
+
+(defmethod print-object ((obj crypto-val) out-stream)
+  (format out-stream "#<~A ~A>"
+          (class-name (class-of obj))
+          (crypto-val-vec obj)))
+
+;; -----------------------------------------------
+
+(defun make-g1-cmpr (&key pt)
+  (make-instance 'g1-cmpr
+                 :pt  pt))
+
+(defun make-signature (&key val)
+  (make-instance 'signature
+                 :val  val))
+
+(defun make-g2-cmpr (&key pt)
+  (make-instance 'g2-cmpr
+                 :pt  pt))
+
+(defun make-public-key (&key val)
+  (make-instance 'public-key
+                 :val  val))
+
+(defun make-zr (&key val)
+  (make-instance 'zr
+                 :val  val))
+
+(defun make-secret-key (&key val)
+  (make-instance 'secret-key
+                 :val  val))
+
+(defun make-gt (&key val)
+  (make-instance 'gt
+                 :val  val))
+
+(defun make-pairing (&key val)
+  (make-instance 'pairing
+                 :val  val))
+
+(defun make-hash (&key val)
+  (make-instance 'hash
+                 :val  val))
+
+(defun make-crypto-text (&key vec)
+  (make-instance 'crypto-text
+                 :vec vec))
+
+;; -------------------------------------------------
+
+(defmethod to-bev ((x crypto-val))
+  (to-bev (crypto-val-vec x)))
+
+(defmethod to-lev ((x crypto-val))
+  (to-lev (crypto-val-vec x)))
+
+(defmethod to-base58 ((x crypto-val))
+  (to-base58 (crypto-val-vec x)))
+
+(defmethod to-int ((x crypto-val))
+  (to-int (crypto-val-vec x)))
 
 ;; -------------------------------------------------
 
@@ -311,8 +448,12 @@ beta 258884928943654248853773222049750430270094630806612676761613360620988850655
 alpha0 15760619495780482509052463852330180194970833782280957391784969704642983647946
 alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
 .end
-   :g1  (make-base58 :str "a11111WqGGrRbfzoFpdpxRZKA8kcYpMo4HetWkKg7adgbP32WP9")
-   :g2  (make-base58 :str "821111J1oeJtne6NTfpSNzFFwP1miBbhewJc8wqC5a5M91gYepHT9pckvDYwuuqJAbkEJ9VQw8qQ4bQHAX7na3FbGMFzuJ")
+   :g1  (make-g1-cmpr
+         :pt (make-base58
+              :str "a11111WqGGrRbfzoFpdpxRZKA8kcYpMo4HetWkKg7adgbP32WP9"))
+   :g2  (make-g2-cmpr
+         :pt (make-base58
+              :str "821111J1oeJtne6NTfpSNzFFwP1miBbhewJc8wqC5a5M91gYepHT9pckvDYwuuqJAbkEJ9VQw8qQ4bQHAX7na3FbGMFzuJ"))
    ))
 
 (defparameter *curve-default-ar160-params*
@@ -328,8 +469,12 @@ exp1 107
 sign1 1
 sign0 1
 .end
-   :g1  (make-base58 :str "821111VRWBrZArTU9JFEveDgiXFrEM5mLYpfivoBp3ag33ba1JsWfET1ht7o71qPRTTcR15DuJkYqQDhMcK3otGmmT7RjN8")
-   :g2  (make-base58 :str "8211114aAsrELJn94eLUo52nBi5DBtsWTywxvGszbX6FMQQYSCzjsJETPMvpz6pzrbade1hGGXvSXFWxXWYGsSAjNJ1c1q2")
+   :g1  (make-g1-cmpr
+         :pt (make-base58
+              :str "821111VRWBrZArTU9JFEveDgiXFrEM5mLYpfivoBp3ag33ba1JsWfET1ht7o71qPRTTcR15DuJkYqQDhMcK3otGmmT7RjN8"))
+   :g2  (make-g2-cmpr
+         :pt (make-base58
+              :str "8211114aAsrELJn94eLUo52nBi5DBtsWTywxvGszbX6FMQQYSCzjsJETPMvpz6pzrbade1hGGXvSXFWxXWYGsSAjNJ1c1q2"))
    ))
 
 (defparameter *curve*    nil)
@@ -372,21 +517,24 @@ sign0 1
     (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
                                                 (g1  g1)
                                                 (g2  g2)) params)
-               (ntxt (length txt)))
+               (ntxt   (length txt))
+               (ansbuf (fli:allocate-dynamic-foreign-object
+                        :type :long :nelems 4)))
       (assert (zerop (_init-pairing (fli:convert-to-dynamic-foreign-string
                                      txt
                                      :external-format :ASCII)
-                                    ntxt)))
-      (setf *curve* params)
-      (get-secret-key) ;; Zr - fill in the field sizes
-      (get-g1)
-      (get-g2)
-      (get-pairing)
+                                    ntxt
+                                    ansbuf)))
+      (setf *curve* params
+            *g1-size*  (fli:dereference ansbuf :index 0)
+            *g2-size*  (fli:dereference ansbuf :index 1)
+            *gt-size*  (fli:dereference ansbuf :index 2)
+            *zr-size*  (fli:dereference ansbuf :index 3))
       (if g1
-          (set-g1 g1)
+          (set-generator g1)
         (setf (curve-params-g1 params) (get-g1)))
       (if g2
-          (set-g2 g2)
+          (set-generator g2)
         (setf (curve-params-g2 params) (get-g2)))
       (values))))
 
@@ -399,8 +547,8 @@ sign0 1
                           :element-type '(unsigned-byte 8))))
     (loop for ix from 0 below nel do
           (setf (aref lbuf ix) (fli:dereference fbuf :index ix)))
-    (to-base58 (make-bev
-                :vec lbuf))))
+    (make-bev
+     :vec lbuf)))
 
 (defun make-fli-buffer (nb &optional initial-contents)
   ;; this must only be called from inside of a WITH-DYNAMIC-FOREIGN-OBJECTS
@@ -443,24 +591,27 @@ sign0 1
 ;; -------------------------------------------------
 
 (defun get-g1 ()
-  (get-element '*g1-size* '_get-g1))
+  (make-g1-cmpr
+   :pt (get-element '*g1-size* '_get-g1)))
 
 (defun get-g2 ()
-  (get-element '*g2-size* '_get-g2))
+  (make-g2-cmpr
+   :pt (get-element '*g2-size* '_get-g2)))
 
 (defun get-signature ()
-  (get-element '*g1-size* '_get-signature))
+  (make-signature
+   :val (get-element '*g1-size* '_get-signature)))
 
 (defun get-public-key ()
-  (get-element '*g2-size* '_get-public-key))
+  (make-public-key
+   :val (get-element '*g2-size* '_get-public-key)))
 
 (defun get-secret-key ()
-  (get-element '*zr-size* '_get-secret-key))
-
-(defun get-pairing ()
-  (get-element '*gt-size* '_get-pairing))
+  (make-secret-key
+   :val (get-element '*zr-size* '_get-secret-key)))
 
 (defun get-order ()
+  ;; retuns an integer
   (let ((txt (curve-params-pairing-text *curve*)))
     (read-from-string txt t nil
                       :start (+ (search "r " txt
@@ -469,89 +620,107 @@ sign0 1
 
 ;; -------------------------------------------------
 
-(defun set-element (bytes set-fn nb)
+(defmethod set-element ((bytes ub8v) set-fn nb)
   (need-pairing)
   (with-fli-buffers ((buf nb bytes))
     (funcall set-fn buf)))
 
-(defun set-g1 (g1-bytes)
-  (set-element g1-bytes '_set-g1 *g1-size*))
+(defmethod set-generator ((g1 g1-cmpr))
+  (set-element (g1-cmpr-pt g1) '_set-g1 *g1-size*))
 
-(defun set-g2 (g2-bytes)
-  (set-element g2-bytes '_set-g2 *g2-size*)
+(defmethod set-generator ((g2 g2-cmpr))
+  (set-element (g2-cmpr-pt g2) '_set-g2 *g2-size*)
   (setf *g2-init* t))
 
-(defun set-generator (g-bytes)
-  (set-g2 g-bytes))
+(defmethod set-public-key ((pkey public-key))
+  (set-element (public-key-val pkey) '_set-public-key *g2-size*))
 
-(defun set-public-key (pkey-bytes)
-  (set-element pkey-bytes '_set-public-key *g2-size*))
-
-(defun set-secret-key (skey-bytes)
+(defmethod set-secret-key ((skey secret-key))
   (need-generator)
-  (set-element skey-bytes '_set-secret-key *zr-size*)
+  (set-element (secret-key-val skey) '_set-secret-key *zr-size*)
   (setf *zr-init* t))
 
 ;; -------------------------------------------------
+;; what to hash of various types
 
-(defmethod hashable ((x bev))
-  (bev-vec x))
+(defmethod hashable ((x ub8v))
+  (ub8v-vec x))
 
-(defmethod hashable ((x lev))
-  (lev-vec x))
+(defmethod hashable ((x integer))
+  (hashable (to-lev x)))
 
-(defmethod hashable ((x base58))
-  (base58-str x))
+(defmethod hashable ((x crypto-val))
+  (hashable (crypto-val-vec x)))
 
 (defmethod hashable (x)
+  ;; let sha3-buffers deal with it via LOENC:ENCODE
   x)
+
+;; -------------------------------------------------
 
 (defun hash (&rest args)
   ;; produce a UB8V of the args
-  (let ((hv  (apply 'sha3/256-buffers (mapcar 'hashable args))))
-    (values (make-bev
-             :vec hv)
+  (let ((hv  (apply 'sha3/256-buffers
+                    (mapcar 'hashable args))))
+    (values (make-hash
+             :val (make-bev
+                   :vec hv))
             (length hv))))
         
-(defun sign-hash (hash-bytes)
+(defmethod sign-hash ((hash hash))
   ;; hash-bytes is UB8V
   (need-keying)
-  (let ((nhash (length (bev-vec (to-bev hash-bytes)))))
-    (with-fli-buffers ((hbuf nhash hash-bytes))
+  (let* ((bytes (hash-val hash))
+         (nhash (length (bev-vec (to-bev bytes)))))
+    (with-fli-buffers ((hbuf nhash bytes))
       (_sign-hash hbuf nhash)
       (get-signature)
       )))
 
-(defun check-hash (hash-bytes sig-bytes pkey-bytes)
+(defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   ;; hash-bytes is UB8V
   (need-generator)
-  (let ((nhash  (length (bev-vec (to-bev hash-bytes)))))
-    (with-fli-buffers ((sbuf *g1-size* sig-bytes)
-                       (hbuf nhash     hash-bytes)
-                       (pbuf *g2-size* pkey-bytes))
+  (let* ((bytes (hash-val hash))
+         (nhash (length (bev-vec (to-bev bytes)))))
+    (with-fli-buffers ((sbuf *g1-size* (signature-val sig))
+                       (hbuf nhash     bytes)
+                       (pbuf *g2-size* (public-key-val pkey)))
       (zerop (_check-signature sbuf hbuf nhash pbuf))
       )))
 
 ;; --------------------------------------------------------------
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
 
+(defclass signed-message ()
+  ((msg   :reader  signed-message-msg
+          :initarg :msg)
+   (sig   :reader  signed-message-sig
+          :initarg :sig)
+   (pkey  :reader  signed-message-pkey  ;; who signed it
+          :initarg :pkey)
+   ))
+
 (defun sign-message (msg)
-  (list :msg  msg                     ;; original message
-        :sig  (sign-hash (hash msg))  ;; signature
-        :pkey (get-public-key)))      ;; public key of signature
+  (make-instance 'signed-message
+                 :msg  msg
+                 :sig  (sign-hash (hash msg))
+                 :pkey (get-public-key)))
 
-(defun get-fields (lst keys)
-  (mapcar (um:curry 'getf lst) keys))
-
-(defun check-message (msg-list)
-  (destructuring-bind (msg sig-bytes pkey-bytes)
-      (get-fields msg-list '(:msg :sig :pkey))
-    (check-hash (hash msg)
-                sig-bytes
-                pkey-bytes)))
+(defmethod check-message ((sm signed-message))
+  (check-hash (hash (signed-message-msg sm))
+              (signed-message-sig       sm)
+              (signed-message-pkey      sm)))
 
 ;; --------------------------------------------------------------
 ;; Keying - generate secret and authenticated public keys
+
+(defclass keying-triple ()
+  ((pkey  :reader keying-triple-pkey
+          :initarg :pkey)
+   (sig   :reader keying-triple-sig
+          :initarg :sig)
+   (skey  :reader keying-triple-skey
+          :initarg :skey)))
 
 (defun make-key-pair (seed)
   ;; seed can be literally anything at all...
@@ -564,10 +733,13 @@ sign0 1
              (skey (get-secret-key)) ;; secret key
              (sig  (sign-hash (hash pkey)))) ;; signature on public key
         ;; return 3 values: public key, signature on public key, secret key
-        (values pkey sig skey))
-      )))
+        (make-instance 'keying-triple
+                       :pkey pkey
+                       :sig  sig
+                       :skey skey)
+        ))))
 
-(defun check-public-key (pkey psig)
+(defmethod check-public-key ((pkey public-key) (psig signature))
   (check-hash (hash pkey)
               psig
               pkey))
@@ -575,69 +747,68 @@ sign0 1
 ;; -----------------------------------------------------------------------
 ;; Sakai-Haskara Encryption
 
-(defun make-public-subkey (pkey seed)
+(defmethod make-public-subkey ((pkey public-key) seed)
   (need-generator)
   (multiple-value-bind (hsh hlen) (hash seed)
     (with-fli-buffers ((hbuf hlen      hsh)
-                       (pbuf *g2-size* pkey)
+                       (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
       (_make-public-subkey abuf pbuf hbuf hlen)
-      (xfer-foreign-to-lisp abuf *g2-size*))))
+      (make-public-key
+       :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
-(defun make-secret-subkey (skey seed)
+(defmethod make-secret-subkey ((skey secret-key) seed)
   (need-generator)
   (multiple-value-bind (hsh hlen) (hash seed)
     (with-fli-buffers ((hbuf hlen      hsh)
-                       (sbuf *zr-size* skey)
+                       (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
       (_make-secret-subkey abuf sbuf hbuf hlen)
-      (xfer-foreign-to-lisp abuf *g1-size*))))
+      (make-secret-key
+       :val (xfer-foreign-to-lisp abuf *g1-size*)))))
 
 ;; --------------------------------------------------------------
 ;; SAKKE - Sakai-Kasahara Pairing Encryption
 
 (defmethod pack-message ((val integer))
-  (to-levn val 32))
+  (to-bevn val 32))
 
-(defmethod pack-message ((x base58))
-  (to-levn x 32))
+(defmethod pack-message ((x ub8v))
+  (to-bevn x 32))
 
-(defmethod pack-message ((x lev))
-  (to-levn x 32))
-
-(defmethod pack-message ((x bev))
+(defmethod pack-message ((x crypto-val))
   (to-bevn x 32))
 
 ;; -------------
 
-(defun ibe-encrypt (msg pkey id)
+(defmethod ibe-encrypt (msg (pkey public-key) id)
   ;; msg should be base58 hash-sized vector of UB8
   ;; returned values are R and CryptoText, both in BASE58 encoding
   (need-generator)
   (let ((pkid   (make-public-subkey pkey id))
-        (tstamp (to-base58
-                 (make-bev
-                  :vec (uuid:uuid-to-byte-array
-                        (uuid:make-v1-uuid)))))
-        (msg    (to-base58 (pack-message msg))))
+        (tstamp (make-bev
+                 :vec (uuid:uuid-to-byte-array
+                       (uuid:make-v1-uuid))))
+        (msg    (pack-message msg)))
     (multiple-value-bind (rhsh hlen) (hash id tstamp msg)
       (with-fli-buffers ((hbuf  hlen       rhsh)  ;; hash value
                          (pbuf  *gt-size*)        ;; returned pairing
-                         (kbuf  *g2-size*  pkid)  ;; public key
+                         (kbuf  *g2-size*  (public-key-val pkid))  ;; public key
                          (rbuf  *g2-size*))       ;; returned R value
         (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf hlen)
         (let* ((pval (hash (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (cmsg (to-base58
-                      (make-lev
-                       :vec (map 'vector 'logxor
-                                 (bev-vec (to-bev pval))
-                                 (lev-vec (to-levn msg hlen))))))
-               (rval (xfer-foreign-to-lisp rbuf *g2-size*)))
+               (cmsg (make-crypto-text
+                      :vec (make-bev
+                            :vec (map 'vector 'logxor
+                                      (bev-vec (to-bev pval))
+                                      (bev-vec (to-bevn msg hlen))))))
+               (rval (make-g2-cmpr
+                      :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
         (list :to  (list pkey id tstamp)
               :enc (list rval cmsg))    ;; R, cyphertext
         )))))
                              
-(defun ibe-decrypt (crypto-packet skey)
+(defmethod ibe-decrypt (crypto-packet (skey secret-key))
   ;; rval is base58 R value provided in crypto message pair
   ;; cmsg should be base58 encoded hash-sized vector of UB8
   (need-generator)
@@ -651,11 +822,10 @@ sign0 1
           (_sakai-kasahara-decrypt pbuf rbuf kbuf)
           (multiple-value-bind (pval hlen)
               (hash (xfer-foreign-to-lisp pbuf *gt-size*))
-            (let* ((msg  (to-base58
-                          (make-lev
-                           :vec (map 'vector 'logxor
-                                     (bev-vec (to-bev pval))
-                                     (to-levn cmsg hlen)))))
+            (let* ((msg  (make-bev
+                          :vec (map 'vector 'logxor
+                                    (bev-vec (to-bev pval))
+                                    (bev-vec (to-bevn cmsg hlen)))))
                    (hval (hash id tstamp msg)))
               (with-fli-buffers ((hbuf hlen      hval)
                                  (kbuf *g2-size* pkey))
@@ -665,92 +835,99 @@ sign0 1
 
 ;; -----------------------------------------------
 
-(defun compute-pairing (hval gval)
+(defmethod compute-pairing ((hval g1-cmpr) (gval g2-cmpr))
   (need-pairing)
   (with-fli-buffers ((hbuf  *g1-size*  hval)
-                     (gbuf  *g2-size*  gval))
-    (_compute-pairing hbuf gbuf)
-    (get-pairing)))
+                     (gbuf  *g2-size*  gval)
+                     (gtbuf *gt-size*))
+    (_compute-pairing gtbuf hbuf gbuf)
+    (make-pairing
+     :val (xfer-foreign-to-lisp gtbuf *gt-size*))))
 
 ;; --------------------------------------------------------
 ;; Curve field operations -- to match academic papers, we utilize the
-;; "bent" nomenclature where curve point addition is denoted by field
+;; "bent" nomenclature where curve point addition is denoted by group
 ;; multiplication, curve point scalar multiplication is denoted as
-;; field exponentiation.
+;; group exponentiation.
 
-(defun mul-g1-pts (pt1 pt2)
-  ;; multiply two elements from G1 field (always the shorter field rep)
+(defun binop (op a b a-siz b-siz final)
+  ;; operate on operands a, b, returning in the buffer for a
+  ;; it is assumed that the a-siz is also the size of result.
   (need-pairing)
-  (with-fli-buffers ((p1-buf   *g1-size* pt1)
-                     (p2-buf   *g1-size* pt2)
-                     (psum-buf *g1-size*))
-    (_mul-g1-pts psum-buf p1-buf p2-buf)
-    (xfer-foreign-to-lisp psum-buf *g1-size*)
-    ))
+  (with-fli-buffers ((a-buf  a-siz  a)
+                     (b-buf  b-siz  b))
+    (funcall op a-buf b-buf) ;; result returned in first arg buffer
+    (funcall final (xfer-foreign-to-lisp a-buf a-siz))))
 
-(defun mul-g2-pts (pt1 pt2)
+(defun make-g1-ans (ans)
+  (make-g1-cmpr
+   :pt  ans))
+
+(defun make-g2-ans (ans)
+  (make-g2-cmpr
+   :pt ans))
+
+(defun make-zr-ans (ans)
+  (make-zr
+   :val ans))
+
+;; -------------------------------
+
+(defmethod mul-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; multiply two elements from G1 field (always the shorter field
+  ;; rep)
+  ;;
+  ;; (should be obvious, but you can't mix G1 with G2, except by
+  ;; pairing operations)
+  ;;
+  (binop '_mul-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
+
+(defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
   ;; multiply two elements from G2 field
-  (need-pairing)
-  (with-fli-buffers ((p1-buf   *g2-size* pt1)
-                     (p2-buf   *g2-size* pt2)
-                     (psum-buf *g2-size*))
-    (_mul-g2-pts psum-buf p1-buf p2-buf)
-    (xfer-foreign-to-lisp psum-buf *g2-size*)
-    ))
+  (binop '_mul-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
 
-(defun add-zr-vals (z1 z2)
+(defmethod add-zrs ((z1 zr) (z2 zr))
   ;; add two elements from Zr ring
-  (need-pairing)
-  (with-fli-buffers ((z1-buf   *zr-size* z1)
-                     (z2-buf   *zr-size* z2)
-                     (zsum-buf *zr-size*))
-    (_add-zr-vals zsum-buf z1-buf z2-buf)
-    (xfer-foreign-to-lisp zsum-buf *zr-size*)
-    ))
+  (binop '_add-zr-vals z1 z2
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defun inv-zr-val (z)
-  ;; compute inverse of z over Zr
+(defmethod inv-zr ((z zr))
+  ;; compute inverse of z in ring Zr
   (need-pairing)
-  (with-fli-buffers ((zinv-buf  *zr-size*)
-                     (z-buf     *zr-size* z))
-    (_inv-zr-val zinv-buf z-buf)
-    (xfer-foreign-to-lisp zinv-buf *zr-size*)))
+  (with-fli-buffers ((z-buf  *zr-size* z))
+    (_inv-zr-val z-buf)
+    (make-zr
+     :val (xfer-foreign-to-lisp z-buf *zr-size*))))
 
-(defun exp-G1z (g1 z)
+(defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
-  (need-pairing)
-  (with-fli-buffers ((g1-buf   *g1-size* g1)
-                     (z-buf    *zr-size* z)
-                     (g1^z-buf *g1-size*))
-    (_exp-G1z g1^z-buf g1-buf z-buf)
-    (xfer-foreign-to-lisp g1^z-buf *g1-size*)
-    ))
+  (binop '_exp-G1z g1 z
+         *g1-size* *zr-size* 'make-g1-ans))
 
-(defun exp-G2z (g2 z)
+(defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
   ;; exponentiate an element of G2 by element z of ring Zr
-  (need-pairing)
-  (with-fli-buffers ((g2-buf   *g2-size* g2)
-                     (z-buf    *zr-size* z)
-                     (g2^z-buf *g2-size*))
-    (_exp-G2z g2^z-buf g2-buf z-buf)
-    (xfer-foreign-to-lisp g2^z-buf *g2-size*)
-    ))
+  (binop '_exp-G2z g2 z
+         *g2-size* *zr-size* 'make-g2-ans))
 
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
 
-(defun combine-signatures (msg-list1 msg-list2)
+(defmethod combine-signatures ((sm1 signed-message) (sm2 signed-message))
   ;; BLS multi-signature is the product of the G1 and G2 elements
   ;; between them
-  (destructuring-bind (msg1 sig1 pkey1) msg-list1
-    (destructuring-bind (msg2 sig2 pkey2) msg-list2
+  (with-accessors ((msg1   signed-message-msg)
+                   (sig1   signed-message-sig)
+                   (pkey1  signed-message-pkey)) sm1
+    (with-accessors ((sig2  signed-message-sig)
+                     (pkey2 signed-message-pkey)) sm2
       ;; no point combining signatures unless the message was the
       ;; same for both...
-      (assert (equalp (hash msg1)
-                      (hash msg2)))
-      (list msg1
-        (mul-g1-pts sig1  sig2)
-        (mul-g2-pts pkey1 pkey2))
+      (make-instance 'signed-message
+                     :msg  msg1
+                     :sig  (mul-pts sig1 sig2)
+                     :pkey (mul-pts pkey1 pkey2))
       )))
 
 ;; --------------------------------------------------------
@@ -843,9 +1020,9 @@ sign0 1
 (defmacro with-crypto ((&key skey pkey) &body body)
   `(ac:ask *crypto-boss* (lambda ()
                             ,@(when skey
-                                `(set-secret-key ,skey))
+                                `((set-secret-key ,skey)))
                             ,@(when pkey
-                                `(set-public-key ,pkey))
+                                `((set-public-key ,pkey)))
                             ,@body)))
 
 #+:LISPWORKS

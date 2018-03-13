@@ -42,8 +42,8 @@ THE SOFTWARE.
      (:cosi (reply-to msg)
       (node-compute-cosi node reply-to msg))
 
-     (:validate (reply-to msg sig)
-      (reply reply-to :validation (node-validate-cosi node msg sig)))
+     (:validate (reply-to sig)
+      (reply reply-to :validation (node-validate-cosi node sig)))
           
      (:public-key (reply-to)
       (reply reply-to :pkey+zkp (node-pkeyzkp node)))
@@ -60,11 +60,8 @@ THE SOFTWARE.
      ;; -------------------------------
      ;; internal comms between Cosi nodes
      
-     (:commitment (reply-to msg seq)
-      (node-cosi-commitment node reply-to msg seq))
-
-     (:signing (reply-to c seq)
-      (node-cosi-signing node reply-to c seq))
+     (:signing (reply-to msg seq)
+      (node-cosi-signing node reply-to msg seq))
 
      ;; -----------------------------------
      ;; for sim and debug
@@ -162,8 +159,8 @@ THE SOFTWARE.
     (increase-loading (node-parent parent-node))))
 
 (defun node-model-insert-node (node new-node-info)
-  ;; info is (ipv4 UUID pkeyzkp)
-  (destructuring-bind (ipstr uuid pkeyzkp) new-node-info
+  ;; info is (ipv4 pkeyzkp)
+  (destructuring-bind (ipstr pkeyzkp) new-node-info
     (let* ((ix       (bin-for-ip node ipstr))
            (bins     (node-subs node))
            (sub-node (aref bins ix)))
@@ -171,7 +168,7 @@ THE SOFTWARE.
           ;; continue in parallel with our copy of tree
           (node-model-insert-node sub-node new-node-info)
         ;; else
-        (let ((new-node (make-node ipstr uuid pkeyzkp node)))
+        (let ((new-node (make-node ipstr pkeyzkp node)))
           (setf (node-real-ip new-node)  ipstr
                 (node-skey new-node)     nil
                 (aref bins ix)           new-node)
@@ -180,15 +177,14 @@ THE SOFTWARE.
         ))))
 
 (defun node-insert-node (node new-node-info)
-  (destructuring-bind (ipstr uuid pkeyzkp) new-node-info
+  (destructuring-bind (ipstr pkeyzkp) new-node-info
     (let ((new-node (gethash ipstr *ip-node-tbl*)))
       (if new-node ;; already present in tree?
-          ;; maybe caller just wants to change UUID or keying
+          ;; maybe caller just wants to change keying
           ;; won't be able to sign unless it know skey
           (multiple-value-bind (pkey ok) (check-pkey pkeyzkp)
             (when ok
-              (setf (node-uuid new-node)     uuid
-                    (node-pkeyzkp new-node)  pkeyzkp
+              (setf (node-pkeyzkp new-node)  pkeyzkp
                     (node-pkey new-node)     pkey ;; cache the decompressed key
                     (node-real-ip new-node)  ipstr)))
         ;; else - not already present
@@ -198,9 +194,8 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------
 
 (defun node-model-remove-node (gone-node)
-  (remhash (node-ip gone-node)   *ip-node-tbl*)
-  (remhash (node-uuid gone-node) *uuid-node-tbl*)
-  (let ((pcmpr (third (node-pkeyzkp gone-node))))
+  (remhash (node-ip gone-node) *ip-node-tbl*)
+  (let ((pcmpr (keyval (first (node-pkeyzkp gone-node)))))
     (remhash pcmpr *pkey-node-tbl*)
     (remhash pcmpr *pkey-skey-tbl*)))
 
@@ -214,30 +209,6 @@ THE SOFTWARE.
       (when (eq node *top-node*)
         (notify-real-descendents node :remove-node gone-node-ipv4)))))
   
-;; ------------------------------------------------------------------
-;; GET-PUBLIC-KEY - This is here primarily for testing the network.
-;; Not really an RPC call, and results will show in the output
-;; browser, not returned to caller.
-;;
-;; RPC violates the basic premise of the point-and-shoot design.
-;; Responders are free to ignore, be deaf, or send us garbage at any
-;; time.
-;;
-;; The design of the system is aimed at coexistence in a Byzantine network.
-;;
-(defun get-public-key (uuid)
-  (let ((node (gethash uuid *uuid-node-tbl*)))
-    (when node
-      (spawn (lambda ()
-               (let ((ret (make-return-addr (node-real-ip *my-node*))))
-                 (send node :public-key ret)
-                 (recv
-                   (msg
-                    (unregister-return-addr ret)
-                    (pr msg))
-                   )))
-             ))))
-
 #|
 (send *top-node* :public-key (make-node-ref *my-node*))
 ==> see results in output window
@@ -324,22 +295,28 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
-(defun node-validate-cosi (node msg sig)
+(defun node-validate-cosi (node sig)
   ;; toplevel entry for Cosi signature validation checking
   (declare (ignore node)) ;; not needed here...
-  (destructuring-bind (c r ids) sig
-    (let* ((tkey  (reduce (lambda (ans node)
-                            (if (and node
-                                     (logbitp (node-bit node) ids))
-                                (ed-add ans (node-pkey node))
-                              ans))
-                          *node-bit-tbl*
-                          :initial-value (ed-neutral-point)))
-           (vpt  (ed-add (ed-nth-pt r)
-                         (ed-mul tkey c)))
-           (h    (hash-pt-msg vpt msg)))
-      (= h c))
-    ))
+  (destructuring-bind (csig bits) sig
+    ;; first check for valid signature...
+    (and (cosi-keying:cosi-validate-signed-message csig)
+         ;; then, check that bitmap indicates the same set of public
+         ;; keys as used in forming the signature
+         (let* ((tkey  (reduce (lambda (ans node)
+                                 (if (and node
+                                          (logbitp (node-bit node) bits))
+                                     (if ans
+                                         (pbc:with-crypto ()
+                                           (pbc:mul-pts ans (node-pkey node)))
+                                       (node-pkey node))
+                                   ;; node didn't participate
+                                   ans))
+                               *node-bit-tbl*
+                               :initial-value nil)))
+           (= (base58:to-int (getf csig :pkey))
+              (base58:to-int tkey))
+           ))))
 
 ;; -----------------------------------------------------------------------
 
@@ -419,94 +396,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   (loop for ip in *real-nodes* do
         (apply 'send (gethash ip *ip-node-tbl*) msg)))
 
-;; -----------------------------------------------------------------------
-
-(defun sub-commitment (my-ip msg seq-id)
-  (=lambda (node)
-    (let ((start    (get-universal-time))
-          (timeout  10
-                    ;; (* (node-load node) *default-timeout-period*)
-                    )
-          (ret-addr (make-return-addr my-ip)))
-      (send node :commitment ret-addr msg seq-id)
-      (labels
-          ((!dly ()
-             #+:LISPWORKS
-             (send *dly-instr* :incr
-                   (/ (- (get-universal-time) start)
-                      timeout)))
-
-           (=return (val)
-             (!dly)
-             (unregister-return-addr ret-addr)
-             (=values val))
-               
-           (wait ()
-             (recv
-               ((list* :commit sub-seq ans)
-                (if (eql sub-seq seq-id)
-                    (=return ans)
-                  (wait)))
-               
-               (_
-                (wait))
-                 
-               :TIMEOUT timeout
-               :ON-TIMEOUT
-               (progn
-                 (pr (format nil "SubCommitment timeout waiting for ~A" (node-ip node)))
-                 (=return nil))
-               )))
-        (wait))
-      )))
-
-(defun node-cosi-commitment (node reply-to msg seq-id)
-  ;;
-  ;; First phase of Cosi:
-  ;;   Generate a fresh random ECC pair: (v, v*G)
-  ;;
-  ;;   Decide if msg warrants a commitment. If so add our contribution
-  ;;   to the random challenge, hold on to the secret seed, v. Collect
-  ;;   contributions from group members and add to the random
-  ;;   challenge ECC pt.
-  ;;
-  ;;   Compute local validity challenges for all the group members.
-  ;; 
-  ;;   Return both the accumulated random point and our particular
-  ;;   point for use in the local validity challenge.
-  ;;
-  (multiple-value-bind (v vpt) (ed-random-pair)
-    (let* ((subs   (remove-if 'node-bad (group-subs node)))
-           (ok     (msg-ok msg node))
-           (bits   (if ok (node-bitmap node) 0))
-           (vsum   (if ok vpt (ed-neutral-point))))
-      (setf (node-seq   node) seq-id
-            (node-parts node) nil
-            (node-v     node) v
-            (node-ok    node) ok) ;; indicate our participation in phase 1
-      (=bind (lst)
-          (pmapcar (sub-commitment (node-real-ip node) msg seq-id) subs)
-        (labels
-            ((fold-answer (ans sub)
-               (cond
-                ((null ans)
-                 (pr (format nil "No commitmemt: ~A" (node-ip sub)))
-                 (mark-node-no-response node sub))
-                
-                (t
-                 (destructuring-bind (sub-ptsum sub-bits) ans ;; partial V_sun, and V_i
-                   ;; fold in the subtree answer
-                   (setf bits (logior bits sub-bits)
-                         vsum (ed-add vsum (ed-decompress-pt sub-ptsum)))
-                   ;; accumulate participants for phase 2
-                   (push (list sub sub-ptsum sub-bits) (node-parts node))
-                   ))
-                )))
-          (mapc #'fold-answer lst subs)
-          ;; return partial V_sum and V_i for local checking
-          (send reply-to :commit seq-id (ed-compress-pt vsum) bits)
-          )))))
-
 ;; ------------------------------
 
 (defun sub-signing (my-ip c seq-id)
@@ -537,13 +426,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                       ;; else
                       (wait)))
                    
-                   ((list (or :missing-node
-                              :invalid-commitment) sub-seq)
-                    (if (eql sub-seq seq-id)
-                        (=return nil)
-                      ;; else
-                      (wait)))
-                   
                    (_
                     (wait))
                    
@@ -556,21 +438,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
         (wait))
       )))
 
-(defun get-summed-pkey (bits)
-  (let ((pksum (ed-neutral-point)))
-    (loop for node across *node-bit-tbl*
-          for bit from 0
-          do
-          (when (logbitp bit bits)
-            (setf pksum (ed-add pksum (node-pkey node)))))
-    pksum))
-
-(defun node-validate-member (sub-vpt c sub-r sub-bits)
-  (ed-pt= (ed-decompress-pt sub-vpt)
-          (ed-add (ed-nth-pt sub-r)
-                  (ed-mul (get-summed-pkey sub-bits) c))))
-
-(defun node-cosi-signing (node reply-to c seq-id)
+(defun node-cosi-signing (node reply-to msg seq-id)
   ;;
   ;; Second phase of Cosi:
   ;;   Given challenge value c, compute the signature value
@@ -578,138 +446,69 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;;   If we decided against signing in the first phase,
   ;;   then we shouldn't even be called
   ;;
-  (cond
-   ((and (integerp c)  ;; valid setup for phase 2?
-         (eql seq-id (node-seq node)))
-    (labels
-        ((compute-signage (challenge)
-           (with-mod *ed-r*
-             (m- (node-v node)
-                 (m* challenge (node-skey node))))))
-      
-      (let* ((ok      (node-ok node)) ;; did we participate in phase 1?
-             (subs    (mapcar 'first (node-parts node)))
-             (rsum    (if ok (compute-signage c) 0))
-             (missing nil))
-        (setf (node-v   node) nil ;; done with these
-              (node-seq node) nil)
-        (=bind (r-lst)
-            (pmapcar (sub-signing (node-real-ip node) c seq-id) subs)
-          (labels
-              ((fold-answer (sub-r sub-chk)
-                 (destructuring-bind (sub sub-vpt sub-bits) sub-chk
-                   (cond
-                    ((null sub-r)
-                     ;; no response from node, or bad subtree
-                     (pr (format nil "No signing: ~A" sub))
-                     (mark-node-no-response node sub)
-                     (setf missing t))
-                    
-                    (t
-                     ;; first validate the sub using msg and its c_i, r_i
-                     (if (node-validate-member sub-vpt c sub-r sub-bits)
-                         (unless missing
-                           ;; sub was ok, but if we had some missing
-                           ;; subs, don't waste time computing
-                           ;; anything
-                           (with-mod *ed-r*
-                             (setf rsum (m+ rsum sub-r))))
-                       ;; else
-                       (progn
-                         ;; sub gave a corrupt answer on the local challenge
-                         (pr (format nil "Corrupt node: ~A" (node-ip sub)))
-                         (mark-node-corrupted node sub)
-                         (setf missing t))
-                       ))
-                    ))))
-            (mapc #'fold-answer r-lst (node-parts node))
-            (if missing
-                (send reply-to :missing-node seq-id)
-              (send reply-to :signed seq-id rsum)) ;; return partial r_sum, and our r_i
-            )))))
-   
-   (t ;; else -- bad args
-      (send reply-to :invalid-commitment seq-id)) ;; request restart
-   ))
+  (let* ((subs (remove-if 'node-bad (group-subs node)))
+         (sig  (cosi-keying:cosi-signature msg (node-skey node)))
+         (bits (node-bitmap node)))
+    (=bind (r-lst)
+        (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
+      (labels
+          ((fold-answer (sub resp)
+             (cond
+              ((null resp)
+               ;; no response from node, or bad subtree
+               (pr (format nil "No signing: ~A" sub))
+               (mark-node-no-response node sub))
+              
+              (t
+               (destructuring-bind (sub-sig sub-bits) resp
+                 (pbc:with-crypto ()
+                   (if (pbc:check-message sub-sig)
+                       (setf sig  (pbc:combine-signatures sig sub-sig)
+                             bits (logior bits sub-bits))
+                     (mark-node-corrupted node sub))
+                   )))
+              )))
+        (mapc #'fold-answer subs r-lst)
+        (send reply-to :signed seq-id sig bits) ;; return partial r_sum, and our r_i
+        ))))
 
 ;; -----------------------------------------------------------
 
 (defun node-compute-cosi (node reply-to msg)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
+  (declare (ignore node))
   (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
         (self (current-actor)))
-    (ac:self-call :commitment self msg sess)
+    (ac:self-call :signing self msg sess)
     (labels
         ((unknown-message (msg)
            (error "Unknown message: ~A" msg))
          
-         (wait-commitment ()
+         (wait-signing ()
            (recv
-             ((list :commit seq vpt bits)
+             ((list :signed seq sig bits)
               (cond
                ((eql seq sess)
-                ;; compute global challenge                         
-                (let ((c  (hash-pt-msg (ed-decompress-pt vpt) msg)))
-                  (ac:self-call :signing self c sess)
-                  (labels
-                      ((wait-signing ()
-                         (recv
-                           ((list :signed seq r)
-                            (cond
-                             ((eql seq sess)
-                              (let ((sig (list c r bits)))
-                                (if (node-validate-cosi node msg sig)
-                                    ;; we completed successfully
-                                    (reply reply-to
-                                           (list :signature msg sig))
-                                  ;; bad signature, try again
-                                  (reply reply-to :corrupt-cosi-network)
-                                  )))
-
-                             (t ;; seq mismatch
-                              ;; must have been a late arrival
-                              (wait-signing))
-                             ))
-                                
-                           ((list :missing-node seq)
-                            (cond
-                             ((eql seq sess)
-                              ;; retry from start
-                              (pr "Witness dropout, signing restart")
-                              (node-compute-cosi node reply-to msg))
-
-                             (t ;; seq mismatch
-                              ;; must have been a late arrival
-                              (wait-signing))
-                             ))
-                           
-                           ((list :invalid-commitment seq)
-                            (cond
-                             ((eql seq sess)
-                              (pr "Invalid commitment, signing restart")
-                              (node-compute-cosi node reply-to msg))
-                             
-                             (t ;; seq mismatch
-                              ;; must have been a late arrival
-                              (wait-signing))
-                             ))
-                           
-                           (msg ;; other messages during signing phase
-                            (unknown-message msg))
-                           )))
-                    (wait-signing))
-                  )) ;; end of big COND clause
+                (if (pbc:with-crypto ()
+                      (pbc:check-message sig))
+                    ;; we completed successfully
+                    (reply reply-to
+                           (list :signature msg (list sig bits)))
+                  ;; bad signature, try again
+                  (reply reply-to :corrupt-cosi-network)
+                  ))
                ;; ------------------------------------
                (t ;; seq mismatch
-                ;; must have been a late arrival
-                (wait-commitment))
+                  ;; must have been a late arrival
+                  (wait-signing))
                )) ;; end of message pattern
              ;; ---------------------------------
              (msg ;; other messages during commitment phase
-              (unknown-message msg))
+                  (unknown-message msg))
              )))
-      (wait-commitment))))
+      (wait-signing)
+      )))
 
 #|
 ;; FOR TESTING!!!
@@ -738,7 +537,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
        (labels
            ((exit ()
               (unregister-return-addr ret)))
-         (send *top-node* :cosi ret "This is a test message!")
+         (send *top-node* :validate ret "This is a test message!")
          (recv
            ((list :answer
                   (and msg
