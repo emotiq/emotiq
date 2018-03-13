@@ -1,14 +1,28 @@
-;;; gossip.lisp
+;;; simple-gossip.lisp
 ;;; 8-Mar-2018 SVS
+
+;;; Simple gossip protocol for experimentation.
+;;;   No crypto. Just for gathering metrics.
+
+(in-package :gossip)
 
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
+(defvar *last-uid* 0 "Simple counter for making UIDs")
+
+(defun new-uid ()
+  (incf *last-uid*))
+
+(defun make-uid-mapper ()
+  "Returns a table that maps UIDs to objects"
+  (make-hash-table :test 'equal))
+
 (defclass uid-mixin ()
-  ((uid :initarg :uid :initform nil :accessor uid
+  ((uid :initarg :uid :initform (new-uid) :reader uid
         :documentation "Unique ID")))
 
 (defclass message-mixin (uid-mixin)
-  ((timestamp :initarg :timestamp :initform nil :accessor timestamp
+  ((timestamp :initarg :timestamp :initform (get-universal-time) :accessor timestamp
               :documentation "Timestamp of message origination")
    (kind :initarg :kind :initform nil :accessor kind
          :documentation "The verb of the message, indicating what action to take.")
@@ -26,28 +40,32 @@
   (:documentation "Reply message. Used to reply to solicitations that need a reply."))
 
 (defclass gossip-node ()
-  ((message-cache :initarg :message-cache :initform nil :accessor message-cache
+  ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
                   :documentation "Cache of seen messages")
-   (kvs :initarg :kvs :initform nil :accessor kvs
+   (kvs :initarg :kvs :initform (make-hash-table) :accessor kvs
         :documentation "Local key/value store for this node")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
-              :documentation "Set of direct neighbors of this node")
-   (logfn :initarg :logfn :initform nil :accessor logfn
+              :documentation "Set of UIDs of direct neighbors of this node")
+   (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
 
-; Logcmds: Keywords that describe what a node has done with a given message UID
+(defun make-node (&rest args)
+  "Makes a new node"
+  (let ((node (apply 'make-instance 'gossip-node args)))
+    (setf (gethash (uid node) *nodes*) node)
+    node))
+
+; Logcmd: Keyword that describes what a node has done with a given message UID
+; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
 
 (defmethod maybe-log ((node gossip-node) logcmd uid &rest args)
   (when (logfn node)
     (apply (logfn node) logcmd uid args)))
 
-;;; Mechanisms strictly for the simulation
-
 (defparameter *end-simulation* nil "Set to true to end an ongoing simulation")
 
 ; Graham's Basic queue
-
 (defun make-queue ()
   (cons nil nil))
 
@@ -63,23 +81,27 @@
 
 (defvar *message-space* (make-queue))
 (defvar *message-space-lock* (make-lock) "Just a lock to manage access to the message space")
+(defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes")
+
+(defun lookup-node (uid)
+  (gethash uid *nodes*))
 
 (defun new-log ()
+  "Returns a new log space"
   (make-array 10 :adjustable t :fill-pointer 0))
 
 (defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 
 (defvar *log* (new-log) "Log of simulated actions.")
 
-(defun logging-function (logcmd uid &rest args)
+(defun default-logging-function (logcmd uid &rest args)
   (vector-push-extend (list* logcmd uid args) *log*))
 
-(defmethod send-msg ((msg solicitation) src-uid dest-uid)
-  "Abstraction for asynchronous message sending. Post a message with src-id and dest-id into
+(defmethod send-msg ((msg solicitation) dest-uid src-uid)
+  "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
   a global space that all nodes can read from."
   (with-lock-grabbed (*message-space-lock*)
-    (enq (list msg src-uid dest-uid) *message-space*)
-    ))
+    (enq (list msg dest-uid src-uid) *message-space*)))
 
 ; TODO: Remove old entries in message-cache, eventually.
 (defmethod receive-message ((sol solicitation) (destnode gossip-node) srcnode)
@@ -91,13 +113,27 @@
                  (t
                   (setf (gethash (uid sol) (message-cache destnode)) t)
                   (maybe-log destnode :accepted (uid sol) (kind sol) (args sol))
-                  (do-message (kind sol) destnode srcnode (args sol))))))
+                  (let* ((kind (kind sol))
+                         (kindsym nil))
+                    (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
+                    (when (and kindsym
+                               (fboundp kindsym))
+                      (funcall kindsym sol destnode (uid srcnode))))))))
         (t (maybe-log destnode :ignore (uid sol) :too-old))))
 
-(defmethod do-message ((kind (eql :assign)) destnode srcnode args)
+(defun forward (msg srcuid destuids)
+  "Sends msg from srcuid to multiple destuids"
+  (mapc (lambda (destuid)
+          (send-msg msg destuid srcuid))
+        destuids))
+
+(defmethod assign (msg destnode srcuid)
   "Establishes a key/value pair on this node and forwards to other nodes, if any."
-  (destructuring-bind (key value &rest other) args
-    (setf (gethash key (kvs node) value))))
+  (let ((key (first (args msg)))
+        (value (second (args msg))))
+    (setf (gethash key (kvs destnode) value))
+    ; destnode becomes new source for forwarding purposes
+    (forward msg destnode (remove srcuid (neighbors destnode)))))
 
 (defmethod do-message ((kind (eql :inquire)) (node gossip-node) args)
   "Inquire as to the value of a key on a node. If this node has no further
@@ -119,10 +155,11 @@
     (funcall (intern "BACKGROUND-PROCESS-RUN-FUNCTION" :gui) keys fn)
     (process-run-function keys fn)))
 
-(defun dispatch-msg (msg src-uid dest-uid)
+(defun dispatch-msg (msg dest-uid src-uid)
+  "Call receive-message on message for node with given dest-uid."
   (let ((srcnode (lookup-node src-uid))
         (destnode (lookup-node dest-uid)))
-    (receive-message sol destnodesrcnode)))
+    (receive-message msg destnode srcnode)))
 
 (defun dispatcher-loop ()
   (let ((nextmsg nil))
