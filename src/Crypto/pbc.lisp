@@ -27,18 +27,27 @@ THE SOFTWARE.
 (defpackage :pbc-interface
   (:use :common-lisp
         :core-crypto)
+  (:nicknames :pbc)
   (:import-from :ecc-crypto-b571
    :encode-bytes-to-base58
-   :decode-bytes-from-base58)
+   :decode-bytes-from-base58
+   :convert-lev-to-int
+   :convert-int-to-lev)
   (:export
    :init-pairing
-   :set-generator
    
    :make-key-pair
    :check-public-key
+
    :set-secret-key
    :set-public-key
 
+   :make-public-subkey
+   :make-secret-subkey
+   :ibe-encrypt
+   :ibe-decrypt
+   
+   :hash
    :sign-message       ;; BLS Sigs
    :check-message
    :combine-signatures ;; for BLS MultiSigs
@@ -100,14 +109,21 @@ THE SOFTWARE.
 ;; -------------------------------------------------
 ;; Query interface
 
-(fli:define-foreign-function (_get-g "get_g" :source)
+(fli:define-foreign-function (_get-g2 "get_g2" :source)
     ((pbuf        (:pointer :void))
      (nbuf        :long))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
 
-(fli:define-foreign-function (_get-h "get_h" :source)
+(fli:define-foreign-function (_get-g1 "get_g1" :source)
+    ((pbuf        (:pointer :void))
+     (nbuf        :long))
+  :result-type :long
+  :language    :ansi-c
+  :module      :pbclib)
+
+(fli:define-foreign-function (_get-pairing "get_pairing" :source)
     ((pbuf        (:pointer :void))
      (nbuf        :long))
   :result-type :long
@@ -117,13 +133,13 @@ THE SOFTWARE.
 ;; -------------------------------------------------
 ;; Setter interface
 
-(fli:define-foreign-function (_set-g "set_g" :source)
+(fli:define-foreign-function (_set-g2 "set_g2" :source)
     ((pbuf   (:pointer (:unsigned :char))))
   :result-type :long
   :language    :ansi-c
   :module      :pbclib)
 
-(fli:define-foreign-function (_set-h "set_h" :source)
+(fli:define-foreign-function (_set-g1 "set_g1" :source)
     ((pbuf   (:pointer (:unsigned :char))))
   :result-type :long
   :language    :ansi-c
@@ -135,6 +151,47 @@ THE SOFTWARE.
 (fli:define-foreign-function (_make-key-pair "make_key_pair" :source)
     ((pbuf   (:pointer (:unsigned :char)))
      (nel    :long))
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_make-public-subkey "make_public_subkey" :source)
+    ((abuf   (:pointer (:unsigned :char)))
+     (pbuf   (:pointer (:unsigned :char)))
+     (hbuf   (:pointer (:unsigned :char)))
+     (hlen   :long))
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_make-secret-subkey "make_secret_subkey" :source)
+    ((abuf   (:pointer (:unsigned :char)))
+     (sbuf   (:pointer (:unsigned :char)))
+     (hbuf   (:pointer (:unsigned :char)))
+     (hlen   :long))
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_sakai-kasahara-encrypt "sakai_kasahara_encrypt" :source)
+    ((rbuf   (:pointer (:unsigned :char))) ;; returned R point in G2
+     (pbuf   (:pointer (:unsigned :char))) ;; returned pairing for encryption in GT
+     (pkey   (:pointer (:unsigned :char))) ;; public subkey in G2
+     (hbuf   (:pointer (:unsigned :char))) ;; hash(ID, msg)
+     (hlen   :long))
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_sakai-kasahara-decrypt "sakai_kasahara_decrypt" :source)
+    ((pbuf   (:pointer (:unsigned :char)))  ;; returned pairing for decryptin in GT
+     (rbuf   (:pointer (:unsigned :char)))  ;; R point in G2
+     (skey   (:pointer (:unsigned :char)))) ;; secret subkey in G1
+  :language :ansi-c
+  :module   :pbclib)
+
+(fli:define-foreign-function (_sakai-kasahara-check "sakai_kasahara_check" :source)
+    ((rbuf   (:pointer (:unsigned :char)))  ;; R point in G2
+     (pkey   (:pointer (:unsigned :char)))  ;; public subkey in G2
+     (hbuf   (:pointer (:unsigned :char)))  ;; hash(ID, msg)
+     (hlen   :long))
+  :result-type :long
   :language :ansi-c
   :module   :pbclib)
 
@@ -230,14 +287,20 @@ THE SOFTWARE.
   :language :ansi-c
   :module   :pbclib)
 
+(fli:define-foreign-function (_compute-pairing "compute_pairing" :source)
+    ((hbuf  (:pointer (:unsigned :char)))
+     (gbuf  (:pointer (:unsigned :char))))
+  :language :ansi-c
+  :module   :pbclib)
+
 ;; -------------------------------------------------
 
 (defstruct curve-params
   pairing-text
-  gen)
+  g1 g2)
 
 ;; from: genfparam 256
-(defvar *curve-fr256-params*
+(defparameter *curve-fr256-params*
   (make-curve-params
    :pairing-text
    #>.end
@@ -249,20 +312,40 @@ beta 258884928943654248853773222049750430270094630806612676761613360620988850655
 alpha0 15760619495780482509052463852330180194970833782280957391784969704642983647946
 alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
 .end
-   :gen  "13RiMW9z5MYdCDHqMecQ6YJJoHChzhgBpuhWZrtaZuWRSN4oEbB2UGYDfPWUyCV7qZJradJojpCoZR7YFH6RESP5"))
+   :g1  "k4D43rUYfy8Jb5svA84MDPBqGopzEnY3p5hWftjb4ajH"
+   :g2  "eHkMQzBYHLpN2qtj12c77Ka8F7cJA5eTVgxYiou2dwxzJwb9yGs8HDAKUvF5CNUtH4Vx6ir2gVv4u49qoKhPjjsf2"
+   ))
 
-(defparameter *G1-size* nil) ;; G1 corresponds to the h curve
-(defparameter *G2-size* nil) ;; G2 corresponds to the g curve for keying
-(defparameter *Zr-size* nil) ;; Zr corresponds to the secret-key
+(defparameter *curve-default-ar160-params*
+  (make-curve-params
+   :pairing-text
+   #>.end
+type a
+q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791
+h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776
+r 730750818665451621361119245571504901405976559617
+exp2 159
+exp1 107
+sign1 1
+sign0 1
+.end
+   :g1  "XvHFWryy2nHDz1uGzXUC1Yh4iHRMqVXxmi6an9KEg3TzXc6Bu4EjapeiAEgZYdKTCxPCYm7ibXBVkHL1HuxxxaVwD"
+   :g2  "HbeSBqyJxwNfsHEuneihwwKiKErSz9TwqrxnUFn6m7ky6mtnLLifFPdGjGYwcC9gPTpSspf7R5Nm6EjyNiacukBC"
+   ))
 
-(defparameter *pairing-init*  nil) ;; t if we have done init-pairing
-(defparameter *g2-init*       nil) ;; t if we have done set-generator
-(defparameter *zr-init*       nil) ;; t if we have done set-secret-key
+(defparameter *curve*    nil)
+(defparameter *G1-size*  nil) ;; G1 corresponds to the h curve
+(defparameter *G2-size*  nil) ;; G2 corresponds to the g curve for keying
+(defparameter *Zr-size*  nil) ;; Zr corresponds to the secret-key
+(defparameter *GT-size*  nil) ;; GT corresponds to the pairings
+
+(defparameter *g2-init*  nil) ;; t if we have done set-generator
+(defparameter *zr-init*  nil) ;; t if we have done set-secret-key
 
 ;; -------------------------------------------------
 
 (defun need-pairing ()
-  (unless *pairing-init*
+  (unless *curve*
     (error "Pairing not initialized. Use INIT-PAIRING.")))
 
 (defun need-keying ()
@@ -282,40 +365,61 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
     (setf *G1-size* nil
           *G2-size* nil
           *Zr-size* nil
+          *GT-size* nil
+          
           *G2-init* nil
-          *Zr-init* nil)
+          *Zr-init* nil
+          *curve*   nil)
     (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
-                                                (gen gen)) params)
+                                                (g1  g1)
+                                                (g2  g2)) params)
                (ntxt (length txt)))
       (assert (zerop (_init-pairing (fli:convert-to-dynamic-foreign-string
                                      txt
                                      :external-format :ASCII)
                                     ntxt)))
-      (setf *pairing-init* t)
+      (setf *curve* params)
       (get-secret-key) ;; Zr - fill in the field sizes
-      (get-g)  ;; G2
-      (get-h)  ;; G1 (always the shorter)
-      (when gen
-        (set-generator gen))
+      (get-g1)
+      (get-g2)
+      (if g1
+          (set-g1 g1)
+        (setf (curve-params-g1 params) (get-g1)))
+      (if g2
+          (set-g2 g2)
+        (setf (curve-params-g2 params) (get-g2)))
       (values))))
 
 ;; -------------------------------------------------
+;; PBC lib expects all values as big-endian
+;; We work internally with little-endian values
+
+(defun encode-bytes (bytes)
+  ;; make little endian base58 string from big-endian vector
+  (encode-bytes-to-base58 (reverse bytes)))
 
 (defun xfer-foreign-to-lisp (fbuf nel)
   (let ((lbuf (make-array nel
                           :element-type '(unsigned-byte 8))))
     (loop for ix from 0 below nel do
           (setf (aref lbuf ix) (fli:dereference fbuf :index ix)))
-    (encode-bytes-to-base58 lbuf)))
+    (encode-bytes lbuf)))
 
 (defmethod decode-bytes (bytes nb)
-  bytes)
+  ;; lib expects big-endian vectors
+  (reverse bytes))
+
+(defmethod decode-bytes ((bytes integer) nb)
+  ;; produce big-endian vector from integer
+  (convert-int-to-nbytesv bytes nb))
 
 (defmethod decode-bytes ((bytes string) nb)
-  (decode-bytes-from-base58 bytes nb))
+  ;; decode little-endian base58 strings to big-endian vectors of UB8
+  (reverse (decode-bytes-from-base58 bytes nb)))
 
 (defun make-fli-buffer (nb &optional initial-contents)
   ;; this must only be called from inside of a WITH-DYNAMIC-FOREIGN-OBJECTS
+  ;; initial-contents should be in little-endian order
   (let ((bytes (decode-bytes initial-contents nb)))
     (fli:allocate-dynamic-foreign-object
      :type   '(:unsigned :char)
@@ -352,11 +456,11 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
               
 ;; -------------------------------------------------
 
-(defun get-g ()
-  (get-element '*g2-size* '_get-g))
+(defun get-g1 ()
+  (get-element '*g1-size* '_get-g1))
 
-(defun get-h ()
-  (get-element '*g1-size* '_get-h))
+(defun get-g2 ()
+  (get-element '*g2-size* '_get-g2))
 
 (defun get-signature ()
   (get-element '*g1-size* '_get-signature))
@@ -367,6 +471,16 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (defun get-secret-key ()
   (get-element '*zr-size* '_get-secret-key))
 
+(defun get-pairing ()
+  (get-element '*gt-size* '_get-pairing))
+
+(defun get-order ()
+  (let ((txt (curve-params-pairing-text *curve*)))
+    (read-from-string txt t nil
+                      :start (+ (search "r " txt
+                                        :test 'string-equal)
+                                2))))
+
 ;; -------------------------------------------------
 
 (defun set-element (bytes set-fn nb)
@@ -374,12 +488,15 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   (with-fli-buffers ((buf nb bytes))
     (funcall set-fn buf)))
 
-(defun set-generator (g-bytes)
-  (set-element g-bytes '_set-g *g2-size*)
+(defun set-g1 (g1-bytes)
+  (set-element g1-bytes '_set-g1 *g1-size*))
+
+(defun set-g2 (g2-bytes)
+  (set-element g2-bytes '_set-g2 *g2-size*)
   (setf *g2-init* t))
 
-(defun set-h (h-bytes)
-  (set-element h-bytes '_set-h *g1-size*))
+(defun set-generator (g-bytes)
+  (set-g2 g-bytes))
 
 (defun set-public-key (pkey-bytes)
   (set-element pkey-bytes '_set-public-key *g2-size*))
@@ -387,15 +504,14 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (defun set-secret-key (skey-bytes)
   (need-generator)
   (set-element skey-bytes '_set-secret-key *zr-size*)
-  (setf *zr-init* t
-        *g2-init* t))
+  (setf *zr-init* t))
 
 ;; -------------------------------------------------
 
 (defun hash (&rest args)
   ;; produce a UB8V of the args
   (let ((hv  (apply 'sha3/256-buffers args)))
-    (values hv (length hv))))
+    (values (reverse hv) (length hv))))
         
 (defun sign-hash (hash-bytes)
   ;; hash-bytes is UB8V
@@ -420,12 +536,16 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
 
 (defun sign-message (msg)
-  (list msg                     ;; original message
-        (sign-hash (hash msg))  ;; signature
-        (get-public-key)))      ;; public key of signature
+  (list :msg  msg                     ;; original message
+        :sig  (sign-hash (hash msg))  ;; signature
+        :pkey (get-public-key)))      ;; public key of signature
+
+(defun get-fields (lst keys)
+  (mapcar (um:curry 'getf lst) keys))
 
 (defun check-message (msg-list)
-  (destructuring-bind (msg sig-bytes pkey-bytes) msg-list
+  (destructuring-bind (msg sig-bytes pkey-bytes)
+      (get-fields msg-list '(:msg :sig :pkey))
     (check-hash (hash msg)
                 sig-bytes
                 pkey-bytes)))
@@ -439,8 +559,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   (multiple-value-bind (hsh hlen) (hash seed)
     (with-fli-buffers ((hbuf hlen hsh))
       (_make-key-pair hbuf hlen)
-      (setf *zr-init* t
-            *g2-init* t)
+      (setf *zr-init* t)
       (let* ((pkey (get-public-key)) ;; public key
              (skey (get-secret-key)) ;; secret key
              (sig  (sign-hash (hash pkey)))) ;; signature on public key
@@ -452,6 +571,93 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   (check-hash (hash pkey)
               psig
               pkey))
+
+;; -----------------------------------------------------------------------
+;; Sakai-Haskara Encryption
+
+(defun make-public-subkey (pkey seed)
+  (need-generator)
+  (multiple-value-bind (hsh hlen) (hash seed)
+    (with-fli-buffers ((hbuf hlen      hsh)
+                       (pbuf *g2-size* pkey)
+                       (abuf *g2-size*))
+      (_make-public-subkey abuf pbuf hbuf hlen)
+      (xfer-foreign-to-lisp abuf *g2-size*))))
+
+(defun make-secret-subkey (skey seed)
+  (need-generator)
+  (multiple-value-bind (hsh hlen) (hash seed)
+    (with-fli-buffers ((hbuf hlen      hsh)
+                       (sbuf *zr-size* skey)
+                       (abuf *g1-size*))
+      (_make-secret-subkey abuf sbuf hbuf hlen)
+      (xfer-foreign-to-lisp abuf *g1-size*))))
+
+;; --------------------------------------------------------------
+
+(defmethod pack-message ((val integer))
+  (encode-bytes-to-base58 (convert-int-to-lev val 32)))
+
+(defmethod pack-message ((str string)) ;; assumed to be base58 LEV enc
+  str)
+
+(defmethod pack-message ((v vector)) ;; assumed to be LEV UB8
+  (encode-bytes-to-base58 v))
+
+(defun ibe-encrypt (msg pkey id)
+  ;; msg should be base58 hash-sized vector of UB8
+  ;; values are R and CryptoText, both in BASE58 encoding
+  (need-generator)
+  (let ((pkid   (make-public-subkey pkey id))
+        (tstamp (encode-bytes-to-base58
+                 (uuid:uuid-to-byte-array
+                  (uuid:make-v1-uuid)))))
+    (unless *gt-size*
+      (get-pairing))
+    (multiple-value-bind (rhsh hlen) (hash id tstamp msg)
+      (with-fli-buffers ((hbuf  hlen       rhsh)  ;; hash value
+                         (pbuf  *gt-size*)        ;; returned pairing
+                         (kbuf  *g2-size*  pkid)  ;; public key
+                         (rbuf  *g2-size*))       ;; returned R value
+        (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf hlen)
+        (let* ((pval (hash (xfer-foreign-to-lisp pbuf *gt-size*)))
+               (cmsg (encode-bytes
+                      (map 'vector 'logxor pval
+                           (decode-bytes msg hlen))))
+               (rval (xfer-foreign-to-lisp rbuf *g2-size*)))
+        (list rval   ;; R
+              tstamp ;; timestamp
+              cmsg)  ;; crypto-text
+        )))))
+                             
+(defun ibe-decrypt (crypto-packet skey pkey id)
+  ;; rval is base58 R value provided in crypto message pair
+  ;; cmsg should be base58 encoded hash-sized vector of UB8
+  (destructuring-bind (rval tstamp cmsg) crypto-packet
+    (let ((skid (make-secret-subkey skey id))
+          (pkey (make-public-subkey pkey id)))
+      (with-fli-buffers ((pbuf  *gt-size*)
+                         (kbuf  *g1-size*  skid)
+                         (rbuf  *g2-size*  rval))
+        (_sakai-kasahara-decrypt pbuf rbuf kbuf)
+        (multiple-value-bind (pval hlen)
+            (hash (xfer-foreign-to-lisp pbuf *gt-size*))
+          (let* ((msg  (encode-bytes
+                        (map 'vector 'logxor pval
+                             (decode-bytes cmsg hlen))))
+                 (hval (hash id tstamp msg)))
+            (with-fli-buffers ((hbuf hlen      hval)
+                               (kbuf *g2-size* pkey))
+              (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf hlen))
+                msg))
+            ))))))
+                             
+(defun compute-pairing (hval gval)
+  (need-pairing)
+  (with-fli-buffers ((hbuf  *g1-size*  hval)
+                     (gbuf  *g2-size*  gval))
+    (_compute-pairing hbuf gbuf)
+    (get-pairing)))
 
 ;; --------------------------------------------------------
 ;; Curve field operations -- to match academic papers, we utilize the
@@ -535,6 +741,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       )))
 
 ;; --------------------------------------------------------
+;; (init-pairing *curve-default-ar160-params*)
 (init-pairing)
 ;; --------------------------------------------------------
 #|
@@ -596,6 +803,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
       (set-secret-key zsum)
       (list (sign-hash hsh) ssum)
       ))))
+
 |#
 
 ;; ------------------------------------------------------
