@@ -76,6 +76,7 @@ long init_pairing(char* param_str, long nel, long* psize)
       element_init_GT(temp1, pairing);
       element_init_GT(temp2, pairing);
       element_init_Zr(secret_key, pairing);
+      
       element_random(g1); // default random values
       element_random(g2);
       element_random(secret_key);
@@ -179,9 +180,9 @@ void make_secret_subkey(unsigned char* abuf,
 }
 
 extern "C"
-void compute_pairing(unsigned char* hbuf,
-		     unsigned char* gbuf,
-		     unsigned char* gtbuf)
+void compute_pairing(unsigned char* gtbuf,
+		     unsigned char* hbuf,
+		     unsigned char* gbuf)
 {
   element_t hh, gg;
 
