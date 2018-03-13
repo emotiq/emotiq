@@ -2208,9 +2208,20 @@ This is C++ style enumerations."
 
 
 ;; --------------------------------------------
-;; BIND*
+;; (BIND* (bindings) . body)
+;;
+;; Note that (declare ...) forms may be included and interspersed among
+;; BINDINGS; i.e., the (declare ...) form does not belong at the beginning of
+;; body.
 
 (defmacro bind* (bindings &body body)
+  ;; Check for common programming error:
+  (when (and (consp (first body))
+             (eq (first (first body)) 'declare))
+    ;; Place (declare ...) forms among  
+    (warn 
+     "Check BIND* declarations syntax. First body form ~s is most likely misplaced."
+     (first body)))
   (nlet iter ((bindings bindings))
     
     (labels ((invalid-syntax (bindings)
