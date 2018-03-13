@@ -203,7 +203,7 @@ void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
   element_to_bytes_compressed(rbuf, pk);
 
   element_mul_zn(pk, g2, zr);
-  pairing_apply(gt, g1, zr, pairing);
+  pairing_apply(gt, g1, pk, pairing);
   element_to_bytes(pbuf, gt);
 
   element_clear(zr);

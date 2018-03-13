@@ -173,7 +173,7 @@ THE SOFTWARE.
 (fli:define-foreign-function (_sakai-kasahara-encrypt "sakai_kasahara_encrypt" :source)
     ((rbuf   (:pointer (:unsigned :char))) ;; returned R point in G2
      (pbuf   (:pointer (:unsigned :char))) ;; returned pairing for encryption in GT
-     (pkey   (:pointer (:unsigned :char))) ;; public subkey
+     (pkey   (:pointer (:unsigned :char))) ;; public subkey in G2
      (hbuf   (:pointer (:unsigned :char))) ;; hash(ID, msg)
      (hlen   :long))
   :language :ansi-c
@@ -456,11 +456,11 @@ sign0 1
               
 ;; -------------------------------------------------
 
-(defun get-g2 ()
-  (get-element '*g2-size* '_get-g2))
-
 (defun get-g1 ()
   (get-element '*g1-size* '_get-g1))
+
+(defun get-g2 ()
+  (get-element '*g2-size* '_get-g2))
 
 (defun get-signature ()
   (get-element '*g1-size* '_get-signature))
@@ -492,11 +492,11 @@ sign0 1
   (set-element g1-bytes '_set-g1 *g1-size*))
 
 (defun set-g2 (g2-bytes)
-  (set-element g2-bytes '_set-g2 *g2-size*))
+  (set-element g2-bytes '_set-g2 *g2-size*)
+  (setf *g2-init* t))
 
 (defun set-generator (g-bytes)
-  (set-element g-bytes '_set-g *g2-size*)
-  (setf *g2-init* t))
+  (set-g2 g-bytes))
 
 (defun set-public-key (pkey-bytes)
   (set-element pkey-bytes '_set-public-key *g2-size*))
@@ -595,39 +595,62 @@ sign0 1
 
 ;; --------------------------------------------------------------
 
+(defmethod pack-message ((val integer))
+  (encode-bytes-to-base58 (convert-int-to-lev val 32)))
+
+(defmethod pack-message ((str string)) ;; assumed to be base58 LEV enc
+  str)
+
+(defmethod pack-message ((v vector)) ;; assumed to be LEV UB8
+  (encode-bytes-to-base58 v))
+
 (defun ibe-encrypt (msg pkey id)
-  ;; msg should be hash-sized vector of UB8
+  ;; msg should be base58 hash-sized vector of UB8
   ;; values are R and CryptoText, both in BASE58 encoding
-  (multiple-value-bind (rhsh hlen) (hash id msg)
-    (let ((pkid (make-public-subkey pkey id)))
-      (with-fli-buffers ((hbuf  hlen       rhsh)
-                         (pbuf  *gt-size*)
-                         (kbuf  *g2-size*  pkid)
-                         (rbuf  *g2-size*))
+  (need-generator)
+  (let ((pkid   (make-public-subkey pkey id))
+        (tstamp (encode-bytes-to-base58
+                 (uuid:uuid-to-byte-array
+                  (uuid:make-v1-uuid)))))
+    (unless *gt-size*
+      (get-pairing))
+    (multiple-value-bind (rhsh hlen) (hash id tstamp msg)
+      (with-fli-buffers ((hbuf  hlen       rhsh)  ;; hash value
+                         (pbuf  *gt-size*)        ;; returned pairing
+                         (kbuf  *g2-size*  pkid)  ;; public key
+                         (rbuf  *g2-size*))       ;; returned R value
         (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf hlen)
         (let* ((pval (hash (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (cmsg (encode-bytes-to-base58 (map 'vector 'logxor pval msg))))
-        (values (xfer-foreign-to-lisp rbuf *g2-size*) ;; R
-                cmsg) ;; crypto-text
+               (cmsg (encode-bytes
+                      (map 'vector 'logxor pval
+                           (decode-bytes msg hlen))))
+               (rval (xfer-foreign-to-lisp rbuf *g2-size*)))
+        (list rval   ;; R
+              tstamp ;; timestamp
+              cmsg)  ;; crypto-text
         )))))
                              
-(defun ibe-decrypt (rval cmsg skey pkey id)
+(defun ibe-decrypt (crypto-packet skey pkey id)
   ;; rval is base58 R value provided in crypto message pair
   ;; cmsg should be base58 encoded hash-sized vector of UB8
-  (let ((skid (make-secret-subkey skey id))
-        (pkey (make-public-subkey pkey id)))
-    (with-fli-buffers ((pbuf  *gt-size*)
-                       (kbuf  *g1-size*  skid)
-                       (rbuf  *g2-size*  rval))
-      (_sakai-kasahara-decrypt pbuf rbuf kbuf)
-      (let* ((pval (hash (xfer-foreign-to-lisp pbuf *gt-size*)))
-             (msg  (map 'vector 'logxor pval (decode-bytes-from-base58 cmsg))))
-        (multiple-value-bind (hval hlen) (hash id msg)
-          (with-fli-buffers ((hbuf hlen      hval)
-                             (kbuf *g2-size* pkey))
-            (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf hlen))
-              msg))
-          )))))
+  (destructuring-bind (rval tstamp cmsg) crypto-packet
+    (let ((skid (make-secret-subkey skey id))
+          (pkey (make-public-subkey pkey id)))
+      (with-fli-buffers ((pbuf  *gt-size*)
+                         (kbuf  *g1-size*  skid)
+                         (rbuf  *g2-size*  rval))
+        (_sakai-kasahara-decrypt pbuf rbuf kbuf)
+        (multiple-value-bind (pval hlen)
+            (hash (xfer-foreign-to-lisp pbuf *gt-size*))
+          (let* ((msg  (encode-bytes
+                        (map 'vector 'logxor pval
+                             (decode-bytes cmsg hlen))))
+                 (hval (hash id tstamp msg)))
+            (with-fli-buffers ((hbuf hlen      hval)
+                               (kbuf *g2-size* pkey))
+              (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf hlen))
+                msg))
+            ))))))
                              
 (defun compute-pairing (hval gval)
   (need-pairing)
