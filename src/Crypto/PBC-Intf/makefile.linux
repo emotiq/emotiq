@@ -6,6 +6,6 @@ pbc_intf: pbc_intf.cpp
 	$(GCC) -o libLispPBCIntf.so \
 		pbc_intf.cpp \
 	-Wl,-rpath /usr/local/lib -l pbc
-	mv libLispPBCIntf.so /usr/local/lib
+	mv -f libLispPBCIntf.so /usr/local/lib
 
 

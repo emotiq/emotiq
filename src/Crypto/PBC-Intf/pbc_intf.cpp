@@ -194,6 +194,9 @@ void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
 {
   element_t zr, gt, pk;
 
+  /* pk, pkey is the public-subkey */
+  /* phash, zr is the hash(ID || Tstamp || msg) */
+
   element_init_G2(pk, pairing);
   element_init_Zr(zr, pairing);
   element_init_GT(gt, pairing);
@@ -218,6 +221,9 @@ void sakai_kasahara_decrypt(unsigned char* pbuf, // pairing result in GT
 {
   element_t gt, sk, rk;
 
+  /* rk, rbuf is the R value from encryption */
+  /* sk, sbuf is the secret_subkey */
+  
   element_init_G1(sk, pairing);
   element_init_G2(rk, pairing);
   element_init_GT(gt, pairing);
@@ -237,6 +243,10 @@ long sakai_kasahara_check(unsigned char* rkey, // R in G2
 {
   element_t zr, pk1, pk2;
   long      ans;
+
+  /* rkey, pk2 is the R value from encryption */
+  /* pkey, pk1 is the public_subkey */
+  /* phash is hash(ID || Tstamp || msg) */
   
   element_init_G2(pk1, pairing);
   element_init_G2(pk2, pairing);

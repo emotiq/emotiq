@@ -272,13 +272,15 @@ THE SOFTWARE.
     ans))
                          
 (defun encode-bytes-to-base58 (bytes)
-  (base58:encode (convert-lev-to-int bytes)))
+  (base58:to-base58 (base58:make-lev
+                     :vec bytes)))
  
 (defun encode-object-to-base58 (obj)
   (encode-bytes-to-base58 (loenc:encode obj)))
 
 (defun decode-bytes-from-base58 (str &optional nb)
-  (convert-int-to-lev (base58:decode str) nb))
+  (base58:to-lev (base58:make-base58
+                  :str str)))
   
 (defun decode-object-from-base58 (str)
   (loenc:decode (decode-bytes-from-base58 str)))

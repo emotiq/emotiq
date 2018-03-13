@@ -41,9 +41,24 @@ THE SOFTWARE.
    ))
 
 (defpackage base58
-  (:use :cl)
-  (:export :encode
-           :decode))
+  (:use :common-lisp)
+  (:export
+   :lev
+   :lev-vec
+   :make-lev
+   :bev
+   :bev-vec
+   :make-bev
+   :base58
+   :base58-str
+   :make-base58
+   :to-lev
+   :to-levn
+   :to-bev
+   :to-bevn
+   :to-base58
+   :to-int
+   ))
 
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
