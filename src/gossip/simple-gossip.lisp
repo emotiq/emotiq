@@ -80,7 +80,7 @@
   (pop (car q)))
 
 (defvar *message-space* (make-queue))
-(defvar *message-space-lock* (make-lock) "Just a lock to manage access to the message space")
+(defvar *message-space-lock* (ccl:make-lock) "Just a lock to manage access to the message space")
 (defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes")
 
 (defun lookup-node (uid)
@@ -131,20 +131,20 @@
   "Establishes a key/value pair on this node and forwards to other nodes, if any."
   (let ((key (first (args msg)))
         (value (second (args msg))))
-    (setf (gethash key (kvs destnode) value))
+    (setf (gethash key (kvs destnode)) value)
     ; destnode becomes new source for forwarding purposes
     (forward msg destnode (remove srcuid (neighbors destnode)))))
 
-(defmethod do-message ((kind (eql :inquire)) (node gossip-node) args)
+(defmethod inquire (msg destnode srcuid)
   "Inquire as to the value of a key on a node. If this node has no further
    neighbors, just return its value. Otherwise collect responses from subnodes."
-  (gethash (car args) (kvs node) value))
+  (gethash (car (args msg)) (kvs destnode)))
 
-(defmethod do-message ((kind (eql :max)) (node gossip-node) args)
+(defmethod find-max (msg destnode srcuid)
   "Retrieve maximum value of a given key on all the nodes"
   )
 
-(defmethod do-message ((kind (eql :min)) (node gossip-node) &rest args)
+(defmethod find-min (msg destnode srcuid)
   "Retrieve minimum value of a given key on all the nodes"
   )
 
@@ -153,7 +153,7 @@
   "So we can debug background processes in gui CCL. Also works in command-line CCL."
   (if (find-package :gui)
     (funcall (intern "BACKGROUND-PROCESS-RUN-FUNCTION" :gui) keys fn)
-    (process-run-function keys fn)))
+    (ccl:process-run-function keys fn)))
 
 (defun dispatch-msg (msg dest-uid src-uid)
   "Call receive-message on message for node with given dest-uid."
@@ -164,7 +164,7 @@
 (defun dispatcher-loop ()
   (let ((nextmsg nil))
     (loop until *end-simulation* do
-      (with-lock-grabbed (*message-space-lock*)
+      (ccl:with-lock-grabbed (*message-space-lock*)
         (setf nextmsg (deq *message-space*)))
       (if nextmsg
           (apply 'dispatch-msg nextmsg)
