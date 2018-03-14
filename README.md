@@ -40,7 +40,7 @@ running some version of *NIX:
 
     
 If you are under Windows or have placed your copy of this source tree
-in a different location on the filesystem, you will have to perform
+in a different location on the file-system, you will have to perform
 the corresponding actions manually as per your local OS conventions.
 
 Once the ASDF configuration has been edited correctly, one should be
@@ -48,7 +48,7 @@ able to verify that things are working via
 
     (asdf:system-source-directory :emotiq)
 
-### Ensure Quicklisp dependencies have been satified
+### Ensure Quicklisp dependencies have been satisfied
 
 This only needs to be performed once per installation.
 
