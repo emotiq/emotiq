@@ -17,7 +17,7 @@ We aim to work on as many ANSI implementation as possible.
 
 For the development of `testnet` we are targeting the
 commercial LispWorks Pro 7.1 implementation but we also test
-our code with `sbcl`, `ccl`, abl `abcl`.  Currently not all ASDF
+our code with `sbcl`, `ccl`, and `abcl`.  Currently not all ASDF
 systems run cleanly outside of `lwpro-7.1.0-patches-2`.
 
 ### Tell ASDF where to find the Emotiq systems 
