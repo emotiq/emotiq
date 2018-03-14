@@ -26,17 +26,11 @@ install:
 
 script:
   - ros -e '(ql:quickload :emotiq-test) 
-            (or (asdf:test-system :emotiq)
-                (uiop:quit -1))'
-  - ros -s prove
-        -e '(or (prove:run :emotiq-prove)
-                (uiop:quit -1))'
+            (when (asdf:test-system :emotiq)
+               (uiop:quit 0))'
   - ros -e '(ql:quickload :cosi-test)
-            (or (lisp-unit:run-tests :all :cosi-test)
-                (uiop:quit -1))'                         
-  - ros -s prove
-        -e '(or (prove:run :cosi-prove)
-                (uiop:quit -1))'
+            (when (asdf:test-system :cosi))
+               (uiop-quit 0))'
   # Speculatively hook into Coveralls <https://coveralls.io/>
   # Coveralls invocation (currently unused)
   #                 
