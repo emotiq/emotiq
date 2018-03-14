@@ -13,12 +13,12 @@ We assert an MIT license over this source aggregation; see
 
 This is a predominantly Common Lisp code base.
 
-We aim to work on as many ANSI implementation as possible.  
+We aim to work on as many ANSI implementations as possible.  
 
-For the development of `testnet` we are targeting the
-commercial LispWorks Pro 7.1 implementation but we also test
-our code with `sbcl`, `ccl`, and `abcl`.  Currently not all ASDF
-systems run cleanly outside of `lwpro-7.1.0-patches-2`.
+For the development of `testnet` we are targeting the commercial
+LispWorks Pro 7.1 implementation but we also test our code with
+`sbcl`, `ccl`, and `abcl`.  Currently not all ASDF systems run cleanly
+outside of `lwpro-7.1.0-patches-2`.
 
 ### Tell ASDF where to find the Emotiq systems 
 
@@ -44,13 +44,14 @@ in a different location on the file-system, you will have to perform
 the corresponding actions manually as per your local OS conventions.
 
 Once the ASDF configuration has been edited correctly, one should be
-able to verify that things are working via
+able to verify that things are working via:
 
     (asdf:system-source-directory :emotiq)
 
 ### Ensure Quicklisp dependencies have been satisfied
 
-This only needs to be performed once per installation.
+The installation of Quicklisp dependencies only needs to be performed
+once per installation.
 
 If Quicklisp is not locally available to your Lisp implementation,
 first download and install it via the instructions available at
@@ -98,4 +99,4 @@ stay equal, with other counts staying zero.
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-03-14 Wed 20:38Z>
+    Revised: <2018-03-14 Wed 21:36Z>
