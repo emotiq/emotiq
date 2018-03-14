@@ -29,8 +29,8 @@ script:
             (when (asdf:test-system :emotiq)
                (uiop:quit 0))'
   - ros -e '(ql:quickload :cosi-test)
-            (when (asdf:test-system :cosi))
-               (uiop-quit 0))'
+            (when (asdf:test-system :cosi)
+               (uiop:quit 0))'
   # Speculatively hook into Coveralls <https://coveralls.io/>
   # Coveralls invocation (currently unused)
   #                 
