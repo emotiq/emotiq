@@ -321,6 +321,8 @@ THE SOFTWARE.
   :module   :pbclib)
 
 ;; -------------------------------------------------
+;; Abstract superclass for crypto objects. These are just wrappers
+;; around UB8V objects. All subclasses share the same immutable slot.
 
 (defclass crypto-val (ub8v-repr)
   ((val  :reader   crypto-val-vec
@@ -335,6 +337,7 @@ THE SOFTWARE.
           (crypto-val-vec obj)))
 
 ;; -------------------------------------------------
+;; Useful subclasses
 
 (defclass g1-cmpr (crypto-val)
   ((val :reader g1-cmpr-pt
@@ -568,41 +571,41 @@ sign0 1
 
 ;; -------------------------------------------------
 
-(defmethod set-element ((bytes ub8v) set-fn nb)
+(defmethod set-element ((x crypto-val) set-fn nb)
+  ;; internal routine
   (need-pairing)
-  (with-fli-buffers ((buf nb bytes))
-    (funcall set-fn buf)))
+  (let ((bytes (crypto-val-vec x)))
+    (with-fli-buffers ((buf nb bytes))
+      (funcall set-fn buf))))
 
 (defmethod set-generator ((g1 g1-cmpr))
-  (set-element (g1-cmpr-pt g1) '_set-g1 *g1-size*))
+  (set-element g1 '_set-g1 *g1-size*))
 
 (defmethod set-generator ((g2 g2-cmpr))
-  (set-element (g2-cmpr-pt g2) '_set-g2 *g2-size*)
+  (set-element g2 '_set-g2 *g2-size*)
   (setf *g2-init* t))
 
 (defmethod set-public-key ((pkey public-key))
-  (set-element (public-key-val pkey) '_set-public-key *g2-size*))
+  (set-element pkey '_set-public-key *g2-size*))
 
 (defmethod set-secret-key ((skey secret-key))
   (need-generator)
-  (set-element (secret-key-val skey) '_set-secret-key *zr-size*)
+  (set-element skey '_set-secret-key *zr-size*)
   (setf *zr-init* t))
 
 ;; -------------------------------------------------
 ;; what to hash of various types
 
-(defmethod hashable ((x ub8v))
-  (ub8v-vec x))
-
-(defmethod hashable ((x integer))
-  (hashable (lev x)))
-
-(defmethod hashable ((x crypto-val))
-  (hashable (crypto-val-vec x)))
-
-(defmethod hashable (x)
-  ;; let sha3-buffers deal with it via LOENC:ENCODE
-  x)
+(defgeneric hashable (x)
+  (:method ((x ub8v))
+   (ub8v-vec x))
+  (:method ((x integer))
+   (hashable (lev x)))
+  (:method ((x ub8v-repr))
+   (hashable (ub8v-repr x)))
+  (:method (x)
+   ;; let sha3-buffers deal with it via LOENC:ENCODE
+   x))
 
 ;; -------------------------------------------------
 
@@ -717,65 +720,113 @@ sign0 1
 ;; --------------------------------------------------------------
 ;; SAKKE - Sakai-Kasahara Pairing Encryption
 
-(defmethod pack-message ((val integer))
-  (bevn val 32))
+(defun long-hash (&rest args)
+  ;; produce a 64-byte (512 bits) UB8V of the args
+  (let ((hv  (apply 'sha3-buffers
+                    (mapcar 'hashable args))))
+    (values (make-instance 'hash
+                           :val (bev hv))
+            (length hv))))
 
-(defmethod pack-message ((x ub8v))
-  (bevn x 32))
+(defun err-package (x)
+  (error "Use symmetric encryption for longer messages: ~A" x))
 
-(defmethod pack-message ((x crypto-val))
-  (bevn x 32))
+(defun check-package (vec)
+  (when (> (length (bev-vec vec)) 64)
+    (err-package vec))
+  (bevn vec 64))
+    
+(defgeneric pack-message (x)
+  (:method ((val integer))
+   (let ((vec (bev val)))
+     (check-package vec)))
+  (:method ((x string))
+   (let ((vec (bev (map 'vector 'char-code x))))
+     (check-package vec)))
+  (:method ((x symbol))
+   (let ((vec (bev (map 'vector 'char-code (string x)))))
+     (check-package vec)))
+  (:method ((x sequence))
+   (let ((vec (bev x)))
+     (check-package vec)))
+  (:method ((x ub8v))
+   (let ((vec (bev x)))
+     (check-package vec)))
+  (:method ((x ub8v-repr))
+   (let ((vec (bev x)))
+     (check-package vec)))
+  (:method (x)
+   (err-package x)))
 
 ;; -------------
 
+(defclass crypto-packet ()
+  ((pkey   :reader  crypto-packet-pkey     ;; public key of intended recipient
+           :initarg :pkey)
+   (id     :reader  crypto-packet-id       ;; ID used in IBE for this message
+           :initarg :id)
+   (tstamp :reader  crypto-packet-tstamp   ;; timestamp of encryption
+           :initarg :tstamp)
+   (rval   :reader  crypto-packet-rval     ;; R value of encryption
+           :initarg :rval)
+   (cmsg   :reader  crypto-packet-cmsg     ;; cryptotext of encrypted message
+           :initarg :cmsg)
+   ))
+
 (defmethod ibe-encrypt (msg (pkey public-key) id)
-  ;; msg should be base58 hash-sized vector of UB8
-  ;; returned values are R and CryptoText, both in BASE58 encoding
+  ;; msg should be representable by a 64-byte, or shorter, UB8-VECTOR
+  ;; Asymmetric encryption is intended only for short messages, like
+  ;; keying material. Use symmetric encryption for bulk message
+  ;; encryption.
   (need-generator)
-  (let ((pkid   (make-public-subkey pkey id))
-        (tstamp (bev (uuid:uuid-to-byte-array
-                      (uuid:make-v1-uuid))))
-        (msg    (pack-message msg)))
-    (multiple-value-bind (rhsh hlen) (hash id tstamp msg)
-      (with-fli-buffers ((hbuf  hlen       rhsh)  ;; hash value
-                         (pbuf  *gt-size*)        ;; returned pairing
-                         (kbuf  *g2-size*  (public-key-val pkid))  ;; public key
-                         (rbuf  *g2-size*))       ;; returned R value
-        (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf hlen)
-        (let* ((pval (hash (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (cmsg (make-instance 'crypto-text
-                                    :vec (bev (map 'vector 'logxor
-                                                   (bev-vec (bev pval))
-                                                   (bev-vec (bevn msg hlen))))))
-               (rval (make-instance 'g2-cmpr
-                                    :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
-        (list :to  (list pkey id tstamp)
-              :enc (list rval cmsg))    ;; R, cyphertext
-        )))))
+  (let* ((pkid   (make-public-subkey pkey id))
+         (tstamp (bev (uuid:uuid-to-byte-array
+                       (uuid:make-v1-uuid))))
+         (msg    (pack-message msg))
+         (rhsh   (hash id tstamp msg)))
+    (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
+                       (pbuf  *gt-size*)         ;; returned pairing
+                       (kbuf  *g2-size*  pkid)   ;; public key
+                       (rbuf  *g2-size*))        ;; returned R value
+      (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf 32)
+      (let* ((pval (long-hash (xfer-foreign-to-lisp pbuf *gt-size*)))
+             (cmsg (make-instance 'crypto-text
+                                  :vec (bev (map 'vector 'logxor
+                                                 (bev-vec (bev pval))
+                                                 (bev-vec (bev msg))))))
+             (rval (make-instance 'g2-cmpr
+                                  :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
+        (make-instance 'crypto-packet
+                       :pkey   pkey
+                       :id     id
+                       :tstamp tstamp
+                       :rval   rval
+                       :cmsg   cmsg)
+        ))))
                              
-(defmethod ibe-decrypt (crypto-packet (skey secret-key))
-  ;; rval is base58 R value provided in crypto message pair
-  ;; cmsg should be base58 encoded hash-sized vector of UB8
+(defmethod ibe-decrypt ((cx crypto-packet) (skey secret-key))
   (need-generator)
-  (destructuring-bind (pkey id tstamp) (getf crypto-packet :to)
-    (destructuring-bind (rval cmsg) (getf crypto-packet :enc)
-      (let ((skid (make-secret-subkey skey id))
-            (pkey (make-public-subkey pkey id)))
-        (with-fli-buffers ((pbuf  *gt-size*)
-                           (kbuf  *g1-size*  skid)
-                           (rbuf  *g2-size*  rval))
-          (_sakai-kasahara-decrypt pbuf rbuf kbuf)
-          (multiple-value-bind (pval hlen)
-              (hash (xfer-foreign-to-lisp pbuf *gt-size*))
-            (let* ((msg  (bev (map 'vector 'logxor
-                                   (bev-vec (bev pval))
-                                   (bev-vec (bevn cmsg hlen)))))
-                   (hval (hash id tstamp msg)))
-              (with-fli-buffers ((hbuf hlen      hval)
-                                 (kbuf *g2-size* pkey))
-                (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf hlen))
-                  msg))
-              )))))))
+  (with-accessors ((pkey   crypto-packet-pkey)
+                   (id     crypto-packet-id)
+                   (tstamp crypto-packet-tstamp)
+                   (rval   crypto-packet-rval)
+                   (cmsg   crypto-packet-cmsg)) cx
+    (let ((skid (make-secret-subkey skey id))
+          (pkey (make-public-subkey pkey id)))
+      (with-fli-buffers ((pbuf  *gt-size*)
+                         (kbuf  *g1-size*  skid)
+                         (rbuf  *g2-size*  rval))
+        (_sakai-kasahara-decrypt pbuf rbuf kbuf)
+        (let* ((pval (long-hash (xfer-foreign-to-lisp pbuf *gt-size*)))
+               (msg  (bev (map 'vector 'logxor
+                               (bev-vec (bev pval))
+                               (bev-vec (bev cmsg)))))
+               (hval (hash id tstamp msg)))
+          (with-fli-buffers ((hbuf 32        hval)
+                             (kbuf *g2-size* pkey))
+            (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf 32))
+              msg))
+          )))))
 
 ;; -----------------------------------------------
 

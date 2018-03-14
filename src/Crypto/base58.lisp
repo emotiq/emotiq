@@ -27,6 +27,53 @@ THE SOFTWARE.
 |#
 
 (in-package :base58)
+;; ---------------------------------------------------------
+
+;; This package describes interchangeable representations of vectors
+;; of (unsigned-byte 8) values.
+;;
+;;            Class Hierarchy
+;;            ---------------
+;;
+;;                 UB8V
+;;                   |
+;;      +-----+------+--------+-------+
+;;      |     |      |        |       |
+;;     LEV   BEV   BASE58   BASE64   HEX
+;;
+;; Class UB8V serves as an abstract superclass for all of these
+;; parallel sub-classes. Any object of one of the subclasses can be
+;; instantly converted into another parallel representation.
+;;
+;; Additionlly we make provision for conversion from bignum integers
+;; to/from these vector representations.
+;;
+;; Finally, the Class UB8V-REPR is a mixin for future classes to use,
+;; to indicate that they have the ability to produce a UB8V
+;; representation, e.g., public keys, secret keys, compressed points
+;; of Elliptic Curves, etc. This representation may be requested from
+;; them with the UB8V-REPR method call.
+;;
+;; Type UB8 represents '(UNSIGNED-BYTE 8). Type UB8-VECTOR is defined
+;; to represent any vector of actual UB8 values. Endian interpretation
+;; is in the eye of the beholder.
+;;
+;; Each of the subclasses also has methods defined with the same name
+;; as their class name, to perform conversions to their specific form
+;; of representation. For example:
+;;
+;;    (base58 (lev #(1 2 3 4)))
+;;  ==>
+;;    #<BASE58 1111156wxj2 >
+;;
+;; These conversion operators may be applied to objects of any of the
+;; parallel subclasses, as well as to INTEGER, LIST, and VECTOR. The
+;; latter two must contain only elements of type UB8.
+;;
+;; The operators can also be applied to any class that inherits from
+;; the mixin class UB8V-REPR and which implements a method by that
+;; same name to return an instance of one of these parallel
+;; subclasses. (c.f., PBC.LISP)
 
 ;; ----------------------------------------------------------
 ;; from https://bitcointalk.org/index.php?topic=1026.0
@@ -62,19 +109,30 @@ THE SOFTWARE.
     arr))
 
 ;; ----------------------------------------------------------
+;; Declare Types UB8 and UB8-VECTOR
+
+(deftype ub8 ()
+  '(unsigned-byte 8))
 
 (deftype ub8-vector (&optional nel)
-  `(array (unsigned-byte 8) (,nel)))
+  `(array ub8 (,nel)))
 
 ;; ---------------------------------------------------------
+;; Declare a useful mixin class to allow future classes to show a UB8V
+;; representation
 
 (defclass ub8v-repr ()
   ())
 
-(defmethod ub8v-repr (x)
-  (error "Subclass responsibility"))
+(defgeneric ub8v-repr (x)
+  (:method ((x ub8v-repr))
+   (error "Subclass responsibility")))
 
 ;; ---------------------------------------------------------
+;; UB8V - the top abstract class of objects which represent
+;; UB8-VECTORs. Declare a single slot to hold the data. Object of
+;; these classes are intended to be immuatable.  All subclasses share
+;; this same slot.
 
 (defclass ub8v ()
   ((val :reader  ub8v-vec
@@ -96,6 +154,8 @@ THE SOFTWARE.
          :initarg  :str)
    ))
 
+(defgeneric base58 (x))
+
 ;; ----------------------------------------------------------
 ;; Base64 encodes UB8 vectors and integers into character strings of
 ;; the restricted alphabet. Encoding has a 6-character prefix that
@@ -107,12 +167,16 @@ THE SOFTWARE.
          :initarg  :str)
    ))
 
+(defgeneric base64 (x))
+
 ;; -----------------------------------------------------------
-;; Hex-string representation, 1 char per nibble
+;; Hex-string representation, 1 char per 4-bit nibble
 
 (defclass hex (ub8v)
   ((val  :reader hex-str
          :initarg :str)))
+
+(defgeneric hex (x))
 
 ;; -----------------------------------------------------------
 ;; LEV-UB8 are little-endian vectors of UB8 elements
@@ -122,6 +186,8 @@ THE SOFTWARE.
          :initarg  :vec)
    ))
 
+(defgeneric lev (x))
+
 ;; -----------------------------------------------------------
 ;; BEV-UB8 are big-endian vectors of UB8 elements
 
@@ -129,6 +195,8 @@ THE SOFTWARE.
   ((val  :reader   bev-vec
          :initarg  :vec)
    ))
+
+(defgeneric bev (x))
 
 ;; ---------------------------------------------------------
 ;; Encode to Base58 big-endian string
@@ -356,11 +424,8 @@ THE SOFTWARE.
                                             :initial-contents lst))
             ))))))
 
-(defmethod lev ((x vector))
-  (make-instance 'lev
-                 :vec (coerce x 'ub8-vector)))
-
-(defmethod lev ((x list))
+(defmethod lev ((x sequence))
+  ;; LIST and VECTOR when can be coerced to UB8-VECTOR
   (make-instance 'lev
                  :vec (coerce x 'ub8-vector)))
 
@@ -368,14 +433,17 @@ THE SOFTWARE.
   (lev (ub8v-repr x)))
 
 (defmethod lev ((x hex))
+  ;; here it is known that HEX has a direct conversion from BEV
   (make-instance 'lev
                  :vec (nreverse
                        (bev-vec (bev x)))))
 
 (defun levn (x nb)
+  ;; create a LEV with a specified number of UB8 bytes
   (let* ((lev (lev x))
          (nel (length (lev-vec lev))))
     (cond ((< nel nb)
+           ;; extend with zero filled tail
            (let* ((diff (- nb nel))
                   (tail (make-array diff
                                     :element-type '(unsigned-byte 8)
@@ -383,6 +451,7 @@ THE SOFTWARE.
              (make-instance 'lev
                             :vec (concatenate 'vector (lev-vec lev) tail))))
           ((> nel nb)
+           ;; take from the LSB side
            (make-instance 'lev
                           :vec (subseq (lev-vec lev) 0 nb)))
           (t
@@ -401,25 +470,27 @@ THE SOFTWARE.
   (make-instance 'bev
                  :vec (reverse (lev-vec x))))
 
-(defmethod bev ((x vector))
-  (make-instance 'bev
-                 :vec (coerce x 'ub8-vector)))
-
-(defmethod bev ((x list))
+(defmethod bev ((x sequence))
+  ;; LIST and VECTOR when can be coerced to UB8-VECTOR
   (make-instance 'bev
                  :vec (coerce x 'ub8-vector)))
 
 (defun nbev (x)
+  ;; non-copying constructor - privately used when we have to first
+  ;; convert to LEV
   (make-instance 'bev
                  :vec (nreverse (lev-vec (lev x)))))
 
 (defmethod bev ((x integer))
+  ;; INTEGER known to have LEV conversion
   (nbev x))
 
 (defmethod bev ((x base58))
+  ;; BASE58 known to have LEV conversion
   (nbev x))
 
 (defmethod bev ((x base64))
+  ;; BASE64 known to have LEV conversion
   (nbev x))
 
 (defmethod bev ((x hex))
@@ -429,8 +500,8 @@ THE SOFTWARE.
                            :element-type '(unsigned-byte 8))))
     (labels ((decode (ch)
                (cond ((char<= #\0 ch #\9) (- (char-code ch) #.(char-code #\0)))
-                     ((char<= #\A ch #\F) (- (char-code ch) #.(char-code #\A) -10))
-                     ((char<= #\a ch #\f) (- (char-code ch) #.(char-code #\a) -10))
+                     ((char<= #\A ch #\F) (- (char-code ch) #.(- (char-code #\A) 10)))
+                     ((char<= #\a ch #\f) (- (char-code ch) #.(- (char-code #\a) 10)))
                      (t
                       (error "Invalid Hex string: ~S" str))
                      )))
@@ -452,9 +523,11 @@ THE SOFTWARE.
                      :vec vec))))
 
 (defun bevn (x nb)
+  ;; construct a BEV with a specified number of UB8 bytes
   (let* ((bev  (bev x))
          (nel  (length (bev-vec bev))))
     (cond ((< nel nb)
+           ;; prepend with zero filled prefix
            (let* ((diff (- nb nel))
                   (pref (make-array diff
                                     :element-type '(unsigned-byte 8)
@@ -462,6 +535,7 @@ THE SOFTWARE.
              (make-instance 'bev
                             :vec (concatenate 'vector pref (bev-vec bev)))))
           ((> nel nb)
+           ;; take a portion from the LSB side
            (make-instance 'bev
                           :vec (subseq (bev-vec bev) (- nel nb))))
           (t
@@ -469,6 +543,7 @@ THE SOFTWARE.
           )))
 
 ;; --------------------------------------------------------------
+;; Integer conversions
 
 (defmethod int ((x integer))
   x)
@@ -480,22 +555,12 @@ THE SOFTWARE.
   (int (lev x)))
 
 ;; -------------------------------------------------------------------
-;; these compare operators are "bent" - doing just lexicographical
-;; comparison, instead of magnitude comparison. Probably good enough
-;; for most needs.
+;; Compare operators for trees and maps
+;; Be careful of extremely large vectors... conversion to bignum
 
-(defmethod ord:compare ((a base58) b)
-  (ord:compare (base58-str a) (base58-str (base58 b))))
+(defmethod ord:compare ((a ub8v) b)
+  (ord:compare (int a) (int b)))
 
-(defmethod ord:compare ((a base64) b)
-  (ord:compare (base64-str a) (base64-str (base64 b))))
-
-(defmethod ord:compare ((a hex) b)
-  (ord:compare (hex-str a) (hex-str (hex b))))
-
-(defmethod ord:compare ((a lev) b)
-  (ord:compare (lev-vec a) (lev-vec (lev b))))
-
-(defmethod ord:compare ((a bev) b)
-  (ord:compare (bev-vec a) (bev-vec (bev b))))
+(defmethod ord:compare ((a ub8v-repr) b)
+  (ord:compare (int a) (int b)))
 
