@@ -43,23 +43,23 @@ THE SOFTWARE.
 (defpackage base58
   (:use :common-lisp)
   (:export
+   :ub8-vector
+   :ub8v-repr
    :ub8v
    :ub8v-vec
    :lev
    :lev-vec
-   :make-lev
    :bev
    :bev-vec
-   :make-bev
    :base58
    :base58-str
-   :make-base58
-   :to-lev
-   :to-levn
-   :to-bev
-   :to-bevn
-   :to-base58
-   :to-int
+   :base64
+   :base64-str
+   :hex
+   :hex-str
+   :int
+   :levn
+   :bevn
    ))
 
 (defpackage :ecc-crypto-b571
@@ -139,7 +139,10 @@ THE SOFTWARE.
 
 (defpackage :edwards-ecc
   (:nicknames :edec)
-  (:use :common-lisp :ecc-crypto-b571 :crypto/modular-arith)
+  (:use :common-lisp
+   :ecc-crypto-b571
+   :crypto/modular-arith
+   :base58)
   (:import-from :ecc-crypto-b571
 		:convert-int-to-nbytes
 		:convert-int-to-nbytesv

@@ -472,14 +472,6 @@ THE SOFTWARE.
                           (lambda ()
                             (ceiling (ed-nbits) 8))))
 
-(defun ed-convert-int-to-lev (v &optional (nel (ed-nbytes)))
-  (unless (<= (integer-length v) (* 8 nel))
-    (error "Truncation implied"))
-  (convert-int-to-lev v nel))
-
-(defun ed-convert-lev-to-int (vec)
-  (convert-lev-to-int vec))
-
 ;; ----------------------------------------
 
 (defun ed-compressed-nbits ()
@@ -508,17 +500,14 @@ THE SOFTWARE.
                (dpb 1 (byte 1 (ed-nbits)) x)
              x)))
       (if lev
-          (let ((enc (ed-convert-int-to-lev enc (ed-compressed-nbytes))))
+          (let ((enc (levn enc (ed-compressed-nbytes))))
             (if (eq lev :base58)
-                (encode-bytes-to-base58 enc)
+                (base58 enc)
               enc))
         enc))))
 
-(defmethod ed-decompress-pt ((s string)) ;; assumed Base58
-  (ed-decompress-pt (decode-bytes-from-base58 s)))
-
-(defmethod ed-decompress-pt ((v vector)) ;; assumed LE UB8V
-  (ed-decompress-pt (ed-convert-lev-to-int v)))
+(defmethod ed-decompress-pt ((x ub8v))
+  (ed-decompress-pt (int x)))
 
 (defmethod ed-decompress-pt ((v integer))
   (with-mod *ed-q*
@@ -552,6 +541,26 @@ THE SOFTWARE.
   (assert (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*))))
   pt)
 
+;; -----------------------------------------------------------------
+
+(defmethod hashable ((x ed-proj-pt))
+  (hashable (ed-compress-pt x :lev t)))
+
+(defmethod hashable ((x ecc-pt))
+  (hashable (ed-compress-pt x :lev t)))
+
+(defmethod hashable ((x ub8v))
+  (ub8v-vec x))
+
+(defmethod hashable ((x integer))
+  (lev-vec (lev x)))
+
+(defmethod hashable (x)
+  x)
+
+(defun hash (&rest args)
+  (bev (apply 'sha3-buffers (mapcar 'hashable args))))
+
 (defun ed-hash (pt)
   (sha3-buffers (ed-compress-pt pt :lev t)))
 
@@ -563,9 +572,11 @@ THE SOFTWARE.
     (um:nlet-tail iter ((ix   1)
                         (bits #()))
       (if (>= (* 8 (length bits)) nbits)
-          bits
+          (bev bits)
         (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
     ))
+
+;; -------------------------------------------------
 
 (defun compute-deterministic-skey (seed &optional (index 0))
   ;;
@@ -574,7 +585,7 @@ THE SOFTWARE.
   ;; *ed-r* field, and which avoids potential small-group attacks
   ;;
   (let* ((nbits (integer-length *ed-r*))
-         (h     (ed-convert-lev-to-int
+         (h     (int
                  (get-hash-bits nbits
                                 (list seed :generate-private-key index))))
          (s     (dpb 1 (byte 1 (1- nbits)) ;; set hi bit
@@ -604,11 +615,11 @@ THE SOFTWARE.
   (um:nlet-tail iter ((ix 0))
     (let ((r   (with-mod *ed-r*
                  (mmod
-                  (ed-convert-lev-to-int
-                   (sha3-buffers
-                    (ed-convert-int-to-lev ix 4)
-                    (ed-convert-int-to-lev k-priv (ed-compressed-nbytes))
-                    msgv))))))
+                  (int
+                   (bev (hash 
+                          (levn ix 4)
+                          (levn k-priv (ed-compressed-nbytes))
+                          msgv)))))))
       (if (plusp r)
           (values r (ed-nth-pt r) ix)
         (iter (1+ ix)))
@@ -625,12 +636,12 @@ THE SOFTWARE.
              (s         (with-mod *ed-r*
                           (m+ r
                               (m* skey
-                                  (ed-convert-lev-to-int
-                                   (sha3-buffers
-                                    (ed-convert-int-to-lev rpt-cmpr  nbcmpr)
-                                    (ed-convert-int-to-lev pkey-cmpr nbcmpr)
-                                    msg-enc))
-                                  )))))
+                                  (int
+                                   (bev (hash
+                                         (levn rpt-cmpr nbcmpr)
+                                         (levn pkey-cmpr nbcmpr)
+                                         msg-enc))
+                                   ))))))
         (list
          :msg   msg
          :pkey  pkey-cmpr
@@ -644,11 +655,11 @@ THE SOFTWARE.
      (ed-nth-pt s)
      (ed-add (ed-decompress-pt r)
              (ed-mul (ed-decompress-pt pkey)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers
-                       (ed-convert-int-to-lev r    nbcmpr)
-                       (ed-convert-int-to-lev pkey nbcmpr)
-                       (loenc:encode msg)))
+                     (int
+                      (bev (hash
+                            (levn r nbcmpr)
+                            (levn pkey nbcmpr)
+                            (lev  (loenc:encode msg)))))
                      )))))
 
 ;; -----------------------------------------------------------
@@ -887,11 +898,11 @@ THE SOFTWARE.
   (um:nlet-tail iter ((ix 0))
     (let* ((r     (with-mod *ed-r*
                     (mmod
-                     (ed-convert-lev-to-int
-                      (sha3-buffers
-                       (ed-convert-int-to-lev ix 4)
-                       (ed-convert-int-to-lev k-priv (elligator-nbytes))
-                       msgv)))))
+                     (int
+                      (bev (hash
+                            (levn ix 4)
+                            (levn k-priv (elligator-nbytes))
+                            msgv))))))
            (rpt   (ed-nth-pt r))
            (tau-r (elli2-encode rpt)))
       (if (and (plusp r) tau-r)
@@ -914,7 +925,7 @@ THE SOFTWARE.
  |#
 
 (defun elligator-ed-dsa (msg k-priv)
-  (let ((msg-enc (loenc:encode msg))
+  (let ((msg-enc (lev (loenc:encode msg)))
         (tau-pub (elli2-encode (ed-nth-pt k-priv))))
     (unless tau-pub
       (error "Not an Elligator key"))
@@ -924,12 +935,12 @@ THE SOFTWARE.
              (s      (with-mod *ed-r*
                        (m+ r
                            (m* k-priv
-                               (ed-convert-lev-to-int
-                                (sha3-buffers
-                                 (ed-convert-int-to-lev tau-r   nbytes)
-                                 (ed-convert-int-to-lev tau-pub nbytes)
-                                 msg-enc))
-                               )))))
+                               (int
+                                (bev (hash
+                                      (levn tau-r nbytes)
+                                      (levn tau-pub nbytes)
+                                      msg-enc))
+                                ))))))
         (list
          :msg     msg
          :tau-pub tau-pub
@@ -943,11 +954,11 @@ THE SOFTWARE.
      (ed-nth-pt s)
      (ed-add (elli2-decode tau-r)
              (ed-mul (elli2-decode tau-pub)
-                     (ed-convert-lev-to-int
-                      (sha3-buffers
-                       (ed-convert-int-to-lev tau-r   nbytes)
-                       (ed-convert-int-to-lev tau-pub nbytes)
-                       (loenc:encode msg)))
+                     (int
+                      (bev (hash
+                            (levn tau-r   nbytes)
+                            (levn tau-pub nbytes)
+                            (lev (loenc:encode msg)))))
                      )))))
 
 ;; ------------------------------------------------------------
@@ -972,7 +983,7 @@ THE SOFTWARE.
 
 (defun elligator-tau-vector (tau)
   ;; lst should be the property list returned by elligator-random-pt
-  (convert-int-to-nbytesv tau (elligator-nbytes)))
+  (levn tau (elligator-nbytes)))
 
 (defun do-elligator-schnorr-sig (msg tau-pub k-priv fn-gen)
   ;; msg is a message vector suitable for hashing
@@ -981,8 +992,8 @@ THE SOFTWARE.
   (um:nlet-tail iter ()
     (let* ((lst   (funcall fn-gen))
            (vtau  (elligator-tau-vector (getf lst :tau)))
-           (h     (convert-bytes-to-int
-                   (sha3-buffers
+           (h     (int
+                   (hash
                     vtau
                     (elligator-tau-vector tau-pub)
                     msg)))
@@ -1005,13 +1016,13 @@ THE SOFTWARE.
   ;; k-priv is the private key integer for pt-pub = k-priv * *ec-gen*
   (um:bind* (((vtau svec) sig)
              (pt-pub (funcall fn-decode tau-pub))
-             (pt-r   (funcall fn-decode (convert-bytes-to-int vtau)))
-             (h      (convert-bytes-to-int
-                      (sha3-buffers
+             (pt-r   (funcall fn-decode (int vtau)))
+             (h      (int
+                      (hash
                        vtau
                        (elligator-tau-vector tau-pub)
                        msg)))
-             (s      (to-elligator-range (convert-bytes-to-int svec)))
+             (s      (to-elligator-range (int svec)))
              (pt     (ed-nth-pt s))
              (ptchk  (ed-add pt-r (ed-mul pt-pub h))))
     (ed-pt= pt ptchk)))

@@ -322,9 +322,19 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------
 
-(defclass crypto-val ()
+(defclass crypto-val (ub8v-repr)
   ((val  :reader   crypto-val-vec
          :initarg  :value)))
+
+(defmethod ub8v-repr ((x crypto-val))
+  (crypto-val-vec x))
+
+(defmethod print-object ((obj crypto-val) out-stream)
+  (format out-stream "#<~A ~A >"
+          (class-name (class-of obj))
+          (crypto-val-vec obj)))
+
+;; -------------------------------------------------
 
 (defclass g1-cmpr (crypto-val)
   ((val :reader g1-cmpr-pt
@@ -368,67 +378,6 @@ THE SOFTWARE.
   ((val  :reader  crypto-text-vec
          :initarg :vec)))
 
-(defmethod print-object ((obj crypto-val) out-stream)
-  (format out-stream "#<~A ~A>"
-          (class-name (class-of obj))
-          (crypto-val-vec obj)))
-
-;; -----------------------------------------------
-
-(defun make-g1-cmpr (&key pt)
-  (make-instance 'g1-cmpr
-                 :pt  pt))
-
-(defun make-signature (&key val)
-  (make-instance 'signature
-                 :val  val))
-
-(defun make-g2-cmpr (&key pt)
-  (make-instance 'g2-cmpr
-                 :pt  pt))
-
-(defun make-public-key (&key val)
-  (make-instance 'public-key
-                 :val  val))
-
-(defun make-zr (&key val)
-  (make-instance 'zr
-                 :val  val))
-
-(defun make-secret-key (&key val)
-  (make-instance 'secret-key
-                 :val  val))
-
-(defun make-gt (&key val)
-  (make-instance 'gt
-                 :val  val))
-
-(defun make-pairing (&key val)
-  (make-instance 'pairing
-                 :val  val))
-
-(defun make-hash (&key val)
-  (make-instance 'hash
-                 :val  val))
-
-(defun make-crypto-text (&key vec)
-  (make-instance 'crypto-text
-                 :vec vec))
-
-;; -------------------------------------------------
-
-(defmethod to-bev ((x crypto-val))
-  (to-bev (crypto-val-vec x)))
-
-(defmethod to-lev ((x crypto-val))
-  (to-lev (crypto-val-vec x)))
-
-(defmethod to-base58 ((x crypto-val))
-  (to-base58 (crypto-val-vec x)))
-
-(defmethod to-int ((x crypto-val))
-  (to-int (crypto-val-vec x)))
-
 ;; -------------------------------------------------
 
 (defstruct curve-params
@@ -448,12 +397,12 @@ beta 258884928943654248853773222049750430270094630806612676761613360620988850655
 alpha0 15760619495780482509052463852330180194970833782280957391784969704642983647946
 alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
 .end
-   :g1  (make-g1-cmpr
-         :pt (make-base58
-              :str "a11111WqGGrRbfzoFpdpxRZKA8kcYpMo4HetWkKg7adgbP32WP9"))
-   :g2  (make-g2-cmpr
-         :pt (make-base58
-              :str "821111J1oeJtne6NTfpSNzFFwP1miBbhewJc8wqC5a5M91gYepHT9pckvDYwuuqJAbkEJ9VQw8qQ4bQHAX7na3FbGMFzuJ"))
+   :g1  (make-instance 'g1-cmpr
+         :pt (make-instance 'base58
+              :str "11111a3CC2P9iZp4DguyULARTeE6LHc1jCLhEhm1kY8hLz48BgU"))
+   :g2  (make-instance 'g2-cmpr
+         :pt (make-instance 'base58
+              :str "111128SiVvDVXDAzEFNYLqwboyPGuggSF7o4K6Hnhr4tQbFnkPcSHyDpaLKEejzpscLP39dMHxCF9W7VtYXKe8drDrCehu"))
    ))
 
 (defparameter *curve-default-ar160-params*
@@ -469,12 +418,12 @@ exp1 107
 sign1 1
 sign0 1
 .end
-   :g1  (make-g1-cmpr
-         :pt (make-base58
-              :str "821111VRWBrZArTU9JFEveDgiXFrEM5mLYpfivoBp3ag33ba1JsWfET1ht7o71qPRTTcR15DuJkYqQDhMcK3otGmmT7RjN8"))
-   :g2  (make-g2-cmpr
-         :pt (make-base58
-              :str "8211114aAsrELJn94eLUo52nBi5DBtsWTywxvGszbX6FMQQYSCzjsJETPMvpz6pzrbade1hGGXvSXFWxXWYGsSAjNJ1c1q2"))
+   :g1  (make-instance 'g1-cmpr
+         :pt (make-instance 'base58
+              :str "111128BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
+   :g2  (make-instance 'g2-cmpr
+         :pt (make-instance 'base58
+              :str "111128FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8"))
    ))
 
 (defparameter *curve*    nil)
@@ -547,14 +496,13 @@ sign0 1
                           :element-type '(unsigned-byte 8))))
     (loop for ix from 0 below nel do
           (setf (aref lbuf ix) (fli:dereference fbuf :index ix)))
-    (make-bev
-     :vec lbuf)))
+    (bev lbuf)))
 
 (defun make-fli-buffer (nb &optional initial-contents)
   ;; this must only be called from inside of a WITH-DYNAMIC-FOREIGN-OBJECTS
   ;; initial-contents should be in little-endian order
   (let ((bytes (and initial-contents
-                    (bev-vec (to-bevn initial-contents nb))))) 
+                    (bev-vec (bevn initial-contents nb))))) 
     (fli:allocate-dynamic-foreign-object
      :type   '(:unsigned :char)
      :nelems nb
@@ -591,23 +539,23 @@ sign0 1
 ;; -------------------------------------------------
 
 (defun get-g1 ()
-  (make-g1-cmpr
+  (make-instance 'g1-cmpr
    :pt (get-element '*g1-size* '_get-g1)))
 
 (defun get-g2 ()
-  (make-g2-cmpr
+  (make-instance 'g2-cmpr
    :pt (get-element '*g2-size* '_get-g2)))
 
 (defun get-signature ()
-  (make-signature
+  (make-instance 'signature
    :val (get-element '*g1-size* '_get-signature)))
 
 (defun get-public-key ()
-  (make-public-key
+  (make-instance 'public-key
    :val (get-element '*g2-size* '_get-public-key)))
 
 (defun get-secret-key ()
-  (make-secret-key
+  (make-instance 'secret-key
    :val (get-element '*zr-size* '_get-secret-key)))
 
 (defun get-order ()
@@ -647,7 +595,7 @@ sign0 1
   (ub8v-vec x))
 
 (defmethod hashable ((x integer))
-  (hashable (to-lev x)))
+  (hashable (lev x)))
 
 (defmethod hashable ((x crypto-val))
   (hashable (crypto-val-vec x)))
@@ -662,16 +610,15 @@ sign0 1
   ;; produce a UB8V of the args
   (let ((hv  (apply 'sha3/256-buffers
                     (mapcar 'hashable args))))
-    (values (make-hash
-             :val (make-bev
-                   :vec hv))
+    (values (make-instance 'hash
+                           :val (bev hv))
             (length hv))))
         
 (defmethod sign-hash ((hash hash))
   ;; hash-bytes is UB8V
   (need-keying)
   (let* ((bytes (hash-val hash))
-         (nhash (length (bev-vec (to-bev bytes)))))
+         (nhash (length (bev-vec (bev bytes)))))
     (with-fli-buffers ((hbuf nhash bytes))
       (_sign-hash hbuf nhash)
       (get-signature)
@@ -681,7 +628,7 @@ sign0 1
   ;; hash-bytes is UB8V
   (need-generator)
   (let* ((bytes (hash-val hash))
-         (nhash (length (bev-vec (to-bev bytes)))))
+         (nhash (length (bev-vec (bev bytes)))))
     (with-fli-buffers ((sbuf *g1-size* (signature-val sig))
                        (hbuf nhash     bytes)
                        (pbuf *g2-size* (public-key-val pkey)))
@@ -754,8 +701,8 @@ sign0 1
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
       (_make-public-subkey abuf pbuf hbuf hlen)
-      (make-public-key
-       :val (xfer-foreign-to-lisp abuf *g2-size*)))))
+      (make-instance 'public-key
+                     :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
   (need-generator)
@@ -764,20 +711,20 @@ sign0 1
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
       (_make-secret-subkey abuf sbuf hbuf hlen)
-      (make-secret-key
-       :val (xfer-foreign-to-lisp abuf *g1-size*)))))
+      (make-instance 'secret-key
+                     :val (xfer-foreign-to-lisp abuf *g1-size*)))))
 
 ;; --------------------------------------------------------------
 ;; SAKKE - Sakai-Kasahara Pairing Encryption
 
 (defmethod pack-message ((val integer))
-  (to-bevn val 32))
+  (bevn val 32))
 
 (defmethod pack-message ((x ub8v))
-  (to-bevn x 32))
+  (bevn x 32))
 
 (defmethod pack-message ((x crypto-val))
-  (to-bevn x 32))
+  (bevn x 32))
 
 ;; -------------
 
@@ -786,9 +733,8 @@ sign0 1
   ;; returned values are R and CryptoText, both in BASE58 encoding
   (need-generator)
   (let ((pkid   (make-public-subkey pkey id))
-        (tstamp (make-bev
-                 :vec (uuid:uuid-to-byte-array
-                       (uuid:make-v1-uuid))))
+        (tstamp (bev (uuid:uuid-to-byte-array
+                      (uuid:make-v1-uuid))))
         (msg    (pack-message msg)))
     (multiple-value-bind (rhsh hlen) (hash id tstamp msg)
       (with-fli-buffers ((hbuf  hlen       rhsh)  ;; hash value
@@ -797,13 +743,12 @@ sign0 1
                          (rbuf  *g2-size*))       ;; returned R value
         (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf hlen)
         (let* ((pval (hash (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (cmsg (make-crypto-text
-                      :vec (make-bev
-                            :vec (map 'vector 'logxor
-                                      (bev-vec (to-bev pval))
-                                      (bev-vec (to-bevn msg hlen))))))
-               (rval (make-g2-cmpr
-                      :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
+               (cmsg (make-instance 'crypto-text
+                                    :vec (bev (map 'vector 'logxor
+                                                   (bev-vec (bev pval))
+                                                   (bev-vec (bevn msg hlen))))))
+               (rval (make-instance 'g2-cmpr
+                                    :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
         (list :to  (list pkey id tstamp)
               :enc (list rval cmsg))    ;; R, cyphertext
         )))))
@@ -822,10 +767,9 @@ sign0 1
           (_sakai-kasahara-decrypt pbuf rbuf kbuf)
           (multiple-value-bind (pval hlen)
               (hash (xfer-foreign-to-lisp pbuf *gt-size*))
-            (let* ((msg  (make-bev
-                          :vec (map 'vector 'logxor
-                                    (bev-vec (to-bev pval))
-                                    (bev-vec (to-bevn cmsg hlen)))))
+            (let* ((msg  (bev (map 'vector 'logxor
+                                   (bev-vec (bev pval))
+                                   (bev-vec (bevn cmsg hlen)))))
                    (hval (hash id tstamp msg)))
               (with-fli-buffers ((hbuf hlen      hval)
                                  (kbuf *g2-size* pkey))
@@ -841,8 +785,8 @@ sign0 1
                      (gbuf  *g2-size*  gval)
                      (gtbuf *gt-size*))
     (_compute-pairing gtbuf hbuf gbuf)
-    (make-pairing
-     :val (xfer-foreign-to-lisp gtbuf *gt-size*))))
+    (make-instance 'pairing
+                   :val (xfer-foreign-to-lisp gtbuf *gt-size*))))
 
 ;; --------------------------------------------------------
 ;; Curve field operations -- to match academic papers, we utilize the
@@ -860,15 +804,15 @@ sign0 1
     (funcall final (xfer-foreign-to-lisp a-buf a-siz))))
 
 (defun make-g1-ans (ans)
-  (make-g1-cmpr
-   :pt  ans))
+  (make-instance 'g1-cmpr
+                 :pt  ans))
 
 (defun make-g2-ans (ans)
-  (make-g2-cmpr
+  (make-instance 'g2-cmpr
    :pt ans))
 
 (defun make-zr-ans (ans)
-  (make-zr
+  (make-instance 'zr
    :val ans))
 
 ;; -------------------------------
@@ -898,8 +842,8 @@ sign0 1
   (need-pairing)
   (with-fli-buffers ((z-buf  *zr-size* z))
     (_inv-zr-val z-buf)
-    (make-zr
-     :val (xfer-foreign-to-lisp z-buf *zr-size*))))
+    (make-instance 'zr
+                   :val (xfer-foreign-to-lisp z-buf *zr-size*))))
 
 (defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
