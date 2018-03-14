@@ -36,6 +36,10 @@
             Kind will dictate nature of reply. Not sure we need this, since whether
              a reply is needed is implicit in kind.")))
 
+; Note: If you change a message before forwarding it, you need to create a new
+;   message with a new UID. (Replies can often be changed as they percolate backwards;
+;   they need new UIDs so that a node that has seen one set of information won't
+;   automatically ignore it.)
 (defclass reply (message-mixin)
   ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
                      :documentation "UID of solicitation message that elicited this reply."))
@@ -45,7 +49,11 @@
      back to one ultimate receiver -- the originator of the solicitation. However,
      a few replies (e.g. to sound-off) are full broadcasts unto themselves."))
 
-(defclass gossip-node ()
+(defclass gossip-mixin (uid-mixin)
+  ((address :initarg :address :initform nil :accessor address
+            :documentation "Network address (e.g. IP) of node.")))
+   
+(defclass gossip-node (gossip-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
                   :documentation "Cache of seen messages")
    (kvs :initarg :kvs :initform (make-hash-table) :accessor kvs
@@ -55,6 +63,12 @@
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
+
+; We'll use these for real (not simulated on one machine) protocol
+(defclass remote-gossip-node (gossip-mixin)
+  ()
+  (:documentation "A local [to this process] standin for a gossip-node located elsewhere.
+              All we know about it is its UID and address, which is enough to transmit a message to it."))
 
 (defun make-node (&rest args)
   "Makes a new node"
@@ -69,7 +83,7 @@
   (when (logfn node)
     (apply (logfn node) logcmd uid args)))
 
-(defparameter *end-simulation* nil "Set to true to end an ongoing simulation")
+(defparameter *stop-dispatcher* nil "Set to true to end an ongoing simulation")
 
 ; Graham's Basic queue
 (defun make-queue ()
@@ -85,9 +99,9 @@
 (defun deq (q)
   (pop (car q)))
 
-(defvar *message-space* (make-queue))
+(defvar *message-space* (make-queue) "Queue of outgoing messages from local machine.")
 (defvar *message-space-lock* (ccl:make-lock) "Just a lock to manage access to the message space")
-(defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes")
+(defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
   (gethash uid *nodes*))
@@ -105,12 +119,15 @@
 
 (defmethod send-msg ((msg solicitation) destuid srcuid)
   "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
-  a global space that all nodes can read from."
+  a global space that all local and simulated nodes can read from."
+  ; Could just call deliver-msg here, but I like the abstraction of
+  ;   having a local message-space which is used for all messages in simulation mode,
+  ;   and all outgoing messages in 'real' network mode.
   (with-lock-grabbed (*message-space-lock*)
     (enq (list msg destuid srcuid) *message-space*)))
 
 ; TODO: Remove old entries in message-cache, eventually.
-(defmethod receive-message ((sol solicitation) (thisnode gossip-node) srcuid)
+(defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid)
   "Deal with an incoming message. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
@@ -127,6 +144,10 @@
                                (fboundp kindsym))
                       (funcall kindsym sol thisnode srcuid)))))))
         (t (maybe-log thisnode :ignore (uid sol) :too-old))))
+
+(defmethod locally-receive-msg ((sol solicitation) (thisnode remote-gossip-node) srcuid)
+  (error "Bug: Cannot locally-receive to a remote node!"))
+
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
@@ -207,6 +228,18 @@
   ; wait a finite time for all replies
   )
 
+(defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
+  "Find address for a node with a given uid. Equivalent to DNS lookup."
+  ;(forward msg thisnode (remove srcuid (neighbors thisnode)))
+  ; wait a finite time for all replies
+  )
+
+(defmethod find-node-with-address ((msg solicitation) thisnode srcuid)
+  "Find address for a node with a given uid. Equivalent to reverse DNS lookup."
+  ;(forward msg thisnode (remove srcuid (neighbors thisnode)))
+  ; wait a finite time for all replies
+  )
+
 #+CCL
 (defun my-prf (fn &rest keys)
   "So we can debug background processes in gui CCL. Also works in command-line CCL."
@@ -214,22 +247,54 @@
     (funcall (intern "BACKGROUND-PROCESS-RUN-FUNCTION" :gui) keys fn)
     (ccl:process-run-function keys fn)))
 
+; NOT DONE YET
+(defmethod transmit-msg (msg (node remote-gossip-node) srcuid)
+  "Send message across network"
+  )
+
+; NOT DONE YET
+(defun parse-raw-message (raw-message-string)
+  "Deserialize a raw message string, srcuid, and destuid.
+   Error on failure."
+  ;(values msg srcuid destuid)
+  )
+
+; NOT DONE YET
+(defun message-listener-daemon ()
+  "Listen for messages received from network and dispatch them locally"
+  (let ((rawmsg (listen-for-message)))
+    (multiple-value-bind (msg srcuid destuid)
+                         (parse-raw-message rawmsg)
+      (let ((destnode (lookup-node destuid)))
+        (locally-receive-msg msg destnode srcuid)))))
+
+(defmethod deliver-msg (msg (node gossip-node) srcuid)
+   (locally-receive-msg msg node srcuid))
+
+(defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
+  "This node is a standin for a remote node. Transmit message across network."
+   (transmit-msg msg node srcuid))
+
 (defun dispatch-msg (msg destuid srcuid)
-  "Call receive-message on message for node with given destuid."
+  "Call deliver-message on message for node with given destuid."
   (let ((destnode (lookup-node destuid)))
-    (receive-message msg destnode srcuid)))
+    (deliver-msg msg destnode srcuid)))
 
 (defun dispatcher-loop ()
+  "Process outgoing messages on this machine. Same code used in both simulation and 'real' modes."
+  (setf *stop-dispatcher* nil)
   (let ((nextmsg nil))
-    (loop until *end-simulation* do
+    (loop until *stop-dispatcher* do
       (ccl:with-lock-grabbed (*message-space-lock*)
         (setf nextmsg (deq *message-space*)))
       (if nextmsg
+          ; Process messages as fast as possible.
           (apply 'dispatch-msg nextmsg)
+          ; But if no messages to process, wait a bit.
           (sleep .1)))))
 
 (defun stop-gossip-sim ()
-  (setf *end-simulation* t))
+  (setf *stop-dispatcher* t))
 
 (defun run-gossip-sim ()
   (stop-gossip-sim) ; stop old simulation, if any
@@ -239,7 +304,6 @@
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   ; Start daemon that dispatches messages to nodes
-  (setf *end-simulation* nil)
   (my-prf (lambda () (dispatcher-loop)) :name "Dispatcher Loop")
   )
 
