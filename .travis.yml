@@ -24,9 +24,11 @@ install:
   - ros install prove
   - ros install lisp-unit
   - ros -e '(ql-dist:install-dist 
-              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" :replace t)
+              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
+               :replace t :prompt nil)
             (ql-dist:install-dist 
-              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt")'
+              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
+               :prompt nil)'
 
 script:
   - ros -e '(ql:quickload :emotiq-test) 
