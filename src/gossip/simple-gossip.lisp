@@ -33,11 +33,17 @@
   ((reply-requested? :initarg :reply-requested? :initform nil :accessor
                      reply-requested?
                      :documentation "True if a reply is requested to this solicitation.
-            Kind will dictate nature of reply.")))
+            Kind will dictate nature of reply. Not sure we need this, since whether
+             a reply is needed is implicit in kind.")))
 
 (defclass reply (message-mixin)
-  ()
-  (:documentation "Reply message. Used to reply to solicitations that need a reply."))
+  ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
+                     :documentation "UID of solicitation message that elicited this reply."))
+  (:documentation "Reply message. Used to reply to solicitations that need a reply.
+     It is common and expected to receive multiple replies matching a given solicitation-uid.
+     Most replies are 'inverse broadcasts' in that they have many sources that funnel
+     back to one ultimate receiver -- the originator of the solicitation. However,
+     a few replies (e.g. to sound-off) are full broadcasts unto themselves."))
 
 (defclass gossip-node ()
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
@@ -97,29 +103,30 @@
 (defun default-logging-function (logcmd uid &rest args)
   (vector-push-extend (list* logcmd uid args) *log*))
 
-(defmethod send-msg ((msg solicitation) dest-uid src-uid)
+(defmethod send-msg ((msg solicitation) destuid srcuid)
   "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
   a global space that all nodes can read from."
   (with-lock-grabbed (*message-space-lock*)
-    (enq (list msg dest-uid src-uid) *message-space*)))
+    (enq (list msg destuid srcuid) *message-space*)))
 
 ; TODO: Remove old entries in message-cache, eventually.
-(defmethod receive-message ((sol solicitation) (destnode gossip-node) srcnode)
-  "Deal with an incoming message. Srcnode could be nil in case of initiating messages."
+(defmethod receive-message ((sol solicitation) (thisnode gossip-node) srcuid)
+  "Deal with an incoming message. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
-         (let ((already-seen? (gethash (uid sol) (message-cache destnode))))
+         (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log destnode :ignore (uid sol) :already-seen))
+                  (maybe-log thisnode :ignore (uid sol) :already-seen))
                  (t
-                  (setf (gethash (uid sol) (message-cache destnode)) t)
-                  (maybe-log destnode :accepted (uid sol) (kind sol) (args sol))
+                  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
+                  (setf (gethash (uid sol) (message-cache thisnode)) srcuid)
+                  (maybe-log thisnode :accepted (uid sol) (kind sol) (args sol))
                   (let* ((kind (kind sol))
                          (kindsym nil))
                     (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
                     (when (and kindsym
                                (fboundp kindsym))
-                      (funcall kindsym sol destnode (uid srcnode))))))))
-        (t (maybe-log destnode :ignore (uid sol) :too-old))))
+                      (funcall kindsym sol thisnode srcuid)))))))
+        (t (maybe-log thisnode :ignore (uid sol) :too-old))))
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
@@ -127,25 +134,77 @@
           (send-msg msg destuid srcuid))
         destuids))
 
-(defmethod assign (msg destnode srcuid)
-  "Establishes a key/value pair on this node and forwards to other nodes, if any."
+(defmethod assign ((msg solicitation) thisnode srcuid)
+  "Establishes a global key/value pair. Sets value on this node and then forwards 
+   solicitation to other nodes, if any. This is a destructive operation --
+   any node that currently has a value for the given key will have that value replaced.
+   No reply expected."
   (let ((key (first (args msg)))
         (value (second (args msg))))
-    (setf (gethash key (kvs destnode)) value)
-    ; destnode becomes new source for forwarding purposes
-    (forward msg destnode (remove srcuid (neighbors destnode)))))
+    (setf (gethash key (kvs thisnode)) value)
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod inquire (msg destnode srcuid)
-  "Inquire as to the value of a key on a node. If this node has no further
-   neighbors, just return its value. Otherwise collect responses from subnodes."
-  (gethash (car (args msg)) (kvs destnode)))
+(defmethod remove ((msg solicitation) thisnode srcuid)
+  "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
+   solicitation to other nodes, if any. This is a destructive operation --
+   any node that currently has the given key will have that key/value removed.
+   No reply expected."
+  (let ((key (first (args msg))))
+    (remhash key (kvs thisnode))
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod find-max (msg destnode srcuid)
+(defmethod inquire ((msg solicitation) thisnode srcuid)
+  "Inquire as to the global value of a key. If this node has no further
+   neighbors, just return its value. Otherwise collect responses from subnodes.
+   Reply is of course expected.
+   Reply here is somewhat complicated: Reply will be an alist of ((value1 . n1) (value2 .n2) ...) where
+   value1 is value reported by n1 nodes downstream of thisnode,
+   value2 is value reported by n2 nodes downstream of thisnode, etc."
+  (let ((myvalue (gethash (car (args msg)) (kvs thisnode)))
+        (srcid (gethash (uid sol) (message-cache thisnode))))
+    ))
+
+(defmethod find-max (msg thisnode srcuid)
   "Retrieve maximum value of a given key on all the nodes"
   )
 
-(defmethod find-min (msg destnode srcuid)
+(defmethod find-min (msg thisnode srcuid)
   "Retrieve minimum value of a given key on all the nodes"
+  )
+
+(defmethod sound-off (msg thisnode srcuid)
+  "Broadcast a request that all nodes execute sound-off with some status information"
+  )
+
+
+(defgeneric sounding-off (msg thisnode srcuid)
+  (:documentation "A broadcast message initiated by a particular origin node (UID contained in msg)
+   containing specific requested or unprompted status information.
+   Usually a response to a sound-off request, but can also be used
+   by a node to announce important status information such as going offline,
+   leaving the group, or joining the group."))
+
+(defmethod sounding-off ((msg reply) thisnode srcuid)
+  "A broadcast message initiated by a particular origin node (UID contained in msg)
+   containing specific requested status information.
+   Always a response to a sound-off request, which will be in the solicitation-uid field.
+   Unlike most replies, this one is forwarded as a true broadcast rather than an inverse broadcast."
+  )
+
+(defmethod sounding-off ((msg solicitation) thisnode srcuid)
+  "A broadcast message initiated by a particular origin node (UID contained in msg)
+   containing specific unprompted status information.
+   Can be used by a node to announce important status information such as going offline,
+   leaving the group, or joining the group."
+  )
+
+(defmethod count-alive ((msg solicitation) thisnode srcuid)
+  "Counts number of live nodes downstream of thisnode, plus thisnode itself.
+   Reply with a scalar."
+  (forward msg thisnode (remove srcuid (neighbors thisnode)))
+  ; wait a finite time for all replies
   )
 
 #+CCL
@@ -155,11 +214,10 @@
     (funcall (intern "BACKGROUND-PROCESS-RUN-FUNCTION" :gui) keys fn)
     (ccl:process-run-function keys fn)))
 
-(defun dispatch-msg (msg dest-uid src-uid)
-  "Call receive-message on message for node with given dest-uid."
-  (let ((srcnode (lookup-node src-uid))
-        (destnode (lookup-node dest-uid)))
-    (receive-message msg destnode srcnode)))
+(defun dispatch-msg (msg destuid srcuid)
+  "Call receive-message on message for node with given destuid."
+  (let ((destnode (lookup-node destuid)))
+    (receive-message msg destnode srcuid)))
 
 (defun dispatcher-loop ()
   (let ((nextmsg nil))
