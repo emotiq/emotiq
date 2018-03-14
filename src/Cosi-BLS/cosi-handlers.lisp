@@ -314,8 +314,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                                    ans))
                                *node-bit-tbl*
                                :initial-value nil)))
-           (= (base58:to-int (getf csig :pkey))
-              (base58:to-int tkey))
+           (= (base58:int (getf csig :pkey))
+              (base58:int tkey))
            ))))
 
 ;; -----------------------------------------------------------------------
@@ -439,13 +439,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
       )))
 
 (defun node-cosi-signing (node reply-to msg seq-id)
-  ;;
-  ;; Second phase of Cosi:
-  ;;   Given challenge value c, compute the signature value
-  ;;     r = v - c * skey.
-  ;;   If we decided against signing in the first phase,
-  ;;   then we shouldn't even be called
-  ;;
+  ;; Compute a collective BLS signature on the message. This process
+  ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node)))
          (sig  (cosi-keying:cosi-signature msg (node-skey node)))
          (bits (node-bitmap node)))
@@ -469,7 +464,9 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                    )))
               )))
         (mapc #'fold-answer subs r-lst)
-        (send reply-to :signed seq-id sig bits) ;; return partial r_sum, and our r_i
+        ;; return a partial aggregate signature and the bitmap
+        ;; indicating which nodes signed
+        (send reply-to :signed seq-id sig bits) 
         ))))
 
 ;; -----------------------------------------------------------
@@ -495,7 +492,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                     ;; we completed successfully
                     (reply reply-to
                            (list :signature msg (list sig bits)))
-                  ;; bad signature, try again
+                  ;; bad signature
                   (reply reply-to :corrupt-cosi-network)
                   ))
                ;; ------------------------------------
