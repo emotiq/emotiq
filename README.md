@@ -13,11 +13,12 @@ We assert an MIT license over this source aggregation; see
 
 This is a predominantly Common Lisp code base.
 
-We aim to work on as many ANSI implementation as possible.  We are
-currently targeting the commercial Allegro Common Lisp 10.1
-implementation but we also test our code with `sbcl-1.4.4` and
-`ccl-1.11`.  Currently not all ASDF systems run cleanly outside of
-`acl`.
+We aim to work on as many ANSI implementation as possible.  
+
+For the development of `testnet` we are targeting the
+commercial LispWorks Pro 7.1 implementation but we also test
+our code with `sbcl`, `ccl`, abl `abcl`.  Currently not all ASDF
+systems run cleanly outside of `lwpro-7.1.0-patches-2`.
 
 ### Tell ASDF where to find the Emotiq systems 
 
@@ -97,4 +98,4 @@ stay equal, with other counts staying zero.
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-02-24 Sat 07:28Z>
+    Revised: <2018-03-14 Wed 20:38Z>
