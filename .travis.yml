@@ -23,6 +23,10 @@ install:
 # Add needed Quicklisp dependencies for testing here  
   - ros install prove
   - ros install lisp-unit
+  - ros -e '(ql-dist:install-dist 
+              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" :replace t)
+            (ql-dist:install-dist 
+              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt")'
 
 script:
   - ros -e '(ql:quickload :emotiq-test) 
