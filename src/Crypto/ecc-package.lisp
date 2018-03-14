@@ -43,8 +43,8 @@ THE SOFTWARE.
 (defpackage base58
   (:use :common-lisp)
   (:export
-   :ub8-vector
-   :ub8v-repr
+   :ub8-vector ;; type
+   :ub8v-repr  ;; mixin class
    :ub8v
    :ub8v-vec
    :lev

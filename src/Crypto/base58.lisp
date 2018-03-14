@@ -367,7 +367,7 @@ THE SOFTWARE.
 (defmethod lev ((x ub8v-repr))
   (lev (ub8v-repr x)))
 
-(defmethod lev (x)
+(defmethod lev ((x hex))
   (make-instance 'lev
                  :vec (nreverse
                        (bev-vec (bev x)))))
@@ -401,10 +401,6 @@ THE SOFTWARE.
   (make-instance 'bev
                  :vec (reverse (lev-vec x))))
 
-(defmethod bev (x)
-  (make-instance 'bev
-                 :vec (nreverse (lev-vec (lev x)))))
-
 (defmethod bev ((x vector))
   (make-instance 'bev
                  :vec (coerce x 'ub8-vector)))
@@ -412,6 +408,19 @@ THE SOFTWARE.
 (defmethod bev ((x list))
   (make-instance 'bev
                  :vec (coerce x 'ub8-vector)))
+
+(defun nbev (x)
+  (make-instance 'bev
+                 :vec (nreverse (lev-vec (lev x)))))
+
+(defmethod bev ((x integer))
+  (nbev x))
+
+(defmethod bev ((x base58))
+  (nbev x))
+
+(defmethod bev ((x base64))
+  (nbev x))
 
 (defmethod bev ((x hex))
   (let* ((str  (hex-str x))
