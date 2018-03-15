@@ -92,11 +92,7 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------
 ;; from https://bitcointalk.org/index.php?topic=1026.0
 
-<<<<<<< HEAD
-(um:defconstant+ +alphabet+
-=======
 (defconstant +alphabet-58+
->>>>>>> implicity type conversions to various vector representations - escape from "Type-less Hell"
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 (defconstant +len-58+
   (length +alphabet-58+)) ;; should be 58

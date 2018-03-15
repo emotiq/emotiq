@@ -131,14 +131,11 @@
    :reconstruct-tree
    :forwarding))
 
-;;; TODO figure out how to prescriptively push compile-time features with ASDF
-(pushnew :ELLIGATOR *features*)
 (defpackage :cosi-keying
   (:use
    :common-lisp
    :ecc-crypto-b571
-   :crypto/modular-arith
-   :edwards-ecc)
+   :crypto/modular-arith)
   (:export
    :need-integer-form
    :published-form
