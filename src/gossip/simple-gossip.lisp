@@ -59,7 +59,7 @@
    (kvs :initarg :kvs :initform (make-hash-table) :accessor kvs
         :documentation "Local key/value store for this node")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
-              :documentation "Set of UIDs of direct neighbors of this node")
+              :documentation "List of UIDs of direct neighbors of this node")
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
@@ -75,6 +75,38 @@
   (let ((node (apply 'make-instance 'gossip-node args)))
     (setf (gethash (uid node) *nodes*) node)
     node))
+
+(defun make-nodes (numnodes)
+  (dotimes (i numnodes)
+    (make-node)))
+
+(defun listify-nodes (&optional (nodetable *nodes*))
+  (loop for node being each hash-value of nodetable collect node))
+
+(defmethod connect ((node1 gossip-node) (node2 gossip-node))
+  (pushnew (uid node1) (neighbors node2))
+  (pushnew (uid node2) (neighbors node1)))
+  
+(defun connect-all (nodelist)
+  "Create a linear path through the nodes"
+  (when (second nodelist)
+    (connect (first nodelist) (second nodelist))
+    (connect-all (cdr nodelist))))
+
+(defun connect-nodes (nodelist)
+  (connect-all nodelist))
+
+(defun make-graph (numnodes)
+  (clrhash *nodes*)
+  (make-nodes numnodes)
+  (connect-nodes (listify-nodes))
+  )
+
+
+
+; (make-graph 10)
+; (graph-nodes (listify-nodes))
+
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
@@ -166,7 +198,7 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod remove ((msg solicitation) thisnode srcuid)
+(defmethod remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
    solicitation to other nodes, if any. This is a destructive operation --
    any node that currently has the given key will have that key/value removed.
