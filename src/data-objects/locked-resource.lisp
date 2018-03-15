@@ -132,7 +132,7 @@ THE SOFTWARE.
 
   #+:CLOZURE
   (:method (key (obj <lockable-mixin>) val)
-x4   (ccl:with-write-lock ((lm-lock obj))
+   (ccl:with-write-lock ((lm-lock obj))
      (call-next-method)))
   
   (:method (key (obj <plist>) val)
