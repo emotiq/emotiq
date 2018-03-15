@@ -25,10 +25,8 @@
                (maxuid (max neighbor (uid node)))
                (key (cons minuid maxuid)))
           (unless (gethash key edges-already-drawn) ; don't draw links twice
-            (format t "~%~D, ~D" minuid maxuid)
             (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
-            (setf (gethash key edges-already-drawn) t)))))
-    (inspect edges-already-drawn)))
+            (setf (gethash key edges-already-drawn) t)))))))
 
 (defun write-dotfile-stream (stream nodelist)
   (let ((mapname (random-name)))
@@ -46,6 +44,7 @@
   (let ((neato "/usr/local/bin/neato"))
     (ccl:RUN-PROGRAM neato (list
                             "-Tsvg"
+                            "-Gmodel=subset"
                             (ccl::native-translated-namestring dotpath)
                             "-o"
                             (ccl::native-translated-namestring svgpath)))))
