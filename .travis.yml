@@ -14,9 +14,9 @@ env:
     - LISP=ccl-bin
 # Uncomment to enable the build farm resource to be spent on implementations that might actually produce useful results    
     - LISP=abcl-bin
-#    - LISP=ecl
-#    - LISP=clisp
-#    - LISP=clasp
+    - LISP=ecl
+    - LISP=clisp
+    - LISP=clasp
 
 install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
