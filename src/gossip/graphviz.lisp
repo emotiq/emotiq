@@ -1,5 +1,7 @@
 (in-package :gossip)
 
+(defparameter *graphviz-command* "/usr/local/bin/sfdp")
+
 (defun random-name (&optional (prefix "ELEM"))
   (string-downcase (symbol-name (gensym prefix))))
 
@@ -18,7 +20,7 @@
 (defun write-inner-commands (stream nodelist)
   (let ((edges-already-drawn (make-hash-table :test 'equalp)))
     (dolist (node nodelist)
-      (format stream "~%  \"~A\" [fontsize=\"18.0\", label=\"\\N\", fillcolor=\"white\"] ;"
+      (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
               (uid node))
       (dolist (neighbor (neighbors node))
         (let* ((minuid (min neighbor (uid node)))
@@ -31,7 +33,11 @@
 (defun write-dotfile-stream (stream nodelist)
   (let ((mapname (random-name)))
     (format stream "graph ~A {~%" mapname)
+    (format stream "graph [outputorder=\"edgesfirst\"];~%")
     (format stream "graph [ratio=\"compress\"];~%")
+    (format stream "graph [overlap=prism];~%")
+    (format stream "graph [repulsiveforce=0.2];~%")
+    (format stream "graph [K=0.1];~%")
     (write-inner-commands stream nodelist)
     (format stream "~%}")
     mapname))
@@ -41,10 +47,10 @@
     (write-dotfile-stream stream nodelist)))
 
 (defun convert-dotfile-to-svg (dotpath &optional svgpath)
-  (let ((neato "/usr/local/bin/neato"))
-    (ccl:RUN-PROGRAM neato (list
+  (let ((cmd *graphviz-command*))
+    (ccl:RUN-PROGRAM cmd (list
                             "-Tsvg"
-                            "-Gmodel=subset"
+                            ;"-Gmodel=subset"
                             (ccl::native-translated-namestring dotpath)
                             "-o"
                             (ccl::native-translated-namestring svgpath)))))

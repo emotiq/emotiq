@@ -139,14 +139,18 @@
   (clrhash *nodes*)
   (make-nodes numnodes)
   (let ((nodelist (listify-nodes)))
+    ; following guarantees a single connected graph
     (linear-path nodelist)
-    (add-random-connections nodelist (length nodelist))
+    ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
+    (add-random-connections nodelist  (/(length nodelist) 2))
     ))
 
-
-
-; (make-graph 10)
-; (graph-nodes (listify-nodes))
+(defun solicit (node kind &rest args)
+  (send-msg (make-solicitation
+             :kind kind
+             :args args)
+            (uid node)
+            nil))
 
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
@@ -331,11 +335,16 @@
       (remhash soluid (reply-data thisnode))
       (remhash soluid (repliers-expected thisnode))
       ; must create a new reply here; cannot reuse an old one because its content has changed
+      (if where-to-forward-reply
       (send-msg (make-reply :solicitation-id soluid
                             :kind :count-alive
                             :args (list totalcount))
                 where-to-forward-reply
-                (uid thisnode)))))
+                (uid thisnode))
+      ; if no place left to reply to, just log the result.
+      ;   This can mean that thisnode autonomously initiated the request, or
+      ;   somebody running the sim told it to.
+      (maybe-log thisnode :FINALREPLY soluid totalcount)))))
 
 (defmethod count-alive ((rep reply) thisnode srcuid)
   (let ((soluid (solicitation-uid rep)))
@@ -388,8 +397,9 @@
       (let ((destnode (lookup-node destuid)))
         (locally-receive-msg msg destnode srcuid)))))
 
+; just for simulator
 (defmethod deliver-msg (msg (node gossip-node) srcuid)
-   (locally-receive-msg msg node srcuid))
+  (my-prf (lambda () (locally-receive-msg msg node srcuid)) :name (format nil "Node ~D" (uid node))))
 
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
@@ -423,7 +433,17 @@
   ; Archive the current log and clear it
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
+  (setf *message-space* (make-queue))
+  (setf *message-space-lock* (ccl:make-lock))
   ; Start daemon that dispatches messages to nodes
   (my-prf (lambda () (dispatcher-loop)) :name "Dispatcher Loop")
   )
+
+
+; (make-graph 10)
+; (make-graph 100)
+; (graph-nodes (listify-nodes))
+
+; (run-gossip-sim)
+; (solicit (first (listify-nodes)) :count-alive)
 
