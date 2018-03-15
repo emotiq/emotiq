@@ -16,6 +16,9 @@
 (defun new-uid ()
   (incf *last-uid*))
 
+(defun uid? (thing)
+  (integerp thing))
+
 (defun make-uid-mapper ()
   "Returns a table that maps UIDs to objects"
   (make-hash-table :test 'equal))
@@ -68,11 +71,11 @@
    (repliers-expected :initarg :repliers-expected :initform (make-hash-table :test 'equal)
                       :accessor repliers-expected
                       :documentation "Hash-table mapping a solicitation id to a list of node UIDs
-                          that I expect to reply to that solicitation")
+                  that I expect to reply to that solicitation")
    (reply-data :initarg :reply-data :initform (make-hash-table :test 'equal)
                :accessor reply-data
                :documentation "Hash-table mapping a solicitation id to some data being accumulated
-                          from replies for that solicitation")
+                  from replies for that solicitation")
    (kvs :initarg :kvs :initform (make-hash-table) :accessor kvs
         :documentation "Local key/value store for this node")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
@@ -156,9 +159,15 @@
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
 
-(defmethod maybe-log ((node gossip-node) logcmd uid &rest args)
+(defmethod maybe-log ((node gossip-node) logcmd msg &rest args)
   (when (logfn node)
-    (apply (logfn node) logcmd uid args)))
+    (apply (logfn node)
+           logcmd
+           (format nil "node~D" (uid node))
+           (typecase msg 
+             (solicitation (format nil "sol~D" (uid msg)))
+             (reply        (format nil "rep~D" (uid msg))))
+           args)))
 
 (defparameter *stop-dispatcher* nil "Set to true to end an ongoing simulation")
 
@@ -191,15 +200,18 @@
 
 (defvar *log* (new-log) "Log of simulated actions.")
 
-(defun default-logging-function (logcmd uid &rest args)
-  (vector-push-extend (list* logcmd uid args) *log*))
+(defun default-logging-function (logcmd nodeuid msguid &rest args)
+  (vector-push-extend (list* logcmd nodeuid msguid args) *log*))
 
-(defmethod send-msg ((msg solicitation) destuid srcuid)
+(defmethod send-msg ((msg message-mixin) destuid srcuid)
   "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
   a global space that all local and simulated nodes can read from."
   ; Could just call deliver-msg here, but I like the abstraction of
   ;   having a local message-space which is used for all messages in simulation mode,
   ;   and all outgoing messages in 'real' network mode.
+  (unless (or (null srcuid)
+              (numberp srcuid))
+    (break))
   (ccl:with-lock-grabbed (*message-space-lock*)
     (enq (list msg destuid srcuid) *message-space*)))
 
@@ -209,20 +221,20 @@
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore (uid sol) :already-seen))
+                  (maybe-log thisnode :ignore sol :already-seen))
                  (t
                   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
                   (setf (gethash (uid sol) (message-cache thisnode)) srcuid)
-                  (maybe-log thisnode :accepted (uid sol) (kind sol) (args sol))
+                  (maybe-log thisnode :accepted sol (kind sol) (args sol))
                   (let* ((kind (kind sol))
                          (kindsym nil))
                     (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
                     (when (and kindsym
                                (fboundp kindsym))
                       (funcall kindsym sol thisnode srcuid)))))))
-        (t (maybe-log thisnode :ignore (uid sol) :too-old))))
+        (t (maybe-log thisnode :ignore sol :too-old))))
 
-(defmethod locally-receive-msg ((sol solicitation) (thisnode remote-gossip-node) srcuid)
+(defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid)
   (error "Bug: Cannot locally-receive to a remote node!"))
 
 (defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid)
@@ -230,22 +242,23 @@
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp rep))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid rep) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore (uid rep) :already-seen))
+                  (maybe-log thisnode :ignore rep :already-seen))
                  (t
                   ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
                   (setf (gethash (uid rep) (message-cache thisnode)) srcuid)
-                  (maybe-log thisnode :reply-accepted (uid rep) (kind rep) (args rep))
+                  (maybe-log thisnode :reply-accepted rep (kind rep) (args rep))
                   (let* ((kind (kind rep))
                          (kindsym nil))
                     (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
                     (when (and kindsym
                                (fboundp kindsym))
                       (funcall kindsym rep thisnode srcuid)))))))
-        (t (maybe-log thisnode :ignore (uid rep) :too-old))))
+        (t (maybe-log thisnode :ignore rep :too-old))))
 
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
+  (unless (uid? srcuid) (setf srcuid (uid srcuid)))
   (mapc (lambda (destuid)
           (send-msg msg destuid srcuid))
         destuids))
@@ -325,10 +338,13 @@
     (setf (gethash soluid (repliers-expected thisnode)) (neighbors thisnode))
     (forward msg thisnode (remove srcuid (neighbors thisnode)))
     ; wait a finite time for all replies
+    (maybe-log thisnode :WAITING msg)
     (ccl:process-wait-with-timeout "reply-wait"
-                                   (* *max-seconds-to-wait* internal-time-units-per-second)
+                                   *max-seconds-to-wait*
+                                   ;(* *max-seconds-to-wait* internal-time-units-per-second)
                                    (lambda ()
                                      (null (gethash soluid (repliers-expected thisnode)))))
+    (maybe-log thisnode :DONE-WAITING msg)
     (let ((totalcount (gethash soluid (reply-data thisnode)))
           (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
       ; clean up reply tables
@@ -336,15 +352,17 @@
       (remhash soluid (repliers-expected thisnode))
       ; must create a new reply here; cannot reuse an old one because its content has changed
       (if where-to-forward-reply
-      (send-msg (make-reply :solicitation-id soluid
-                            :kind :count-alive
-                            :args (list totalcount))
-                where-to-forward-reply
-                (uid thisnode))
-      ; if no place left to reply to, just log the result.
-      ;   This can mean that thisnode autonomously initiated the request, or
-      ;   somebody running the sim told it to.
-      (maybe-log thisnode :FINALREPLY soluid totalcount)))))
+          (progn
+            (maybe-log thisnode :SEND-REPLY msg totalcount)
+            (send-msg (make-reply :solicitation-uid soluid
+                                  :kind :count-alive
+                                  :args (list totalcount))
+                      where-to-forward-reply
+                      (uid thisnode)))
+          ; if no place left to reply to, just log the result.
+          ;   This can mean that thisnode autonomously initiated the request, or
+          ;   somebody running the sim told it to.
+          (maybe-log thisnode :FINALREPLY msg totalcount)))))
 
 (defmethod count-alive ((rep reply) thisnode srcuid)
   (let ((soluid (solicitation-uid rep)))
@@ -428,6 +446,7 @@
 
 (defun run-gossip-sim ()
   (stop-gossip-sim) ; stop old simulation, if any
+  (sleep .2) ; give dispatcher-loop time to stop
   ; Create gossip network
   ; Clear message space
   ; Archive the current log and clear it
@@ -447,3 +466,13 @@
 ; (run-gossip-sim)
 ; (solicit (first (listify-nodes)) :count-alive)
 
+; Mostly for debugging. Node processes should kill themselves.
+(defun kill-node-processes ()
+  (let ((node-processes nil))
+		(mapc  #'(lambda (process)
+                             (when (ignore-errors (string= "Node " (subseq (ccl:process-name process) 0 5)))
+                               (push process node-processes)))
+                       (ccl:all-processes))
+    (mapc 'ccl::process-kill node-processes)))
+
+; (kill-node-processes)
