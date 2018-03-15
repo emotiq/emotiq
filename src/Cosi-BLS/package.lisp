@@ -29,7 +29,9 @@
    :verify-schnorr-signature))
 
 (defpackage :range-proofs
-  (:use :common-lisp :crypto/modular-arith)
+  (:use :common-lisp
+   :crypto/modular-arith
+   :hash)
   (:import-from :edwards-ecc
    :ed-mul
    :ed-add

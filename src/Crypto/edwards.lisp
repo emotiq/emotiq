@@ -543,38 +543,18 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------
 
-(defmethod hashable ((x ed-proj-pt))
-  (hashable (ed-compress-pt x :lev t)))
-
 (defmethod hashable ((x ecc-pt))
   (hashable (ed-compress-pt x :lev t)))
 
-(defmethod hashable ((x ub8v))
-  (ub8v-vec x))
-
-(defmethod hashable ((x integer))
-  (lev-vec (lev x)))
-
-(defmethod hashable (x)
-  x)
-
-(defun hash (&rest args)
-  (bev (apply 'sha3-buffers (mapcar 'hashable args))))
+(defmethod hashable ((x ed-proj-pt))
+  (hashable (ed-affine x)))
 
 (defun ed-hash (pt)
   (sha3-buffers (ed-compress-pt pt :lev t)))
 
-(defun get-hash-bits (nbits seed)
+(defun get-hash-nbits (nbits seed)
   ;; concatenated SHA3 until we collect enough bits
-  (labels ((hash-part (ix)
-             (sha3-buffers
-              (loenc:encode (list ix seed)))))
-    (um:nlet-tail iter ((ix   1)
-                        (bits #()))
-      (if (>= (* 8 (length bits)) nbits)
-          (bev bits)
-        (iter (1+ ix) (concatenate 'vector bits (hash-part ix)))))
-    ))
+  (get-hash-nbytes (ceiling nbits 8) seed))
 
 ;; -------------------------------------------------
 
@@ -586,8 +566,8 @@ THE SOFTWARE.
   ;;
   (let* ((nbits (integer-length *ed-r*))
          (h     (int
-                 (get-hash-bits nbits
-                                (list seed :generate-private-key index))))
+                 (get-hash-nbits nbits
+                                 (list seed :generate-private-key index))))
          (s     (dpb 1 (byte 1 (1- nbits)) ;; set hi bit
                      (ldb (byte nbits 0) h)))
          (skey  (- s (mod s *ed-h*))))
@@ -616,7 +596,7 @@ THE SOFTWARE.
     (let ((r   (with-mod *ed-r*
                  (mmod
                   (int
-                   (bev (hash 
+                   (bev (hash/512 
                           (levn ix 4)
                           (levn k-priv (ed-compressed-nbytes))
                           msgv)))))))
@@ -637,7 +617,7 @@ THE SOFTWARE.
                           (m+ r
                               (m* skey
                                   (int
-                                   (bev (hash
+                                   (bev (hash/512
                                          (levn rpt-cmpr nbcmpr)
                                          (levn pkey-cmpr nbcmpr)
                                          msg-enc))
@@ -656,7 +636,7 @@ THE SOFTWARE.
      (ed-add (ed-decompress-pt r)
              (ed-mul (ed-decompress-pt pkey)
                      (int
-                      (bev (hash
+                      (bev (hash/512
                             (levn r nbcmpr)
                             (levn pkey nbcmpr)
                             (lev  (loenc:encode msg)))))
@@ -899,7 +879,7 @@ THE SOFTWARE.
     (let* ((r     (with-mod *ed-r*
                     (mmod
                      (int
-                      (bev (hash
+                      (bev (hash/512
                             (levn ix 4)
                             (levn k-priv (elligator-nbytes))
                             msgv))))))
@@ -936,7 +916,7 @@ THE SOFTWARE.
                        (m+ r
                            (m* k-priv
                                (int
-                                (bev (hash
+                                (bev (hash/512
                                       (levn tau-r nbytes)
                                       (levn tau-pub nbytes)
                                       msg-enc))
@@ -955,7 +935,7 @@ THE SOFTWARE.
      (ed-add (elli2-decode tau-r)
              (ed-mul (elli2-decode tau-pub)
                      (int
-                      (bev (hash
+                      (bev (hash/512
                             (levn tau-r   nbytes)
                             (levn tau-pub nbytes)
                             (lev (loenc:encode msg)))))
@@ -993,7 +973,7 @@ THE SOFTWARE.
     (let* ((lst   (funcall fn-gen))
            (vtau  (elligator-tau-vector (getf lst :tau)))
            (h     (int
-                   (hash
+                   (hash/512
                     vtau
                     (elligator-tau-vector tau-pub)
                     msg)))
@@ -1018,7 +998,7 @@ THE SOFTWARE.
              (pt-pub (funcall fn-decode tau-pub))
              (pt-r   (funcall fn-decode (int vtau)))
              (h      (int
-                      (hash
+                      (hash/512
                        vtau
                        (elligator-tau-vector tau-pub)
                        msg)))

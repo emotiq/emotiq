@@ -31,7 +31,8 @@ THE SOFTWARE.
   :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
   :components  ((:file "ecc-package")
                 (:file "utilities")
-                (:file "base58")
+                (:file "vec-repr")
+                (:file "hash")
                 (:file "ctr-hash-drbg")
                 (:file "primes")
                 #+:COM.RAL (:file "crypto-le")

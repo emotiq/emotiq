@@ -66,20 +66,20 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------
 
 (defun get-seed (seed)
-  (base58:bev
+  (vec-repr:bev
    (if seed
-       (pbc:hash (base58:lev
+       (hash:hash/256 (vec-repr:lev
                   (loenc:encode seed)))
      (ctr-drbg 256))))
 
 (defun get-salt (salt)
   (let ((pref (loenc:encode "salt")))
-    (pbc:hash-val
-     (pbc:hash
+    (hash:hash-val
+     (hash:hash/256
       (if salt
           (concatenate 'vector
                        pref 
-                       (base58:lev-vec (base58:levn salt 32)))
+                       (vec-repr:lev-vec (vec-repr:levn salt 32)))
         pref)))))
 
 ;; --------------------------------------------------------------
@@ -90,8 +90,8 @@ THE SOFTWARE.
   ;; This is the normal entry point when making new user keys.
   (let* ((seed  (get-seed seed))
          (salt  (get-salt salt))
-         (rseed (ironclad:pbkdf2-hash-password (base58:bev-vec seed)
-                                               :salt       (base58:bev-vec salt)
+         (rseed (ironclad:pbkdf2-hash-password (vec-repr:bev-vec seed)
+                                               :salt       (vec-repr:bev-vec salt)
                                                :digest     :sha3
                                                :iterations 2048)))
     (make-deterministic-keypair rseed)))
@@ -143,7 +143,7 @@ THE SOFTWARE.
 
 (defmethod lookup-pkey ((pkey pbc:public-key))
   ;; return t if pkey found and valid, nil if not found or invalid
-  (let ((psig (maps:find (base58:int pkey) *pkeys*)))
+  (let ((psig (maps:find (vec-repr:int pkey) *pkeys*)))
     (when psig
       (validate-pkey pkey psig))))
 
@@ -199,7 +199,7 @@ THE SOFTWARE.
   (assert (= 2048 (length wref)))
   (check-type val (integer 0))
   (assert (<= (integer-length val) 256))
-  (let* ((h  (pbc:hash (base58:levn val 32)))
+  (let* ((h  (hash:hash/256 (vec-repr:levn val 32)))
          (v  (dpb (aref h 0) (byte 8 256) val)))
     (loop for ct from 0 below 24
           for pos from 0 by 11
@@ -227,7 +227,7 @@ THE SOFTWARE.
           (setf (ldb (byte 11 pos) v) (position wrd wref
                                                 :test 'string-equal)))
     (let* ((val (ldb (byte 256 0) v))
-           (h   (pbc:hash (base58:levn val 32))))
+           (h   (hash:hash/256 (vec-repr:levn val 32))))
       (unless (= (aref h 0) (ldb (byte 8 256) v))
         (error "Invalid wordlist"))
       val)))

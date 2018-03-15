@@ -27,7 +27,8 @@ THE SOFTWARE.
 (defpackage :pbc-interface
   (:use :common-lisp
         :core-crypto
-        :base58)
+        :vec-repr
+        :hash)
   (:nicknames :pbc)
   (:export
    ;; classes and their slot readers
@@ -49,8 +50,6 @@ THE SOFTWARE.
    :signature-val
    :pairing
    :pairing-val
-   :hash
-   :hash-val
    :crypto-text
    :crypto-text-vec
    
@@ -331,17 +330,6 @@ THE SOFTWARE.
 (defmethod ub8v-repr ((x crypto-val))
   (crypto-val-vec x))
 
-(defmethod print-object ((obj crypto-val) out-stream)
-  (if *print-readably*
-      (format out-stream "#.(make-instance '~W :value ~A)"
-              (class-name (class-of obj))
-              (with-output-to-string (s)
-                (print-object (crypto-val-vec obj) s)))
-    ;; else
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (crypto-val-vec obj))))
-
 ;; -------------------------------------------------
 ;; Useful subclasses
 
@@ -378,10 +366,6 @@ THE SOFTWARE.
 (defclass secret-key (zr)
   ((val :reader secret-key-val
         :initarg  :val)))
-
-(defclass hash (crypto-val)
-  ((val  :reader hash-val
-         :initarg  :val)))
 
 (defclass crypto-text (crypto-val)
   ((val  :reader  crypto-text-vec
@@ -501,12 +485,19 @@ sign0 1
 ;; We work internally with little-endian values
 
 (defun raw-bytes (x)
-  (bev-vec (bev x)))
+  ;; used only in encrypt/decrypt where message is stored as LEV
+  (lev-vec (lev x)))
 
 (defun construct-bev (vec)
   ;; careful here... this assumes vec is UB8-VECTOR
   ;; more efficient internally when we know vec.
   (make-instance 'bev
+                 :vec vec))
+
+(defun construct-lev (vec)
+  ;; careful here... this assumes vec is UB8-VECTOR
+  ;; more efficient internally when we know vec.
+  (make-instance 'lev
                  :vec vec))
 
 (defun xfer-foreign-to-lisp (fbuf nel)
@@ -608,50 +599,23 @@ sign0 1
   (setf *zr-init* t))
 
 ;; -------------------------------------------------
-;; what to hash of various types
 
-(defgeneric hashable (x)
-  (:method ((x ub8v))
-   (ub8v-vec x))
-  (:method ((x integer))
-   (hashable (lev x)))
-  (:method ((x ub8v-repr))
-   (hashable (ub8v-repr x)))
-  (:method (x)
-   ;; let sha3-buffers deal with it via LOENC:ENCODE
-   x))
-
-;; -------------------------------------------------
-
-(defun construct-hash (vec)
-  (make-instance 'hash
-                 :val (construct-bev vec)))
-
-(defun hash (&rest args)
-  ;; produce a UB8V of the args
-  (let ((hv  (apply 'sha3/256-buffers
-                    (mapcar 'hashable args))))
-    (values (construct-hash hv)
-            (length hv))))
-        
 (defmethod sign-hash ((hash hash))
   ;; hash-bytes is UB8V
   (need-keying)
-  (let* ((bytes (hash-val hash))
-         (nhash (length (raw-bytes bytes))))
-    (with-fli-buffers ((hbuf nhash bytes))
+  (let ((nhash (hash-length hash)))
+    (with-fli-buffers ((hbuf nhash hash))
       (_sign-hash hbuf nhash)
       (get-signature)
       )))
 
-(defmethod check-hash ((hash hash) (sig g1-cmpr) (pkey g2-cmpr))
+(defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   ;; hash-bytes is UB8V
   (need-generator)
-  (let* ((bytes (hash-val hash))
-         (nhash (length (raw-bytes bytes))))
-    (with-fli-buffers ((sbuf *g1-size* sig)
-                       (hbuf nhash     bytes)
-                       (pbuf *g2-size* pkey))
+  (let ((nhash (hash-length hash)))
+    (with-fli-buffers ((sbuf *g1-size*  sig)
+                       (hbuf nhash      hash)
+                       (pbuf *g2-size*  pkey))
       (zerop (_check-signature sbuf hbuf nhash pbuf))
       )))
 
@@ -670,11 +634,11 @@ sign0 1
 (defun sign-message (msg)
   (make-instance 'signed-message
                  :msg  msg
-                 :sig  (sign-hash (hash msg))
+                 :sig  (sign-hash (hash/256 msg))
                  :pkey (get-public-key)))
 
 (defmethod check-message ((sm signed-message))
-  (check-hash (hash (signed-message-msg sm))
+  (check-hash (hash/256 (signed-message-msg sm))
               (signed-message-sig       sm)
               (signed-message-pkey      sm)))
 
@@ -692,13 +656,13 @@ sign0 1
 (defun make-key-pair (seed)
   ;; seed can be literally anything at all...
   (need-generator)
-  (multiple-value-bind (hsh hlen) (hash seed)
+  (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((hbuf hlen hsh))
       (_make-key-pair hbuf hlen)
       (setf *zr-init* t)
       (let* ((pkey (get-public-key)) ;; public key
              (skey (get-secret-key)) ;; secret key
-             (sig  (sign-hash (hash pkey)))) ;; signature on public key
+             (sig  (sign-hash (hash/256 pkey)))) ;; signature on public key
         ;; return 3 values: public key, signature on public key, secret key
         (make-instance 'keying-triple
                        :pkey pkey
@@ -707,7 +671,7 @@ sign0 1
         ))))
 
 (defmethod check-public-key ((pkey public-key) (psig signature))
-  (check-hash (hash pkey)
+  (check-hash (hash/256 pkey)
               psig
               pkey))
 
@@ -716,7 +680,7 @@ sign0 1
 
 (defmethod make-public-subkey ((pkey public-key) seed)
   (need-generator)
-  (multiple-value-bind (hsh hlen) (hash seed)
+  (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((hbuf hlen      hsh)
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
@@ -726,7 +690,7 @@ sign0 1
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
   (need-generator)
-  (multiple-value-bind (hsh hlen) (hash seed)
+  (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((hbuf hlen      hsh)
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
@@ -736,40 +700,6 @@ sign0 1
 
 ;; --------------------------------------------------------------
 ;; SAKKE - Sakai-Kasahara Pairing Encryption
-
-(defun long-hash (&rest args)
-  ;; produce a 64-byte (512 bits) UB8V of the args
-  (let ((hv  (apply 'sha3-buffers
-                    (mapcar 'hashable args))))
-    (values (construct-hash hv)
-            (length hv))))
-
-(defun get-hashbytes (nb seed)
-  (cond
-   ((> nb 64)
-    (let ((bytes (make-ub8-vector nb)))
-      (um:nlet-tail iter ((start 0))
-        (if (< start nb)
-            (let ((end  (min (+ start 64) nb)))
-              (replace bytes (raw-bytes (long-hash start seed))
-                       :start1 start
-                       :end1   end)
-              (iter end))
-          bytes))
-      ))
-   ((= nb 64)
-    (raw-bytes (long-hash seed)))
-   ((> nb 32)
-    (let ((bytes (raw-bytes (long-hash seed))))
-      (subseq bytes 0 nb)))
-   ((= nb 32)
-    (raw-bytes (hash seed)))
-   (t
-    (let ((bytes (raw-bytes (hash seed))))
-      (subseq bytes 0 nb)))
-   ))
-
-;; -------------
 
 (defclass crypto-packet ()
   ((pkey   :reader  crypto-packet-pkey     ;; public key of intended recipient
@@ -791,7 +721,7 @@ sign0 1
   ;; encryption. But this will work regardless.
   (need-generator)
   (let* ((pkid      (make-public-subkey pkey id))
-         (tstamp    (construct-bev (uuid:uuid-to-byte-array
+         (tstamp    (construct-lev (uuid:uuid-to-byte-array
                                     (uuid:make-v1-uuid))))
          (msg-bytes (loenc:encode msg))
          (nmsg      (length msg-bytes))
@@ -803,16 +733,16 @@ sign0 1
                           cloaked)
                       ;; else
                       msg-bytes))
-         (xmsg      (construct-bev xbytes))
-         (rhsh      (hash id tstamp xmsg)))
+         (xmsg      (construct-lev xbytes))
+         (rhsh      (hash/256 id tstamp xmsg)))
     (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
       (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf 32)
-      (let* ((pval (get-hashbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
+      (let* ((pval (get-hash-nbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
              (cmsg (make-instance 'crypto-text
-                                  :vec (construct-bev
+                                  :vec (construct-lev
                                         (map-into pval 'logxor pval xbytes))))
              (rval (make-instance 'g2-cmpr
                                   :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
@@ -839,10 +769,10 @@ sign0 1
         (_sakai-kasahara-decrypt pbuf rbuf kbuf)
         (let* ((cmsg-bytes (raw-bytes cmsg))
                (nb         (length cmsg-bytes))
-               (pval (get-hashbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (msg  (construct-bev
+               (pval (get-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
+               (msg  (construct-lev
                       (map-into pval 'logxor pval cmsg-bytes)))
-               (hval (hash id tstamp msg)))
+               (hval (hash/256 id tstamp msg)))
           (with-fli-buffers ((hbuf 32        hval)
                              (kbuf *g2-size* pkey))
             (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf 32))
@@ -942,8 +872,8 @@ sign0 1
       ;; same for both...
       (make-instance 'signed-message
                      :msg  msg1
-                     :sig  (mul-pts sig1 sig2)
-                     :pkey (mul-pts pkey1 pkey2))
+                     :sig  (change-class (mul-pts sig1 sig2)   'signature)
+                     :pkey (change-class (mul-pts pkey1 pkey2) 'public-key))
       )))
 
 ;; --------------------------------------------------------
@@ -956,7 +886,7 @@ sign0 1
 ;; check BLS Signatures
 (multiple-value-bind (pkey psig skey) (make-key-pair :dave)
   (let* ((msg  :hello-dave)
-         (hash (hash msg)))
+         (hash (hash/256 msg)))
     (sign-hash hash)
     (let* ((sig (get-signature)))
       (check-hash hash sig pkey))))
@@ -975,7 +905,7 @@ sign0 1
 ;; verify multi-sig BLS -- YES!!
 (multiple-value-bind (pkey1 psig skey1) (make-key-pair :key1)
   (let* ((msg    :this-is-a-test)
-         (hsh    (hash msg))
+         (hsh    (hash/256 msg))
          (sig1   (sign-hash hsh)))
     (assert (check-hash hsh sig1 pkey1))
     (multiple-value-bind (pkey2 psig skey2) (make-key-pair :key2)
@@ -998,7 +928,7 @@ sign0 1
 ;; check that sig(sum) = sum(sig)
 (multiple-value-bind (pk1 psig sk1) (make-key-pair :key1)
   (let* ((msg  :testing)
-         (hsh  (hash msg))
+         (hsh  (hash/256 msg))
          (sig1 (sign-hash hsh)))
   (multiple-value-bind (pk2 psig sk2) (make-key-pair :key2)
     (let* ((pksum (mul-g2-pts pk1 pk2))

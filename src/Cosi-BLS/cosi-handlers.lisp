@@ -313,8 +313,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                                  ans))
                              *node-bit-tbl*
                              :initial-value nil)))
-         (= (base58:int (pbc:signed-message-pkey sig))
-            (base58:int tkey))
+         (= (vec-repr:int (pbc:signed-message-pkey sig))
+            (vec-repr:int tkey))
          )))
 
 ;; -----------------------------------------------------------------------

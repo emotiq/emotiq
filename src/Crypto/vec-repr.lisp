@@ -1,4 +1,4 @@
-;; base58.lisp -- BTC-style base58 value encoding
+;; vec-repr.lisp -- Uniform and varied representation of UB8 Vectors
 ;;
 ;; DM/Emotiq 02/18
 ;; ----------------------------------------------------------------
@@ -26,7 +26,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :base58)
+(in-package :vec-repr)
 ;; ---------------------------------------------------------
 
 ;; This package describes interchangeable representations of vectors
@@ -147,6 +147,17 @@ THE SOFTWARE.
     (format out-stream "#<~A ~A >"
             (class-name (class-of obj))
             (ub8v-vec obj))))
+
+(defmethod print-object ((obj ub8v-repr) out-stream)
+  (if *print-readably*
+      (format out-stream "#.(make-instance '~W :value ~A)"
+              (class-name (class-of obj))
+              (with-output-to-string (s)
+                (print-object (ub8v-repr obj) s)))
+    ;; else
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (ub8v-repr obj))))
 
 ;; ----------------------------------------------------------
 ;; Base58 encodes UB8 vectors and integers into character strings of

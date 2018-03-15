@@ -206,7 +206,7 @@ THE SOFTWARE.
   (usocket:hbo-to-dotted-quad val))
 
 (defun keyval (key)
-  (base58:int key))
+  (vec-repr:int key))
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))

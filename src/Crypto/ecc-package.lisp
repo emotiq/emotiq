@@ -40,7 +40,7 @@ THE SOFTWARE.
    :quadratic-residue-p
    ))
 
-(defpackage base58
+(defpackage vec-repr
   (:use :common-lisp)
   (:export
    :ub8        ;; type
@@ -64,6 +64,20 @@ THE SOFTWARE.
    :bevn
    ))
 
+(defpackage :hash
+  (:use :common-lisp
+        :vec-repr)
+  (:export
+   :hash
+   :hash-val
+   :hash-bytes
+   :hash-length
+   :hash/256
+   :hash/512
+   :get-hash-nbytes
+   :hashable
+   ))
+
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
   (:nicknames :ecc)
@@ -78,6 +92,7 @@ THE SOFTWARE.
    :convert-bytes-to-int
    :ctr-drbg
    :ctr-drbg-int
+   
    :sha3-buffers
    :sha3/256-buffers
    
@@ -144,7 +159,8 @@ THE SOFTWARE.
   (:use :common-lisp
    :ecc-crypto-b571
    :crypto/modular-arith
-   :base58)
+   :vec-repr
+   :hash)
   (:import-from :ecc-crypto-b571
 		:convert-int-to-nbytes
 		:convert-int-to-nbytesv
