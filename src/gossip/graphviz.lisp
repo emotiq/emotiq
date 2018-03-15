@@ -1,3 +1,7 @@
+;;; graphviz interface for gossip
+;;; SVS
+;;;
+
 (in-package :gossip)
 
 (defparameter *graphviz-command* "/usr/local/bin/sfdp")
@@ -68,5 +72,5 @@
                  (make-instance 'ns:ns-url
                    :with-string (ccl::%make-nsstring (concatenate 'string "file://"
                                                              (ccl::native-translated-namestring svgpath)))))))
-      (ccl::%open-url-in-browser url))
+      #+OPENMCL (ccl::%open-url-in-browser url))
     (values dotpath svgpath)))
