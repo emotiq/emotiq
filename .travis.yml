@@ -6,22 +6,24 @@ env:
   global:
     - PATH=~/.roswell/bin:$PATH
     - ROSWELL_INSTALL_DIR=$HOME/.roswell
-# Speculatively hook into Coveralls <https://coveralls.io/>
-# Coveralls configuration (currently unused)
-#    - COVERAGE_EXCLUDE=t/
   matrix:
-    - LISP=sbcl-bin
     - LISP=ccl-bin
-# Uncomment to enable the build farm resource to be spent on implementations that might actually produce useful results    
+    - LISP=sbcl-bin
+# Uncomment to enable the build farm resource to be spent on
+# implementations that might actually produce useful results.
     - LISP=abcl-bin
-    - LISP=ecl
-    - LISP=clisp
-    - LISP=clasp
+# Non-binary distributions need to be built from source, which
+# currently times out for the Travis CI builds we are currently paying
+# for.
+#    - LISP=ecl
+#    - LISP=clisp
+#    - LISP=clasp
 
 install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
 # Add needed Quicklisp dependencies for testing here  
   - ros install prove
+# Pin quicklisp to known version; install emotiq dist
   - ros -e '(ql-dist:install-dist 
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
                :replace t :prompt nil)
@@ -29,6 +31,7 @@ install:
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
                :prompt nil)'
 
+# Add/remove test converage here               
 script:
   - ros -e "(loop
               :for i :upfrom 0
