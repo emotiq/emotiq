@@ -22,7 +22,6 @@ install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
 # Add needed Quicklisp dependencies for testing here  
   - ros install prove
-  - ros install lisp-unit
   - ros -e '(ql-dist:install-dist 
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
                :replace t :prompt nil)
@@ -31,16 +30,19 @@ install:
                :prompt nil)'
 
 script:
-  - ros -e '(ql:quickload :emotiq-test) 
-            (when (asdf:test-system :emotiq)
-               (uiop:quit 0))'
-  - ros -e '(ql:quickload :cosi-test)
-            (when (asdf:test-system :cosi)
-               (uiop:quit 0))'
-  # Speculatively hook into Coveralls <https://coveralls.io/>
-  # Coveralls invocation (currently unused)
-  #                 
-  # - ros -s prove -s cl-coveralls
-  #       -e '(or (coveralls:with-coveralls (:exclude (list "t"))
-  #                 (prove:run :emotiq-prove))
-  #               (uiop:quit -1))'
+  - ros -e "(loop
+              :for i :upfrom 0
+              :for 
+                  (system dependencies) 
+              :in 
+                  '((:emotiq :emotiq-test)
+                    (:cosi   :cosi-test))
+              :doing 
+                 (ql:quickload dependencies)
+              :unless 
+                 (asdf:test-system system)
+              :return 
+                 (uiop:quit (ash -1 i))
+              :finally 
+                 (uiop:quit 0))"
+
