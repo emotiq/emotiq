@@ -126,7 +126,7 @@ THE SOFTWARE.
   ;; is unforgeable. If a MITM attack occurs, the receiving node will
   ;; fail HMAC verification and just drop the incoming packet on the
   ;; floor. So MITM modifications become tantamount to a DOS attack.
-  (cosi-keying:cosi-signature msg skey))
+  (cosi-keying:cosi-sign msg skey))
 
 (defun verify-hmac (tuple)
   ;; Every incoming packet is scrutinized for a valid HMAC. If it

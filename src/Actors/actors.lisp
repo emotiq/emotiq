@@ -521,9 +521,16 @@ THE SOFTWARE.
   (defun release-mailbox (mbox)
     (mpcompat:with-lock (lock)
        (push mbox (car queue)))))
-  
+
+(defun ensure-mbox-empty (mbox)
+  (um:nlet-tail iter ()
+    (when (mp:mailbox-peek mbox)
+      (mp:mailbox-read mbox)
+      (iter))))
+
 (defun do-with-borrowed-mailbox (fn)
   (let ((mbox (get-mailbox)))
+    (ensure-mbox-empty mbox)
     (unwind-protect
         (funcall fn mbox)
       (release-mailbox mbox))))

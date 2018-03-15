@@ -39,7 +39,7 @@ THE SOFTWARE.
      ;; ----------------------------
      ;; user accessible entry points - directed to leader node
      
-     (:cosi (reply-to msg)
+     (:cosi-sign (reply-to msg)
       (node-compute-cosi node reply-to msg))
 
      (:validate (reply-to sig bits)
@@ -263,7 +263,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
               (shutdown-server my-port)))
          (pr :my-port my-port)
          #+:LISPWORKS (inspect ret)
-         (send *top-node* :cosi ret msg)
+         (send *top-node* :cosi-sign ret msg)
          (recv
            ((list :answer (and packet
                                (list :signature _ sig)))
@@ -533,7 +533,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
        (labels
            ((exit ()
               (unregister-return-addr ret)))
-         (send *top-node* :cosi ret "This is a test message!")
+         (send *top-node* :cosi-sign ret "This is a test message!")
          (recv
            ((list :answer
                   (and msg
