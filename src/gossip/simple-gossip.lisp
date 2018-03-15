@@ -8,6 +8,9 @@
 
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
+; TODO: Initiator node of message should wait longer than nodes farther away.
+(defparameter *max-seconds-to-wait* 2 "Max seconds to wait for all replies to come in")
+
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
 (defun new-uid ()
@@ -36,6 +39,9 @@
             Kind will dictate nature of reply. Not sure we need this, since whether
              a reply is needed is implicit in kind.")))
 
+(defun make-solicitation (&rest args)
+  (apply 'make-instance 'solicitation args))
+
 ; Note: If you change a message before forwarding it, you need to create a new
 ;   message with a new UID. (Replies can often be changed as they percolate backwards;
 ;   they need new UIDs so that a node that has seen one set of information won't
@@ -49,6 +55,9 @@
      back to one ultimate receiver -- the originator of the solicitation. However,
      a few replies (e.g. to sound-off) are full broadcasts unto themselves."))
 
+(defun make-reply (&rest args)
+  (apply 'make-instance 'reply args))
+
 (defclass gossip-mixin (uid-mixin)
   ((address :initarg :address :initform nil :accessor address
             :documentation "Network address (e.g. IP) of node.")))
@@ -56,6 +65,14 @@
 (defclass gossip-node (gossip-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
                   :documentation "Cache of seen messages")
+   (repliers-expected :initarg :repliers-expected :initform (make-hash-table :test 'equal)
+                      :accessor repliers-expected
+                      :documentation "Hash-table mapping a solicitation id to a list of node UIDs
+                          that I expect to reply to that solicitation")
+   (reply-data :initarg :reply-data :initform (make-hash-table :test 'equal)
+               :accessor reply-data
+               :documentation "Hash-table mapping a solicitation id to some data being accumulated
+                          from replies for that solicitation")
    (kvs :initarg :kvs :initform (make-hash-table) :accessor kvs
         :documentation "Local key/value store for this node")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
@@ -87,20 +104,44 @@
   (pushnew (uid node1) (neighbors node2))
   (pushnew (uid node2) (neighbors node1)))
   
-(defun connect-all (nodelist)
+(defmethod connected? ((node1 gossip-node) (node2 gossip-node))
+  (or (member (uid node2) (neighbors node1) :test 'equal)
+      ; redundant if we connected the graph correctly in the first place
+      (member (uid node1) (neighbors node2) :test 'equal)))
+
+(defun linear-path (nodelist)
   "Create a linear path through the nodes"
   (when (second nodelist)
     (connect (first nodelist) (second nodelist))
-    (connect-all (cdr nodelist))))
+    (linear-path (cdr nodelist))))
 
-(defun connect-nodes (nodelist)
-  (connect-all nodelist))
+(defun random-connection (nodelist)
+  (let* ((len (length nodelist))
+         (node1 (elt nodelist (random len)))
+         (node2 (elt nodelist (random len))))
+    (if (eq node1 node2)
+        (random-connection nodelist)
+        (values node1 node2))))
+
+(defun random-new-connection (nodelist)
+  (multiple-value-bind (node1 node2) (random-connection nodelist)
+    (if (connected? node1 node2)
+        (random-new-connection nodelist)
+        (values node1 node2))))
+
+(defun add-random-connections (nodelist n)
+  "Adds n random edges between pairs in nodelist, where no connection currently exists."
+  (dotimes (i n)
+    (multiple-value-bind (node1 node2) (random-new-connection nodelist)
+      (connect node1 node2))))
 
 (defun make-graph (numnodes)
   (clrhash *nodes*)
   (make-nodes numnodes)
-  (connect-nodes (listify-nodes))
-  )
+  (let ((nodelist (listify-nodes)))
+    (linear-path nodelist)
+    (add-random-connections nodelist (length nodelist))
+    ))
 
 
 
@@ -155,12 +196,12 @@
   ; Could just call deliver-msg here, but I like the abstraction of
   ;   having a local message-space which is used for all messages in simulation mode,
   ;   and all outgoing messages in 'real' network mode.
-  (with-lock-grabbed (*message-space-lock*)
+  (ccl:with-lock-grabbed (*message-space-lock*)
     (enq (list msg destuid srcuid) *message-space*)))
 
 ; TODO: Remove old entries in message-cache, eventually.
 (defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid)
-  "Deal with an incoming message. Srcuid could be nil in case of initiating messages."
+  "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
@@ -179,6 +220,24 @@
 
 (defmethod locally-receive-msg ((sol solicitation) (thisnode remote-gossip-node) srcuid)
   (error "Bug: Cannot locally-receive to a remote node!"))
+
+(defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid)
+  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
+  (cond ((< (get-universal-time) (+ *max-message-age* (timestamp rep))) ; ignore too-old messages
+         (let ((already-seen? (gethash (uid rep) (message-cache thisnode))))
+           (cond (already-seen? ; ignore if already seen
+                  (maybe-log thisnode :ignore (uid rep) :already-seen))
+                 (t
+                  ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
+                  (setf (gethash (uid rep) (message-cache thisnode)) srcuid)
+                  (maybe-log thisnode :reply-accepted (uid rep) (kind rep) (args rep))
+                  (let* ((kind (kind rep))
+                         (kindsym nil))
+                    (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
+                    (when (and kindsym
+                               (fboundp kindsym))
+                      (funcall kindsym rep thisnode srcuid)))))))
+        (t (maybe-log thisnode :ignore (uid rep) :too-old))))
 
 
 (defun forward (msg srcuid destuids)
@@ -255,10 +314,39 @@
 
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
   "Counts number of live nodes downstream of thisnode, plus thisnode itself.
-   Reply with a scalar."
-  (forward msg thisnode (remove srcuid (neighbors thisnode)))
-  ; wait a finite time for all replies
-  )
+  Reply with a scalar."
+  (let ((soluid (uid msg)))
+    ; prepare reply tables
+    (setf (gethash soluid (reply-data thisnode)) 1)
+    (setf (gethash soluid (repliers-expected thisnode)) (neighbors thisnode))
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))
+    ; wait a finite time for all replies
+    (ccl:process-wait-with-timeout "reply-wait"
+                                   (* *max-seconds-to-wait* internal-time-units-per-second)
+                                   (lambda ()
+                                     (null (gethash soluid (repliers-expected thisnode)))))
+    (let ((totalcount (gethash soluid (reply-data thisnode)))
+          (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
+      ; clean up reply tables
+      (remhash soluid (reply-data thisnode))
+      (remhash soluid (repliers-expected thisnode))
+      ; must create a new reply here; cannot reuse an old one because its content has changed
+      (send-msg (make-reply :solicitation-id soluid
+                            :kind :count-alive
+                            :args (list totalcount))
+                where-to-forward-reply
+                (uid thisnode)))))
+
+(defmethod count-alive ((rep reply) thisnode srcuid)
+  (let ((soluid (solicitation-uid rep)))
+    ; First record the data in the reply appropriately
+    (let ((numalive (first (args rep))))
+      (incf (gethash soluid (reply-data thisnode)) numalive))
+    ; Now remove this srcuid from expected-replies list. (We know it's on
+    ;  the list because this method would never have been called otherwise.)
+    (let ((nodes-expected-to-reply (gethash soluid (repliers-expected thisnode))))
+      (setf (gethash soluid (repliers-expected thisnode))
+            (delete srcuid nodes-expected-to-reply)))))
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
