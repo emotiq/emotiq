@@ -139,7 +139,7 @@
   (:export
    :need-integer-form
    :published-form
-   :cosi-signature
+   :cosi-sign
    :cosi-validate
    :cosi-validate-signed-message
    :make-random-keypair

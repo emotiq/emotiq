@@ -45,6 +45,7 @@ THE SOFTWARE.
   (:export
    :ub8        ;; type
    :ub8-vector ;; type
+   :make-ub8-vector
    :ub8v-repr  ;; mixin class
    :ub8v
    :ub8v-vec

@@ -129,7 +129,9 @@ THE SOFTWARE.
   (convert-text-to-int8-array s))
 
 (defmethod ensure-8bitv ((v sequence))
-  (coerce v '(ub-vector *)))
+  (or (ignore-errors
+        (coerce v '(ub-vector *)))
+      (call-next-method)))
 
 (defmethod ensure-8bitv ((s symbol))
   (ensure-8bitv (string s)))

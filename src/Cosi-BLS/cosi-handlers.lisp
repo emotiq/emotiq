@@ -42,8 +42,8 @@ THE SOFTWARE.
      (:cosi (reply-to msg)
       (node-compute-cosi node reply-to msg))
 
-     (:validate (reply-to sig)
-      (reply reply-to :validation (node-validate-cosi node sig)))
+     (:validate (reply-to sig bits)
+      (reply reply-to :validation (node-validate-cosi node sig bits)))
           
      (:public-key (reply-to)
       (reply reply-to :pkey+zkp (node-pkeyzkp node)))
@@ -295,28 +295,27 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
-(defun node-validate-cosi (node sig)
+(defun node-validate-cosi (node sig bits)
   ;; toplevel entry for Cosi signature validation checking
   (declare (ignore node)) ;; not needed here...
-  (destructuring-bind (csig bits) sig
-    ;; first check for valid signature...
-    (and (cosi-keying:cosi-validate-signed-message csig)
-         ;; then, check that bitmap indicates the same set of public
-         ;; keys as used in forming the signature
-         (let* ((tkey  (reduce (lambda (ans node)
-                                 (if (and node
-                                          (logbitp (node-bit node) bits))
-                                     (if ans
-                                         (pbc:with-crypto ()
-                                           (pbc:mul-pts ans (node-pkey node)))
-                                       (node-pkey node))
-                                   ;; node didn't participate
-                                   ans))
-                               *node-bit-tbl*
-                               :initial-value nil)))
-           (= (base58:int (getf csig :pkey))
-              (base58:int tkey))
-           ))))
+  ;; first check for valid signature...
+  (and (cosi-keying:cosi-validate-signed-message sig)
+       ;; then, check that bitmap indicates the same set of public
+       ;; keys as used in forming the signature
+       (let* ((tkey  (reduce (lambda (ans node)
+                               (if (and node
+                                        (logbitp (node-bit node) bits))
+                                   (if ans
+                                       (pbc:with-crypto ()
+                                         (pbc:mul-pts ans (node-pkey node)))
+                                     (node-pkey node))
+                                 ;; node didn't participate
+                                 ans))
+                             *node-bit-tbl*
+                             :initial-value nil)))
+         (= (base58:int (pbc:signed-message-pkey sig))
+            (base58:int tkey))
+         )))
 
 ;; -----------------------------------------------------------------------
 
@@ -398,14 +397,14 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; ------------------------------
 
-(defun sub-signing (my-ip c seq-id)
+(defun sub-signing (my-ip msg seq-id)
   (=lambda (node)
     (let ((start    (get-universal-time))
           (timeout  10
                     ;; (* (node-load node) *default-timeout-period*)
                     )
           (ret-addr (make-return-addr my-ip)))
-      (send node :signing ret-addr c seq-id)
+      (send node :signing ret-addr msg seq-id)
       (labels
           ((!dly ()
                  #+:LISPWORKS
@@ -420,7 +419,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                
                (wait ()
                  (recv
-                   ((list :signed sub-seq ans)
+                   ((list* :signed sub-seq ans)
                     (if (eql sub-seq seq-id)
                         (=return ans)
                       ;; else
@@ -442,7 +441,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node)))
-         (sig  (cosi-keying:cosi-signature msg (node-skey node)))
+         (sig  (cosi-keying:cosi-sign msg (node-skey node)))
          (bits (node-bitmap node)))
     (=bind (r-lst)
         (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
@@ -491,7 +490,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                       (pbc:check-message sig))
                     ;; we completed successfully
                     (reply reply-to
-                           (list :signature msg (list sig bits)))
+                           (list :signature sig bits))
                   ;; bad signature
                   (reply reply-to :corrupt-cosi-network)
                   ))
@@ -519,7 +518,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (setf *real-nodes* (remove "10.0.1.13" *real-nodes*
                            :test 'string-equal))
 
-(generate-tree :nel 100)
+(generate-tree :nodes 100)
 
 (reconstruct-tree)
 |#
@@ -534,19 +533,18 @@ Connecting to #$(NODE "10.0.1.6" 65000)
        (labels
            ((exit ()
               (unregister-return-addr ret)))
-         (send *top-node* :validate ret "This is a test message!")
+         (send *top-node* :cosi ret "This is a test message!")
          (recv
            ((list :answer
                   (and msg
-                       (list :signature txt
-                             (and sig (list _ _ bits)))))
+                       (list :signature sig bits)))
             (send *dly-instr* :plt)
             (ac:pr
              (format nil "Total Witnesses: ~D" (logcount bits))
              msg
              (format nil "Duration = ~A" (- (get-universal-time) start)))
             
-            (send *my-node* :validate ret txt sig)
+            (send *my-node* :validate ret sig bits)
             (recv
               ((list :answer :validation t/f)
                (if t/f
@@ -566,6 +564,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; -------------------------------------------------------------
 
+(defvar *arroyo*     "10.0.1.2")
 (defvar *dachshund*  "10.0.1.3")
 (defvar *malachite*  "10.0.1.6")
 (defvar *rambo*      "10.0.1.13")

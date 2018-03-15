@@ -41,7 +41,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------
 ;; BLS Signatures
 
-(defmethod cosi-signature (msg (skey pbc:secret-key))
+(defmethod cosi-sign (msg (skey pbc:secret-key))
   (pbc:with-crypto (:skey skey)
     (pbc:sign-message msg)))
 

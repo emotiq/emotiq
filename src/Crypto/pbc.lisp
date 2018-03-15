@@ -332,9 +332,15 @@ THE SOFTWARE.
   (crypto-val-vec x))
 
 (defmethod print-object ((obj crypto-val) out-stream)
-  (format out-stream "#<~A ~A >"
-          (class-name (class-of obj))
-          (crypto-val-vec obj)))
+  (if *print-readably*
+      (format out-stream "#.(make-instance '~W :value ~A)"
+              (class-name (class-of obj))
+              (with-output-to-string (s)
+                (print-object (crypto-val-vec obj) s)))
+    ;; else
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (crypto-val-vec obj))))
 
 ;; -------------------------------------------------
 ;; Useful subclasses
@@ -494,12 +500,20 @@ sign0 1
 ;; PBC lib expects all values as big-endian
 ;; We work internally with little-endian values
 
+(defun raw-bytes (x)
+  (bev-vec (bev x)))
+
+(defun construct-bev (vec)
+  ;; careful here... this assumes vec is UB8-VECTOR
+  ;; more efficient internally when we know vec.
+  (make-instance 'bev
+                 :vec vec))
+
 (defun xfer-foreign-to-lisp (fbuf nel)
-  (let ((lbuf (make-array nel
-                          :element-type '(unsigned-byte 8))))
+  (let ((lbuf (make-ub8-vector nel)))
     (loop for ix from 0 below nel do
           (setf (aref lbuf ix) (fli:dereference fbuf :index ix)))
-    (bev lbuf)))
+    (construct-bev lbuf)))
 
 (defun make-fli-buffer (nb &optional initial-contents)
   ;; this must only be called from inside of a WITH-DYNAMIC-FOREIGN-OBJECTS
@@ -609,32 +623,35 @@ sign0 1
 
 ;; -------------------------------------------------
 
+(defun construct-hash (vec)
+  (make-instance 'hash
+                 :val (construct-bev vec)))
+
 (defun hash (&rest args)
   ;; produce a UB8V of the args
   (let ((hv  (apply 'sha3/256-buffers
                     (mapcar 'hashable args))))
-    (values (make-instance 'hash
-                           :val (bev hv))
+    (values (construct-hash hv)
             (length hv))))
         
 (defmethod sign-hash ((hash hash))
   ;; hash-bytes is UB8V
   (need-keying)
   (let* ((bytes (hash-val hash))
-         (nhash (length (bev-vec (bev bytes)))))
+         (nhash (length (raw-bytes bytes))))
     (with-fli-buffers ((hbuf nhash bytes))
       (_sign-hash hbuf nhash)
       (get-signature)
       )))
 
-(defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
+(defmethod check-hash ((hash hash) (sig g1-cmpr) (pkey g2-cmpr))
   ;; hash-bytes is UB8V
   (need-generator)
   (let* ((bytes (hash-val hash))
-         (nhash (length (bev-vec (bev bytes)))))
-    (with-fli-buffers ((sbuf *g1-size* (signature-val sig))
+         (nhash (length (raw-bytes bytes))))
+    (with-fli-buffers ((sbuf *g1-size* sig)
                        (hbuf nhash     bytes)
-                       (pbuf *g2-size* (public-key-val pkey)))
+                       (pbuf *g2-size* pkey))
       (zerop (_check-signature sbuf hbuf nhash pbuf))
       )))
 
@@ -724,39 +741,33 @@ sign0 1
   ;; produce a 64-byte (512 bits) UB8V of the args
   (let ((hv  (apply 'sha3-buffers
                     (mapcar 'hashable args))))
-    (values (make-instance 'hash
-                           :val (bev hv))
+    (values (construct-hash hv)
             (length hv))))
 
-(defun err-package (x)
-  (error "Use symmetric encryption for longer messages: ~A" x))
-
-(defun check-package (vec)
-  (when (> (length (bev-vec vec)) 64)
-    (err-package vec))
-  (bevn vec 64))
-    
-(defgeneric pack-message (x)
-  (:method ((val integer))
-   (let ((vec (bev val)))
-     (check-package vec)))
-  (:method ((x string))
-   (let ((vec (bev (map 'vector 'char-code x))))
-     (check-package vec)))
-  (:method ((x symbol))
-   (let ((vec (bev (map 'vector 'char-code (string x)))))
-     (check-package vec)))
-  (:method ((x sequence))
-   (let ((vec (bev x)))
-     (check-package vec)))
-  (:method ((x ub8v))
-   (let ((vec (bev x)))
-     (check-package vec)))
-  (:method ((x ub8v-repr))
-   (let ((vec (bev x)))
-     (check-package vec)))
-  (:method (x)
-   (err-package x)))
+(defun get-hashbytes (nb seed)
+  (cond
+   ((> nb 64)
+    (let ((bytes (make-ub8-vector nb)))
+      (um:nlet-tail iter ((start 0))
+        (if (< start nb)
+            (let ((end  (min (+ start 64) nb)))
+              (replace bytes (raw-bytes (long-hash start seed))
+                       :start1 start
+                       :end1   end)
+              (iter end))
+          bytes))
+      ))
+   ((= nb 64)
+    (raw-bytes (long-hash seed)))
+   ((> nb 32)
+    (let ((bytes (raw-bytes (long-hash seed))))
+      (subseq bytes 0 nb)))
+   ((= nb 32)
+    (raw-bytes (hash seed)))
+   (t
+    (let ((bytes (raw-bytes (hash seed))))
+      (subseq bytes 0 nb)))
+   ))
 
 ;; -------------
 
@@ -774,26 +785,35 @@ sign0 1
    ))
 
 (defmethod ibe-encrypt (msg (pkey public-key) id)
-  ;; msg should be representable by a 64-byte, or shorter, UB8-VECTOR
+  ;; msg can be anything and of any length. (we use LOENC:ENCODE)
   ;; Asymmetric encryption is intended only for short messages, like
   ;; keying material. Use symmetric encryption for bulk message
-  ;; encryption.
+  ;; encryption. But this will work regardless.
   (need-generator)
-  (let* ((pkid   (make-public-subkey pkey id))
-         (tstamp (bev (uuid:uuid-to-byte-array
-                       (uuid:make-v1-uuid))))
-         (msg    (pack-message msg))
-         (rhsh   (hash id tstamp msg)))
+  (let* ((pkid      (make-public-subkey pkey id))
+         (tstamp    (construct-bev (uuid:uuid-to-byte-array
+                                    (uuid:make-v1-uuid))))
+         (msg-bytes (loenc:encode msg))
+         (nmsg      (length msg-bytes))
+         (xlen      (* 32 (ceiling nmsg 32)))
+         (xbytes    (if (< nmsg xlen)
+                        (let ((cloaked (make-ub8-vector xlen)))
+                          (replace cloaked msg-bytes)
+                          (fill cloaked 0 :start nmsg)
+                          cloaked)
+                      ;; else
+                      msg-bytes))
+         (xmsg      (construct-bev xbytes))
+         (rhsh      (hash id tstamp xmsg)))
     (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
       (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf 32)
-      (let* ((pval (long-hash (xfer-foreign-to-lisp pbuf *gt-size*)))
+      (let* ((pval (get-hashbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
              (cmsg (make-instance 'crypto-text
-                                  :vec (bev (map 'vector 'logxor
-                                                 (bev-vec (bev pval))
-                                                 (bev-vec (bev msg))))))
+                                  :vec (construct-bev
+                                        (map-into pval 'logxor pval xbytes))))
              (rval (make-instance 'g2-cmpr
                                   :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
         (make-instance 'crypto-packet
@@ -817,17 +837,18 @@ sign0 1
                          (kbuf  *g1-size*  skid)
                          (rbuf  *g2-size*  rval))
         (_sakai-kasahara-decrypt pbuf rbuf kbuf)
-        (let* ((pval (long-hash (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (msg  (bev (map 'vector 'logxor
-                               (bev-vec (bev pval))
-                               (bev-vec (bev cmsg)))))
+        (let* ((cmsg-bytes (raw-bytes cmsg))
+               (nb         (length cmsg-bytes))
+               (pval (get-hashbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
+               (msg  (construct-bev
+                      (map-into pval 'logxor pval cmsg-bytes)))
                (hval (hash id tstamp msg)))
           (with-fli-buffers ((hbuf 32        hval)
                              (kbuf *g2-size* pkey))
             (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf 32))
-              msg))
+              (loenc:decode (raw-bytes msg))))
           )))))
-
+    
 ;; -----------------------------------------------
 
 (defmethod compute-pairing ((hval g1-cmpr) (gval g2-cmpr))
