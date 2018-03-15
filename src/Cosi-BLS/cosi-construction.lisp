@@ -34,7 +34,8 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("Malachite.local" . "10.0.1.6")
+(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.2")
+                         ("Malachite.local" . "10.0.1.6")
                          ("Dachshund.local" . "10.0.1.3")
                          ("Rambo"           . "10.0.1.13")
                          ("ChromeKote.local" . "10.0.1.36")))
@@ -47,7 +48,7 @@ THE SOFTWARE.
   (get-local-ipv4 (machine-instance)))
 
 (defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "Dachshund.local"))
+(defvar *leader-node* (get-local-ipv4 "Arroyo.local"))
 ;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
 
 (defvar *top-node*   nil) ;; current leader node
@@ -351,10 +352,14 @@ THE SOFTWARE.
       (setf (gethash ip *ip-node-tbl*) ip))))
 
 (defmethod pair-ip-pkey ((node node))
+  ;; used during initial tree generation
+  ;; we need numeric values of keys for store in file
   (list (node-ip node)
         (node-pkeyzkp node)))
 
 (defmethod pair-ip-pkey ((ip string))
+  ;; used during initial tree generation
+  ;; we need numeric values of keys for store in file
   (pair-ip-pkey (gethash ip *ip-node-tbl*)))
 
 (defun gen-main-tree (leader real-nodes grps)
@@ -374,7 +379,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------
 ;; Generate Tree / Keying and save to startup init files
 
-(defun generate-tree (&key datafile keyfile (nel 1000))
+(defun generate-tree (&key datafile keyfile (nodes 1000))
   (let* ((leader     *leader-node*)
          (real-nodes  (remove-duplicates *real-nodes*
                                          :test 'string=)))
@@ -391,9 +396,9 @@ THE SOFTWARE.
 
     ;; build the trees
     (let* ((nreal       (length real-nodes))
-           (nel/grp     (ceiling nel nreal))
+           (nodes/grp   (ceiling nodes nreal))
            (grps        (loop repeat nreal collect
-                              (loop repeat nel/grp collect
+                              (loop repeat nodes/grp collect
                                     (generate-ip))))
            (main-tree   (gen-main-tree leader real-nodes grps)))
 
@@ -476,9 +481,7 @@ THE SOFTWARE.
     (mapc (lambda (pair)
             (destructuring-bind (k . v) pair
               ;; k is integer, compressed pkey ECC pt
-              ;; v is skey integer
-              ;; decompression checks for valid ECC pt
-              (assert (ed-pt= (ed-nth-pt v) (ed-decompress-pt k)))
+              ;; v is skey secret key
               (setf (gethash k *pkey-skey-tbl*) v)))
           keys)
     

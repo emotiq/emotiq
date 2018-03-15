@@ -76,6 +76,20 @@ THE SOFTWARE.
 ;; subclasses. (c.f., PBC.LISP)
 
 ;; ----------------------------------------------------------
+;; Declare Types UB8 and UB8-VECTOR
+
+(deftype ub8 ()
+  '(unsigned-byte 8))
+
+(deftype ub8-vector (&optional nel)
+  `(array ub8 (,nel)))
+
+(defun make-ub8-vector (nel &rest args)
+  (apply 'make-array nel
+         :element-type 'ub8
+         args))
+
+;; ----------------------------------------------------------
 ;; from https://bitcointalk.org/index.php?topic=1026.0
 
 <<<<<<< HEAD
@@ -87,15 +101,17 @@ THE SOFTWARE.
 (defconstant +len-58+
   (length +alphabet-58+)) ;; should be 58
 
-(defvar +inv-alphabet-58+
-  (let ((arr (make-array 256
-                         :element-type '(unsigned-byte 8)
+(defun make-inverse-alphabet (alphabet)
+  (let ((arr (make-ub8-vector 256
                          :initial-element 0)))
-    (loop for c across +alphabet-58+
+    (loop for c across alphabet
           for ix from 1
           do
           (setf (aref arr (char-code c)) ix))
     arr))
+  
+(defvar +inv-alphabet-58+
+  (make-inverse-alphabet +alphabet-58+))
 
 ;; ----------------------------------------------------------
 
@@ -103,23 +119,7 @@ THE SOFTWARE.
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 
 (defvar +inv-alphabet-64+
-  (let ((arr (make-array 256
-                         :element-type '(unsigned-byte 8)
-                         :initial-element 0)))
-    (loop for c across +alphabet-64+
-          for ix from 1
-          do
-          (setf (aref arr (char-code c)) ix))
-    arr))
-
-;; ----------------------------------------------------------
-;; Declare Types UB8 and UB8-VECTOR
-
-(deftype ub8 ()
-  '(unsigned-byte 8))
-
-(deftype ub8-vector (&optional nel)
-  `(array ub8 (,nel)))
+  (make-inverse-alphabet +alphabet-64+))
 
 ;; ---------------------------------------------------------
 ;; Declare a useful mixin class to allow future classes to show a UB8V
@@ -143,9 +143,14 @@ THE SOFTWARE.
         :initarg :vec)))
 
 (defmethod print-object ((obj ub8v) out-stream)
-  (format out-stream "#<~A ~A >"
-          (class-name (class-of obj))
-          (ub8v-vec obj)))
+  (if *print-readably*
+      (format out-stream "#.(~W ~A)"
+              (class-name (class-of obj))
+              (int obj))
+    ;; else
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (ub8v-vec obj))))
 
 ;; ----------------------------------------------------------
 ;; Base58 encodes UB8 vectors and integers into character strings of
@@ -348,8 +353,7 @@ THE SOFTWARE.
 (defun convert-int-to-vec (val)
   ;; convert val to little-endian vector of UB8
   (let* ((nb (ceiling (integer-length val) 8))
-         (v  (make-array nb
-                         :element-type '(unsigned-byte 8))))
+         (v  (make-ub8-vector nb)))
     (loop for ix from 0 below nb
           for pos from 0 by 8
           do
@@ -373,8 +377,7 @@ THE SOFTWARE.
   (let* ((str  (base58-str x))
          (nb   (sub-decode-58 (subseq str 0 6)))
          (nstr (length str))
-         (vec  (make-array nb
-                           :element-type '(unsigned-byte 8))))
+         (vec  (make-ub8-vector nb)))
     (um:nlet-tail iter ((start  6)
                         (vstart 0))
       (when (< start nstr)
@@ -423,8 +426,7 @@ THE SOFTWARE.
               (3  (decode 0)
                   (decode 1)))
             (make-instance 'lev
-                           :vec (make-array (length lst)
-                                            :element-type '(unsigned-byte 8)
+                           :vec (make-ub8-vector vlen
                                             :initial-contents lst))
             ))))))
 
@@ -449,8 +451,7 @@ THE SOFTWARE.
     (cond ((< nel nb)
            ;; extend with zero filled tail
            (let* ((diff (- nb nel))
-                  (tail (make-array diff
-                                    :element-type '(unsigned-byte 8)
+                  (tail (make-ub8-vector diff
                                     :initial-element 0)))
              (make-instance 'lev
                             :vec (concatenate 'vector (lev-vec lev) tail))))
@@ -500,8 +501,7 @@ THE SOFTWARE.
 (defmethod bev ((x hex))
   (let* ((str  (hex-str x))
          (ns   (length str))
-         (vec  (make-array (ceiling ns 2)
-                           :element-type '(unsigned-byte 8))))
+         (vec  (make-ub8-vector (ceiling ns 2))))
     (labels ((decode (ch)
                (cond ((char<= #\0 ch #\9) (- (char-code ch) #.(char-code #\0)))
                      ((char<= #\A ch #\F) (- (char-code ch) #.(- (char-code #\A) 10)))
@@ -533,8 +533,7 @@ THE SOFTWARE.
     (cond ((< nel nb)
            ;; prepend with zero filled prefix
            (let* ((diff (- nb nel))
-                  (pref (make-array diff
-                                    :element-type '(unsigned-byte 8)
+                  (pref (make-ub8-vector diff
                                     :initial-element 0)))
              (make-instance 'bev
                             :vec (concatenate 'vector pref (bev-vec bev)))))

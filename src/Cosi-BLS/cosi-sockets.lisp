@@ -135,7 +135,7 @@ THE SOFTWARE.
   (when (ignore-errors
           (pbc:with-crypto ()
             (pbc:check-message tuple)))
-    (values (getf tuple :msg) t)))
+    (values (pbc:signed-message-msg tuple) t)))
 
 ;; -----------------------------------------------------
 ;; THE SOCKET INTERFACE...
@@ -170,9 +170,9 @@ THE SOFTWARE.
       (socket-send me me port '(:SHUTDOWN-SERVER)))))
 
 (defun socket-send (ip real-ip real-port msg)
-  (let* ((tuple   (make-hmac (list* ip msg)
+  (let* ((hmac    (make-hmac (list* ip msg)
                              (node-skey *my-node*)))
-         (packet  (loenc:encode quad)))
+         (packet  (loenc:encode hmac)))
     (internal-send-socket real-ip real-port packet)))
 
 ;; ------------------------------------------------------------------
