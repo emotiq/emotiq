@@ -12,7 +12,7 @@
 (defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
-(defparameter *process-count* 0 "Just for simulation")
+(defparameter *process-count* 0 "Just for simulation") ; NO LONGER NEEDED
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
@@ -575,7 +575,7 @@
   (setf msg (copy-message msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount msg))
-  (when (> *process-count* (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
+  (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
     (pprint (ccl::all-processes) t)
     (break "In deliver-msg"))
   (my-prf (lambda () (locally-receive-msg msg node srcuid)) :name (format nil "Node ~D" (uid node))))
@@ -633,13 +633,27 @@
 ; (make-graph 100)
 ; (visualize-nodes (listify-nodes))
 
+(defun count-node-processes ()
+  "Returns a count of node processes."
+  (let ((count 0))
+    (mapc  #'(lambda (process)
+               (when (ignore-errors (string= "Node " (subseq (ccl:process-name process) 0 5)))
+                 (incf count)))
+           (ccl:all-processes))
+    count))
+
+(defun node-processes ()
+  "Returns a list of node processes."
+  (let ((node-processes nil))
+    (mapc  #'(lambda (process)
+               (when (ignore-errors (string= "Node " (subseq (ccl:process-name process) 0 5)))
+                 (push process node-processes)))
+           (ccl:all-processes))
+    node-processes))
+
 ; Mostly for debugging. Node processes should kill themselves.
 (defun kill-node-processes ()
-  (let ((node-processes nil))
-		(mapc  #'(lambda (process)
-                             (when (ignore-errors (string= "Node " (subseq (ccl:process-name process) 0 5)))
-                               (push process node-processes)))
-                       (ccl:all-processes))
+  (let ((node-processes (node-processes)))
     (mapc 'ccl::process-kill node-processes)))
 
 ; (run-gossip-sim)
