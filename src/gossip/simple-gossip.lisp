@@ -72,7 +72,9 @@
    
 (defclass gossip-node (gossip-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
-                  :documentation "Cache of seen messages")
+                  :documentation "Cache of seen messages. Table mapping UID of message to UID of sender.
+                  Used to ensure identical messages are not acted on twice, and to determine where
+                  replies to a message should be sent.")
    (repliers-expected :initarg :repliers-expected :initform (make-hash-table :test 'equal)
                       :accessor repliers-expected
                       :documentation "Hash-table mapping a solicitation id to a list of node UIDs
@@ -231,18 +233,26 @@
             (uid node)
             nil))
 
+(defmethod briefname ((node gossip-node) &optional (prefix "node"))
+ (format nil "~A~D" prefix (uid node)))
+
+(defmethod briefname ((msg solicitation) &optional (prefix "sol"))
+  (format nil "~A~D" prefix (uid msg)))
+
+(defmethod briefname ((msg reply) &optional (prefix "rep"))
+  (format nil "~A~D" prefix (uid msg)))
+
+(defmethod briefname ((id integer) &optional (prefix ""))
+  (format nil "~A~D" prefix id))
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
-
 (defmethod maybe-log ((node gossip-node) logcmd msg &rest args)
   (when (logfn node)
     (apply (logfn node)
            logcmd
-           (format nil "node~D" (uid node))
-           (typecase msg 
-             (solicitation (format nil "sol~D" (uid msg)))
-             (reply        (format nil "rep~D" (uid msg))))
+           (briefname node)
+           (briefname msg)
            args)))
 
 (defparameter *stop-dispatcher* nil "Set to true to end an ongoing simulation")
@@ -276,8 +286,8 @@
 
 (defvar *log* (new-log) "Log of simulated actions.")
 
-(defun default-logging-function (logcmd nodeuid msguid &rest args)
-  (vector-push-extend (list* logcmd nodeuid msguid args) *log*))
+(defun default-logging-function (logcmd nodename msgname &rest args)
+  (vector-push-extend (list* logcmd nodename msgname args) *log*))
 
 (defmethod send-msg ((msg message-mixin) destuid srcuid)
   "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
@@ -297,7 +307,7 @@
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore sol :already-seen))
+                  (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :already-seen))
                  (t
                   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
                   (setf (gethash (uid sol) (message-cache thisnode)) srcuid)
@@ -308,29 +318,32 @@
                     (when (and kindsym
                                (fboundp kindsym))
                       (funcall kindsym sol thisnode srcuid)))))))
-        (t (maybe-log thisnode :ignore sol :too-old))))
+        (t (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :too-old))))
 
 (defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid)
   (error "Bug: Cannot locally-receive to a remote node!"))
 
+; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
+;       or srcuid is not on the list. That means we've given up waiting. Handle that here
+;       rather than in specific gossip methods.
+;       Provide a specific :IGNORE log message for this case.
 (defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid)
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp rep))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid rep) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore rep :already-seen))
+                  (maybe-log thisnode :ignore rep :from (briefname srcuid "node") :already-seen))
                  (t
                   ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
                   (setf (gethash (uid rep) (message-cache thisnode)) srcuid)
-                  (maybe-log thisnode :reply-accepted rep (kind rep) (args rep))
+                  (maybe-log thisnode :reply-accepted rep (kind rep) :from (briefname srcuid "node") (args rep))
                   (let* ((kind (kind rep))
                          (kindsym nil))
                     (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
                     (when (and kindsym
                                (fboundp kindsym))
                       (funcall kindsym rep thisnode srcuid)))))))
-        (t (maybe-log thisnode :ignore rep :too-old))))
-
+        (t (maybe-log thisnode :ignore rep :from (briefname srcuid "node") :too-old))))
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
@@ -338,6 +351,8 @@
   (mapc (lambda (destuid)
           (send-msg msg destuid srcuid))
         destuids))
+
+;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
 (defmethod assign ((msg solicitation) thisnode srcuid)
   "Establishes a global key/value pair. Sets value on this node and then forwards 
@@ -429,7 +444,7 @@
       ; must create a new reply here; cannot reuse an old one because its content has changed
       (if where-to-forward-reply
           (progn
-            (maybe-log thisnode :SEND-REPLY msg totalcount)
+            (maybe-log thisnode :SEND-REPLY msg :to (briefname where-to-forward-reply "node") totalcount)
             (send-msg (make-reply :solicitation-uid soluid
                                   :kind :count-alive
                                   :args (list totalcount))
@@ -464,6 +479,8 @@
   ;(forward msg thisnode (remove srcuid (neighbors thisnode)))
   ; wait a finite time for all replies
   )
+
+;;; END OF GOSSIP METHODS
 
 #+CCL
 (defun my-prf (fn &rest keys)
@@ -547,9 +564,6 @@
 ; (make-graph 100)
 ; (visualize-nodes (listify-nodes))
 
-; (run-gossip-sim)
-; (solicit (first (listify-nodes)) :count-alive)
-
 ; Mostly for debugging. Node processes should kill themselves.
 (defun kill-node-processes ()
   (let ((node-processes nil))
@@ -560,6 +574,9 @@
     (mapc 'ccl::process-kill node-processes)))
 
 ; (kill-node-processes)
+; (run-gossip-sim)
+; (solicit (first (listify-nodes)) :count-alive)
+; (inspect *log*)
 
 #+IGNORE
 (setf node (make-node
