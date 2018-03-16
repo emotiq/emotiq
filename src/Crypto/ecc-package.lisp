@@ -62,6 +62,8 @@ THE SOFTWARE.
    :int
    :levn
    :bevn
+   :convert-int-to-vector
+   :convert-vector-to-int
    ))
 
 (defpackage :hash

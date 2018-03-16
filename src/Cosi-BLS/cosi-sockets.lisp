@@ -126,16 +126,17 @@ THE SOFTWARE.
   ;; is unforgeable. If a MITM attack occurs, the receiving node will
   ;; fail HMAC verification and just drop the incoming packet on the
   ;; floor. So MITM modifications become tantamount to a DOS attack.
-  (cosi-keying:cosi-sign msg skey))
+  (pbc:with-crypto (:skey skey)
+    (pbc:sign-message msg)))
 
-(defun verify-hmac (tuple)
+(defun verify-hmac (packet)
   ;; Every incoming packet is scrutinized for a valid HMAC. If it
   ;; checks out then the packet is dispatched to an operation.
   ;; Otherwise it is just dropped on the floor.
   (when (ignore-errors
           (pbc:with-crypto ()
-            (pbc:check-message tuple)))
-    (values (pbc:signed-message-msg tuple) t)))
+            (pbc:check-message packet)))
+    (values (pbc:signed-message-msg packet) t)))
 
 ;; -----------------------------------------------------
 ;; THE SOCKET INTERFACE...
@@ -170,10 +171,10 @@ THE SOFTWARE.
       (socket-send me me port '(:SHUTDOWN-SERVER)))))
 
 (defun socket-send (ip real-ip real-port msg)
-  (let* ((hmac    (make-hmac (list* ip msg)
-                             (node-skey *my-node*)))
-         (packet  (loenc:encode hmac)))
-    (internal-send-socket real-ip real-port packet)))
+  (let ((packet (make-hmac (list* ip msg)
+                           (node-skey *my-node*))))
+    (internal-send-socket real-ip real-port
+                          (loenc:encode packet))))
 
 ;; ------------------------------------------------------------------
 

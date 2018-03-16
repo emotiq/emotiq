@@ -43,7 +43,7 @@ THE SOFTWARE.
       (node-compute-cosi node reply-to msg))
 
      (:validate (reply-to sig bits)
-      (reply reply-to :validation (node-validate-cosi node sig bits)))
+      (node-validate-cosi reply-to sig bits))
           
      (:public-key (reply-to)
       (reply reply-to :pkey+zkp (node-pkeyzkp node)))
@@ -295,27 +295,28 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
-(defun node-validate-cosi (node sig bits)
+(defun node-validate-cosi (reply-to sig bits)
   ;; toplevel entry for Cosi signature validation checking
-  (declare (ignore node)) ;; not needed here...
   ;; first check for valid signature...
-  (and (cosi-keying:cosi-validate-signed-message sig)
-       ;; then, check that bitmap indicates the same set of public
-       ;; keys as used in forming the signature
-       (let* ((tkey  (reduce (lambda (ans node)
-                               (if (and node
-                                        (logbitp (node-bit node) bits))
-                                   (if ans
-                                       (pbc:with-crypto ()
-                                         (pbc:mul-pts ans (node-pkey node)))
-                                     (node-pkey node))
-                                 ;; node didn't participate
-                                 ans))
-                             *node-bit-tbl*
-                             :initial-value nil)))
-         (= (vec-repr:int (pbc:signed-message-pkey sig))
-            (vec-repr:int tkey))
-         )))
+  (reply reply-to :validation
+         (and (pbc:with-crypto ()
+                (pbc:check-message sig))
+              ;; then, check that bitmap indicates the same set of public
+              ;; keys as used in forming the signature
+              (let ((tkey (reduce (lambda (ans node)
+                                    (if (and node
+                                             (logbitp (node-bit node) bits))
+                                        (let ((pkey (node-pkey node)))
+                                          (if ans
+                                              (pbc:with-crypto ()
+                                                (pbc:mul-pts ans pkey))
+                                            pkey))
+                                      ans))
+                                  *node-bit-tbl*
+                                  :initial-value nil)))
+                (= (vec-repr:int (pbc:signed-message-pkey sig))
+                   (vec-repr:int tkey))))
+         ))
 
 ;; -----------------------------------------------------------------------
 
@@ -441,8 +442,9 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node)))
-         (sig  (cosi-keying:cosi-sign msg (node-skey node)))
-         (bits (node-bitmap node)))
+         (bits (node-bitmap node))
+         (sig  (pbc:with-crypto (:skey (node-skey node))
+                 (pbc:sign-message msg))))
     (=bind (r-lst)
         (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
       (labels

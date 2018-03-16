@@ -118,17 +118,6 @@ THE SOFTWARE.
   (make-inverse-alphabet +alphabet-64+))
 
 ;; ---------------------------------------------------------
-;; Declare a useful mixin class to allow future classes to show a UB8V
-;; representation
-
-(defclass ub8v-repr ()
-  ())
-
-(defgeneric ub8v-repr (x)
-  (:method ((x ub8v-repr))
-   (error "Subclass responsibility")))
-
-;; ---------------------------------------------------------
 ;; UB8V - the top abstract class of objects which represent
 ;; UB8-VECTORs. Declare a single slot to hold the data. Object of
 ;; these classes are intended to be immuatable.  All subclasses share
@@ -137,6 +126,21 @@ THE SOFTWARE.
 (defclass ub8v ()
   ((val :reader  ub8v-vec
         :initarg :vec)))
+
+;; ---------------------------------------------------------
+;; Declare a useful mixin class to allow future classes to show a UB8V
+;; representation
+
+(defclass ub8v-repr ()
+  ())
+
+(defgeneric ub8v-repr (x)
+  ;; subclasses of the mixin should return whatever representation
+  ;; they need
+  (:method ((x ub8v-repr))
+   (error "Subclass responsibility")))
+
+;; -----------------------------------------------
 
 (defmethod print-object ((obj ub8v) out-stream)
   (if *print-readably*
@@ -149,6 +153,7 @@ THE SOFTWARE.
             (ub8v-vec obj))))
 
 (defmethod print-object ((obj ub8v-repr) out-stream)
+  ;; subclasses of UB8V-REPR mixin should feel free to override this
   (if *print-readably*
       (format out-stream "#.(make-instance '~W :value ~A)"
               (class-name (class-of obj))
@@ -160,10 +165,8 @@ THE SOFTWARE.
             (ub8v-repr obj))))
 
 ;; ----------------------------------------------------------
-;; Base58 encodes UB8 vectors and integers into character strings of
-;; the restricted alphabet. Encoding has a 6-character prefix that
-;; represents the total number of bytes in the vector, up to 2^32
-;; elements.
+;; Base58 encodes integers into character strings of the restricted
+;; alphabet.
 
 (defclass base58 (ub8v)
   ((val  :reader   base58-str
@@ -215,60 +218,103 @@ THE SOFTWARE.
 (defgeneric bev (x))
 
 ;; ---------------------------------------------------------
-;; Encode to Base58 big-endian string
+;; Integer to/from vector form - conversion starts at LSB and works
+;; toward MSB. So FROR-END should be true for big-endian vectors, and
+;; false for little-endian vectors.
 
-(defun sub-encode-58 (val nc s)
-  (let ((cs nil))
-    (um:nlet-tail iter ((v  val)
-                        (ix 0))
-      (when (or (plusp v)
-                (and nc
-                     (< ix nc)))
-        (multiple-value-bind (vf vr) (floor v +len-58+)
-          (push (char +alphabet-58+ vr) cs)
-          (iter vf (1+ ix)))))
-    (princ (coerce cs 'string) s)
+(defun convert-vec-to-int (vec &key
+                           (start    0)
+                           (end      (length vec))
+                           (from-end t))
+  ;; from-end t is suitable for big-endian format
+  (let ((val  0))
+    (if from-end
+        (do ((ix  (1- end)  (1- ix))
+             (pos 0         (+ pos 8)))
+            ((< ix start)  val)
+          (setf val (dpb (aref vec ix) (byte 8 pos) val)))
+      ;; else
+      (do ((ix  start  (1+ ix))
+           (pos 0      (+ 8 pos)))
+          ((>= ix end)  val)
+        (setf val (dpb (aref vec ix) (byte 8 pos) val)))
+      )))
+
+(defun convert-int-to-vec (val &key
+                               (from-end t)
+                               (nb  (ceiling (integer-length val) 8)))
+  ;; convert val to little-endian vector of UB8
+  (let ((v  (make-ub8-vector nb)))
+    (if from-end
+        (do ((ix  (1- nb)  (1- ix))
+             (pos 0        (+ 8 pos)))
+            ((minusp ix)  v)
+          (setf (aref v ix) (ldb (byte 8 pos) val)))
+      ;; else
+      (do ((ix  0   (1+ ix))
+           (pos 0   (+ 8 pos)))
+          ((>= ix nb)  v)
+        (setf (aref v ix) (ldb (byte 8 pos) val)))
+      )))
+
+;; --------------------------------------------------------------
+;; Integer conversions
+
+(defmethod int ((x integer))
+  x)
+
+(defmethod int ((x lev))
+  (convert-vec-to-int (lev-vec x)
+                      :from-end nil))
+
+(defmethod int ((x bev))
+  (convert-vec-to-int (bev-vec x)))
+
+(defmethod int (x)
+  (int (bev x)))
+
+(defmethod int ((x base58))
+  (let* ((str  (base58-str x))
+         (nstr (length str)))
+    (um:nlet-tail iter ((pos    (1- nstr))
+                        (val    0)
+                        (base   1))
+      (if (minusp pos)
+          val
+        (let* ((c  (char str pos))
+               (v  (aref +inv-alphabet-58+ (char-code c))))
+          (when (zerop v)
+            (error "Invalid Base58 string: ~A" str))
+          (iter (1- pos) (+ val (* base (1- v))) (* base +len-58+)))
+        ))
     ))
 
-(defun convert-vec-to-int (vec)
-  (let ((val 0))
-    (loop for v across vec
-          for pos from 0 by 8
-          do
-          (setf val (dpb v (byte 8 pos) val)))
-    val))
-
 ;; ---------------------------------------------------
+;; Base58 -- Integer value as Base58 string
 
-(defmethod base58 ((x lev))
-  ;; encode vector in blocks of 512 bytes = 4096 bits = 700 chars of
-  ;; Base58 encoding. Output has first 6 chars to encode 4-byte length
-  ;; prefix.
-  (let* ((v   (lev-vec x))
-         (nb  (length v)))
-    (make-instance 'base58
-                   :str (with-output-to-string (s)
-                          (sub-encode-58 nb 6 s)
-                          (um:nlet-tail iter ((start 0))
-                            (unless (>= start nb)
-                              (let* ((end   (min nb (+ start 512)))
-                                     (chunk (subseq v start end)))
-                                (sub-encode-58 (convert-vec-to-int chunk)
-                                               (when (< end nb)
-                                                 700)
-                                               s)
-                                (iter end))))
-                          ))))
+(defmethod base58 ((x integer))
+  ;; encode integer as a base58 string
+  (make-instance 'base58
+                 :str (let ((cs nil))
+                        (um:nlet-tail iter ((v x))
+                          (when (plusp v)
+                            (multiple-value-bind (vf vr) (floor v +len-58+)
+                              (push (char +alphabet-58+ vr) cs)
+                              (iter vf))))
+                        (coerce cs 'string))
+                 ))
 
 (defmethod base58 ((x base58))
   x)
 
 (defmethod base58 (x)
-  (base58 (lev x)))
+  (base58 (int x)))
 
 ;; -------------------------------------------------------------
+;; Vector Conversions
 
 (defmethod base64 ((x bev))
+  ;; encode vector as a base64 (6-bit) string
   (let* ((v   (bev-vec x))
          (nb  (length v))
          (ns  (* 4 (ceiling nb 3)))
@@ -317,6 +363,7 @@ THE SOFTWARE.
 ;; -------------------------------------------------------------
 
 (defmethod hex ((x bev))
+  ;; encode vector as a hex string 
   (let* ((v   (bev-vec x))
          (nb  (length v))
          (str (make-string (* 2 nb))))
@@ -324,15 +371,15 @@ THE SOFTWARE.
                (code-char
                 (+ val
                    (if (< val 10)
-                       (char-code #\0)
-                     (- (char-code #\A) 10))))
+                       #.(char-code #\0)
+                     #.(- (char-code #\a) 10))))
                ))
     (loop for bx from (1- nb) downto 0
           for b = (aref v bx)
           for ix = (* 2 bx)
           do
-          (setf (char str ix)      (enc (ldb (byte 4 4) b))
-                (char str (1+ ix)) (enc (ldb (byte 4 0) b))))
+          (setf (char str ix)      (enc (ldb '#.(byte 4 4) b))
+                (char str (1+ ix)) (enc (ldb '#.(byte 4 0) b))))
     (make-instance 'hex
                    :str str))))
 
@@ -342,32 +389,8 @@ THE SOFTWARE.
 (defmethod hex (x)
   (hex (bev x)))
 
-;; -------------------------------------------------------------
-
-(defun sub-decode-58 (str)
-  ;; decode big-endian base58 to integer value
-  (let ((val  0))
-    (loop for ix from (1- (length str)) downto 0
-          for c = (char str ix)
-          for v = (aref +inv-alphabet-58+ (char-code c))
-          for base = 1 then (* base +len-58+)
-          do
-          (if (zerop v)
-              (error "Invalid base58 string: ~S" str)
-            (incf val (* base (1- v)))))
-    val))
-
-(defun convert-int-to-vec (val)
-  ;; convert val to little-endian vector of UB8
-  (let* ((nb (ceiling (integer-length val) 8))
-         (v  (make-ub8-vector nb)))
-    (loop for ix from 0 below nb
-          for pos from 0 by 8
-          do
-          (setf (aref v ix) (ldb (byte 8 pos) val)))
-    v))
-
 ;; ------------------------------------------------------
+;; LEV -- encode vector as little-endian (LSB first)
 
 (defmethod lev ((x lev))
   x)
@@ -378,64 +401,7 @@ THE SOFTWARE.
 
 (defmethod lev ((val integer))
   (make-instance 'lev
-   :vec (convert-int-to-vec val)))
-
-(defmethod lev ((x base58))
-  (let* ((str  (base58-str x))
-         (nb   (sub-decode-58 (subseq str 0 6)))
-         (nstr (length str))
-         (vec  (make-ub8-vector nb)))
-    (um:nlet-tail iter ((start  6)
-                        (vstart 0))
-      (when (< start nstr)
-        (let* ((end  (min nstr (+ start 700)))
-               (vend (min nb (+ vstart 512)))
-               (sub  (subseq str start end))
-               (val  (sub-decode-58 sub)))
-          (loop for ix from vstart below vend
-                for pos from 0 by 8
-                do
-                (setf (aref vec ix) (ldb (byte 8 pos) val)))
-          (iter end vend))))
-    (make-instance 'lev
-     :vec vec)))
-
-(defmethod lev ((x base64))
-  (let* ((str  (base64-str x))
-         (nstr (length str))
-         (vlen 0)
-         (lst  nil))
-    (um:nlet-tail iter ((start  0)
-                        (val    0)
-                        (ct     0))
-      (labels ((decode (pos)
-                 (push (ldb (byte 8 (* 8 (- 2 pos))) val) lst)
-                 (incf vlen)))
-        (when (>= ct 4)
-          (decode 0)
-          (decode 1)
-          (decode 2)
-          (setf val 0
-                ct  0))
-        (if (< start nstr)
-            (let ((c (char str start)))
-              (unless (char= c #\=)
-                (let ((cv  (aref +inv-alphabet-64+ (char-code c))))
-                  (when (zerop cv)
-                    (error "Invalid Base64 string: ~S" str))
-                  (setf val (dpb (1- cv) (byte 6 (* 6 (- 3 ct))) val))
-                  (incf ct)))
-              (iter (1+ start) val ct))
-          ;; else
-          (progn
-            (case ct
-              (2  (decode 0))
-              (3  (decode 0)
-                  (decode 1)))
-            (make-instance 'lev
-                           :vec (make-ub8-vector vlen
-                                            :initial-contents lst))
-            ))))))
+   :vec (convert-int-to-vec val :from-end nil)))
 
 (defmethod lev ((x sequence))
   ;; LIST and VECTOR when can be coerced to UB8-VECTOR
@@ -445,8 +411,7 @@ THE SOFTWARE.
 (defmethod lev ((x ub8v-repr))
   (lev (ub8v-repr x)))
 
-(defmethod lev ((x hex))
-  ;; here it is known that HEX has a direct conversion from BEV
+(defmethod lev (x)
   (make-instance 'lev
                  :vec (nreverse
                        (bev-vec (bev x)))))
@@ -471,6 +436,7 @@ THE SOFTWARE.
           )))
 
 ;; -----------------------------------------------------------
+;; BEV -- encode vector as big-endian (MSB first)
 
 (defmethod bev ((x bev))
   x)
@@ -479,6 +445,7 @@ THE SOFTWARE.
   (bev (ub8v-repr x)))
 
 (defmethod bev ((x lev))
+  ;; conversion of LEV to BEV
   (make-instance 'bev
                  :vec (reverse (lev-vec x))))
 
@@ -487,25 +454,55 @@ THE SOFTWARE.
   (make-instance 'bev
                  :vec (coerce x 'ub8-vector)))
 
-(defun nbev (x)
-  ;; non-copying constructor - privately used when we have to first
-  ;; convert to LEV
-  (make-instance 'bev
-                 :vec (nreverse (lev-vec (lev x)))))
-
 (defmethod bev ((x integer))
-  ;; INTEGER known to have LEV conversion
-  (nbev x))
+  ;; convert integer to BEV vector
+  (make-instance 'bev
+                 :vec (convert-int-to-vec x :from-end t)))
 
 (defmethod bev ((x base58))
-  ;; BASE58 known to have LEV conversion
-  (nbev x))
+  ;; convert Base58 string to BEV vector
+  (bev (int x)))
 
 (defmethod bev ((x base64))
-  ;; BASE64 known to have LEV conversion
-  (nbev x))
+  ;; convert Base64 string to BEV vector
+  (let* ((str  (base64-str x))
+         (nstr (length str))
+         (vlen 0)
+         (lst  (um:accum acc
+                 (um:nlet-tail iter ((start  0)
+                                     (val    0)
+                                     (ct     0))
+                   (labels ((decode (pos)
+                              (acc (ldb (byte 8 (* 8 (- 2 pos))) val))
+                              (incf vlen)))
+                     (when (>= ct 4)
+                       (decode 0)
+                       (decode 1)
+                       (decode 2)
+                       (setf val 0
+                             ct  0))
+                     (if (< start nstr)
+                         (let ((c (char str start)))
+                           (unless (char= c #\=)
+                             (let ((cv  (aref +inv-alphabet-64+ (char-code c))))
+                               (when (zerop cv)
+                                 (error "Invalid Base64 string: ~S" str))
+                               (setf val (dpb (1- cv) (byte 6 (* 6 (- 3 ct))) val))
+                               (incf ct)))
+                           (iter (1+ start) val ct))
+                       ;; else
+                       (case ct
+                         (2  (decode 0))
+                         (3  (decode 0)
+                             (decode 1)))
+                       ))))))
+    (make-instance 'bev
+                   :vec (make-ub8-vector vlen
+                                         :initial-contents lst))
+    ))
 
 (defmethod bev ((x hex))
+  ;; convert hex string to BEV vector
   (let* ((str  (hex-str x))
          (ns   (length str))
          (vec  (make-ub8-vector (ceiling ns 2))))
@@ -551,26 +548,4 @@ THE SOFTWARE.
           (t
            bev)
           )))
-
-;; --------------------------------------------------------------
-;; Integer conversions
-
-(defmethod int ((x integer))
-  x)
-
-(defmethod int ((x lev))
-  (convert-vec-to-int (lev-vec x)))
-
-(defmethod int (x)
-  (int (lev x)))
-
-;; -------------------------------------------------------------------
-;; Compare operators for trees and maps
-;; Be careful of extremely large vectors... conversion to bignum
-
-(defmethod ord:compare ((a ub8v) b)
-  (ord:compare (int a) (int b)))
-
-(defmethod ord:compare ((a ub8v-repr) b)
-  (ord:compare (int a) (int b)))
 

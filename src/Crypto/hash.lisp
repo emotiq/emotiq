@@ -54,11 +54,11 @@ THE SOFTWARE.
 
 (defgeneric hashable (x)
   (:method ((x ub8v))
-   (lev-vec (lev x)))
+   (bev-vec (bev x)))
   (:method ((x ub8v-repr))
    (hashable (ub8v-repr x)))
   (:method ((x integer))
-   (hashable (lev x)))
+   (hashable (bev x)))
   (:method ((x sequence))
    (or (ignore-errors
          (coerce x 'ub8-vector))
@@ -70,7 +70,6 @@ THE SOFTWARE.
   (:method ((x pathname))
    (hashable (namestring x)))
   (:method (x)
-   ;; let sha3-buffers deal with it via LOENC:ENCODE
    (loenc:encode x)))
 
 ;; -------------------------------------------------

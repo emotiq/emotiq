@@ -392,10 +392,10 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 .end
    :g1  (make-instance 'g1-cmpr
          :pt (make-instance 'base58
-              :str "11111a3CC2P9iZp4DguyULARTeE6LHc1jCLhEhm1kY8hLz48BgU"))
+              :str "3CC2P9iZp4DguyULARTeE6LHc1jCLhEhm1kY8hLz48BgU"))
    :g2  (make-instance 'g2-cmpr
          :pt (make-instance 'base58
-              :str "111128SiVvDVXDAzEFNYLqwboyPGuggSF7o4K6Hnhr4tQbFnkPcSHyDpaLKEejzpscLP39dMHxCF9W7VtYXKe8drDrCehu"))
+              :str "SiVvDVXDAzEFNYLqwboyPGuggSF7o4K6Hnhr4tQbFnkPcSHyDpaLKEejzpscLP39dMHxCF9W7VtYXKe8drDrCehu"))
    ))
 
 (defparameter *curve-default-ar160-params*
@@ -413,10 +413,10 @@ sign0 1
 .end
    :g1  (make-instance 'g1-cmpr
          :pt (make-instance 'base58
-              :str "111128BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
+              :str "BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
    :g2  (make-instance 'g2-cmpr
          :pt (make-instance 'base58
-              :str "111128FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8"))
+              :str "FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8"))
    ))
 
 (defparameter *curve*    nil)
@@ -485,8 +485,8 @@ sign0 1
 ;; We work internally with little-endian values
 
 (defun raw-bytes (x)
-  ;; used only in encrypt/decrypt where message is stored as LEV
-  (lev-vec (lev x)))
+  ;; used only in encrypt/decrypt where message is stored as BEV
+  (bev-vec (bev x)))
 
 (defun construct-bev (vec)
   ;; careful here... this assumes vec is UB8-VECTOR
@@ -494,16 +494,10 @@ sign0 1
   (make-instance 'bev
                  :vec vec))
 
-(defun construct-lev (vec)
-  ;; careful here... this assumes vec is UB8-VECTOR
-  ;; more efficient internally when we know vec.
-  (make-instance 'lev
-                 :vec vec))
-
 (defun xfer-foreign-to-lisp (fbuf nel)
   (let ((lbuf (make-ub8-vector nel)))
-    (loop for ix from 0 below nel do
-          (setf (aref lbuf ix) (fli:dereference fbuf :index ix)))
+    (fli:replace-foreign-array lbuf fbuf
+                               :end2 nel)
     (construct-bev lbuf)))
 
 (defun make-fli-buffer (nb &optional initial-contents)
@@ -721,7 +715,7 @@ sign0 1
   ;; encryption. But this will work regardless.
   (need-generator)
   (let* ((pkid      (make-public-subkey pkey id))
-         (tstamp    (construct-lev (uuid:uuid-to-byte-array
+         (tstamp    (construct-bev (uuid:uuid-to-byte-array
                                     (uuid:make-v1-uuid))))
          (msg-bytes (loenc:encode msg))
          (nmsg      (length msg-bytes))
@@ -733,7 +727,7 @@ sign0 1
                           cloaked)
                       ;; else
                       msg-bytes))
-         (xmsg      (construct-lev xbytes))
+         (xmsg      (construct-bev xbytes))
          (rhsh      (hash/256 id tstamp xmsg)))
     (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
                        (pbuf  *gt-size*)         ;; returned pairing
@@ -742,7 +736,7 @@ sign0 1
       (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf 32)
       (let* ((pval (get-hash-nbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
              (cmsg (make-instance 'crypto-text
-                                  :vec (construct-lev
+                                  :vec (construct-bev
                                         (map-into pval 'logxor pval xbytes))))
              (rval (make-instance 'g2-cmpr
                                   :pt (xfer-foreign-to-lisp rbuf *g2-size*))))
@@ -770,7 +764,7 @@ sign0 1
         (let* ((cmsg-bytes (raw-bytes cmsg))
                (nb         (length cmsg-bytes))
                (pval (get-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
-               (msg  (construct-lev
+               (msg  (construct-bev
                       (map-into pval 'logxor pval cmsg-bytes)))
                (hval (hash/256 id tstamp msg)))
           (with-fli-buffers ((hbuf 32        hval)
@@ -958,13 +952,14 @@ sign0 1
 ;; environment, you should reestablish it on entry. This applies
 ;; in particular to the secret and public keying in effect.
 
-(defvar *crypto-boss*
-  (ac:make-actor
-   (lambda (fn)
-     (funcall fn))))
+(defvar *pbc-exclusive* (mp:make-lock))
+
+(defun do-with-pbc-exclusive (fn)
+  (mp:with-lock (*pbc-exclusive*)
+    (funcall fn)))
 
 (defmacro with-crypto ((&key skey pkey) &body body)
-  `(ac:ask *crypto-boss* (lambda ()
+  `(do-with-pbc-exclusive (lambda ()
                             ,@(when skey
                                 `((set-secret-key ,skey)))
                             ,@(when pkey
@@ -974,4 +969,4 @@ sign0 1
 #+:LISPWORKS
 (editor:setup-indent "with-crypto" 1)
 
- 
+
