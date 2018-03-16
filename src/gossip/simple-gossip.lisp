@@ -9,7 +9,7 @@
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
 ; TODO: Initiator node of message should wait longer than nodes farther away.
-(defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 (defparameter *process-count* 0 "Just for simulation") ; NO LONGER NEEDED
@@ -279,6 +279,10 @@
 (defmethod briefname ((id integer) &optional (prefix ""))
   (format nil "~A~D" prefix id))
 
+(defmethod briefname ((id null) &optional (prefix ""))
+  (declare (ignore prefix))
+  "nil")
+
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
 (defmethod maybe-log ((node gossip-node) logcmd msg &rest args)
@@ -349,42 +353,59 @@
   (ccl:with-lock-grabbed (*message-space-lock*)
     (enq (list msg destuid srcuid) *message-space*)))
 
-(defmethod locally-receive-msg :around (msg thisnode srcuid)
-  (declare (ignore thisnode srcuid))
+(defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
+  (declare (ignore thisnode srcuid kindsym))
   (let ((*seconds-to-wait* (* *max-seconds-to-wait* (expt *hop-factor* (hopcount msg)))))
     (when (> *seconds-to-wait* *max-seconds-to-wait*)
       (error "*hop-factor* must be less than 1.0"))
     (call-next-method)))
 
-; TODO: Remove old entries in message-cache, eventually.
-;       Might want to also check hopcount and reject message where it's too big.
-(defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid)
-  "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
-  (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
+(defmethod accept-msg? ((sol solicitation) (thisnode gossip-node) srcuid)
+  "Returns true if this message should be accepted by this node.
+   Doesn't change anything in message or node."
+  (cond ((> (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
+         (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :too-old)
+         nil)
+        (t
          (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :already-seen))
-                 (t
-                  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-                  (setf (gethash (uid sol) (message-cache thisnode)) (or srcuid t)) ; solicitations from outside might not have a srcid
-                  (maybe-log thisnode :accepted sol (kind sol) (args sol))
+                  (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :already-seen)
+                  nil)
+                 (t ; it's a new message
                   (let* ((kind (kind sol))
                          (kindsym nil))
-                    (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
-                    (when (and kindsym
-                               (fboundp kindsym))
-                      (funcall kindsym sol thisnode srcuid)))))))
-        (t (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :too-old))))
+                    (cond (kind
+                           (setf kindsym (intern (symbol-name kind) :gossip))
+                           (if (and kindsym (fboundp kindsym))
+                               kindsym ;; SUCCESS! We accept the message.
+                               (progn
+                                 (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :unknown-kind kindsym)
+                                 nil)))
+                          (t
+                           (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :no-kind)
+                           nil)))))))))
 
-(defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid)
-  (declare (ignore srcuid))
+; TODO: Remove old entries in message-cache, eventually.
+;       Might want to also check hopcount and reject message where it's too big.
+(defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid &optional (kindsym nil))
+  "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
+  (unless kindsym
+    (setf kindsym (accept-msg? sol thisnode srcuid)))
+  (when kindsym
+  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
+    (setf (gethash (uid sol) (message-cache thisnode)) (or srcuid t)) ; solicitations from outside might not have a srcid
+    (maybe-log thisnode :accepted sol (kind sol) :from (briefname srcuid "node") (args sol))
+    (funcall kindsym sol thisnode srcuid)))
+
+(defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid &optional (kindsym nil))
+  (declare (ignore srcuid kindsym))
   (error "Bug: Cannot locally-receive to a remote node!"))
 
 ; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
 ;       or srcuid is not on the list. That means we've given up waiting. Handle that here
 ;       rather than in specific gossip methods.
 ;       Provide a specific :IGNORE log message for this case.
-(defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid)
+(defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp rep))) ; ignore too-old messages
          (let ((already-seen? (gethash (uid rep) (message-cache thisnode))))
@@ -600,7 +621,8 @@
           ; Process messages as fast as possible.
           (apply 'dispatch-msg nextmsg)
           ; But if no messages to process, wait a bit.
-          (sleep .1)))))
+          ;(sleep .1) ; don't sleep. Slows down overall response and causes missed replies.
+          ))))
 
 (defun stop-gossip-sim ()
   (setf *stop-dispatcher* t))
