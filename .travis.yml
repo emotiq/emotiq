@@ -30,7 +30,7 @@ install:
             (ql-dist:install-dist 
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
                :prompt nil)'
-  - apt-get install openssl-dev
+  - sudo apt-get install openssl-dev
 
 # Add/remove test converage here
 # 
