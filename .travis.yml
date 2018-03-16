@@ -31,7 +31,21 @@ install:
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
                :prompt nil)'
 
-# Add/remove test converage here               
+# Add/remove test converage here
+# 
+# <https://en.wikipedia.org/wiki/Exit_status#POSIX>
+# <https://books.google.at/books?id=kIxQAAAAMAAJ&q=software+tools+kernighan+and+plough&dq=software+tools+kernighan+and+plough&hl=en&sa=X&ved=0ahUKEwiC-v_I7_DZAhUKWSwKHXI7C7wQ6AEIKzAA>
+#
+# Whatever scripts one invokes, the exit returned to travis has the following semantics:
+#
+# SUCCESS "zero"
+#   (uiop:quit 0)
+# 
+# FAILURE "non-zero status"
+#   (uiop:quit (not (zerop status))
+#
+#   The current implementation returns the bit representation of '-1'
+#   shifted by the zero-based index of the failing test.
 script:
   - ros -e "(loop
               :for i :upfrom 0
