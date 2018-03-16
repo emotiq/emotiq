@@ -13,7 +13,7 @@ We assert an MIT license over this source aggregation; see
 
 This is a predominantly Common Lisp code base.
 
-We aim to work on as many ANSI implementations as possible.  
+We aim to work on as many ANSI implementations as possible.
 
 For the development of `testnet` we are targeting the commercial
 LispWorks Pro 7.1 implementation but we also test our code with
@@ -66,7 +66,7 @@ the `emotiq-test` ASDF system.
 
 We have many ASDF descriptions within this repository whose
 dependencies may need to be satisfied by via `ql:quickload` other than
-`emotiq-test`.  
+`emotiq-test`.
 
 Currently we are working many systems simultaneously, most noteworthy
 among them being the work in the `cosi` system.
@@ -95,8 +95,16 @@ At end you should see a result like
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
+# Test Coverage
+
+All pushed to the source tree result in "Continuous Integration" build
+from Travis CI: <https://travis-ci.org/emotiq/emotiq>.
+
+The description of test coverage is contained in the Travis CI
+artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
+
 # Colophon
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-03-14 Wed 21:36Z>
+    Revised: <2018-03-16 Fri 12:48Z>
