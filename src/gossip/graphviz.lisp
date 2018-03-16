@@ -59,7 +59,7 @@
                             "-o"
                             (ccl::native-translated-namestring svgpath)))))
 
-(defun graph-nodes (nodelist)
+(defun visualize-nodes (nodelist)
   "Makes a graphviz .dot file from nodelist, then converts that to an .svg file, and returns that pathname.
    Opens svg file in browser."
   (let* ((dotpath (make-temp-dotfile))

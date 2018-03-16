@@ -9,7 +9,7 @@
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
 ; TODO: Initiator node of message should wait longer than nodes farther away.
-(defparameter *max-seconds-to-wait* 2 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
@@ -26,6 +26,11 @@
 (defclass uid-mixin ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
         :documentation "Unique ID")))
+
+(defmethod print-object ((thing uid-mixin) stream)
+   (with-slots (uid) thing
+       (print-unreadable-object (thing stream :type t :identity t)
+          (when uid (princ uid stream)))))
 
 (defclass message-mixin (uid-mixin)
   ((timestamp :initarg :timestamp :initform (get-universal-time) :accessor timestamp
@@ -84,6 +89,14 @@
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
 
+(defmethod clear-caches ((node gossip-node))
+  "Caches should be cleared in the normal course of events, but this can be used to make sure."
+  (clrhash (message-cache node))
+  (clrhash (repliers-expected node))
+  (clrhash (reply-data node))
+  ; don't clear the kvs. That should be persistent.
+  )
+
 ; We'll use these for real (not simulated on one machine) protocol
 (defclass remote-gossip-node (gossip-mixin)
   ()
@@ -104,6 +117,8 @@
   (loop for node being each hash-value of nodetable collect node))
 
 (defmethod connect ((node1 gossip-node) (node2 gossip-node))
+  "Establish an edge between two nodes. Because every node must know its nearest neighbors,
+   we store the edge information twice: Once in each endpoint node."
   (pushnew (uid node1) (neighbors node2))
   (pushnew (uid node2) (neighbors node1)))
   
@@ -138,6 +153,67 @@
     (multiple-value-bind (node1 node2) (random-new-connection nodelist)
       (connect node1 node2))))
 
+(defun as-hash-table (test alist)
+  "Builds a hash table from an alist"
+  (let ((ht (make-hash-table :test test)))
+    (dolist (pair alist)
+      (setf (gethash (car pair) ht) (cdr pair)))
+    ht))
+
+(defmethod readable-value ((me t))
+  (let ((*package* (find-package :gossip)))
+    (format nil "~S" me)))
+
+(defmethod readable-value ((me symbol))
+  (let ((*package* (find-package :gossip)))
+    (format nil "'~S" me)))
+
+(defmethod alistify-hashtable ((table hash-table))
+   (loop for key being each hash-key of table using (hash-value val) collect (cons key val)))
+
+(defmethod readable-value ((me hash-table))
+  (with-output-to-string (s)
+    (format s "(as-hash-table~%")
+    (format s "~T~T~A~%" (readable-value (hash-table-test me)))
+    (format s "~T~T~A)~%" (readable-value (alistify-hashtable me)))))
+
+(defmethod readable-value ((me list))
+  (let ((*package* (find-package :gossip)))
+    (format nil "'~S" me)))
+
+(defmethod save-node ((node gossip-node) stream)
+  "Write a form to stream that will reconstruct given node"
+  (let ((*package* (find-package :gossip)))
+    (flet ((write-slot (initarg value) ; assumes accessors and initargs are named the same
+             (format stream "~%  ~S ~A" initarg (readable-value value))))
+      (format stream "(make-node")
+      (write-slot :uid (uid node))
+      (write-slot :address (address node))
+      (write-slot :neighbors (neighbors node))
+      (write-slot :logfn (logfn node))
+      (write-slot :kvs (kvs node))
+      (format stream "~T)~%"))))
+
+(defun save-graph (stream &optional (nodetable *nodes*))
+  (format stream "(in-package :gossip)~%~%")
+  (loop for node being each hash-value of nodetable do
+    (save-node node stream)))
+
+(defun save-graph-to-file (pathname &optional (nodetable *nodes*))
+  "Save current graph to file. Restore by calling restore-graph-from-file.
+   Makes experimentation easier."
+  (with-open-file (stream pathname :direction :output)
+    (format stream ";;; ~A~%" (file-namestring pathname))
+    (format stream ";;; Saved graph file.~%")
+    (format stream ";;; Call gossip::restore-graph-from-file on this file to restore graph from it.~%~%")
+    (save-graph stream nodetable))
+  pathname)
+
+(defun restore-graph-from-file (pathname)
+  "Restores a graph from a file saved by save-graph-to-file."
+  (clrhash *nodes*)
+  (load pathname))
+
 (defun make-graph (numnodes)
   (clrhash *nodes*)
   (make-nodes numnodes)
@@ -145,7 +221,7 @@
     ; following guarantees a single connected graph
     (linear-path nodelist)
     ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
-    (add-random-connections nodelist  (/(length nodelist) 2))
+    (add-random-connections nodelist  (truncate (length nodelist) 2))
     ))
 
 (defun solicit (node kind &rest args)
@@ -332,16 +408,16 @@
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
   "Counts number of live nodes downstream of thisnode, plus thisnode itself.
   Reply with a scalar."
-  (let ((soluid (uid msg)))
+  (let ((soluid (uid msg))
+        (repliers-expected (remove srcuid (neighbors thisnode))))
     ; prepare reply tables
     (setf (gethash soluid (reply-data thisnode)) 1)
-    (setf (gethash soluid (repliers-expected thisnode)) (neighbors thisnode))
-    (forward msg thisnode (remove srcuid (neighbors thisnode)))
+    (setf (gethash soluid (repliers-expected thisnode)) repliers-expected)
+    (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
-    (maybe-log thisnode :WAITING msg)
+    (maybe-log thisnode :WAITING msg repliers-expected)
     (ccl:process-wait-with-timeout "reply-wait"
-                                   *max-seconds-to-wait*
-                                   ;(* *max-seconds-to-wait* internal-time-units-per-second)
+                                   (* *max-seconds-to-wait* ccl::*ticks-per-second*)
                                    (lambda ()
                                      (null (gethash soluid (repliers-expected thisnode)))))
     (maybe-log thisnode :DONE-WAITING msg)
@@ -365,6 +441,8 @@
           (maybe-log thisnode :FINALREPLY msg totalcount)))))
 
 (defmethod count-alive ((rep reply) thisnode srcuid)
+  ; TODO:  Check (gethash soluid (reply-data thisnode)) and if nil, ignore this reply.
+  ;        Because it could have straggled in late after :WAITING timed out
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
     (let ((numalive (first (args rep))))
@@ -454,14 +532,20 @@
   (setf *log* (new-log))
   (setf *message-space* (make-queue))
   (setf *message-space-lock* (ccl:make-lock))
+  (mapc 'clear-caches (listify-nodes))
   ; Start daemon that dispatches messages to nodes
   (my-prf (lambda () (dispatcher-loop)) :name "Dispatcher Loop")
   )
 
 
 ; (make-graph 10)
+; (save-graph-to-file "~/gossip/10nodes.lisp")
+; (restore-graph-from-file "~/gossip/10nodes.lisp")
+; (make-graph 5)
+; (save-graph-to-file "~/gossip/5nodes.lisp")
+
 ; (make-graph 100)
-; (graph-nodes (listify-nodes))
+; (visualize-nodes (listify-nodes))
 
 ; (run-gossip-sim)
 ; (solicit (first (listify-nodes)) :count-alive)
@@ -476,3 +560,14 @@
     (mapc 'ccl::process-kill node-processes)))
 
 ; (kill-node-processes)
+
+#+IGNORE
+(setf node (make-node
+  :UID 253
+  :ADDRESS 'NIL
+  :NEIGHBORS '(248 250 251)
+  :LOGFN 'GOSSIP::DEFAULT-LOGGING-FUNCTION
+  :KVS (as-hash-table 'eql '((key1 . 1) (key2 . 2) (key3 . 3)))))
+
+#+IGNORE
+(save-node node *standard-output*)
