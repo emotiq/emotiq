@@ -57,11 +57,4 @@ THE SOFTWARE.
                                      (:file "confidential-purchase")
 
                                      (:file "range-proofs")))))
-
-(defsystem "cosi-bls/test/allegro"
-  :description "Allegro specific CAS timing code from dbm."
-  :depends-on (cosi-bls)
-  :components ((:module source
-                        :pathname "./"
-                        :components ((:file "test-cas")))))
                         
