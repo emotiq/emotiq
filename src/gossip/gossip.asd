@@ -8,4 +8,5 @@
  ; :depends-on (:uiop)
   :serial t
   :components ((:file "package")
-               (:file "simple-gossip")))
+               (:file "simple-gossip")
+               (:file "graphviz")))
