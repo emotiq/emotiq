@@ -952,10 +952,8 @@ sign0 1
 ;; environment, you should reestablish it on entry. This applies
 ;; in particular to the secret and public keying in effect.
 
-(defvar *pbc-exclusive* (mp:make-lock))
-
 (defun do-with-pbc-exclusive (fn)
-  (mp:with-lock (*pbc-exclusive*)
+  (um:critical-section
     (funcall fn)))
 
 (defmacro with-crypto ((&key skey pkey) &body body)
