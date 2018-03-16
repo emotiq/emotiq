@@ -10,6 +10,9 @@
 
 ; TODO: Initiator node of message should wait longer than nodes farther away.
 (defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
+(defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
+(defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
+(defparameter *process-count* 0 "Just for simulation")
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
@@ -35,10 +38,26 @@
 (defclass message-mixin (uid-mixin)
   ((timestamp :initarg :timestamp :initform (get-universal-time) :accessor timestamp
               :documentation "Timestamp of message origination")
+   (hopcount :initarg :hopcount :initform 0 :accessor hopcount
+             :documentation "Number of hops this message has traversed.")
    (kind :initarg :kind :initform nil :accessor kind
          :documentation "The verb of the message, indicating what action to take.")
    (args :initarg :args :initform nil :accessor args
          :documentation "Payload of the message. Arguments to kind.")))
+
+(defgeneric copy-message (msg)
+  (:documentation "Copies a message object verbatim. Mainly for simulation mode
+          where messages are shared, in which case in order to increase hopcount,
+          the message needs to be copied."))
+
+(defmethod copy-message ((msg message-mixin))
+  (let ((new-msg (make-instance (class-of msg)
+                   :uid (uid msg)
+                   :timestamp (timestamp msg)
+                   :hopcount (hopcount msg)
+                   :kind (kind msg)
+                   :args (args msg))))
+    new-msg))
 
 (defclass solicitation (message-mixin)
   ((reply-requested? :initarg :reply-requested? :initform nil :accessor
@@ -62,6 +81,11 @@
      Most replies are 'inverse broadcasts' in that they have many sources that funnel
      back to one ultimate receiver -- the originator of the solicitation. However,
      a few replies (e.g. to sound-off) are full broadcasts unto themselves."))
+
+(defmethod copy-message :around ((msg reply))
+  (let ((new-msg (call-next-method)))
+    (setf (solicitation-uid new-msg) (solicitation-uid msg))
+    new-msg))
 
 (defun make-reply (&rest args)
   (apply 'make-instance 'reply args))
@@ -227,11 +251,21 @@
     ))
 
 (defun solicit (node kind &rest args)
-  (send-msg (make-solicitation
-             :kind kind
-             :args args)
-            (uid node)
-            nil))
+  "Send a solicitation to the network starting with given node. This is the primary interface to 
+  the network to start an action from the outside. Nodes shouldn't use this function to initiate an
+  action because they should set the srcuid parameter to be their own rather than nil."
+  (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+                 (uid node)
+                 node))
+        (node (if (typep node 'gossip-node)
+                  node
+                  (lookup-node node))))
+    (setf (logfn node) 'interactive-logging-function)
+    (send-msg (make-solicitation
+               :kind kind
+               :args args)
+              uid        ; destination
+              nil)))      ; srcuid
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
  (format nil "~A~D" prefix (uid node)))
@@ -287,8 +321,22 @@
 (defvar *log* (new-log) "Log of simulated actions.")
 
 (defun default-logging-function (logcmd nodename msgname &rest args)
-  (vector-push-extend (list* logcmd nodename msgname args) *log*))
+  (let ((logmsg (list* logcmd nodename msgname args)))
+    (vector-push-extend logmsg *log*)
+    logmsg))
 
+(defun interactive-logging-function (logcmd nodename msgname &rest args)
+  "Use this logging function for interactive debugging. You'll probably only want to use this
+  in the mode you called #'solicit on."
+  (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
+         (logstring (format nil "~S~%" logmsg)))
+    #+CCL
+    (if (find-package :hi)
+        (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
+        (write-string logstring *standard-output*))
+    #-CCL
+    (write-string logstring *standard-output*)))
+  
 (defmethod send-msg ((msg message-mixin) destuid srcuid)
   "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
   a global space that all local and simulated nodes can read from."
@@ -297,11 +345,19 @@
   ;   and all outgoing messages in 'real' network mode.
   (unless (or (null srcuid)
               (numberp srcuid))
-    (break))
+    (break "In send-msg"))
   (ccl:with-lock-grabbed (*message-space-lock*)
     (enq (list msg destuid srcuid) *message-space*)))
 
+(defmethod locally-receive-msg :around (msg thisnode srcuid)
+  (declare (ignore thisnode srcuid))
+  (let ((*seconds-to-wait* (* *max-seconds-to-wait* (expt *hop-factor* (hopcount msg)))))
+    (when (> *seconds-to-wait* *max-seconds-to-wait*)
+      (error "*hop-factor* must be less than 1.0"))
+    (call-next-method)))
+
 ; TODO: Remove old entries in message-cache, eventually.
+;       Might want to also check hopcount and reject message where it's too big.
 (defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid)
   "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
@@ -310,7 +366,7 @@
                   (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :already-seen))
                  (t
                   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-                  (setf (gethash (uid sol) (message-cache thisnode)) srcuid)
+                  (setf (gethash (uid sol) (message-cache thisnode)) (or srcuid t)) ; solicitations from outside might not have a srcid
                   (maybe-log thisnode :accepted sol (kind sol) (args sol))
                   (let* ((kind (kind sol))
                          (kindsym nil))
@@ -321,6 +377,7 @@
         (t (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :too-old))))
 
 (defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid)
+  (declare (ignore srcuid))
   (error "Bug: Cannot locally-receive to a remote node!"))
 
 ; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
@@ -335,7 +392,7 @@
                   (maybe-log thisnode :ignore rep :from (briefname srcuid "node") :already-seen))
                  (t
                   ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
-                  (setf (gethash (uid rep) (message-cache thisnode)) srcuid)
+                  (setf (gethash (uid rep) (message-cache thisnode)) (or srcuid t)) ; replies should ALWAYS have a srcid, but belt & suspenders
                   (maybe-log thisnode :reply-accepted rep (kind rep) :from (briefname srcuid "node") (args rep))
                   (let* ((kind (kind rep))
                          (kindsym nil))
@@ -384,6 +441,7 @@
    value2 is value reported by n2 nodes downstream of thisnode, etc."
   (let ((myvalue (gethash (car (args msg)) (kvs thisnode)))
         (srcid (gethash (uid sol) (message-cache thisnode))))
+    ; careful if srcid is not a uid.
     ))
 
 (defmethod find-max (msg thisnode srcuid)
@@ -432,7 +490,7 @@
     ; wait a finite time for all replies
     (maybe-log thisnode :WAITING msg repliers-expected)
     (ccl:process-wait-with-timeout "reply-wait"
-                                   (* *max-seconds-to-wait* ccl::*ticks-per-second*)
+                                   (* *seconds-to-wait* ccl::*ticks-per-second*)
                                    (lambda ()
                                      (null (gethash soluid (repliers-expected thisnode)))))
     (maybe-log thisnode :DONE-WAITING msg)
@@ -442,12 +500,12 @@
       (remhash soluid (reply-data thisnode))
       (remhash soluid (repliers-expected thisnode))
       ; must create a new reply here; cannot reuse an old one because its content has changed
-      (if where-to-forward-reply
-          (progn
-            (maybe-log thisnode :SEND-REPLY msg :to (briefname where-to-forward-reply "node") totalcount)
-            (send-msg (make-reply :solicitation-uid soluid
-                                  :kind :count-alive
-                                  :args (list totalcount))
+      (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
+          (let ((reply (make-reply :solicitation-uid soluid
+                                   :kind :count-alive
+                                   :args (list totalcount))))
+            (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") totalcount)
+            (send-msg reply
                       where-to-forward-reply
                       (uid thisnode)))
           ; if no place left to reply to, just log the result.
@@ -487,7 +545,8 @@
   "So we can debug background processes in gui CCL. Also works in command-line CCL."
   (if (find-package :gui)
     (funcall (intern "BACKGROUND-PROCESS-RUN-FUNCTION" :gui) keys fn)
-    (ccl:process-run-function keys fn)))
+    (ccl:process-run-function keys fn))
+  (incf *process-count*))
 
 ; NOT DONE YET
 (defmethod transmit-msg (msg (node remote-gossip-node) srcuid)
@@ -507,11 +566,18 @@
   (let ((rawmsg (listen-for-message)))
     (multiple-value-bind (msg srcuid destuid)
                          (parse-raw-message rawmsg)
+      (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
       (let ((destnode (lookup-node destuid)))
         (locally-receive-msg msg destnode srcuid)))))
 
 ; just for simulator
 (defmethod deliver-msg (msg (node gossip-node) srcuid)
+  (setf msg (copy-message msg)) ; must copy before incrementing hopcount because we can't
+  ;  modify the original without affecting other threads.
+  (incf (hopcount msg))
+  (when (> *process-count* (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
+    (pprint (ccl::all-processes) t)
+    (break "In deliver-msg"))
   (my-prf (lambda () (locally-receive-msg msg node srcuid)) :name (format nil "Node ~D" (uid node))))
 
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
@@ -545,6 +611,8 @@
   ; Create gossip network
   ; Clear message space
   ; Archive the current log and clear it
+  (kill-node-processes)
+  (setf *process-count* 0)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   (setf *message-space* (make-queue))
@@ -560,6 +628,7 @@
 ; (restore-graph-from-file "~/gossip/10nodes.lisp")
 ; (make-graph 5)
 ; (save-graph-to-file "~/gossip/5nodes.lisp")
+; (restore-graph-from-file "~/gossip/5nodes.lisp")
 
 ; (make-graph 100)
 ; (visualize-nodes (listify-nodes))
@@ -573,10 +642,10 @@
                        (ccl:all-processes))
     (mapc 'ccl::process-kill node-processes)))
 
-; (kill-node-processes)
 ; (run-gossip-sim)
 ; (solicit (first (listify-nodes)) :count-alive)
-; (inspect *log*)
+; (solicit 340 :count-alive)
+; (inspect *log*) --> Should see :FINALREPLY with node count (or something slightly less, depending on *hop-factor*, network delays, etc.) 
 
 #+IGNORE
 (setf node (make-node
@@ -588,3 +657,7 @@
 
 #+IGNORE
 (save-node node *standard-output*)
+
+#+IGNORE
+(setf msg (make-solicitation :kind :count-alive))
+(copy-message msg)
