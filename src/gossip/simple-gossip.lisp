@@ -394,7 +394,8 @@
     (cond ((and kindsym
                (member srcuid (gethash (solicitation-uid msg) (repliers-expected thisnode))))
            kindsym)
-          (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)))))
+          (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
+             nil))))
 
 ; TODO: Remove old entries in message-cache, eventually.
 ;       Might want to also check hopcount and reject message where it's too big.
