@@ -254,6 +254,8 @@
   "Send a solicitation to the network starting with given node. This is the primary interface to 
   the network to start an action from the outside. Nodes shouldn't use this function to initiate an
   action because they should set the srcuid parameter to be their own rather than nil."
+  (unless node
+    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
   (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
                  (uid node)
                  node))
@@ -360,30 +362,39 @@
       (error "*hop-factor* must be less than 1.0"))
     (call-next-method)))
 
-(defmethod accept-msg? ((sol solicitation) (thisnode gossip-node) srcuid)
-  "Returns true if this message should be accepted by this node.
+(defmethod accept-msg? ((msg message-mixin) (thisnode gossip-node) srcuid)
+  "Returns kindsym if this message should be accepted by this node, where
+   kindsym is the name of the gossip method that should be called to handle this message.
    Doesn't change anything in message or node."
-  (cond ((> (get-universal-time) (+ *max-message-age* (timestamp sol))) ; ignore too-old messages
-         (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :too-old)
+  (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
+         (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
          nil)
         (t
-         (let ((already-seen? (gethash (uid sol) (message-cache thisnode))))
+         (let ((already-seen? (gethash (uid msg) (message-cache thisnode))))
            (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :already-seen)
+                  (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :already-seen)
                   nil)
                  (t ; it's a new message
-                  (let* ((kind (kind sol))
+                  (let* ((kind (kind msg))
                          (kindsym nil))
                     (cond (kind
                            (setf kindsym (intern (symbol-name kind) :gossip))
                            (if (and kindsym (fboundp kindsym))
                                kindsym ;; SUCCESS! We accept the message.
                                (progn
-                                 (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :unknown-kind kindsym)
+                                 (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unknown-kind kindsym)
                                  nil)))
                           (t
-                           (maybe-log thisnode :ignore sol :from (briefname srcuid "node") :no-kind)
+                           (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :no-kind)
                            nil)))))))))
+
+(defmethod accept-msg? ((msg reply) (thisnode gossip-node) srcuid)
+  (let ((kindsym (call-next-method))) ; the one on message-mixin
+    ; Also ensure this reply is actually expected
+    (cond ((and kindsym
+               (member srcuid (gethash (solicitation-uid msg) (repliers-expected thisnode))))
+           kindsym)
+          (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)))))
 
 ; TODO: Remove old entries in message-cache, eventually.
 ;       Might want to also check hopcount and reject message where it's too big.
@@ -401,10 +412,7 @@
   (declare (ignore srcuid kindsym))
   (error "Bug: Cannot locally-receive to a remote node!"))
 
-; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
-;       or srcuid is not on the list. That means we've given up waiting. Handle that here
-;       rather than in specific gossip methods.
-;       Provide a specific :IGNORE log message for this case.
+#+OBSOLETE
 (defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
   (cond ((< (get-universal-time) (+ *max-message-age* (timestamp rep))) ; ignore too-old messages
@@ -422,6 +430,20 @@
                                (fboundp kindsym))
                       (funcall kindsym rep thisnode srcuid)))))))
         (t (maybe-log thisnode :ignore rep :from (briefname srcuid "node") :too-old))))
+
+; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
+;       or srcuid is not on the list. That means we've given up waiting. Handle that here
+;       rather than in specific gossip methods.
+;       Provide a specific :IGNORE log message for this case.
+(defmethod locally-receive-msg ((msg reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
+  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
+  (unless kindsym
+    (setf kindsym (accept-msg? msg thisnode srcuid)))
+  (when kindsym
+    ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
+    (setf (gethash (uid msg) (message-cache thisnode)) (or srcuid t)) ; replies should ALWAYS have a srcid, but belt & suspenders
+    (maybe-log thisnode :reply-accepted msg (kind msg) :from (briefname srcuid "node") (args msg))
+    (funcall kindsym msg thisnode srcuid)))
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
@@ -596,10 +618,12 @@
   (setf msg (copy-message msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount msg))
-  (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
-    (pprint (ccl::all-processes) t)
-    (break "In deliver-msg"))
-  (my-prf (lambda () (locally-receive-msg msg node srcuid)) :name (format nil "Node ~D" (uid node))))
+  (let ((kindsym (accept-msg? msg node srcuid)))
+    (when kindsym ; ignore the message here and now if it's ignorable, without creating a new thread
+      (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
+        (pprint (ccl::all-processes) t)
+        (break "In deliver-msg"))
+      (my-prf (lambda () (locally-receive-msg msg node srcuid kindsym)) :name (format nil "Node ~D" (uid node))))))
 
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
@@ -696,4 +720,5 @@
 
 #+IGNORE
 (setf msg (make-solicitation :kind :count-alive))
+#+IGNORE
 (copy-message msg)
