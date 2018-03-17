@@ -6,14 +6,15 @@ env:
   global:
     - PATH=~/.roswell/bin:$PATH
     - ROSWELL_INSTALL_DIR=$HOME/.roswell
-# Speculatively hook into Coveralls <https://coveralls.io/>
-# Coveralls configuration (currently unused)
-#    - COVERAGE_EXCLUDE=t/
   matrix:
-    - LISP=sbcl-bin
     - LISP=ccl-bin
-# Uncomment to enable the build farm resource to be spent on implementations that might actually produce useful results    
+    - LISP=sbcl-bin
+# Uncomment to enable the build farm resource to be spent on
+# implementations that might actually produce useful results.
     - LISP=abcl-bin
+# Non-binary distributions need to be built from source, which
+# currently times out for the Travis CI builds we are currently paying
+# for.
 #    - LISP=ecl
 #    - LISP=clisp
 #    - LISP=clasp
@@ -22,25 +23,44 @@ install:
   - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
 # Add needed Quicklisp dependencies for testing here  
   - ros install prove
-  - ros install lisp-unit
+# Pin quicklisp to known version; install emotiq dist
+  - ros -e '(ql-dist:install-dist 
+              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
+               :replace t :prompt nil)
+            (ql-dist:install-dist 
+              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
+               :prompt nil)'
+  - sudo apt-get install openssl pgpgpg wget bash
 
+# Add/remove test converage here
+# 
+# <https://en.wikipedia.org/wiki/Exit_status#POSIX>
+# <https://books.google.at/books?id=kIxQAAAAMAAJ&q=software+tools+kernighan+and+plough&dq=software+tools+kernighan+and+plough&hl=en&sa=X&ved=0ahUKEwiC-v_I7_DZAhUKWSwKHXI7C7wQ6AEIKzAA>
+#
+# Whatever scripts one invokes, the exit returned to travis has the following semantics:
+#
+# SUCCESS "zero"
+#   (uiop:quit 0)
+# 
+# FAILURE "non-zero status"
+#   (uiop:quit (not (zerop status))
+#
+#   The current implementation returns the bit representation of '-1'
+#   shifted by the zero-based index of the failing test.
 script:
-  - ros -e '(ql:quickload :emotiq-test) 
-            (or (asdf:test-system :emotiq)
-                (uiop:quit -1))'
-  - ros -s prove
-        -e '(or (prove:run :emotiq-prove)
-                (uiop:quit -1))'
-  - ros -e '(ql:quickload :cosi-test)
-            (or (lisp-unit:run-tests :all :cosi-test)
-                (uiop:quit -1))'                         
-  - ros -s prove
-        -e '(or (prove:run :cosi-prove)
-                (uiop:quit -1))'
-  # Speculatively hook into Coveralls <https://coveralls.io/>
-  # Coveralls invocation (currently unused)
-  #                 
-  # - ros -s prove -s cl-coveralls
-  #       -e '(or (coveralls:with-coveralls (:exclude (list "t"))
-  #                 (prove:run :emotiq-prove))
-  #               (uiop:quit -1))'
+  - ros -e "(loop
+              :for i :upfrom 0
+              :for 
+                  (system dependencies) 
+              :in 
+                  '((:emotiq :emotiq-test)
+                    (:cosi   :cosi-test))
+              :doing 
+                 (ql:quickload dependencies)
+              :unless 
+                 (asdf:test-system system)
+              :return 
+                 (uiop:quit (ash -1 i))
+              :finally 
+                 (uiop:quit 0))"
+

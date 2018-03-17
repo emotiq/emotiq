@@ -13,11 +13,12 @@ We assert an MIT license over this source aggregation; see
 
 This is a predominantly Common Lisp code base.
 
-We aim to work on as many ANSI implementation as possible.  We are
-currently targeting the commercial Allegro Common Lisp 10.1
-implementation but we also test our code with `sbcl-1.4.4` and
-`ccl-1.11`.  Currently not all ASDF systems run cleanly outside of
-`acl`.
+We aim to work on as many ANSI implementations as possible.
+
+For the development of `testnet` we are targeting the commercial
+LispWorks Pro 7.1 implementation but we also test our code with
+`sbcl`, `ccl`, and `abcl`.  Currently not all ASDF systems run cleanly
+outside of `lwpro-7.1.0-patches-2`.
 
 ### Tell ASDF where to find the Emotiq systems 
 
@@ -39,17 +40,18 @@ running some version of *NIX:
 
     
 If you are under Windows or have placed your copy of this source tree
-in a different location on the filesystem, you will have to perform
+in a different location on the file-system, you will have to perform
 the corresponding actions manually as per your local OS conventions.
 
 Once the ASDF configuration has been edited correctly, one should be
-able to verify that things are working via
+able to verify that things are working via:
 
     (asdf:system-source-directory :emotiq)
 
-### Ensure Quicklisp dependencies have been satified
+### Ensure Quicklisp dependencies have been satisfied
 
-This only needs to be performed once per installation.
+The installation of Quicklisp dependencies only needs to be performed
+once per installation.
 
 If Quicklisp is not locally available to your Lisp implementation,
 first download and install it via the instructions available at
@@ -64,7 +66,7 @@ the `emotiq-test` ASDF system.
 
 We have many ASDF descriptions within this repository whose
 dependencies may need to be satisfied by via `ql:quickload` other than
-`emotiq-test`.  
+`emotiq-test`.
 
 Currently we are working many systems simultaneously, most noteworthy
 among them being the work in the `cosi` system.
@@ -93,8 +95,16 @@ At end you should see a result like
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
+# Test Coverage
+
+All pushed to the source tree result in "Continuous Integration" build
+from Travis CI: <https://travis-ci.org/emotiq/emotiq>.
+
+The description of test coverage is contained in the Travis CI
+artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
+
 # Colophon
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-02-24 Sat 07:28Z>
+    Revised: <2018-03-16 Fri 12:48Z>
