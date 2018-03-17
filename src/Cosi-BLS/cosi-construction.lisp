@@ -467,7 +467,7 @@ THE SOFTWARE.
                    (assert (null (gethash ipstr *ip-node-tbl*)))
                    (let ((pval (keyval (first zkp))))
                      (assert (null (gethash pval *pkey-node-tbl*)))
-                     (apply 'cosi-keying:validate-pkey zkp)
+                     (assert (apply 'cosi-keying:validate-pkey zkp))
                      (setf (gethash ipstr *ip-node-tbl*)   ip
                            (gethash pval  *pkey-node-tbl*) ip)
                      )))))

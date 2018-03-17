@@ -144,13 +144,18 @@ THE SOFTWARE.
 
 (defmethod print-object ((obj ub8v) out-stream)
   (if *print-readably*
-      (format out-stream "#.(~W ~A)"
-              (class-name (class-of obj))
-              (int obj))
+      (progn
+        (princ "#." out-stream)
+        (prin1 `(,(class-name (class-of obj)) (hex-of-str ,(hex-str (hex obj))))
+               out-stream))
     ;; else
     (format out-stream "#<~A ~A >"
             (class-name (class-of obj))
             (ub8v-vec obj))))
+
+(defun hex-of-str (str)
+  (make-instance 'hex
+                 :str str))
 
 (defmethod print-object ((obj ub8v-repr) out-stream)
   ;; subclasses of UB8V-REPR mixin should feel free to override this

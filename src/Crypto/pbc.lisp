@@ -72,7 +72,8 @@ THE SOFTWARE.
    :combine-signatures ;; for BLS MultiSigs
 
    :with-crypto
-
+   :ask-crypto
+   
    :mul-pts  ;; bent nomenclature for ECC
    :add-zrs
    :inv-zr
@@ -952,19 +953,42 @@ sign0 1
 ;; environment, you should reestablish it on entry. This applies
 ;; in particular to the secret and public keying in effect.
 
-(defun do-with-pbc-exclusive (fn)
+(defun do-with-pbc-exclusive (fn skey pkey)
   (um:critical-section
+    (when skey
+      (set-secret-key skey))
+    (when pkey
+      (set-public-key pkey))
     (funcall fn)))
 
+(defun ado-with-pbc-exclusive (fn skey pkey)
+  ;; support parallelism better with an Actor service
+  ;; instead of blocking-wait lock
+  (let ((handler (load-time-value
+                  (ac:make-actor 'do-with-pbc-exclusive))))
+    (ac:send handler fn skey pkey)))
+
 (defmacro with-crypto ((&key skey pkey) &body body)
-  `(do-with-pbc-exclusive (lambda ()
-                            ,@(when skey
-                                `((set-secret-key ,skey)))
-                            ,@(when pkey
-                                `((set-public-key ,pkey)))
-                            ,@body)))
+  `(ado-with-pbc-exclusive (lambda ()
+                            ,@body)
+                          ,skey ,pkey))
 
 #+:LISPWORKS
 (editor:setup-indent "with-crypto" 1)
 
 
+(defun do-ask-crypto (fn skey pkey)
+  (let ((mbox (mp:make-mailbox)))
+    (with-crypto (:skey skey
+                  :pkey pkey)
+      (mp:mailbox-send mbox
+                       (um:capture-ans-or-exn fn)))
+    (um:recover-ans-or-exn (mp:mailbox-read mbox))))
+
+(defmacro ask-crypto ((&key skey pkey) &body body)
+  `(do-ask-crypto (lambda ()
+                    ,@body)
+                  ,skey ,pkey))
+
+#+:LISPWORKS
+(editor:setup-indent "ask-crypto" 1)

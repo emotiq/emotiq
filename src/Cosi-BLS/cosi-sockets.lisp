@@ -43,7 +43,8 @@ THE SOFTWARE.
 
 ;; ----------------------------
 
-(defvar *cosi-port*         65001)
+(defparameter *local-ip*    "127.0.0.1")
+(defparameter *cosi-port*         65001)
 
 ;; ----------------------------
 ;; AID/Actor Associations for network portable Actor references
@@ -59,7 +60,7 @@ THE SOFTWARE.
    (aid      :accessor return-addr-aid  ;; actor id for returns
              :initarg  :aid)))
 
-(defvar *aid-tbl*
+(defparameter *aid-tbl*
   ;; assoc between Actors and AID's
   #+:LISPWORKS (make-hash-table
                 :weak-kind :value)
@@ -121,49 +122,65 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------
 
-(defun make-hmac (msg skey)
+(=defun make-hmac (msg skey)
   ;; Every packet sent to another node is accompanied by an HMAC that
   ;; is unforgeable. If a MITM attack occurs, the receiving node will
   ;; fail HMAC verification and just drop the incoming packet on the
   ;; floor. So MITM modifications become tantamount to a DOS attack.
   (pbc:with-crypto (:skey skey)
-    (pbc:sign-message msg)))
+    (=values (pbc:sign-message msg))))
+    
 
-(defun verify-hmac (packet)
-  ;; Every incoming packet is scrutinized for a valid HMAC. If it
-  ;; checks out then the packet is dispatched to an operation.
-  ;; Otherwise it is just dropped on the floor.
-  (when (ignore-errors
-          (pbc:with-crypto ()
-            (pbc:check-message packet)))
-    (values (pbc:signed-message-msg packet) t)))
+(=defun verify-hmac (packet)
+  ;; might not be a valid encoding
+  (let ((decoded (ignore-errors
+                   (loenc:decode packet))))
+    (when decoded
+      (pbc:with-crypto ()
+        ;; might not be a pbc:signed-message
+        (when (ignore-errors
+                (pbc:check-message decoded))
+          ;; return the contained message
+          (=values (pbc:signed-message-msg decoded)))))
+    ))
 
 ;; -----------------------------------------------------
 ;; THE SOCKET INTERFACE...
 ;; -----------------------------------------------------
 
-(defvar *max-buffer-length* 65500)
+(defparameter *max-buffer-length* 65500)
+(defparameter *shutting-down*     nil)
 
-(defun cosi-service-handler (buf)
-  (multiple-value-bind (ans err)
-      (ignore-errors
-        (loenc:decode buf))
-    (unless err
-      (multiple-value-bind (packet t/f) (verify-hmac ans)
-        (when t/f
-          (destructuring-bind (dest msg-verb &rest msg-args) packet
-            (cond ((eql :SHUTDOWN-SERVER msg-verb)
-                   :SHUTDOWN-SERVER)
-                  (t
-                   (let ((true-dest (dest-ip dest)))
-                     ;; for debug... -------------------
-                     (when (eq true-dest (node-self *my-node*))
-                       (pr (format nil "forwarding-to-me: ~A" (cons msg-verb msg-args))))
-                     ;; ------------------
-                     (apply 'send true-dest msg-verb msg-args)
-                     t))
-                  )))
-        ))))
+(defun port-routing-handler (buf)
+  (=bind (packet)
+      ;; Every incoming packet is scrutinized for a valid HMAC. If
+      ;; it checks out then the packet is dispatched to an
+      ;; operation.  Otherwise it is just dropped on the floor.
+      (verify-hmac buf)
+    
+    ;; we can only arrive here if the incoming buffer held a valid
+    ;; packet
+    (ignore-errors
+      ;; might not be a properly destructurable packet
+      (destructuring-bind (dest msg-verb &rest msg-args) packet
+        (cond ((eql :SHUTDOWN-SERVER msg-verb)
+               (setf *shutting-down* :SHUTDOWN-SERVER)
+               (internal-send-socket *local-ip* *cosi-port* :SHUTDOWN-SERVER))
+              
+              (t
+               (let ((true-dest (dest-ip dest)))
+                 ;; for debug... -------------------
+                 (when (eq true-dest (node-self *my-node*))
+                   (pr (format nil "forwarding-to-me: ~A" (cons msg-verb msg-args))))
+                 ;; ------------------
+                 (apply 'send true-dest msg-verb msg-args)))
+              )))
+    ))
+    
+(defun port-router (buf)
+  (let ((handler (load-time-value
+                  (make-actor 'port-routing-handler))))
+    (send handler buf)))
 
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *my-node*
@@ -171,8 +188,9 @@ THE SOFTWARE.
       (socket-send me me port '(:SHUTDOWN-SERVER)))))
 
 (defun socket-send (ip real-ip real-port msg)
-  (let ((packet (make-hmac (list* ip msg)
-                           (node-skey *my-node*))))
+  (=bind (packet)
+      (pbc:with-crypto (:skey (node-skey *my-node*))
+        (=values (pbc:sign-message (list* ip msg))))
     (internal-send-socket real-ip real-port
                           (loenc:encode packet))))
 
@@ -238,8 +256,10 @@ THE SOFTWARE.
 		(usocket:socket-receive socket maxbuf (length maxbuf))
 	      (declare (ignore rem-ip rem-port))
 	      ;; (pr :sock-read buf-len rem-ip rem-port (loenc:decode buf))
-              (when (eql :SHUTDOWN-SERVER (cosi-service-handler buf))
-                (return-from #1#))))
+              (when (eql :SHUTDOWN-SERVER *shutting-down*)
+                (setf *shutting-down* nil)
+                (return-from #1#))
+              (port-router buf)))
         ;; unwinding
         (usocket:socket-close socket)
         ;; (pr :server-stopped)
@@ -302,9 +322,13 @@ THE SOFTWARE.
         (start-server)
         (return-from #1#))
 
-      (if (eql :SHUTDOWN-SERVER (cosi-service-handler string))
-          (comm:close-async-io-state async-io-state)
-        (udp-cosi-server-receive-next async-io-state))))
+      (if (eql :SHUTDOWN-SERVER *shutting-down*)
+          (progn
+            (setf *shutting-down* nil)
+            (comm:close-async-io-state async-io-state))
+        (progn
+          (port-router (copy-seq string))
+          (udp-cosi-server-receive-next async-io-state)))))
   
   (defun udp-cosi-server-receive-next (async-io-state )
     (comm:async-io-state-receive-message async-io-state
