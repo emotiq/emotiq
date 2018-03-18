@@ -1044,3 +1044,18 @@ THE SOFTWARE.
             '(:one :two :three))
   (pr which))
 |#
+
+;; SMAPCAR = sequential mapping where fn might require async Actor
+;; participation
+
+(=defun smapcar (fn lst)
+  (labels ((mapper (lst accum)
+             (if (endp lst)
+                 (=values (nreverse accum))
+               (destructuring-bind (hd &rest tl) lst
+                 (=bind (ans)
+                     (=values (funcall fn hd))
+                   (mapper tl (cons ans accum))))
+               )))
+    (mapper lst nil)))
+

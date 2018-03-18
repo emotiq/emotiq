@@ -69,8 +69,9 @@ results to some other Actor.
 
 ---------------------------------
 
-There is another alternative provide by the Actors package: PMAPCAR (=
-parallel mapcar). With this macro we can write our mapping example as:
+There is another alternative provided by the Actors package:
+PMAPCAR (= parallel mapcar). With this macro we can write our mapping
+example as:
 
 (=bind (lst)
        (pmapcar (=lambda (val)
@@ -87,4 +88,28 @@ Note the use of =LAMBDA in the function sent to PMAPCAR. The =VALUES
 inside that function refer, not to the outer =BIND, but to an internal
 one created by PMAPCAR. But the effect overall is to bind that outer
 =BIND to the entire list of results.
+
+The use of PMAPCAR implies truly parallel operations on each of the
+operands in the original list of operands. Sometimes that is
+appropriate. But other times, when the mapping is intended to produce
+side effects of folding over the list of operands, then a sequential
+mapping is called for. And that is the transformation discussed in the
+first section of this article.
+
+---------------------------------
+
+Finally, as a late addition to the Actors package, I decided to add
+that serialized mapping transformation as an Actor primitive, called
+SMAPCAR (= sequential mapcar). It is to be used within an outer =BIND
+form.
+
+Unlike PMAPCAR, SMAPCAR does not fire off any transient Actors, and
+unless your mapping function actually uses async Actor calls, it
+behaves immediately just like normal MAPCAR. But if your function does
+use async Actor calls, then the result is just as described for the
+transform in the first section of this article.
+
+      (=bind (lst)
+            (smapcar 'computation operands)
+         (do-something-with-result lst))
 
