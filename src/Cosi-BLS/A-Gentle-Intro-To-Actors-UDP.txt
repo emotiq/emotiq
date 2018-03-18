@@ -1,0 +1,144 @@
+Lets start simple, and work our way progressively higher. Assume there
+is a function called INTERNAL-SEND-SOCKET that takes an IP Address,
+Port, and a vector of (UNSIGNED-BYTE 8) values and performs the
+physical send.
+
+Atop that routine, we have our SOCKET-SEND that takes an object (any
+kind of Lisp object), the IP Addr, Port, and it wraps the object in an
+authentication signature (BLS signature), then serializes to byte
+vector form and calls INTERNAL-SEND-SOCKET:
+
+(defun socket-send (ip real-ip real-port msg)
+  ;; real IP addr, contrasted with simulated addr
+  (=bind (packet)
+      (pbc:with-crypto (:skey (node-skey *my-node*))
+        (=values (pbc:sign-message (list* ip msg))))
+    (internal-send-socket real-ip real-port
+                          (loenc:encode packet))))
+                          
+The internal Pairing-based crypto (PBC) libs are currently
+single-threaded, and so must be performed by an Actor service which
+already exists down in the PBC package. So we always call PBC crypto
+routines while wrapped with PBC:WITH-CRYPTO. That macro gives us the
+opportunity to set the public key (:pkey) and secret key (:skey) as
+needed, before calling the wrapped forms. The body of WITH-CRYPTO is
+wrapped into a thunk that is sent to the PBC Actor service for
+execution.
+
+Performing crypto wrapped in this way sends a message to the PBC Actor
+service to run the code you wrapped. That happens in the same or
+different thread, but won't directly return anything of value to the
+caller who wrapped the code. To get a returned value, you send it
+(them) back with =VALUES, to a waiting =BIND.
+
+When this SOCKET-SEND runs, the =BIND sets up a continuation for its
+body code, that will be called when =VALUES runs, and then the =BIND
+form skips to the next form, if any. In other words, SOCKET-SEND exits
+immediately. No blocking wait. When =VALUES runs, it will run the
+continuation body of the =BIND form by sending a continuation message
+to the Actor which performed the =BIND. Sending a continuation message
+back to the original Actor guarantees that the body will execute in
+the single-thread context of the calling Actor.
+
+Inside that body code, the BLS signed msg item is serialized for port
+transmission by calling LOENC:ENCODE.
+
+Now for the other side of the communications - assume the existence of
+a thread continuously monitoring its socket port. When a packet
+arrives, it simply calls PORT-ROUTER with the packet bytes, and
+resumes its port watch. Here is the code for PORT-ROUTER:
+
+(defun port-router (buf)
+  (let ((handler (load-time-value
+                  (make-actor 'port-routing-handler))))
+    (send handler buf)))
+    
+As you can see, it simply sends the packet bytes to another Actor who
+will perform packet disassembly and routing. The SEND to the Actor
+handler is immediate and non-blocking. So the call to PORT-ROUTER is
+very fast, not tying up the socket watcher thread at all.
+
+The code that the port router handler actually runs is here:
+
+(defun port-routing-handler (buf)
+  (=bind (packet)
+      ;; Every incoming packet is scrutinized for a valid HMAC. If
+      ;; it checks out then the packet is dispatched to an
+      ;; operation.  Otherwise it is just dropped on the floor.
+      (verify-hmac buf)
+    
+    ;; we can only arrive here if the incoming buffer held a valid
+    ;; packet
+    (ignore-errors
+      ;; might not be a properly destructurable packet
+      (destructuring-bind (dest msg-verb &rest msg-args) packet
+        (let ((true-dest (dest-ip dest)))
+          (apply 'send true-dest msg-verb msg-args)))
+      )))
+    
+The comments are pretty self explanatory, now that you undertand the
+nature of =BIND and =VALUES. The packet authentication is verified by
+VERIFY-HMAC. It is wrapped inside an =BIND clause because we need to
+call PBC Crypto again. Here is the code for VERIFY-HMAC:
+
+(=defun verify-hmac (packet)
+  ;; might not be a valid encoding
+  (let ((decoded (ignore-errors
+                   (loenc:decode packet))))
+    (when decoded
+      (pbc:with-crypto ()
+        ;; might not be a pbc:signed-message
+        (when (ignore-errors
+                (pbc:check-message decoded))
+          ;; return the contained message
+          (=values (pbc:signed-message-msg decoded)))))
+    ))
+    
+Since this is called in the context of an =BIND, there is a hidden
+argument passed along that represents the continuation of the =BIND
+clause. In order to use =VALUES from here, we need to know that we
+have been passed that hidden continuation argument, and that is
+signaled by using =DEFUN, instead of DEFUN.
+    
+The logic of VERIFY-HMAC is as follows:
+
+1. On entry we are just handed a raw buffer of bytes. So we first call
+LOENC:DECODE to deserialize the implied object.
+
+2. But that vector of bytes might not be a valid serialization of
+anything. Hence the IGNORE-ERRORS wrapped around DECODE. If the packet
+cannot be deserialized, we simply return - which means the
+continuation will never be called.
+
+3. Assuming we deserialized, we next need to check the authentication
+on the object. That means we need to call PBC Crypto again. But the
+=DEFUN was already called in the context of an =BIND from the caller,
+so we don't need to do it again.
+
+4. The second IGNORE-ERRORS wrapped around the call to
+PBC:CHECK-MESSAGE is there because the deserialized object might not
+be an authenticated message object. The call to CHECK-MESSAGE might
+abort with an error. Again, if that happens we simply drop the packet
+on the floor, and don't call the continuation.
+
+5. If we have successfully deserialized an authenticated message
+packet, and the signature was good, then we call =VALUES back to the
+waiting =BIND with the Lisp object that was signed.
+
+That's why, in PORT-ROUTING-HANDLER, the comment following the =BIND
+states that we only arrive there if the incoming buffer held a valid
+packet.
+
+But it might be a validated packet that has nothing to do with the
+kind of message format we expect for a forwarding routing
+request. That why we wrap the DESTRUCTURING-BIND with another
+IGNORE-ERRORS. If the incoming data makes no sense in this context, we
+simply drop it on the floor. Otherwise, we perform the SEND routing to
+the intended Actor service.
+
+That's it! Not terribly complicated. But strict attention has been
+paid to realizing when forms simply drop through, when delayed
+continuations are activated, and how values are passed back from an
+implied Actor service.
+
+- DM

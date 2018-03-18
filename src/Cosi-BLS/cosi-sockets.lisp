@@ -163,19 +163,13 @@ THE SOFTWARE.
     (ignore-errors
       ;; might not be a properly destructurable packet
       (destructuring-bind (dest msg-verb &rest msg-args) packet
-        (cond ((eql :SHUTDOWN-SERVER msg-verb)
-               (setf *shutting-down* :SHUTDOWN-SERVER)
-               (internal-send-socket *local-ip* *cosi-port* :SHUTDOWN-SERVER))
-              
-              (t
-               (let ((true-dest (dest-ip dest)))
-                 ;; for debug... -------------------
-                 (when (eq true-dest (node-self *my-node*))
-                   (pr (format nil "forwarding-to-me: ~A" (cons msg-verb msg-args))))
-                 ;; ------------------
-                 (apply 'send true-dest msg-verb msg-args)))
-              )))
-    ))
+        (let ((true-dest (dest-ip dest)))
+          ;; for debug... -------------------
+          (when (eq true-dest (node-self *my-node*))
+            (pr (format nil "forwarding-to-me: ~A" (cons msg-verb msg-args))))
+          ;; ------------------
+          (apply 'send true-dest msg-verb msg-args)))
+      )))
     
 (defun port-router (buf)
   (let ((handler (load-time-value
@@ -184,13 +178,12 @@ THE SOFTWARE.
 
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *my-node*
-    (let ((me (node-ip *my-node*)))
-      (socket-send me me port '(:SHUTDOWN-SERVER)))))
+    (setf *shutting-down* :SHUTDOWN-SERVER)
+    (internal-send-socket *local-ip* port "ShutDown")))
 
 (defun socket-send (ip real-ip real-port msg)
   (=bind (packet)
-      (pbc:with-crypto (:skey (node-skey *my-node*))
-        (=values (pbc:sign-message (list* ip msg))))
+      (make-hmac (list* ip msg) (node-skey *my-node*))
     (internal-send-socket real-ip real-port
                           (loenc:encode packet))))
 
@@ -327,7 +320,7 @@ THE SOFTWARE.
             (setf *shutting-down* nil)
             (comm:close-async-io-state async-io-state))
         (progn
-          (port-router (copy-seq string))
+          (port-router string)
           (udp-cosi-server-receive-next async-io-state)))))
   
   (defun udp-cosi-server-receive-next (async-io-state )
