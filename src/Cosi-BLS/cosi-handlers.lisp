@@ -469,39 +469,35 @@ Connecting to #$(NODE "10.0.1.6" 65000)
           (=values nil 0))
       (=bind (r-lst)
           (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
-        (labels
-            ((fold-answer (subs resps)
-               (if (endp subs)
-                   ;; return a partial aggregate signature and the bitmap
-                   ;; indicating which nodes signed
-                   (send reply-to :signed seq-id sig bits)
-                 (let ((sub  (car subs))
-                       (resp (car resps)))
-                   (cond
-                    ((null resp)
-                     ;; no response from node, or bad subtree
-                     (pr (format nil "No signing: ~A" sub))
-                     (mark-node-no-response node sub)
-                     (fold-answer (cdr subs) (cdr resps)))
-                    
-                    (t
-                     (destructuring-bind (sub-sig sub-bits) resp
-                       (=bind ()
-                           (pbc:with-crypto ()
-                             (if (pbc:check-message sub-sig)
-                                 (setf sig  (if sig
-                                                (pbc:combine-signatures sig sub-sig)
-                                              sub-sig)
-                                       bits (logior bits sub-bits))
-                               ;; else
-                               (mark-node-corrupted node sub))
-                             (=values))
-                         (fold-answer (cdr subs) (cdr resps)))
-                       ))
-                    )))))
-          (fold-answer subs r-lst)))
-      )))
-  
+        (=bind ()
+            (let ((fold-answer
+                   (=lambda (sub resp)
+                     (cond
+                      ((null resp)
+                       ;; no response from node, or bad subtree
+                       (pr (format nil "No signing: ~A" sub))
+                       (mark-node-no-response node sub)
+                       (=values))
+                      
+                      (t
+                       (destructuring-bind (sub-sig sub-bits) resp
+                         (pbc:with-crypto ()
+                           (if (pbc:check-message sub-sig)
+                               (setf sig  (if sig
+                                              (pbc:combine-signatures sig sub-sig)
+                                            sub-sig)
+                                     bits (logior bits sub-bits))
+                             ;; else
+                             (mark-node-corrupted node sub))
+                           (=values))
+                         ))
+                      ))))
+              (smapc fold-answer subs r-lst))
+          (locally
+            (declare (ignore x))
+            (send reply-to :signed seq-id sig bits)))
+        ))))
+
 ;; -----------------------------------------------------------
 
 (defun node-compute-cosi (node reply-to msg)

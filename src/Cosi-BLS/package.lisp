@@ -119,6 +119,7 @@
    :=funcall
    :=apply
    :pmapcar
+   :smapc
    :spawn
    :current-actor
    :recv

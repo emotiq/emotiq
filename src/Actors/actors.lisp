@@ -916,7 +916,8 @@ THE SOFTWARE.
 (defun as-list (seq)
   (coerce seq 'list))
 
-(=defun pmap (fn &rest seqs)
+(=defun pmapc (fn &rest seqs)
+  ;; >>> I don't think this is correct...
   (=apply '=pmapcar fn (mapcar 'as-list seqs)))
 
 (defun par-xform (pfn &rest clauses)
@@ -1048,14 +1049,29 @@ THE SOFTWARE.
 ;; SMAPCAR = sequential mapping where fn might require async Actor
 ;; participation
 
-(=defun smapcar (fn lst)
-  (labels ((mapper (lst accum)
-             (if (endp lst)
+(=defun smapcar (fn &rest lsts)
+  ;; fn must call =VALUES
+  (labels ((mapper (lsts accum)
+             (if (some 'endp lsts)
                  (=values (nreverse accum))
-               (destructuring-bind (hd &rest tl) lst
+               (let ((hds (mapcar 'car lsts))
+                     (tls (mapcar 'cdr lsts)))
                  (=bind (ans)
-                     (=values (funcall fn hd))
-                   (mapper tl (cons ans accum))))
+                     (=apply fn hds)
+                   (mapper tls (cons ans accum))))
                )))
-    (mapper lst nil)))
+    (mapper lsts nil)))
 
+(=defun smapc (fn &rest lsts)
+  ;; fn must call =VALUES
+  (labels ((mapper (lsts)
+             (if (some 'endp lsts)
+                 (=values)
+               (let ((hds (mapcar 'car lsts))
+                     (tls (mapcar 'cdr lsts)))
+                 (=bind (&rest ans)
+                     (=apply fn hds)
+                   ans ;; just to remove unused warning...
+                   (mapper tls)))
+               )))
+    (mapper lsts)))

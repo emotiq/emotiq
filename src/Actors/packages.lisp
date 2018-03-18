@@ -146,8 +146,9 @@ THE SOFTWARE.
    #:with-cont
    #:with-future
    #:smapcar
+   #:smapc
    #:pmapcar
-   #:pmap
+   #:pmapc
    #:par
    #:with-futures
    #:pfirst
