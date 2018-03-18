@@ -416,25 +416,6 @@
   (declare (ignore srcuid kindsym))
   (error "Bug: Cannot locally-receive to a remote node!"))
 
-#+OBSOLETE
-(defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
-  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (cond ((< (get-universal-time) (+ *max-message-age* (timestamp rep))) ; ignore too-old messages
-         (let ((already-seen? (gethash (uid rep) (message-cache thisnode))))
-           (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore rep :from (briefname srcuid "node") :already-seen))
-                 (t
-                  ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
-                  (setf (gethash (uid rep) (message-cache thisnode)) (or srcuid t)) ; replies should ALWAYS have a srcid, but belt & suspenders
-                  (maybe-log thisnode :reply-accepted rep (kind rep) :from (briefname srcuid "node") (args rep))
-                  (let* ((kind (kind rep))
-                         (kindsym nil))
-                    (when kind (setf kindsym (intern (symbol-name kind) :gossip)))
-                    (when (and kindsym
-                               (fboundp kindsym))
-                      (funcall kindsym rep thisnode srcuid)))))))
-        (t (maybe-log thisnode :ignore rep :from (briefname srcuid "node") :too-old))))
-
 ; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
 ;       or srcuid is not on the list. That means we've given up waiting. Handle that here
 ;       rather than in specific gossip methods.
@@ -502,7 +483,6 @@
   "Broadcast a request that all nodes execute sound-off with some status information"
   )
 
-
 (defgeneric sounding-off (msg thisnode srcuid)
   (:documentation "A broadcast message initiated by a particular origin node (UID contained in msg)
    containing specific requested or unprompted status information.
@@ -525,56 +505,70 @@
   )
 
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
-  "Counts number of live nodes downstream of thisnode, plus thisnode itself.
-  Reply with a scalar."
+  "Get a list of UIDs live nodes downstream of thisnode, plus thisnode itself."
+  ; actually returns a list of the UIDs of all the nodes that responded. This is more useful
+  ;   for seeing who's missing.
   (let ((soluid (uid msg))
         (repliers-expected (remove srcuid (neighbors thisnode))))
     ; prepare reply tables
     (ccl:with-lock-grabbed ((reply-table-lock thisnode))
-      (setf (gethash soluid (reply-data thisnode)) 1) ; thisnode itself is 1 live node
+      (setf (gethash soluid (reply-data thisnode)) (list (uid thisnode))) ; thisnode itself is 1 live node
       (setf (gethash soluid (repliers-expected thisnode)) repliers-expected))
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
     (maybe-log thisnode :WAITING msg repliers-expected)
-    (ccl:process-wait-with-timeout "reply-wait"
-                                   (* *seconds-to-wait* ccl::*ticks-per-second*)
-                                   (lambda ()
-                                     (null (gethash soluid (repliers-expected thisnode)))))
-    (maybe-log thisnode :DONE-WAITING msg)
-    (let ((totalcount nil)
-          (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
-      ; clean up reply tables
-      (ccl:with-lock-grabbed ((reply-table-lock thisnode))
-        (setf totalcount (gethash soluid (reply-data thisnode)))
-        (remhash soluid (repliers-expected thisnode))
-        (remhash soluid (reply-data thisnode)))
-      ; must create a new reply here; cannot reuse an old one because its content has changed
-      (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
+    (let ((win
+           (ccl:process-wait-with-timeout "reply-wait"
+                                          (* *seconds-to-wait* ccl::*ticks-per-second*)
+                                          (lambda ()
+                                            (null (gethash soluid (repliers-expected thisnode)))))))
+      (if win
+          (maybe-log thisnode :DONE-WAITING-WIN msg)
+          (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
+      (let ((local-alive nil)
+            (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
+        ; clean up reply tables
+        (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+          (setf local-alive (gethash soluid (reply-data thisnode)))
+          (remhash soluid (repliers-expected thisnode))
+          (remhash soluid (reply-data thisnode)))
+        ; must create a new reply here; cannot reuse an old one because its content has changed
+        (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
             (let ((reply (make-reply :solicitation-uid soluid
                                      :kind :count-alive
-                                     :args (list totalcount))))
-              (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") totalcount)
+                                     :args (list local-alive))))
+              (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-alive)
               (send-msg reply
                         where-to-forward-reply
                         (uid thisnode)))
-          ; if no place left to reply to, just log the result.
-          ;   This can mean that thisnode autonomously initiated the request, or
-          ;   somebody running the sim told it to.
-          (maybe-log thisnode :FINALREPLY msg totalcount)))))
+            ; if no place left to reply to, just log the result.
+            ;   This can mean that thisnode autonomously initiated the request, or
+            ;   somebody running the sim told it to.
+            (maybe-log thisnode :FINALREPLY msg local-alive))))))
 
 (defmethod count-alive ((rep reply) thisnode srcuid)
-  ; TODO:  Check (gethash soluid (reply-data thisnode)) and if nil, ignore this reply.
-  ;        Because it could have straggled in late after :WAITING timed out
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
-    (let ((numalive (first (args rep))))
+    (let ((alive-in-reply (first (args rep))))
       (ccl:with-lock-grabbed ((reply-table-lock thisnode))
-        (incf (gethash soluid (reply-data thisnode)) numalive))
+        (let ((local-alive (gethash soluid (reply-data thisnode))))
+          (setf (gethash soluid (reply-data thisnode)) (append alive-in-reply local-alive)))))
       ; Now remove this srcuid from expected-replies list. (We know it's on
       ;  the list because this method would never have been called otherwise.)
       (let ((nodes-expected-to-reply (gethash soluid (repliers-expected thisnode))))
         (setf (gethash soluid (repliers-expected thisnode))
-              (delete srcuid nodes-expected-to-reply))))))
+              (delete srcuid nodes-expected-to-reply)))))
+
+; For debugging count-alive
+(defun missing? (alive-list)
+  "Returns a list of node UIDs that are missing from a list returned by count-alive"
+  (let ((dead-list nil))
+    (maphash (lambda (key value)
+               (declare (ignore value))
+               (unless (member key alive-list)
+                 (push key dead-list)))
+             *nodes*)
+    (sort dead-list #'<)))
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
