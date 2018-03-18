@@ -6,16 +6,12 @@
 
 (in-package :gossip)
 
-#+CCL
-(setf ccl::*lock-free-hash-table-default* nil) ; this did not fix the Holy Shit problem below.
-; so it doesn't seem to be a problem with lock-free hash tables.
-
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
 ; TODO: Initiator node of message should wait longer than nodes farther away.
 (defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
-(defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
+(defparameter *hop-factor* 0.95 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 (defparameter *process-count* 0 "Just for simulation") ; NO LONGER NEEDED
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
@@ -247,15 +243,16 @@
   (clrhash *nodes*)
   (load pathname))
 
-(defun make-graph (numnodes)
+(defun make-graph (numnodes &optional (fraction 0.5))
+  "Build a graph with numnodes nodes. Strategy here is to first connect all the nodes in a single
+   non-cyclic linear path, then add f random edges, where f is a multiple of the number of nodes."
   (clrhash *nodes*)
   (make-nodes numnodes)
   (let ((nodelist (listify-nodes)))
     ; following guarantees a single connected graph
     (linear-path nodelist)
     ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
-    (add-random-connections nodelist  (truncate (length nodelist) 2))
-    ))
+    (add-random-connections nodelist  (round (* fraction (length nodelist))))))
 
 (defun solicit (node kind &rest args)
   "Send a solicitation to the network starting with given node. This is the primary interface to 
@@ -548,24 +545,18 @@
           (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
       ; clean up reply tables
       (ccl:with-lock-grabbed ((reply-table-lock thisnode))
-        (setf totalcount (gethash soluid (reply-data thisnode))))
-      (when (null totalcount) ; this is happening. Holy shit why????
-        (break "Totalcount is null at location 1!"))
-      (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+        (setf totalcount (gethash soluid (reply-data thisnode)))
         (remhash soluid (repliers-expected thisnode))
         (remhash soluid (reply-data thisnode)))
       ; must create a new reply here; cannot reuse an old one because its content has changed
       (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
-          (progn
-            (when (null totalcount)
-              (break "Totalcount is null at location 2!"))
             (let ((reply (make-reply :solicitation-uid soluid
                                      :kind :count-alive
                                      :args (list totalcount))))
               (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") totalcount)
               (send-msg reply
                         where-to-forward-reply
-                        (uid thisnode))))
+                        (uid thisnode)))
           ; if no place left to reply to, just log the result.
           ;   This can mean that thisnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
