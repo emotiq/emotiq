@@ -66,3 +66,25 @@ returning the list of accumulated results, one must do something else
 with them. By the time the results have been accumulated there is
 nobody waiting to receive them here. One possibility is to SEND the
 results to some other Actor.
+
+---------------------------------
+
+There is another alternative provide by the Actors package: PMAPCAR (=
+parallel mapcar). With this macro we can write our mapping example as:
+
+(=bind (lst)
+       (pmapcar (=lambda (val)
+			 (=values (computation val)))
+		operands)
+   (do-something-with-result lst))
+
+This form fires off a parallel collection of transient Actors, each of
+which evaluates one item from the operands list. Once all such Actors
+have finished, the outer =BIND is bound with a list of the results and
+its continuation is performed.
+
+Note the use of =LAMBDA in the function sent to PMAPCAR. The =VALUES
+inside that function refer, not to the outer =BIND, but to an internal
+one created by PMAPCAR. But the effect overall is to bind that outer
+=BIND to the entire list of results.
+
