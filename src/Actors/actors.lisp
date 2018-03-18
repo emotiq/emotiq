@@ -913,12 +913,41 @@ THE SOFTWARE.
         (=values nil)))
     ))
 
+(=defun pmapc (fn &rest lists)
+  ;;
+  ;; Parallel mapc - no returned value
+  ;; Use like PAR for indefinite number of parallel forms,
+  ;; each of which is the same function applied to different args.
+  ;;
+  ;; The function fn should be defined with =DEFUN or =LAMBDA, and
+  ;; return via =VALUES
+  ;;
+  ;; PMAPC is intended for use within an (=BIND () (PMAPC ... ) ...)
+  ;;  (see example below)
+  ;;
+  (let* ((grps   (trn lists))
+         (len    (length grps))
+         (count  (list len)))
+    (labels ((done (&rest ans)
+               (declare (ignore ans))
+               (when (zerop (mpcompat:atomic-decf (car (the cons count))))
+                 (=values))))
+      (if grps
+          (loop for grp in grps
+                do
+                (apply 'spawn fn #'done grp))
+        ;; else - empty lists, nothing to do
+        (=values)))
+    ))
+
+#|
 (defun as-list (seq)
   (coerce seq 'list))
 
 (=defun pmapc (fn &rest seqs)
   ;; >>> I don't think this is correct...
   (=apply '=pmapcar fn (mapcar 'as-list seqs)))
+|#
 
 (defun par-xform (pfn &rest clauses)
   ;; Internal transform function. Converts a list of clauses to a form
@@ -1046,11 +1075,12 @@ THE SOFTWARE.
   (pr which))
 |#
 
-;; SMAPCAR = sequential mapping where fn might require async Actor
-;; participation
+;; -------------------------------------------------------------
+;; SMAPCAR, SMAP = sequential mapping where fn might require async
+;; Actor participation
 
 (=defun smapcar (fn &rest lsts)
-  ;; fn must call =VALUES
+  ;; fn must be defined with =DEFUN or =LAMBDA, and return via =VALUES
   (labels ((mapper (lsts accum)
              (if (some 'endp lsts)
                  (=values (nreverse accum))
@@ -1063,7 +1093,7 @@ THE SOFTWARE.
     (mapper lsts nil)))
 
 (=defun smapc (fn &rest lsts)
-  ;; fn must call =VALUES
+  ;; fn must be defined with =DEFUN or =LAMBDA, and return via =VALUES
   (labels ((mapper (lsts)
              (if (some 'endp lsts)
                  (=values)

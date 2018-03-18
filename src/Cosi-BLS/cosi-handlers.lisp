@@ -493,9 +493,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                          ))
                       ))))
               (smapc fold-answer subs r-lst))
-          (locally
-            (declare (ignore x))
-            (send reply-to :signed seq-id sig bits)))
+          (send reply-to :signed seq-id sig bits))
         ))))
 
 ;; -----------------------------------------------------------
