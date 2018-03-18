@@ -1,0 +1,62 @@
+Imperative mapping is incompatible with asynchronous Actor calls. The
+presence of Actor calls inside the mapping function causes immediate
+pass-through with delayed results that are simply dropped. This
+article describes the general transform needed from imperative mapping
+to Actor-compatible forms.
+
+Consider the following idealized mapping operation. We have a list of
+operands that we want to map using some actor service which runs code
+for us. It won't work as written here:
+
+       (map (lambda (arg)
+	      (send actor-service (lambda ()
+				    (computation arg)))
+	   operands)
+
+A SEND to an Actor completes immediately and returns nothing of
+value. And later, when the Actor runs our code, the results of
+computation will just be dropped on the floor.
+
+So, to get back the result of the Actor computation, we need to recast
+the Actor call with =BIND and =VALUES as shown here:
+
+       (map (lambda (arg)
+	      (=bind (ans)
+		     (send actor-service (lambda ()
+					   (=values (computation arg))))
+		  ans))
+	    operands)
+
+But this still won't work properly because upon encountering the =BIND
+form, it still calls SEND, which just falls through immediately,
+producing no results. The result binding and delayed body of =BIND
+will happen later when the Actor peforms the =VALUES form.
+
+The solution to this quandry is to recast imperative mapping with the
+use of LABELS and recursion:
+
+       (labels ((mapper (opnds accum)
+		  ;; operands is out list of operands remaining to be mapped
+		  ;; accum is an accumulator of results
+		  (if (endp opnds)     ;; are we finished?
+		      (nreverse accum) ;; return list of results
+		    ;; else
+		      (let ((hd (car opnds))
+			    (tl (cdr opnds)))
+			(=bind (ans)
+			       (send actor-service (lambda ()
+						     (=values (computation hd))))
+			   (mapper tl (cons ans accum))) ;; recursive call
+			))))
+	 (mapper operands nil))
+
+Now, when the =BIND is performed, the code simply falls through. But
+when =VALUES finally makes the =BIND binding and runs the body
+continuation, we accumulate the computed result and make a recursive
+call to our LABELS mapper function on the remaining operands.
+
+Note that we must use LABELS and not FLET here, so that we can
+properly refer to our function via recursion. Because =BIND falls
+through immediately, we see that the code runs in constant stack
+space, despite being a recursive routine with indefinite extent.
+
