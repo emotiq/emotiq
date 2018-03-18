@@ -36,7 +36,7 @@ The solution to this quandry is to recast imperative mapping with the
 use of LABELS and recursion:
 
        (labels ((mapper (opnds accum)
-		  ;; operands is out list of operands remaining to be mapped
+		  ;; operands is our list of operands remaining to be mapped
 		  ;; accum is an accumulator of results
 		  (if (endp opnds)     ;; are we finished?
 		      (nreverse accum) ;; return list of results
@@ -60,3 +60,9 @@ properly refer to our function via recursion. Because =BIND falls
 through immediately, we see that the code runs in constant stack
 space, despite being a recursive routine with indefinite extent.
 
+But note that the initial call to mapper returns immediately with no
+useful results. So, in general, at the end of recursion, rather than
+returning the list of accumulated results, one must do something else
+with them. By the time the results have been accumulated there is
+nobody waiting to receive them here. One possibility is to SEND the
+results to some other Actor.
