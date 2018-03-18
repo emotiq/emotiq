@@ -6,10 +6,14 @@
 
 (in-package :gossip)
 
+#+CCL
+(setf ccl::*lock-free-hash-table-default* nil) ; this did not fix the Holy Shit problem below.
+; so it doesn't seem to be a problem with lock-free hash tables.
+
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
 ; TODO: Initiator node of message should wait longer than nodes farther away.
-(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 (defparameter *process-count* 0 "Just for simulation") ; NO LONGER NEEDED
@@ -99,6 +103,9 @@
                   :documentation "Cache of seen messages. Table mapping UID of message to UID of sender.
                   Used to ensure identical messages are not acted on twice, and to determine where
                   replies to a message should be sent.")
+   (reply-table-lock :initarg :reply-table-lock :initform (ccl:make-lock) :accessor reply-table-lock
+                     :documentation "Lock for repliers-expected and reply-data. Changes to those must be
+                     atomic to avoid a race condition in the simulator.")
    (repliers-expected :initarg :repliers-expected :initform (make-hash-table :test 'equal)
                       :accessor repliers-expected
                       :documentation "Hash-table mapping a solicitation id to a list of node UIDs
@@ -363,8 +370,8 @@
     (call-next-method)))
 
 (defmethod accept-msg? ((msg message-mixin) (thisnode gossip-node) srcuid)
-  "Returns kindsym if this message should be accepted by this node, where
-   kindsym is the name of the gossip method that should be called to handle this message.
+  "Returns kindsym if this message should be accepted by this node, nil otherwise.
+   Kindsym is the name of the gossip method that should be called to handle this message.
    Doesn't change anything in message or node."
   (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
          (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
@@ -392,7 +399,8 @@
   (let ((kindsym (call-next-method))) ; the one on message-mixin
     ; Also ensure this reply is actually expected
     (cond ((and kindsym
-               (member srcuid (gethash (solicitation-uid msg) (repliers-expected thisnode))))
+                (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+                  (member srcuid (gethash (solicitation-uid msg) (repliers-expected thisnode)))))
            kindsym)
           (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
              nil))))
@@ -404,8 +412,6 @@
   (unless kindsym
     (setf kindsym (accept-msg? sol thisnode srcuid)))
   (when kindsym
-  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-    (setf (gethash (uid sol) (message-cache thisnode)) (or srcuid t)) ; solicitations from outside might not have a srcid
     (maybe-log thisnode :accepted sol (kind sol) :from (briefname srcuid "node") (args sol))
     (funcall kindsym sol thisnode srcuid)))
 
@@ -436,13 +442,12 @@
 ;       or srcuid is not on the list. That means we've given up waiting. Handle that here
 ;       rather than in specific gossip methods.
 ;       Provide a specific :IGNORE log message for this case.
+;       DONE! In "accept-msg?" on reply objects.
 (defmethod locally-receive-msg ((msg reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
   (unless kindsym
     (setf kindsym (accept-msg? msg thisnode srcuid)))
   (when kindsym
-    ; Remember the srcuid that sent me this message, not that we really need it for incoming replies
-    (setf (gethash (uid msg) (message-cache thisnode)) (or srcuid t)) ; replies should ALWAYS have a srcid, but belt & suspenders
     (maybe-log thisnode :reply-accepted msg (kind msg) :from (briefname srcuid "node") (args msg))
     (funcall kindsym msg thisnode srcuid)))
 
@@ -528,8 +533,9 @@
   (let ((soluid (uid msg))
         (repliers-expected (remove srcuid (neighbors thisnode))))
     ; prepare reply tables
-    (setf (gethash soluid (reply-data thisnode)) 1)
-    (setf (gethash soluid (repliers-expected thisnode)) repliers-expected)
+    (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+      (setf (gethash soluid (reply-data thisnode)) 1) ; thisnode itself is 1 live node
+      (setf (gethash soluid (repliers-expected thisnode)) repliers-expected))
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
     (maybe-log thisnode :WAITING msg repliers-expected)
@@ -538,20 +544,28 @@
                                    (lambda ()
                                      (null (gethash soluid (repliers-expected thisnode)))))
     (maybe-log thisnode :DONE-WAITING msg)
-    (let ((totalcount (gethash soluid (reply-data thisnode)))
+    (let ((totalcount nil)
           (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
       ; clean up reply tables
-      (remhash soluid (reply-data thisnode))
-      (remhash soluid (repliers-expected thisnode))
+      (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+        (setf totalcount (gethash soluid (reply-data thisnode))))
+      (when (null totalcount) ; this is happening. Holy shit why????
+        (break "Totalcount is null at location 1!"))
+      (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+        (remhash soluid (repliers-expected thisnode))
+        (remhash soluid (reply-data thisnode)))
       ; must create a new reply here; cannot reuse an old one because its content has changed
       (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
-          (let ((reply (make-reply :solicitation-uid soluid
-                                   :kind :count-alive
-                                   :args (list totalcount))))
-            (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") totalcount)
-            (send-msg reply
-                      where-to-forward-reply
-                      (uid thisnode)))
+          (progn
+            (when (null totalcount)
+              (break "Totalcount is null at location 2!"))
+            (let ((reply (make-reply :solicitation-uid soluid
+                                     :kind :count-alive
+                                     :args (list totalcount))))
+              (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") totalcount)
+              (send-msg reply
+                        where-to-forward-reply
+                        (uid thisnode))))
           ; if no place left to reply to, just log the result.
           ;   This can mean that thisnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
@@ -563,12 +577,13 @@
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
     (let ((numalive (first (args rep))))
-      (incf (gethash soluid (reply-data thisnode)) numalive))
-    ; Now remove this srcuid from expected-replies list. (We know it's on
-    ;  the list because this method would never have been called otherwise.)
-    (let ((nodes-expected-to-reply (gethash soluid (repliers-expected thisnode))))
-      (setf (gethash soluid (repliers-expected thisnode))
-            (delete srcuid nodes-expected-to-reply)))))
+      (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+        (incf (gethash soluid (reply-data thisnode)) numalive))
+      ; Now remove this srcuid from expected-replies list. (We know it's on
+      ;  the list because this method would never have been called otherwise.)
+      (let ((nodes-expected-to-reply (gethash soluid (repliers-expected thisnode))))
+        (setf (gethash soluid (repliers-expected thisnode))
+              (delete srcuid nodes-expected-to-reply))))))
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
@@ -619,11 +634,13 @@
   (setf msg (copy-message msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount msg))
-  (let ((kindsym (accept-msg? msg node srcuid)))
+  (let ((kindsym (accept-msg? msg node srcuid))) ; check this here only in simulator
     (when kindsym ; ignore the message here and now if it's ignorable, without creating a new thread
       (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
         (pprint (ccl::all-processes) t)
         (break "In deliver-msg"))
+      ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
+      (setf (gethash (uid msg) (message-cache node)) (or srcuid t)) ; solicitations from outside might not have a srcid
       (my-prf (lambda () (locally-receive-msg msg node srcuid kindsym)) :name (format nil "Node ~D" (uid node))))))
 
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
