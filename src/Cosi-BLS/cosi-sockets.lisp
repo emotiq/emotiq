@@ -310,7 +310,7 @@ THE SOFTWARE.
   ;; Server side
   
   (defun #1=udp-cosi-server-process-request (async-io-state string bytes-num ip-address port-num)
-    (declare (ignore ip-address port-num))
+    (declare (ignore bytes-num ip-address port-num))
     (let ((status (comm:async-io-state-read-status async-io-state)))
       (when status ;; something went wrong
         (pr (format nil "UDP example server: got error ~s, restarting" status))

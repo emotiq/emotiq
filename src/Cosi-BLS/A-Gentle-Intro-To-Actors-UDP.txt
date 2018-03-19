@@ -43,6 +43,8 @@ the single-thread context of the calling Actor.
 Inside that body code, the BLS signed msg item is serialized for port
 transmission by calling LOENC:ENCODE.
 
+--------------------------------------
+
 Now for the other side of the communications - assume the existence of
 a thread continuously monitoring its socket port. When a packet
 arrives, it simply calls PORT-ROUTER with the packet bytes, and
