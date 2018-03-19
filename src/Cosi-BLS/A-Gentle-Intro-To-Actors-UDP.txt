@@ -71,9 +71,9 @@ The code that the port router handler actually runs is here:
     ;; packet
     (ignore-errors
       ;; might not be a properly destructurable packet
-      (destructuring-bind (dest msg-verb &rest msg-args) packet
+      (destructuring-bind (dest &rest msg) packet
         (let ((true-dest (dest-ip dest)))
-          (apply 'send true-dest msg-verb msg-args)))
+          (apply 'send true-dest msg)))
       )))
     
 The comments are pretty self explanatory, now that you undertand the
@@ -82,13 +82,13 @@ VERIFY-HMAC. It is wrapped inside an =BIND clause because we need to
 call PBC Crypto again. Here is the code for VERIFY-HMAC:
 
 (=defun verify-hmac (packet)
-  ;; might not be a valid encoding
   (let ((decoded (ignore-errors
+       		   ;; might not be a valid encoding
                    (loenc:decode packet))))
     (when decoded
       (pbc:with-crypto ()
-        ;; might not be a pbc:signed-message
         (when (ignore-errors
+	        ;; might not be a pbc:signed-message
                 (pbc:check-message decoded))
           ;; return the contained message
           (=values (pbc:signed-message-msg decoded)))))

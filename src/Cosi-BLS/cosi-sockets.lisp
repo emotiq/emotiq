@@ -132,13 +132,13 @@ THE SOFTWARE.
     
 
 (=defun verify-hmac (packet)
-  ;; might not be a valid encoding
   (let ((decoded (ignore-errors
+                   ;; might not be a valid encoding
                    (loenc:decode packet))))
     (when decoded
       (pbc:with-crypto ()
-        ;; might not be a pbc:signed-message
         (when (ignore-errors
+                ;; might not be a pbc:signed-message
                 (pbc:check-message decoded))
           ;; return the contained message
           (=values (pbc:signed-message-msg decoded)))))
@@ -162,13 +162,13 @@ THE SOFTWARE.
     ;; packet
     (ignore-errors
       ;; might not be a properly destructurable packet
-      (destructuring-bind (dest msg-verb &rest msg-args) packet
+      (destructuring-bind (dest &rest msg) packet
         (let ((true-dest (dest-ip dest)))
           ;; for debug... -------------------
           (when (eq true-dest (node-self *my-node*))
-            (pr (format nil "forwarding-to-me: ~A" (cons msg-verb msg-args))))
+            (pr (format nil "forwarding-to-me: ~A" msg)))
           ;; ------------------
-          (apply 'send true-dest msg-verb msg-args)))
+          (apply 'send true-dest msg)))
       )))
     
 (defun port-router (buf)
@@ -252,7 +252,10 @@ THE SOFTWARE.
               (when (eql :SHUTDOWN-SERVER *shutting-down*)
                 (setf *shutting-down* nil)
                 (return-from #1#))
-              (port-router buf)))
+              (let ((saf-buf  (if (eq buf maxbuf)
+                                  (subseq buf 0 buf-len)
+                                buf)))
+                (port-router saf-buf))))
         ;; unwinding
         (usocket:socket-close socket)
         ;; (pr :server-stopped)
@@ -307,7 +310,7 @@ THE SOFTWARE.
   ;; Server side
   
   (defun #1=udp-cosi-server-process-request (async-io-state string bytes-num ip-address port-num)
-    (declare (ignore bytes-num ip-address port-num))
+    (declare (ignore ip-address port-num))
     (let ((status (comm:async-io-state-read-status async-io-state)))
       (when status ;; something went wrong
         (pr (format nil "UDP example server: got error ~s, restarting" status))

@@ -99,7 +99,7 @@ first section of this article.
 ---------------------------------
 
 Finally, as a late addition to the Actors package, I decided to add
-that serialized mapping transformation as an Actor primitive, called
+the serialized mapping transformation as an Actor primitive, called
 SMAPCAR (= sequential mapcar). It is to be used within an outer =BIND
 form.
 
@@ -113,3 +113,6 @@ transform in the first section of this article.
             (smapcar 'computation operands)
          (do-something-with-result lst))
 
+But unlike a normal MAPCAR, the function 'computation must be defined
+using either =DEFUN or =LAMBDA, and it must contain a return via
+=VALUES.

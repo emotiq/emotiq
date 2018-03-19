@@ -1077,7 +1077,8 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------
 ;; SMAPCAR, SMAP = sequential mapping where fn might require async
-;; Actor participation
+;; Actor participation. No spawning of transient Actors is used here.
+;; But fn might.
 
 (=defun smapcar (fn &rest lsts)
   ;; fn must be defined with =DEFUN or =LAMBDA, and return via =VALUES

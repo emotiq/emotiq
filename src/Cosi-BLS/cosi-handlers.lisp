@@ -470,7 +470,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
       (=bind (r-lst)
           (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
         (=bind ()
-            (let ((fold-answer
+            (let ((=fold-answer
                    (=lambda (sub resp)
                      (cond
                       ((null resp)
@@ -492,7 +492,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                            (=values))
                          ))
                       ))))
-              (smapc fold-answer subs r-lst))
+              (smapc =fold-answer subs r-lst))
           (send reply-to :signed seq-id sig bits))
         ))))
 
