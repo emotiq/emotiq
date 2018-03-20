@@ -22,11 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
-#include <strings.h>
-#include <stdlib.h>
-#include <memory.h>
-
-#include <pbc/pbc.h>
+#include "pbc_intf.h"
 
 // ---------------------------------------------------
 // for initial interface testing...

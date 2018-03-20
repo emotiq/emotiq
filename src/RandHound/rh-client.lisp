@@ -103,7 +103,7 @@ THE SOFTWARE.
 ;;
 ;;    f_i(x) = Sum(x^j * a_ij, j = 0..t-1)
 ;;
-;;   a_ij = Rnd(i|j)
+;;    a_ij = Rnd(i|j)
 ;;
 ;; Node's secret value will be a_i0.
 ;;
