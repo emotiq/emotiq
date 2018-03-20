@@ -9,9 +9,9 @@
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
 ; TODO: Initiator node of message should wait longer than nodes farther away.
-(defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
-(defparameter *hop-factor* 0.95 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
+(defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 (defparameter *process-count* 0 "Just for simulation") ; NO LONGER NEEDED
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
@@ -648,7 +648,7 @@
           ; Process messages as fast as possible.
           (apply 'dispatch-msg nextmsg)
           ; But if no messages to process, wait a bit.
-          ;(sleep .1) ; don't sleep. Slows down overall response and causes missed replies.
+          (sleep .05) ; this dramatically decreases CPU time taken up by Lisp
           ))))
 
 (defun stop-gossip-sim ()
