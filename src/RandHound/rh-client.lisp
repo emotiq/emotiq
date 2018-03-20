@@ -84,3 +84,64 @@ THE SOFTWARE.
         (broadcast-message init-msg vnodes)))
     ))
 
+;; --------------------------------------------------------------------
+;; Try out Secret Sharing with Pairing-based Crypto
+;;
+;; G1 = Generator for group G1
+;; G2 = Generator for group G2
+;; Zr = Generator for field Zr
+;; P_i = public key for node i
+;; s_i = secret key for node i; P_i = s_i * G
+;; e(A, B) = pairing between A in G1, B in G2;
+;;       => e(s_i*H(P_i), G) = e(H(P_i), s_i*G) = e(H(P_i),P_i)
+;; H(x) = hash of x impressed on field
+;; Rnd(x) = random value with seed x
+;; n = nbr nodes
+;; t = threshold for secret sharing
+;;
+;; Each node i computes a random polynomial f_i(x) of degree t-1 with coeffs a_ij:
+;;
+;;    f_i(x) = Sum(x^j * a_ij, j = 0..t-1)
+;;
+;;   a_ij = Rnd(i|j)
+;;
+;; Node's secret value will be a_i0.
+;;
+;; Publish commitments C_ij = a_ij * G1, j = 0..t-1, all in G1
+;; Publish encrypted shares S_ik = f_i(k) * P_k, k = 1..n, all in G2
+;;  (can we use H(P_k) -> Zr for k? lets us assoc responses with P_k)
+;; Publish = broadcast to all n nodes: t+n-1 values, t from G1, n-1 from G2
+;;
+;; Accumlate packets from nodes during timeout period. At end we have
+;; m <= n-1 responses, exluding our own. Assert that m >= f for BFT f, else give up.
+;; Record which nodes responded, for further broadcast.
+;;
+;; Verify commitments and shares at node k:
+;;
+;;   C_i = Sum(k^j * C_ij, j = 0..t-1)
+;;       = Sum(k^j * a_ij, j = 0..t-1)*G1
+;;       = f_i(k)*G1
+;;  Check:
+;;       e(C_i,P_k) = e(G1,S_ik)
+;;
+;; Compute still-encrypted share:
+;;
+;;  Y_ik = 1/s_k * S_ik = 1/s_k*f_i(k)*P_k = 1/s_k*f_i(k)*s_k*G2 = f_i(k)*G2
+;;
+;; Broadcast still-encrypted shares Y_ik to all other m nodes, i in {m}:
+;;
+;; Receive at least t-1 other still-encrypted shares Y_ij, for total of t shares
+;;
+;; Solve for S_i0 with Lagrange interpolation. For each node (incl our
+;; own) for which we have >= t responses, label them as j = 1..p:
+;;
+;;  S_j = Sum(Y_jk, k = 1..p), j = 1..t
+;;
+;; this adds the individual polynomials together.
+;;
+;;  S_0 = Sum(S_j * lam_j, j = 1..t) where lam_j is Lagrange coeff Prod(j/(j-i), j /= i, j = 1..t)
+;;
+;; But this is still a G2 value. We could use it straight away, in
+;; compressed form, or else hash it, as the shared secret value.
+;;
+;;
