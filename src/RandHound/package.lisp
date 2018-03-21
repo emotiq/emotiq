@@ -28,7 +28,9 @@ THE SOFTWARE.
 
 (defpackage :randhound/common
   (:use :common-lisp
-   :core-crypto)
+   :core-crypto
+   :pbc
+   :vec-repr)
   (:import-from :cosi-keying
    :need-integer-form
    :published-form
@@ -57,7 +59,9 @@ THE SOFTWARE.
 (defpackage :randhound/client
   (:use :common-lisp
         :core-crypto
-        :randhound/common)
+        :randhound/common
+        :pbc
+        :vec-repr)
   (:export
    ))
 

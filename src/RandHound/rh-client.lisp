@@ -91,7 +91,7 @@ THE SOFTWARE.
 ;; G2 = Generator for group G2
 ;; Zr = Generator for field Zr
 ;; P_i = public key for node i
-;; s_i = secret key for node i; P_i = s_i * G
+;; p_i = secret key for node i; P_i = p_i * G
 ;; e(A, B) = pairing between A in G1, B in G2;
 ;;       => e(s_i*H(P_i), G) = e(H(P_i), s_i*G) = e(H(P_i),P_i)
 ;; H(x) = hash of x impressed on field
@@ -106,9 +106,26 @@ THE SOFTWARE.
 ;;    a_ij = Rnd(i|j)
 ;;
 ;; Node's secret value will be a_i0.
+;; --------------------------------------------------------------------------
 ;;
-;; Publish commitments C_ij = a_ij * G1, j = 0..t-1, all in G1
-;; Publish encrypted shares S_ik = f_i(k) * P_k, k = 1..n, all in G2
+;;              == The "Chinese" Algorithm ==
+;;
+;;  c.f, "Publicly Verifiable Secret Sharing Schemes Using Bilinear
+;;  Pairings", by Tian, Peng, and Ma, International Journal of Network
+;;  Security, Vol 14, No. 3, pp 142-148, May 2012
+;;
+;; The paper suffers from translation to English, and the math
+;; nomenclature is inconsistent, as well as in error in one place. I
+;; attempt to rederive the notions below:
+
+;; Publish commitments
+;;
+;;              C_ij = a_ij * G1, j = 0..t-1, all in G1
+;;
+;; Publish encrypted shares
+;;
+;;              S_ik = f_i(k) * P_k, k = 1..n, all in G2
+;;
 ;;  (can we use H(P_k) -> Zr for k? lets us assoc responses with P_k)
 ;; Publish = broadcast to all n nodes: t+n-1 values, t from G1, n-1 from G2
 ;;
@@ -118,17 +135,18 @@ THE SOFTWARE.
 ;;
 ;; Verify commitments and shares at node k:
 ;;
-;;   C_i = Sum(k^j * C_ij, j = 0..t-1)
-;;       = Sum(k^j * a_ij, j = 0..t-1)*G1
-;;       = f_i(k)*G1
+;;   CS_ik = Sum(k^j * C_ij, j = 0..t-1)
+;;         = Sum(k^j * a_ij, j = 0..t-1)*G1
+;;         = f_i(k)*G1
 ;;  Check:
-;;       e(C_i,P_k) = e(G1,S_ik)
+;;       e(CS_ik,P_k) = e(G1,S_ik)
 ;;
 ;; Compute still-encrypted share:
 ;;
-;;  Y_ik = 1/s_k * S_ik = 1/s_k*f_i(k)*P_k = 1/s_k*f_i(k)*s_k*G2 = f_i(k)*G2
+;;  Y_ik = 1/p_k * S_ik = 1/p_k*f_i(k)*P_k = 1/p_k*f_i(k)*p_k*G2 = f_i(k)*G2
 ;;
-;; Broadcast still-encrypted shares Y_ik to all other m nodes, i in {m}:
+;; Broadcast still-encrypted shares Y_ik and proof CS_ik, to all other
+;; m nodes, i in {m}.  Proof of Y_ik is e(CS_ik,G2) = e(G1,Y_ik)
 ;;
 ;; Receive at least t-1 other still-encrypted shares Y_ij, for total of t shares
 ;;
@@ -145,3 +163,210 @@ THE SOFTWARE.
 ;; compressed form, or else hash it, as the shared secret value.
 ;;
 ;;
+;; ---------------------------------------------------------------------------------------
+#| ---------------------------------------------------------------------------------------
+
+         ==  Reed-Solomon Code Interpretation of Shamir Sharing ==
+
+   c.f., "SCRAPE: Scalable Randomness Attested by Public Entities", by Cascudo and David
+
+Alternative is to treat list of shares S_ik as code word of Reed-Solomon [n,k,n-k+1].
+Instead of publishing proofs on coeffs of polynomial, we publish proofs on the shares S_ik,
+and validate by checking for orthogonality in the dual space of the RS Code.
+
+Consider just one node for now:
+
+Pick a random polynomial f(x) of degree t-1 with coeffs a_i. We must
+use t = sharing threshold = f + 1 for BFT. Number of nodes n = 3*f + 1.
+
+  f(x) = Sum(x^i * a_i, i = 0 .. t-1), where a_0 = secret value
+
+and
+
+  a_i = Rnd(i)
+
+Let                   x_j = H(P_j) in Zr
+Form the shares       s_j = f(x_j) in Zr,
+Form encrypted shares S_j = s_j * P_j, all in G2, j = 1..n
+Form the proofs       V_j = s_j * G1, all in G1, j = 1..n
+Publish shares and proofs to all nodes 1..n
+
+Each node checks share validity by noting that e(V_j,P_j) = e(G1,S_j), j = 1..n
+Check that shares form valid RS-Code by computing a random polynomial in the dual space:
+
+    g(x) = Sum(x^i * b_i, i = 0..m <= n-t-1)
+
+and
+    b_i = Rnd(i) in Zr
+
+Let  x_j = H(P_j) in Zr, same x_j as used in forming shares,
+then form dual vector:
+
+    c_j = d_j * g(x_j), j = 1..n, in Zr
+
+where
+
+    d_j = Prod(1/(j-i),  i /= j, i = 1..n), in Zr
+
+Then show that Sum(c_j * V_j, j = 1..n) = I. This validates the entire
+set {S_j} of shares as a valid RS-Code.
+
+Now decrypt your node k share:
+
+   SD_k = 1/p_k*S_k = 1/p_k*s_k*P_k = 1/p_k*s_k*p_k*G2 = s_k*G2, in G2
+
+Publish decrypted share SD_k. Proof of SD_k is e(V_k,G2) = e(G1,SD_k),
+V_k already public.
+
+Anyone who sees #SD_k >= t = f+1 can use Lagrange interpolation to
+derive final secret S = a_0 * G2.
+
+   S = Sum(lam_j * SD_j, j = 1..m >= t), in G2
+
+where
+
+   lam_j = Prod(j/(j-i), i = 1..m, i /= j), in Zr
+
+
+Here we choose degree of sharing polynomial f(x) as t-1, making a
+[n,t,n-t+1] RS code from (S1,S2,...,Sn). The dual space polynomial
+g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
+
+[n,m,l] := [length, dimension, distance]
+
+|#
+;; ---------------------------------------------------------------------------
+#|
+       In the end... The "Chinese" algorithm requires the publication of T + N values,
+       corresponding to the N Shares and T Proofs of the sharing polynomial coefficients. (T << N)
+
+       The Reed-Solomon requires publication of 2N values corrsponding to N Shares and N Proofs of Shares.
+
+       So opt for the "Chinese" algorithm. Call it TPM for the authors initials.
+
+|#
+;; ---------------------------------------------------------------------------
+
+;; Single-thread testing...
+(defun gen-randomness ()
+  (let* ((f     3)            ;; number of potential Byzantine failures
+         (n     (1+ (* 3 f))) ;; number of nodes = 3*f+1
+         (kord  f)            ;; order of sharing polynomial = f, sharing threshold = k+1 = f+1
+         (q     (pbc:get-order))
+         (coffs (loop repeat (1+ kord) collect
+                      (random-between 1 q)))
+         (key-pairs (loop for ix from 1 to n collect (make-key-pair ix)))
+         (pkeys     (mapcar 'keying-triple-pkey key-pairs))
+         (xvals     (mapcar (lambda (pkey)
+                              (mod (int pkey) q))
+                            pkeys))
+         (poly      (lambda (x)
+                      (with-mod q
+                        (um:nlet-tail iter ((coffs coffs)
+                                            (ans   0))
+                          (if (endp coffs)
+                              ans
+                            (iter (cdr coffs)
+                                  (m+ (car coffs)
+                                      (m* x ans)))
+                            )))))
+         (shares       (mapcar poly xvals))
+         (encr-shares  (mapcar (lambda (pkey share)
+                                 (expt-pt-zr pkey (make-instance 'zr
+                                                                 :val share)))
+                               pkeys shares))
+         (coff-proofs  (mapcar (let ((g1 (get-g1)))
+                                 (lambda (coff)
+                                   (expt-pt-zr g1 (make-instance 'zr
+                                                                 :val coff))))
+                               coffs)))
+    (list coff-proofs encr-shares key-pairs)))
+
+(defun validate-randomness (lst)
+  (destructuring-bind (proofs shares keys) lst
+    (let* ((pkeys (mapcar 'keying-triple-pkey keys))
+           (skeys (mapcar 'keying-triple-skey keys))
+           (q     (get-order))
+           (xvals (mapcar (lambda (pkey)
+                            (mod (int pkey) q))
+                          pkeys))
+           (poly  (lambda (x)
+                    (let ((xz (make-instance 'zr
+                                             :val x)))
+                      (um:nlet-tail iter ((pts proofs)
+                                          (ans nil))
+                        (if (endp pts)
+                            ans
+                          (iter (cdr pts)
+                                (if ans
+                                    (mul-pts (car pts)
+                                             (expt-pt-zr ans xz))
+                                  (car pts)))
+                          )))))
+           (ver-proofs (mapcar poly xvals)))
+      (assert (every (let ((g1  (get-g1)))
+                       (lambda (ver pkey share)
+                         (let ((p1  (compute-pairing ver pkey))
+                               (p2  (compute-pairing g1  share)))
+                           (= (int p1) (int p2)))))
+                     ver-proofs pkeys shares))
+      (list lst
+            ver-proofs
+            (mapcar (lambda (skey share)
+                      (expt-pt-zr share (inv-zr (make-instance 'zr
+                                                               :val skey))))
+                    skeys shares))
+      )))
+
+(defun grand-randomness (lst)
+  (destructuring-bind ((proofs encr-shares keys) ver-proofs shares) lst
+    (declare (ignore proofs encr-shares))
+    (assert (every (let ((g1 (get-g1))
+                         (g2 (get-g2)))
+                     (lambda (ver-proof share)
+                       (let ((p1 (compute-pairing ver-proof g2))
+                             (p2 (compute-pairing g1        share)))
+                         (= (int p1) (int p2)))))
+                   ver-proofs shares))
+    (let* ((pkeys (mapcar 'keying-triple-pkey keys))
+           (q     (get-order))
+           (xvals (mapcar (lambda (pkey)
+                            (mod (int pkey) q))
+                          pkeys)))
+      (labels ((lagrange (x)
+                 (with-mod q
+                   (m/ x
+                       (um:nlet-tail iter ((xs xvals)
+                                           (prod 1))
+                         (if (endp xs)
+                             prod
+                           (iter (cdr xs)
+                                 (let ((diff (m- x (car xs))))
+                                   (if (zerop diff)
+                                       prod
+                                     (m* prod diff))))
+                           ))))))
+        (um:nlet-tail iter ((shares  shares)
+                            (xs      xvals)
+                            (ans     nil))
+          (if (endp shares)
+              ans
+            (iter (cdr shares) (cdr xs)
+                  (let ((pt (expt-pt-zr (car shares) (make-instance 'zr
+                                                                    :val (lagrange (car xs))))))
+                    (if ans
+                        (mul-pts ans pt)
+                      pt)))
+            ))))))
+                
+(let* ((nodes  '( 10   19   37    73   145   289   577  1153))
+       (times  '(1.7  3.3  6.5  13.8  31.9  80.0   223  722)))
+  (plt:plot 'plt nodes times
+            :clear t
+            :title "Randomness Generation vs Nbr Participants"
+            :xtitle "Nbr Participant Nodes"
+            :ytitle "Elapsed Time [sec]"
+            :symbol :circle
+            :plot-joined t
+            :xlog   t
+            :ylog   t))

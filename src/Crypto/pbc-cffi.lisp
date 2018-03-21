@@ -57,12 +57,18 @@ THE SOFTWARE.
    
    :init-pairing
    :set-generator  ;; 1 each for G1, and G2 groups
+   :set-public-key
+   :set-secret-key
+   
+   :get-g1
+   :get-g2
+   :get-signature
+   :get-public-key
+   :get-secret-key
+   :get-order
    
    :make-key-pair
    :check-public-key
-
-   :set-secret-key
-   :set-public-key
 
    :make-public-subkey
    :make-secret-subkey
@@ -75,7 +81,8 @@ THE SOFTWARE.
 
    :with-crypto
    :ask-crypto
-   
+
+   :compute-pairing
    :mul-pts  ;; bent nomenclature for ECC
    :add-zrs
    :inv-zr
@@ -90,6 +97,13 @@ THE SOFTWARE.
    :signed-message-msg
    :signed-message-sig
    :signed-message-pkey
+
+   :crypto-packet
+   :crypto-packet-pkey
+   :crypto-packet-id
+   :crypto-packet-tstamp
+   :crypto-packet-rval
+   :crypto-packet-cmsg
    ))
 
 (in-package :pbc-interface)
@@ -277,7 +291,7 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
   (z     :pointer :unsigned-char))
 
-(cffi:defcfun ("exp_G1z" _exp_G1z) :void
+(cffi:defcfun ("exp_G1z" _exp-G1z) :void
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
