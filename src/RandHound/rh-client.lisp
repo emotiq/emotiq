@@ -271,15 +271,8 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                                       (m* x ans)))
                             )))))
          (shares       (mapcar poly xvals))
-         (encr-shares  (mapcar (lambda (pkey share)
-                                 (expt-pt-zr pkey (make-instance 'zr
-                                                                 :val share)))
-                               pkeys shares))
-         (coff-proofs  (mapcar (let ((g1 (get-g1)))
-                                 (lambda (coff)
-                                   (expt-pt-zr g1 (make-instance 'zr
-                                                                 :val coff))))
-                               coffs)))
+         (encr-shares  (mapcar 'expt-pt-zr pkeys shares))
+         (coff-proofs  (mapcar (um:curry 'expt-pt-zr (get-g1)) coffs)))
     (list coff-proofs encr-shares key-pairs)))
 
 (defun validate-randomness (lst)
@@ -313,12 +306,164 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
       (list lst
             ver-proofs
             (mapcar (lambda (skey share)
-                      (expt-pt-zr share (inv-zr (make-instance 'zr
-                                                               :val skey))))
+                      (expt-pt-zr share (inv-zr skey)))
                     skeys shares))
       )))
 
-(defun grand-randomness (lst)
+(defun collect-randomness (lst)
+  (destructuring-bind ((proofs encr-shares keys) ver-proofs shares) lst
+    (declare (ignore proofs encr-shares))
+    (assert (every (let ((g1 (get-g1))
+                         (g2 (get-g2)))
+                     (lambda (ver-proof share)
+                       (let ((p1 (compute-pairing ver-proof g2))
+                             (p2 (compute-pairing g1        share)))
+                         (= (int p1) (int p2)))))
+                   ver-proofs shares))
+    (let* ((pkeys (mapcar 'keying-triple-pkey keys))
+           (q     (get-order))
+           (xvals (mapcar (lambda (pkey)
+                            (mod (int pkey) q))
+                          pkeys)))
+      (labels ((lagrange (x)
+                 (with-mod q
+                   (m/ x
+                       (um:nlet-tail iter ((xs xvals)
+                                           (prod 1))
+                         (if (endp xs)
+                             prod
+                           (iter (cdr xs)
+                                 (let ((diff (m- x (car xs))))
+                                   (if (zerop diff)
+                                       prod
+                                     (m* prod diff))))
+                           ))))))
+        (um:nlet-tail iter ((shares  shares)
+                            (xs      xvals)
+                            (ans     nil))
+          (if (endp shares)
+              ans
+            (iter (cdr shares) (cdr xs)
+                  (let ((pt (expt-pt-zr (car shares) (lagrange (car xs)))))
+                    (if ans
+                        (mul-pts ans pt)
+                      pt)))
+            ))))))
+
+#|
+(let* ((nodes  '( 10   19   37  )) ;;   73   145   289   577  1153))
+       (times  '(1.7  3.3  6.5  ))) ;; 13.8  31.9  80.0   223  722)))
+  (plt:plot 'plt nodes times
+            :clear t
+            :title "Randomness Generation vs Nbr Participants"
+            :xtitle "Nbr Participant Nodes"
+            :ytitle "Elapsed Time [sec]"
+            :symbol :circle
+            :plot-joined t
+            :xlog   nil
+            :ylog   nil))
+|#
+
+;; ---------------------------------------------------------------------
+;; Reed-Solomon Variant
+
+;; Single-thread testing...
+(defun gen-randomness-rs ()
+  (let* ((f     6)            ;; number of potential Byzantine failures
+         (n     (1+ (* 3 f))) ;; number of nodes = 3*f+1
+         (kord  f)            ;; order of sharing polynomial = f, sharing threshold = k+1 = f+1
+         (q     (pbc:get-order))
+         (coffs (loop repeat (1+ kord) collect
+                      (random-between 1 q)))
+         (key-pairs (loop for ix from 1 to n collect (make-key-pair ix)))
+         (pkeys     (mapcar 'keying-triple-pkey key-pairs))
+         (xvals     (um:range 1 (1+ n)))
+         (poly      (lambda (x)
+                      (with-mod q
+                        (um:nlet-tail iter ((coffs coffs)
+                                            (ans   0))
+                          (if (endp coffs)
+                              ans
+                            (iter (cdr coffs)
+                                  (m+ (car coffs)
+                                      (m* x ans)))
+                            )))))
+         (shares       (mapcar poly xvals))
+         (encr-shares  (mapcar 'expt-pt-zr pkeys shares))
+         (share-proofs (mapcar (um:curry 'expt-pt-zr (get-g1)) shares)))
+    (list kord share-proofs encr-shares key-pairs shares)))
+
+(defun validate-randomness-rs (lst)
+  ;; the algorithm presented in the SCRAPE paper for computing the
+  ;; dual vector is incorrect. This code does not work...
+  (destructuring-bind (k proofs encr-shares keys shares) lst
+    (let* ((pkeys (mapcar 'keying-triple-pkey keys)))
+      (assert (every (let ((g1 (get-g1)))
+                       (lambda (proof pkey share)
+                         (let ((p1 (compute-pairing proof pkey))
+                               (p2 (compute-pairing g1    share)))
+                           (= (int p1) (int p2)))))
+                     proofs pkeys encr-shares))
+      (let* ((skeys (mapcar 'keying-triple-skey keys))
+             (q     (get-order))
+             (n     (length pkeys))
+             (kord  (- n k 1))
+             (xvals (um:range 1 (1+ n)))
+             (coffs (loop repeat (1+ kord) collect
+                          (random-between 1 q)))
+             (invprod (lambda (x)
+                        (let ((prod 1))
+                          (loop for xi in xvals do
+                                (unless (= x xi)
+                                  (setf prod (m/ prod (m- x xi)))))
+                          prod)))
+             (poly  (lambda (x)
+                      (with-mod q
+                        (m*
+                         (um:nlet-tail iter ((coffs coffs)
+                                             (ans   0))
+                           (if (endp coffs)
+                               ans
+                             (iter (cdr coffs)
+                                   (m+ (car coffs)
+                                       (m* x ans)))
+                            ))
+                         ;; (m^ x (1+ k)) ;;
+                         (funcall invprod x)
+                         ))))
+             (cvals  (mapcar poly xvals))
+             (chk    (let ((pt  nil))
+                       (loop for p in proofs
+                             for c in cvals
+                             do
+                             (let ((c*p  (expt-pt-zr p c)))
+                               (setf pt (if pt
+                                            (mul-pts pt c*p)
+                                          c*p))))
+                       pt))
+             (chk2   (let ((ans nil))
+                       (with-mod q
+                         (inspect coffs)
+                         (format t "~&sum of shares: ~A" (reduce 'm+ shares))
+                         (format t "~&sum of cvals:  ~A" (reduce 'm+ cvals))
+                         (loop for s in shares
+                               for c in cvals
+                               do
+                               (let ((c*s  (m* c s)))
+                                 (setf ans (if ans
+                                               (m+ ans c*s)
+                                             c*s)))))
+                       ans)))
+        (format t "~&Chk2: ~A" chk2)
+        (format t "~&Chk:  ~A" (int chk))
+        (assert (zerop (int chk)))
+        (list lst
+              (mapcar (lambda (share skey)
+                        (expt-pt-zr share (inv-zr skey)))
+                      shares skeys))
+        ))))
+
+(defun grand-randomness-rs (lst)
   (destructuring-bind ((proofs encr-shares keys) ver-proofs shares) lst
     (declare (ignore proofs encr-shares))
     (assert (every (let ((g1 (get-g1))
@@ -359,14 +504,3 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                       pt)))
             ))))))
                 
-(let* ((nodes  '( 10   19   37    73   145   289   577  1153))
-       (times  '(1.7  3.3  6.5  13.8  31.9  80.0   223  722)))
-  (plt:plot 'plt nodes times
-            :clear t
-            :title "Randomness Generation vs Nbr Participants"
-            :xtitle "Nbr Participant Nodes"
-            :ytitle "Elapsed Time [sec]"
-            :symbol :circle
-            :plot-joined t
-            :xlog   t
-            :ylog   t))
