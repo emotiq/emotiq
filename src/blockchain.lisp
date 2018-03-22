@@ -1,6 +1,6 @@
 ;;;; blockchain.lisp
 
-(in-package :emotiq/research/chain)
+(in-package :emotiq)
 
 
 
@@ -81,7 +81,7 @@
   (print-unreadable-object (blockchain-block outstream)
     (with-slots 
           (timestamp
-           hash-pointer-of-previous-block hash-pointer-of-transaction)
+           hash-pointer-of-previous-block)
         blockchain-block
       (format outstream "~(~a~) " (type-of blockchain-block))
       (stamp-time timestamp outstream)
@@ -411,20 +411,25 @@ have been visited."
 ;;;
 ;;;   http://fc15.ifca.ai/preproceedings/paper_101.pdf
 
-(defun next-transaction (input-specs output-specs signatures)
-  (declare (ignore signatures))         ; ignored for now
+(defun next-transaction (input-specs output-specs)
   (when (null *last-block*)
     (start-blockchain))
   (loop with utxo
         with outputs-of-input-transaction
+        with n-outputs
         with indexed-output
         with subamount
         with total-output-amount
         for (id index) in input-specs
         do (unless (setq utxo (find-utxo id))
-             (warn "Transaction failure.")
+             (warn "Transaction failure: no UTXO found.")
              (return nil))
            (setq outputs-of-input-transaction (transaction-outputs utxo))
+           (setq n-outputs (length outputs-of-input-transaction))
+           (when (not (< index n-outputs))
+             (warn "Transaction failure: out-of-range index in UTXO: ~d" 
+                   index)
+             (return nil))
            (setq indexed-output (elt outputs-of-input-transaction index))
            (setq subamount (elt indexed-output 1))
         sum subamount into total-input-amount
@@ -560,6 +565,19 @@ have been visited."
 
 
 
+(defun tx-input-sequence (previous-tx sequence-number &rest additional)
+  (list* (list (transaction-id previous-tx)
+               sequence-number)
+         (when additional
+           (loop for (tx seq-no) on additional by 'cddr
+                 collect `(,(transaction-id tx)
+                           ,seq-no)))))
+
+
+(defvar *blockchain-tx-attempt-counter* 0)
+(defvar *blockchain-tx-success-counter* 0)
+
+
 ;;; The following sets of args are order-dependent. I.e., first set are
 ;;; fine. The second are double-spends coming after this first set.  The third
 ;;; refer to transactions never were known.
@@ -568,34 +586,30 @@ have been visited."
   "Test by resetting the blockchain, which issues 51000 to Alice,
 sending 40000 from Alice to Bob, 20000 from Bob to David, 5000 from
 Bob to Alice, and finally 1000 from Bob to David."
-  (multiple-value-bind (tx-0 b-0)
-      (restart-blockchain)
-    (format t "~%(GENESIS)~%  Tx-0: ~A~%  Block: ~A~%" tx-0 b-0)
+  (let (prev-tx)
+    (setq prev-tx (restart-blockchain))
+    (format t "~%(GENESIS)~%  Tx-0: ~A~%" prev-tx)
     ;; Genesis Block Coinbase Tx gives 510000 to Alice initially.
-    (multiple-value-bind (tx-1 b-1)
-        (next-transaction 
-         (list (list (transaction-id tx-0) 0))
-         `((,*bob-account* 40000) (,*alice-account* ,(- 51000 40000)))
-         '())
-      (format t "~%  Tx-1: ~A~%  Block: ~A~%" tx-1 b-1)
-      (multiple-value-bind (tx-2 b-2)
+    (setq prev-tx 
+          (next-transaction 
+           (tx-input-sequence prev-tx 0)
+           `((,*bob-account* 40000) (,*alice-account* ,(- 51000 40000)))))
+    (format t "~%  Tx-1: ~A~%" prev-tx)
+    (setq prev-tx 
           (next-transaction
-           (list (list (transaction-id tx-1) 0))
-           `((,*david-account* 20000) (,*bob-account* ,(- 40000 20000)))
-           '())
-        (format t "~%  Tx-2: ~A~%  Block: ~A~%" tx-2 b-2)
-        (multiple-value-bind (tx-3 b-3)
-            (next-transaction
-             (list (list (transaction-id tx-2) 0))
-             `((,*alice-account* 5000) (,*bob-account* ,(- 20000 5000)))
-             '())
-          (format t "~%  Tx-3: ~A~%  Block: ~A~%" tx-3 b-3)
-          (multiple-value-bind (tx-4 b-4)
-              (next-transaction
-               (list (list (transaction-id tx-3) 1))
-               `((,*david-account* 1000) (,*bob-account* ,(- 15000 1000)))
-               '())
-            (format t "~%  Tx-4: ~A~%  Block: ~A~%" tx-4 b-4)))))))
+           (tx-input-sequence prev-tx 0)
+           `((,*david-account* 20000) (,*bob-account* ,(- 40000 20000)))))
+    (format t "~%  Tx-2: ~A~%" prev-tx)
+    (setq prev-tx
+          (next-transaction
+           (tx-input-sequence prev-tx 0)
+           `((,*alice-account* 5000) (,*bob-account* ,(- 20000 5000)))))
+    (format t "~%  Tx-3: ~A~%" prev-tx)
+    (setq prev-tx
+          (next-transaction
+           (tx-input-sequence prev-tx 1)
+           `((,*david-account* 1000) (,*bob-account* ,(- 15000 1000)))))
+    (format t "~%  Tx-4: ~A~%" prev-tx)))
 
 (defun blockchain-test-2 ()
   "Test by first invoking function blockchain-test-1, q.v., and then attempting
@@ -613,28 +627,26 @@ had just been used in the last transaction."
             (hash-pointer-of-transaction
              (hash-pointer-item
               (hash-pointer-of-previous-block *last-block*))))))
-    (multiple-value-bind (tx-5 b-5)
-        (next-transaction
-         (list (list (transaction-id (genesis-tx)) 0)) ; <= bad - already used Tx!
-         `((,*bob-account* 40000) (,*alice-account* ,(- 51000 40000)))
-         '())
+    (let (prev-tx)
+      (setq prev-tx
+            (next-transaction
+             (tx-input-sequence (genesis-tx) 0) ; <= bad - already used Tx!
+             `((,*bob-account* 40000) (,*alice-account* ,(- 51000 40000)))))
       (format t "~%  Result: ~a (~a)~%" 
-              tx-5
-              (if (eq b-5 'nil)
+              prev-tx
+              (if (eq prev-tx 'nil)
+                  "as expected"
+                  (format nil "Bad - unexpected value: ~a." prev-tx)))
+      (setq prev-tx
+            (next-transaction
+             (tx-input-sequence (penultimate-tx) 1) ; <= bad - already used Tx!
+             `((,*david-account* 1000) (,*bob-account* 14000))))
+      (format t "~%  Result: ~a (~a)~%" 
+              prev-tx
+              (if (eq prev-tx 'nil)
                   "as expected"
                   (format nil "Bad - unexpected value: ~a."
-                          b-5)))
-      (multiple-value-bind (tx-6 b-6)
-          (next-transaction
-           (list (list (transaction-id (penultimate-tx)) 1)) ; <= bad - already used Tx!
-           `((,*david-account* 1000) (,*bob-account* 14000))
-           '())
-        (format t "~%  Result: ~a (~a)~%" 
-                tx-6
-                (if (eq b-6 'nil)
-                    "as expected"
-                    (format nil "Bad - unexpected value: ~a."
-                            b-6)))))))
+                          prev-tx))))))
 
 (defun blockchain-test-3 ()
   "Test by first invoking function blockchain-test-2, q.v., and then attempting
@@ -644,71 +656,96 @@ had just been used in the last transaction."
   ;; Try to spend 15,000 from *last-transaction*'s output to *bob-account*
   ;; (sending it to *alice-account*), but we  account had only gotten 14,000
   ;; from this transaction:
-  (multiple-value-bind (tx-7 b-7)
-      (next-transaction
-       (list (list (transaction-id *last-transaction*) 1)) ; <= bad - overspend!
-       `((,*alice-account* 15000))
-       '())
-      (format t "~%  Result: ~a (~a)~%" 
-              tx-7
-              (if (eq b-7 'nil)
-                  "as expected"
-                  (format nil "Bad - unexpected value: ~a."
-                          b-7)))
-
+  (let (prev-tx tx-8)
+    (setq prev-tx
+          (next-transaction
+           (tx-input-sequence *last-transaction* 1) ; <= bad - overspend!
+           `((,*alice-account* 15000))))
+    (format t "~%  Result: ~a (~a)~%" 
+            prev-tx
+            (if (eq prev-tx 'nil)
+                "as expected"
+                (format nil "Bad - unexpected value: ~a."
+                        prev-tx)))
     ;; Now try to spend exactly 14,000 from this transaction's output to
     ;; *bob-account* (sending it to *alice-account*). This account had gotten
     ;; exactly 14,000. So this will leave zero.  Note that this would leave zero
     ;; (0) as a transaction fee (!). This will be allowed (for now).  Maybe zero
     ;; transaction fees are kind of iffy, but review that issue later!
-    (multiple-value-bind (tx-8 b-8)
-        (next-transaction
-         (list (list (transaction-id *last-transaction*) 1))  ; <= GOOD TRANSACTION HERE
-         `((,*alice-account* 14000))
-         '())
-      (format t "~%  Tx-8: ~A~%  Block: ~A~%" tx-8 b-8)
-      
-      ;; Now try spending zero (0) from Alice back to Bob. Should be rejected:
-      ;; zero or negative amounts cannot be transferred.
-      (multiple-value-bind (tx-9 b-9)
+    (setq prev-tx
           (next-transaction
-           (list (list (transaction-id tx-8) 0)) ; <= bad (attempt to transfer zero amount)
-           `((,*bob-account* 0))
-           '())
-        (format t "~%  Result: ~a (~a)~%" 
-                tx-9
-                (if (eq b-9 'nil)
-                    "as expected"
-                    (format nil "Bad - unexpected value: ~a."
-                            b-9)))
+           (tx-input-sequence *last-transaction* 1) ; <= GOOD TRANSACTION HERE
+           `((,*alice-account* 14000))))
+    (setq tx-8 prev-tx)                 ; save it
+    (format t "~%  Tx-8: ~A~%" prev-tx)
+      
+    ;; Now try spending zero (0) from Alice back to Bob. Should be rejected:
+    ;; zero or negative amounts cannot be transferred.
+    (setq prev-tx
+          (next-transaction
+           (tx-input-sequence tx-8 0) ; <= bad (attempt to transfer zero amount)
+           `((,*bob-account* 0))))
+    (format t "~%  Result: ~a (~a)~%" 
+            prev-tx
+            (if (eq prev-tx 'nil)
+                "as expected"
+                (format nil "Bad - unexpected value: ~a."
+                        prev-tx)))
 
-        ;; Now try spending negative (-1) million from Alice back to Bob. Should
-        ;; be rejected: zero or negative amounts cannot be transferred.
-        (multiple-value-bind (tx-10 b-10)
-            (next-transaction
-             (list (list (transaction-id tx-8) 0)) ; <= bad (attempt to transfer negative amount)
-             `((,*bob-account* 0))
-             '())
-          (format t "~%  Result: ~a (~a)~%" 
-                  tx-10
-                  (if (eq b-10 'nil)
-                      "as expected"
-                      (format nil "Bad - unexpected value: ~a."
-                              b-10))))))))
+    ;; Now try spending negative (-1) million from Alice back to Bob. Should
+    ;; be rejected: zero or negative amounts cannot be transferred.
+    (setq prev-tx
+          (next-transaction
+           (tx-input-sequence tx-8 0) ; <= bad (attempt to transfer negative amount)
+           `((,*bob-account* 0))))
+    (format t "~%  Result: ~a (~a)~%" 
+            prev-tx
+            (if (eq prev-tx 'nil)
+                "as expected"
+                (format nil "Bad - unexpected value: ~a."
+                        prev-tx)))))
 
-;; Work these back into tests like the above!
 
-;; (defparameter *blockchain-test-unknown-tx-output*
-;;   `(((("b1ee128b0bc45ced9957f84eb3d35c7e1151867b4632ab358bf4df74a8828201" 13)) ; <= bad: index out of range
-;;      ((,*bob-account* 40000)
-;;       (,*alice-account* ,(- 51000 40000))))
-;;     ((("f0ee028f0fc45ced9957f84ef3d35c7e0050867f4632af358ff4df74a8828200" 0)) ; <= bad: nonexistent tx
-;;      ((,*alice-account* 5000)
-;;       (,*bob-account* ,(- 20000 5000))))))
-  
+
+(defvar *nonexistent-test-transaction-id*
+  (sha-256-string "arbitrary-hash-doesnotexist")
+  "A piece of 'fixture data' just be to be used in the next test
+   as a dummy transaction ID, i.e., for a dummy reference to
+   a transaction that does not exist, i.e., for testing a bad
+   reference in a transaction.")
+
+(defun blockchain-test-4 ()
+  "Test by first invoking function blockchain-test-3, q.v., and then attempting
+   a couple more bad transactions: one with an index out of range, and one that
+   tries to use as input a nonexistent transaction."
+  (blockchain-test-3)
+  (let (prev-tx)
+    (setq prev-tx
+          (next-transaction
+           (tx-input-sequence *last-transaction* 13) ; <= bad - index out of range!
+           `((,*bob-account* 4000)
+             (,*alice-account* (- 51000 4000)))))
+    (format t "~%  Result: ~a (~a)~%" 
+            prev-tx
+            (if (eq prev-tx 'nil)
+                "as expected"
+                (format nil "Bad - unexpected value: ~a."
+                        prev-tx)))
+    (setq prev-tx
+          (next-transaction
+           (list (list *nonexistent-test-transaction-id* 0)) ; <= bad: nonexistent tx
+           `((,*alice-account* 5000) 
+             (,*bob-account* ,(- 20000 5000)))))
+    (format t "~%  Result: ~a (~a)~%" 
+            prev-tx
+            (if (eq prev-tx 'nil)
+                "as expected"
+                (format nil "Bad - unexpected value: ~a."
+                        prev-tx)))))
+
 
 (defun test-blockchain ()
-  (blockchain-test-3)
+  (blockchain-test-4)
   (format t "~%---~%Transactions tests finished. Now printing blockchain...~%")
   (print-blockchain-info)
   (format t "~%DONE.~%"))
