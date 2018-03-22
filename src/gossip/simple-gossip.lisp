@@ -99,7 +99,7 @@
                   :documentation "Cache of seen messages. Table mapping UID of message to UID of sender.
                   Used to ensure identical messages are not acted on twice, and to determine where
                   replies to a message should be sent.")
-   (reply-table-lock :initarg :reply-table-lock :initform (ccl:make-lock) :accessor reply-table-lock
+   (reply-table-lock :initarg :reply-table-lock :initform (mpcompat:make-lock) :accessor reply-table-lock
                      :documentation "Lock for repliers-expected and reply-data. Changes to those must be
                      atomic to avoid a race condition in the simulator.")
    (repliers-expected :initarg :repliers-expected :initform (make-hash-table :test 'equal)
@@ -245,14 +245,14 @@
 
 (defun make-graph (numnodes &optional (fraction 0.5))
   "Build a graph with numnodes nodes. Strategy here is to first connect all the nodes in a single
-   non-cyclic linear path, then add f random edges, where f is a multiple of the number of nodes."
+   non-cyclic linear path, then add f random edges, where f is multiplied by the number of nodes."
   (clrhash *nodes*)
   (make-nodes numnodes)
   (let ((nodelist (listify-nodes)))
     ; following guarantees a single connected graph
     (linear-path nodelist)
     ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
-    (add-random-connections nodelist  (round (* fraction (length nodelist))))))
+    (add-random-connections nodelist (round (* fraction (length nodelist))))))
 
 (defun solicit (node kind &rest args)
   "Send a solicitation to the network starting with given node. This is the primary interface to 
@@ -316,7 +316,7 @@
   (pop (car q)))
 
 (defvar *message-space* (make-queue) "Queue of outgoing messages from local machine.")
-(defvar *message-space-lock* (ccl:make-lock) "Just a lock to manage access to the message space")
+(defvar *message-space-lock* (mpcompat:make-lock) "Just a lock to manage access to the message space")
 (defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
@@ -356,7 +356,7 @@
   (unless (or (null srcuid)
               (numberp srcuid))
     (break "In send-msg"))
-  (ccl:with-lock-grabbed (*message-space-lock*)
+  (mpcompat:with-lock (*message-space-lock*)
     (enq (list msg destuid srcuid) *message-space*)))
 
 (defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
@@ -396,7 +396,7 @@
   (let ((kindsym (call-next-method))) ; the one on message-mixin
     ; Also ensure this reply is actually expected
     (cond ((and kindsym
-                (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+                (mpcompat:with-lock ((reply-table-lock thisnode))
                   (member srcuid (gethash (solicitation-uid msg) (repliers-expected thisnode)))))
            kindsym)
           (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
@@ -438,14 +438,27 @@
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
-(defmethod assign ((msg solicitation) thisnode srcuid)
-  "Establishes a global key/value pair. Sets value on this node and then forwards 
-   solicitation to other nodes, if any. This is a destructive operation --
-   any node that currently has a value for the given key will have that value replaced.
-   No reply expected."
-  (let ((key (first (args msg)))
-        (value (second (args msg))))
-    (setf (gethash key (kvs thisnode)) value)
+(defmethod relate ((msg solicitation) thisnode srcuid)
+  "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
+   new value will be added to the set; it won't replace them.
+  Sets value on this node and then forwards 
+  solicitation to other nodes, if any.
+  No reply expected."
+  (destructuring-bind (key value &rest other) (args msg)
+    (declare (ignore other))
+    (setf (kvs thisnode) (kvs:relate (kvs thisnode) key value))
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))))
+
+(defmethod relate-unique ((msg solicitation) thisnode srcuid)
+  "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
+  Sets value on this node and then forwards 
+  solicitation to other nodes, if any. This is a destructive operation --
+  any node that currently has a value for the given key will have that value replaced.
+  No reply expected."
+  (destructuring-bind (key value &rest other) (args msg)
+    (declare (ignore other))
+    (setf (kvs thisnode) (kvs:relate-unique (kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
@@ -455,19 +468,20 @@
    any node that currently has the given key will have that key/value removed.
    No reply expected."
   (let ((key (first (args msg))))
-    (remhash key (kvs thisnode))
+    (setf (kvs thisnode) (kvs:remove-key (kvs thisnode) key))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod inquire ((msg solicitation) thisnode srcuid)
+(defmethod lookup-key ((msg solicitation) thisnode srcuid)
   "Inquire as to the global value of a key. If this node has no further
    neighbors, just return its value. Otherwise collect responses from subnodes.
    Reply is of course expected.
    Reply here is somewhat complicated: Reply will be an alist of ((value1 . n1) (value2 .n2) ...) where
    value1 is value reported by n1 nodes downstream of thisnode,
    value2 is value reported by n2 nodes downstream of thisnode, etc."
-  (let ((myvalue (gethash (car (args msg)) (kvs thisnode)))
-        (srcid (gethash (uid sol) (message-cache thisnode))))
+  (let* ((key (first (args msg)))
+         (myvalue (gethash (car (args msg)) (kvs thisnode)))
+         (srcid (gethash (uid sol) (message-cache thisnode))))
     ; careful if srcid is not a uid.
     ))
 
@@ -505,21 +519,19 @@
   )
 
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
-  "Get a list of UIDs live nodes downstream of thisnode, plus thisnode itself."
-  ; actually returns a list of the UIDs of all the nodes that responded. This is more useful
-  ;   for seeing who's missing.
+  "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
   (let ((soluid (uid msg))
         (repliers-expected (remove srcuid (neighbors thisnode))))
     ; prepare reply tables
-    (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+    (mpcompat:with-lock ((reply-table-lock thisnode))
       (setf (gethash soluid (reply-data thisnode)) (list (uid thisnode))) ; thisnode itself is 1 live node
       (setf (gethash soluid (repliers-expected thisnode)) repliers-expected))
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
     (maybe-log thisnode :WAITING msg repliers-expected)
     (let ((win
-           (ccl:process-wait-with-timeout "reply-wait"
-                                          (* *seconds-to-wait* ccl::*ticks-per-second*)
+           (mpcompat:process-wait-with-timeout "reply-wait"
+                                          *seconds-to-wait*
                                           (lambda ()
                                             (null (gethash soluid (repliers-expected thisnode)))))))
       (if win
@@ -528,7 +540,7 @@
       (let ((local-alive nil)
             (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
         ; clean up reply tables
-        (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+        (mpcompat:with-lock ((reply-table-lock thisnode))
           (setf local-alive (gethash soluid (reply-data thisnode)))
           (remhash soluid (repliers-expected thisnode))
           (remhash soluid (reply-data thisnode)))
@@ -550,7 +562,7 @@
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
     (let ((alive-in-reply (first (args rep))))
-      (ccl:with-lock-grabbed ((reply-table-lock thisnode))
+      (mpcompat:with-lock ((reply-table-lock thisnode))
         (let ((local-alive (gethash soluid (reply-data thisnode))))
           (setf (gethash soluid (reply-data thisnode)) (append alive-in-reply local-alive)))))
       ; Now remove this srcuid from expected-replies list. (We know it's on
@@ -642,7 +654,7 @@
   (setf *stop-dispatcher* nil)
   (let ((nextmsg nil))
     (loop until *stop-dispatcher* do
-      (ccl:with-lock-grabbed (*message-space-lock*)
+      (mpcompat:with-lock (*message-space-lock*)
         (setf nextmsg (deq *message-space*)))
       (if nextmsg
           ; Process messages as fast as possible.
@@ -665,7 +677,7 @@
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   (setf *message-space* (make-queue))
-  (setf *message-space-lock* (ccl:make-lock))
+  (setf *message-space-lock* (mpcompat:make-lock))
   (mapc 'clear-caches (listify-nodes))
   ; Start daemon that dispatches messages to nodes
   (my-prf (lambda () (dispatcher-loop)) :name "Dispatcher Loop")
@@ -680,7 +692,7 @@
 ; (restore-graph-from-file "~/gossip/5nodes.lisp")
 
 ; (make-graph 100)
-; (visualize-nodes (listify-nodes))
+; (visualize-nodes *nodes*)
 
 (defun count-node-processes ()
   "Returns a count of node processes."
