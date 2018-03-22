@@ -10,6 +10,9 @@
   (string-downcase (symbol-name (gensym prefix))))
 
 (defun temp-folder ()
+  #+LISPWORKS
+  (get-temp-directory)
+  #+CLOZURE
   (let* ((ptr (#_tempnam (ccl::%null-ptr) (ccl::%null-ptr)))
         (tempname (ccl::%get-cstring ptr)))
     (#_free ptr)
@@ -18,7 +21,7 @@
 (defun make-temp-dotfile ()
   (let* ((name (random-name "DOTFILE"))
          (folder (temp-folder))
-         (dotfile (merge-pathnames (merge-pathnames ".dot" name) folder)))
+         (dotfile (merge-pathnames (make-pathname :name name :type "dot") folder)))
     dotfile))
 
 (defun write-inner-commands (stream nodelist)
@@ -52,25 +55,33 @@
 
 (defun convert-dotfile-to-svg (dotpath &optional svgpath)
   (let ((cmd *graphviz-command*))
-    (ccl:RUN-PROGRAM cmd (list
+    (uiop:run-program (list cmd
                             "-Tsvg"
                             ;"-Gmodel=subset"
-                            (ccl::native-translated-namestring dotpath)
+                            (uiop:native-namestring dotpath)
                             "-o"
-                            (ccl::native-translated-namestring svgpath)))))
+                            (uiop:native-namestring svgpath)))))
 
-(defun visualize-nodes (nodelist)
+(defmethod visualize-nodes ((nodes null))
+  (visualize-nodes *nodes*))
+
+(defmethod visualize-nodes ((nodes hash-table))
+  (visualize-nodes (listify-nodes nodes)))
+
+(defmethod visualize-nodes ((nodelist list))
   "Makes a graphviz .dot file from nodelist, then converts that to an .svg file, and returns that pathname.
-   Opens svg file in browser."
+  Opens svg file in browser."
   (let* ((dotpath (make-temp-dotfile))
          (svgpath (make-pathname :directory (pathname-directory dotpath)
                                  :name (pathname-name dotpath)
                                  :type "svg")))
     (write-dotfile dotpath nodelist)
     (convert-dotfile-to-svg dotpath svgpath)
-    (let* ((url (#/absoluteURL
-                 (make-instance 'ns:ns-url
-                   :with-string (ccl::%make-nsstring (concatenate 'string "file://"
-                                                             (ccl::native-translated-namestring svgpath)))))))
-      #+OPENMCL (ccl::%open-url-in-browser url))
-    (values dotpath svgpath)))
+    (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring svgpath))))
+      #+LISPWORKS (sys:open-url urlstring)
+      #+OPENMCL
+      (let* ((url (NEXTSTEP-FUNCTIONS:|absoluteURL|
+                                      (make-instance 'ns:ns-url
+                                        :with-string (ccl::%make-nsstring urlstring)))))
+        (ccl::%open-url-in-browser url))
+      (values dotpath svgpath))))
