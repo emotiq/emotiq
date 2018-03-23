@@ -157,7 +157,7 @@
 (defun make-node (&rest args)
   "Makes a new node"
   (let ((node (apply 'make-instance 'gossip-node args)))
-    (setf (gethash (uid node) *nodes*) node)
+    (kvs:relate-unique! *nodes* (uid node) node)
     node))
 
 (defun make-nodes (numnodes)
@@ -342,7 +342,7 @@
 (defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
-  (gethash uid *nodes*))
+  (kvs:lookup-key *nodes* uid))
 
 (defun new-log ()
   "Returns a new log space"
@@ -396,7 +396,7 @@
          (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
          nil)
         (t
-         (let ((already-seen? (gethash (uid msg) (message-cache thisnode))))
+         (let ((already-seen? (kvs:lookup-key (message-cache thisnode) (uid msg))))
            (cond (already-seen? ; ignore if already seen
                   (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :already-seen)
                   nil)
@@ -419,7 +419,7 @@
     ; Also ensure this reply is actually expected
     (cond ((and kindsym
                 (mpcompat:with-lock ((reply-table-lock thisnode))
-                  (member srcuid (gethash (solicitation-uid msg) (repliers-expected thisnode)))))
+                  (member srcuid (kvs:lookup-key  (repliers-expected thisnode) (solicitation-uid msg)))))
            kindsym)
           (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
              nil))))
@@ -438,11 +438,6 @@
   (declare (ignore srcuid kindsym))
   (error "Bug: Cannot locally-receive to a remote node!"))
 
-; TODO: Don't accept reply if (gethash soluid (repliers-expected thisnode)) is nil
-;       or srcuid is not on the list. That means we've given up waiting. Handle that here
-;       rather than in specific gossip methods.
-;       Provide a specific :IGNORE log message for this case.
-;       DONE! In "accept-msg?" on reply objects.
 (defmethod locally-receive-msg ((msg reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
   (unless kindsym
@@ -512,8 +507,8 @@
    value1 is value reported by n1 nodes downstream of thisnode,
    value2 is value reported by n2 nodes downstream of thisnode, etc."
   (let* ((key (first (args msg)))
-         (myvalue (gethash (car (args msg)) (kvs thisnode)))
-         (srcid (gethash (uid sol) (message-cache thisnode))))
+         (myvalue (kvs:lookup-key (kvs thisnode) (car (args msg))))
+         (srcid (kvs:lookup-key (message-cache thisnode) (uid sol))))
     ; careful if srcid is not a uid.
     ))
 
@@ -556,8 +551,8 @@
         (repliers-expected (remove srcuid (neighbors thisnode))))
     ; prepare reply tables
     (mpcompat:with-lock ((reply-table-lock thisnode))
-      (setf (gethash soluid (reply-data thisnode)) (list (uid thisnode))) ; thisnode itself is 1 live node
-      (setf (gethash soluid (repliers-expected thisnode)) repliers-expected))
+      (kvs:relate-unique! (reply-data thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
+      (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected))
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
     (maybe-log thisnode :WAITING msg repliers-expected)
@@ -565,15 +560,15 @@
            (mpcompat:process-wait-with-timeout "reply-wait"
                                           *seconds-to-wait*
                                           (lambda ()
-                                            (null (gethash soluid (repliers-expected thisnode)))))))
+                                            (null (kvs:lookup-key (repliers-expected thisnode) soluid))))))
       (if win
           (maybe-log thisnode :DONE-WAITING-WIN msg)
           (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
       (let ((local-alive nil)
-            (where-to-forward-reply (gethash (uid msg) (message-cache thisnode))))
+            (where-to-forward-reply (kvs:lookup-key (message-cache thisnode) (uid msg))))
         ; clean up reply tables
         (mpcompat:with-lock ((reply-table-lock thisnode))
-          (setf local-alive (gethash soluid (reply-data thisnode)))
+          (setf local-alive (kvs:lookup-key (reply-data thisnode) soluid))
           (remhash soluid (repliers-expected thisnode))
           (remhash soluid (reply-data thisnode)))
         ; must create a new reply here; cannot reuse an old one because its content has changed
@@ -595,13 +590,12 @@
     ; First record the data in the reply appropriately
     (let ((alive-in-reply (first (args rep))))
       (mpcompat:with-lock ((reply-table-lock thisnode))
-        (let ((local-alive (gethash soluid (reply-data thisnode))))
-          (setf (gethash soluid (reply-data thisnode)) (append alive-in-reply local-alive)))))
-      ; Now remove this srcuid from expected-replies list. (We know it's on
-      ;  the list because this method would never have been called otherwise.)
-      (let ((nodes-expected-to-reply (gethash soluid (repliers-expected thisnode))))
-        (setf (gethash soluid (repliers-expected thisnode))
-              (delete srcuid nodes-expected-to-reply)))))
+        (let ((local-alive (kvs:lookup-key (reply-data thisnode) soluid)))
+          (kvs:relate-unique! (reply-data thisnode) soluid (append alive-in-reply local-alive)))))
+    ; Now remove this srcuid from expected-replies list. (We know it's on
+    ;  the list because this method would never have been called otherwise.)
+    (let ((nodes-expected-to-reply (kvs:lookup-key (repliers-expected thisnode) soluid)))
+      (kvs:relate-unique! (repliers-expected thisnode) soluid (delete srcuid nodes-expected-to-reply)))))
 
 ; For debugging count-alive
 (defun missing? (alive-list)
@@ -661,7 +655,7 @@
         (pprint (all-processes) t)
         (break "In deliver-msg"))
       ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-      (setf (gethash (uid msg) (message-cache node)) (or srcuid t)) ; solicitations from outside might not have a srcid
+      (kvs:relate-unique! (message-cache node) (uid msg) (or srcuid t)) ; solicitations from outside might not have a srcid
       (mpcompat:process-run-function (format nil "Node ~D" (uid node)) nil
         (lambda () (locally-receive-msg msg node srcuid kindsym))))))
 
@@ -745,7 +739,7 @@
 ; (solicit (first (listify-nodes)) :count-alive)
 ; (solicit (first (listify-nodes)) :announce :foo)
 ; (solicit 340 :count-alive)
-; (inspect *log*) --> Should see :FINALREPLY with node count (or something slightly less, depending on *hop-factor*, network delays, etc.) 
+; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on *hop-factor*, network delays, etc.) 
 
 #+IGNORE
 (setf node (make-node
