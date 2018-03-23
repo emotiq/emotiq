@@ -43,26 +43,20 @@ then
     exit 1
 fi
 
-if [ ! -d ${LIB}/usr/local/lib ]
+if [ ! -d ${INC} ]
 then
-    echo the file ${LIB}/usr/local/lib does not exist, something went wrong during build of gmp
+    echo the file /${INC}/ does not exist, something went wrong during build of gmp
     exit 1
 fi
 
-mv ${LIB}/usr/local/lib/* ${LIB}
-mv ${LIB}/usr/local/include ${LIB}
+export CFLAGS=-I${INC}
+export CPPFLAGS=-I${INC}
+export CXXFLAGS=-I${INC}
+export LDFLAGS=-L${LIB}
 
-LDFLAGS="-L${LIB}"
-export LIBRARY_PATH=${LIB}:$LIBRARY_PATH
-export LD_LIBRARY_PATH=${LIB}:$LD_LIBRARY_PATH
-export C_INCLUDE_PATH=${LIB}/include:$LD_LIBRARY_PATH
-export C_INCLUDE_PATH=${LIB}/include:$LD_LIBRARY_PATH
-echo paths /${LIBRARY_PATH}/ /$LD_LIBRARY_PATH}/
-
-cd ${LIB}
+cd ${TARDIR}
 tar xf ${TARDIR}/${PBC}
 cd ${PBCDIR}
 ./configure --prefix=${BASE}
-pwd
 make
 make install
