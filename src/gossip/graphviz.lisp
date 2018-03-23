@@ -1,6 +1,8 @@
 ;;; graphviz interface for gossip
 ;;; SVS
-;;;
+
+;;; You need to install graphviz before this will work. On a Mac, do this:
+;;; brew install graphviz --with-gts
 
 (in-package :gossip)
 
