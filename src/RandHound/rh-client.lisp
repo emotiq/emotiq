@@ -524,4 +524,79 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                         (mul-pts ans pt)
                       pt)))
             ))))))
-                
+
+(defun find-base (n)
+  (let ((qm1 (1- (get-order))))
+    (um:nlet-tail iter ((m  n))
+      (if (and (primes:is-prime? m)
+               (zerop (mod qm1 m)))
+          m
+        (if (> m (* 2 n))
+            :none
+          (iter (1+ m)))))
+    ))
+
+(defun dft (m coffs &optional inv)
+  ;; n = nbr elements to produce
+  ;; m = order of FFT
+  ;; coffs = amplitudes for each spectral index
+  (let* ((q  (get-order))
+         (p  (with-mod q
+               (m^ 2 (truncate (1- q) m))))
+         (xs (with-mod q
+               (loop for ix from 1 to m
+                   for x = 1 then (m* p x)
+                   collect x)))
+         (poly (lambda (x)
+                 (with-mod q
+                   (um:nlet-tail iter ((cs   (reverse coffs))
+                                       (ans  0))
+                       (if (endp cs)
+                           ans
+                         (iter (cdr cs)
+                               (m+ (car cs)
+                                   (m* x ans)))
+                         )))))
+         (trev (lambda (lst)
+                 (cons (car lst) (reverse (cdr lst)))))
+         (spec  (mapcar poly xs)))
+    (if inv
+        (funcall trev spec)
+      spec)))
+         
+
+(let* ((q   (get-order))
+       (cs  (loop for ix from 0 to 6 collect
+                  (random-between 1 q)))
+       (xs  (dft 43 cs))
+       (css (append (make-list (length cs) :initial-element 0)
+                    (loop for ix from (length cs) below 43 collect
+                          (random-between 1 q))))
+       (xsi (dft 43 xs t))
+       (xsii (dft 43
+                  (let ((xs (copy-list xs)))
+                    (setf (cadr xs) (with-mod q (1+ (cadr xs))))
+                    xs)
+                  t))
+       (ys  (dft 43 css))
+       (ysi (dft 43 ys t)))
+  (inspect (with-mod q
+             (mapcar 'm- xsi xsii)))
+  (plt:plot 'xx xsi :clear t
+            :symbol :circle
+            :plot-joined t)
+  (plt:plot 'xx cs :color :red
+            :symbol :circle
+            :plot-joined t)
+  (plt:plot 'xx xsii :color :blue
+            :symbol :circle
+            :plot-joined t)
+  (plt:plot 'x css :clear t
+            :symbol :circle
+            :plot-joined t)
+  (plt:plot 'x ysi :color :red
+            :symbol :circle
+            :plot-joined t)
+  (with-mod q
+    (reduce 'm+
+            (mapcar 'm*  xx cs))))
