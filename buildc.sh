@@ -5,11 +5,13 @@ TARDIR=${BASE}/src/Crypto/PBC-Intf
 GMP=gmp-6.1.2.tar.bz2
 PBC=pbc-0.5.14.tar
 
+# where make install will install stuff
+DEST=${BASE}
+PBCDIR=${TARDIR}/pbc-0.5.14
+GMPDIR=${TARDIR}/gmp-6.1.2
+
 LIB=${BASE}/lib
-# where make install will root is tree
-DEST=${LIB}
-PBCDIR=${LIB}/pbc-0.5.14
-GMPDIR=${LIB}/gmp-6.1.2
+INC=${BASE}/include
 
 if [ ! -f ${TARDIR}/${GMP} ]
 then
@@ -28,12 +30,11 @@ fi
 
 # PBC depends on GMP, so build GMP first
 
-cd ${LIB}
-tar xf ${TARDIR}/${GMP}
+cd ${TARDIR}
+tar xfj ${TARDIR}/${GMP}
 cd ${GMPDIR}
 ./configure --prefix=${BASE}
 make
-#make DESTDIR=${DEST} install
 make install
 
 if [ ! -d ${LIB} ]
@@ -64,5 +65,4 @@ cd ${PBCDIR}
 ./configure --prefix=${BASE}
 pwd
 make
-#make DESTDIR=${DEST} install
 make install
