@@ -11,11 +11,17 @@
 
 (defun temp-folder ()
   #+LISPWORKS
-  (get-temp-directory)
+  (hcl:get-temp-directory)
   #+CLOZURE
-  (let* ((ptr (#_tempnam (ccl::%null-ptr) (ccl::%null-ptr)))
+  (let* ((ptr (CCL:EXTERNAL-CALL
+               "tempnam"
+               :ADDRESS
+               (CCL:%NULL-PTR)
+               :ADDRESS
+               (CCL:%NULL-PTR)
+               :ADDRESS))
         (tempname (ccl::%get-cstring ptr)))
-    (#_free ptr)
+    (CCL:EXTERNAL-CALL "free" :ADDRESS PTR :VOID)
     (directory-namestring tempname)))
 
 (defun make-temp-dotfile ()
