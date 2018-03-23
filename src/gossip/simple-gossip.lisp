@@ -618,8 +618,7 @@
           (maybe-log thisnode :DONE-WAITING-WIN msg)
           (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
       (let ((local-alive nil)
-            (where-to-forward-reply ;;; why isn't this just srcuid?
-             (kvs:lookup-key (message-cache thisnode) (uid msg))))
+            (where-to-forward-reply srcuid))
         ; clean up reply tables
         (mpcompat:with-lock ((reply-table-lock thisnode))
           (setf local-alive (kvs:lookup-key (reply-data thisnode) soluid))
