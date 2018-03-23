@@ -499,18 +499,71 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
+(defun multiple-tally (store alist)
+  "Given a key/value store and an alist like ((key1 . n1) (key2 . n2) ...)
+   call kvs:tally for all pairs in alist."
+  (dolist (pair alist)
+    (setf store (kvs:tally store (car pair) (cdr pair))))
+  store)
+
 (defmethod lookup-key ((msg solicitation) thisnode srcuid)
   "Inquire as to the global value of a key. If this node has no further
-   neighbors, just return its value. Otherwise collect responses from subnodes.
-   Reply is of course expected.
-   Reply here is somewhat complicated: Reply will be an alist of ((value1 . n1) (value2 .n2) ...) where
-   value1 is value reported by n1 nodes downstream of thisnode,
-   value2 is value reported by n2 nodes downstream of thisnode, etc."
-  (let* ((key (first (args msg)))
-         (myvalue (kvs:lookup-key (kvs thisnode) (car (args msg))))
-         (srcid (kvs:lookup-key (message-cache thisnode) (uid sol))))
-    ; careful if srcid is not a uid.
-    ))
+  neighbors, just return its value. Otherwise collect responses from subnodes.
+  Reply is of course expected.
+  Reply here is somewhat complicated: Reply will be an alist of ((value1 . n1) (value2 .n2) ...) where
+  value1 is value reported by n1 nodes downstream of thisnode,
+  value2 is value reported by n2 nodes downstream of thisnode, etc."
+  (let* ((soluid (uid msg))
+         (repliers-expected (remove srcuid (neighbors thisnode)))
+         (key (first (args msg)))
+         (myvalue (kvs:lookup-key (kvs thisnode) key)))
+    ; prepare reply tables
+    (mpcompat:with-lock ((reply-table-lock thisnode))
+      (kvs:relate-unique! (reply-data thisnode) soluid (list (cons myvalue 1)))
+      (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected))
+    (forward msg thisnode repliers-expected)
+    ; wait a finite time for all replies
+    (maybe-log thisnode :WAITING msg repliers-expected)
+    (let ((win
+           (mpcompat:process-wait-with-timeout "reply-wait"
+                                               *seconds-to-wait*
+                                               (lambda ()
+                                                 (null (kvs:lookup-key (repliers-expected thisnode) soluid))))))
+      (if win
+          (maybe-log thisnode :DONE-WAITING-WIN msg)
+          (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
+      (let ((local-values nil)
+            (where-to-forward-reply srcuid))
+        ; clean up reply tables
+        (mpcompat:with-lock ((reply-table-lock thisnode))
+          (setf local-values (kvs:lookup-key (reply-data thisnode) soluid))
+          (remhash soluid (repliers-expected thisnode))
+          (remhash soluid (reply-data thisnode)))
+        ; must create a new reply here; cannot reuse an old one because its content has changed
+        (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
+            (let ((reply (make-reply :solicitation-uid soluid
+                                     :kind :lookup-key
+                                     :args (list local-values))))
+              (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-values)
+              (send-msg reply
+                        where-to-forward-reply
+                        (uid thisnode)))
+            ; if no place left to reply to, just log the result.
+            ;   This can mean that thisnode autonomously initiated the request, or
+            ;   somebody running the sim told it to.
+            (maybe-log thisnode :FINALREPLY msg local-values))))))
+
+(defmethod lookup-key ((rep reply) thisnode srcuid)
+  (let ((soluid (solicitation-uid rep)))
+    ; First record the data in the reply appropriately
+    (let ((values-in-reply (first (args rep))))
+      (mpcompat:with-lock ((reply-table-lock thisnode))
+        (let ((local-values (kvs:lookup-key (reply-data thisnode) soluid)))
+          (kvs:relate-unique! (reply-data thisnode) soluid (multiple-tally local-values values-in-reply)))))
+    ; Now remove this srcuid from expected-replies list. (We know it's on
+    ;  the list because this method would never have been called otherwise.)
+    (let ((nodes-expected-to-reply (kvs:lookup-key (repliers-expected thisnode) soluid)))
+      (kvs:relate-unique! (repliers-expected thisnode) soluid (delete srcuid nodes-expected-to-reply)))))
 
 (defmethod find-max (msg thisnode srcuid)
   "Retrieve maximum value of a given key on all the nodes"
@@ -565,7 +618,8 @@
           (maybe-log thisnode :DONE-WAITING-WIN msg)
           (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
       (let ((local-alive nil)
-            (where-to-forward-reply (kvs:lookup-key (message-cache thisnode) (uid msg))))
+            (where-to-forward-reply ;;; why isn't this just srcuid?
+             (kvs:lookup-key (message-cache thisnode) (uid msg))))
         ; clean up reply tables
         (mpcompat:with-lock ((reply-table-lock thisnode))
           (setf local-alive (kvs:lookup-key (reply-data thisnode) soluid))
@@ -740,6 +794,12 @@
 ; (solicit (first (listify-nodes)) :announce :foo)
 ; (solicit 340 :count-alive)
 ; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on *hop-factor*, network delays, etc.) 
+
+; (solicit (first (listify-nodes)) :relate-unique :foo :bar)
+; (solicit (first (listify-nodes)) :lookup-key :foo)
+; (solicit (first (listify-nodes)) :relate :foo :baz)
+; (solicit (first (listify-nodes)) :lookup-key :foo)
+;; should produce something like (:FINALREPLY "node209" "sol255" (((:BAZ :BAR) . 4))) as last *log* entry
 
 #+IGNORE
 (setf node (make-node
