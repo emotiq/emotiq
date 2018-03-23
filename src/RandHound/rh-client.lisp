@@ -428,7 +428,7 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
       (let* ((skeys (mapcar 'keying-triple-skey keys))
              (q     (get-order))
              (n     (length pkeys))
-             (kord  (- n k 1))
+             (kord  (- n k 2))
              (xvals (um:range 1 (1+ n)))
              (coffs (loop repeat (1+ kord) collect
                           (random-between 1 q)))
@@ -436,11 +436,11 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                         (let ((prod 1))
                           (loop for xi in xvals do
                                 (unless (= x xi)
-                                  (setf prod (m/ prod (m- x xi)))))
+                                  (setf prod (m* prod (m- x xi)))))
                           prod)))
              (poly  (lambda (x)
                       (with-mod q
-                        (m*
+                        (m/
                          (um:nlet-tail iter ((coffs coffs)
                                              (ans   0))
                            (if (endp coffs)
@@ -449,7 +449,6 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                                    (m+ (car coffs)
                                        (m* x ans)))
                             ))
-                         ;; (m^ x (1+ k)) ;;
                          (funcall invprod x)
                          ))))
              (cvals  (mapcar poly xvals))
@@ -475,9 +474,9 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                                                (m+ ans c*s)
                                              c*s)))))
                        ans)))
-        ;; (format t "~&Chk2: ~A" chk2)
+        (format t "~&Chk2: ~A" chk2)
         ;; (format t "~&Chk:  ~A" (int chk))
-        ;; (assert (zerop (int chk)))
+        (assert (zerop (int chk)))
         (list lst
               (mapcar (lambda (share skey)
                         (expt-pt-zr share (inv-zr skey)))
@@ -564,7 +563,7 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
         (funcall trev spec)
       spec)))
          
-
+#|
 (let* ((q   (get-order))
        (cs  (loop for ix from 0 to 6 collect
                   (random-between 1 q)))
@@ -600,3 +599,73 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
   (with-mod q
     (reduce 'm+
             (mapcar 'm*  xx cs))))
+|#
+
+(defun tst-fld (n k)
+  (let* ((q     (get-order))
+         (coffs (loop for ix from 0 below k collect (random-between 1 q)))
+         (xs    (loop for ix from 1 to n collect ix))
+         (poly  (lambda (x)
+                  (with-mod q
+                    (um:nlet-tail iter ((cs  (reverse coffs))
+                                        (ans 0))
+                      (if (endp cs)
+                          ans
+                        (iter (cdr cs)
+                              (m+ (car cs)
+                                  (m* x ans))))))))
+         (shares  (mapcar poly xs))
+         (bent-shares (let ((shs (copy-list shares)))
+                        (setf (cadr shs) (with-mod q
+                                           (m+ 1 (cadr shs))))
+                        shs))
+         (g1      (get-g1))
+         (cshares (mapcar (um:curry 'expt-pt-zr g1) shares))
+         (bent-cshares (mapcar (um:curry 'expt-pt-zr g1) bent-shares))
+         (kdual   (- n k 1))
+         (coffsd  (loop for ix from 0 below kdual collect (random-between 1 q)))
+         (invwt   (lambda (x)
+                    (with-mod q
+                      (um:nlet-tail iter ((xs xs)
+                                          (prod 1))
+                        (if (endp xs)
+                            prod
+                          (iter (cdr xs)
+                                (let ((xj  (car xs)))
+                                  (if (= x xj)
+                                      prod
+                                    (m* prod (m- x xj)))))
+                          )))))
+         (polyd    (lambda (x)
+                     (with-mod q
+                       (m/
+                        (um:nlet-tail iter ((cs  (reverse coffsd))
+                                            (ans 0))
+                          (if (endp cs)
+                              ans
+                            (iter (cdr cs)
+                                  (m+ (car cs)
+                                      (m* x ans)))
+                            ))
+                        (funcall invwt x)))))
+         (dualv    (mapcar polyd xs))
+         (dotprod  (lambda (v1 v2)
+                     (with-mod q
+                       (reduce 'm+
+                               (mapcar 'm* v1 v2)))))
+         (dotprodc (lambda (cv1 v2)
+                     (let ((prod  nil))
+                       (um:nlet-tail iter ((cs cv1)
+                                           (vs v2))
+                         (if (endp cs)
+                             prod
+                           (progn
+                             (setf prod (let ((c*v  (expt-pt-zr (car cs) (car vs))))
+                                          (if prod
+                                              (mul-pts prod c*v)
+                                            c*v)))
+                             (iter (cdr cs) (cdr vs)))
+                           ))))))
+    (assert (zerop (funcall dotprod dualv shares)))
+    (funcall dotprodc cshares dualv)
+    ))

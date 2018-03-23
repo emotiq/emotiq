@@ -87,7 +87,9 @@ THE SOFTWARE.
    :add-zrs
    :inv-zr
    :expt-pt-zr
-
+   :add-pts  ;; non-bent nomenclature for ECC
+   :mul-pt-zr
+   
    :keying-triple
    :keying-triple-pkey
    :keying-triple-sig
@@ -115,6 +117,7 @@ THE SOFTWARE.
   (:linux  "/usr/local/lib/libLispPBCIntf.so")
   (t (:default "libLispPBCIntf"))
   )
+(cffi:reload-foreign-libraries)
 (cffi:use-foreign-library libpbc)
 
 ;; -----------------------------------------------------------------------
@@ -802,11 +805,11 @@ sign0 1
 
 (defun make-g2-ans (ans)
   (make-instance 'g2-cmpr
-   :pt ans))
+                 :pt ans))
 
 (defun make-zr-ans (ans)
   (make-instance 'zr
-   :val ans))
+                 :val ans))
 
 ;; -------------------------------
 
@@ -817,14 +820,26 @@ sign0 1
   ;; (should be obvious, but you can't mix G1 with G2, except by
   ;; pairing operations)
   ;;
-  (binop '_mul-g1-pts pt1 pt2
-         *g1-size* *g1-size* 'make-g1-ans))
+  (cond ((zerop (int pt1)) pt2)
+        ((zerop (int pt2)) pt1)
+        (t 
+         (binop '_mul-g1-pts pt1 pt2
+                *g1-size* *g1-size* 'make-g1-ans))
+        ))
+
+(defun add-pts (pt1 pt2)
+  ;; for non-bent nomenclature
+  (mul-pts pt1 pt2))
 
 (defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
   ;; multiply two elements from G2 field
-  (binop '_mul-g2-pts pt1 pt2
-         *g2-size* *g2-size* 'make-g2-ans))
-
+  (cond ((zerop (int pt1)) pt2)
+        ((zerop (int pt2)) pt1)
+        (t 
+         (binop '_mul-g2-pts pt1 pt2
+                *g2-size* *g2-size* 'make-g2-ans))
+        ))
+        
 (defmethod add-zrs ((z1 zr) (z2 zr))
   ;; add two elements from Zr ring
   (binop '_add-zr-vals z1 z2
@@ -836,6 +851,8 @@ sign0 1
 
 (defmethod inv-zr ((z zr))
   ;; compute inverse of z in ring Zr
+  (when (zerop (int z))
+    (error "Can't invert zero"))
   (need-pairing)
   (with-fli-buffers ((z-buf  *zr-size* z))
     (_inv-zr-val z-buf)
@@ -846,19 +863,37 @@ sign0 1
   (inv-zr (make-instance 'zr
                          :val (mod z (get-order)))))
 
+(defvar *g1-zero*
+  (make-instance 'g1-cmpr
+                 :pt (bev 0)))
+
+(defvar *g2-zero*
+  (make-instance 'g2-cmpr
+                 :pt (bev 0)))
+
 (defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
-  (binop '_exp-G1z g1 z
-         *g1-size* *zr-size* 'make-g1-ans))
+  (cond ((zerop (int z)) *g1-zero*)
+        (t
+         (binop '_exp-G1z g1 z
+                *g1-size* *zr-size* 'make-g1-ans))
+        ))
 
 (defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
   ;; exponentiate an element of G2 by element z of ring Zr
-  (binop '_exp-G2z g2 z
-         *g2-size* *zr-size* 'make-g2-ans))
+  (cond ((zerop (int z)) *g2-zero*)
+        (t 
+         (binop '_exp-G2z g2 z
+                *g2-size* *zr-size* 'make-g2-ans))
+        ))
 
 (defmethod expt-pt-zr (g1 (z integer))
   (expt-pt-zr g1 (make-instance 'zr
                                 :val (mod z (get-order)))))
+
+(defun mul-pt-zr (pt z)
+  ;; for non-bent nomenclature
+  (expt-pt-zr pt z))
 
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
