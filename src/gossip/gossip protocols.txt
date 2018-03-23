@@ -1,0 +1,46 @@
+Gossip protocols
+
+Setup:
+
+Given a set of nodes, create a connected graph with limited degree.
+
+Send a message to one node and measure how long it takes to reach
+every node. 
+
+Every message must
+        Have a unique ID.
+        Have a timestamp, which is the time the message encountered the first node in the graph
+          (or when the initiating sender sent it).
+        Have a time-to-live, given as a delta number of seconds starting
+          at the timestamp.
+
+Every node must, upon every incoming message, do
+        Check message timestamp + TTL. If current time exceeds this figure, do
+                If current time exceeds figure by more than a factor of 2,
+                        ensure that this message ID is not in my local cache.
+                        Exit
+                   Else do nothing and exit. (Might be in the local cache. If so just leave it there.)
+                Else do
+                Check the message ID to see if it has been seen by the node before.
+                        If so, ignore the message.
+                        If not, take action on whatever the message requires, and
+                                forward the message to nodes connected to myself,
+                                excluding the one that sent me the message.
+
+        Report what it's doing to a central logging server (only for simulation purposes).
+        
+Messages will never be sent "backwards" in the graph, but they could encounter
+        loops in the graph. This could be manifested in a node A receiving the
+        same message from two other nodes (B and C) at nearly the same time. Which could
+        cause the message to inadvertently be sent back from A to the SECOND node
+        (of B or C) that sent the message to node A.
+        There are two ways to mitigate this problem:
+        1. Before sending to node X, A ensures that the message has not come in from
+           node B between the time A first saw the message from C and the time A decides
+           to send it out to B.
+        2. Node B will always notice that it has seen the message before and ignore it.
+
+        In practice, 1 is impossible to guarantee. 2 involves some redundant
+        communication but it's guaranteed to work.
+
+
