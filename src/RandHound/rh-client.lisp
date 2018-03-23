@@ -248,9 +248,9 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
 ;; ---------------------------------------------------------------------------
 
 ;; Single-thread testing...
-(defun gen-randomness ()
-  (let* ((f     3)            ;; number of potential Byzantine failures
-         (n     (1+ (* 3 f))) ;; number of nodes = 3*f+1
+(defun gen-randomness (n)
+  (let* ((f     (floor (1- n) 3))  ;; number of potential Byzantine failures
+         ;; (n     (1+ (* 3 f))) ;; number of nodes = 3*f+1
          (kord  f)            ;; order of sharing polynomial = f, sharing threshold = k+1 = f+1
          (q     (pbc:get-order))
          (coffs (loop repeat (1+ kord) collect
@@ -351,26 +351,47 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
             ))))))
 
 #|
-(let* ((nodes  '( 10   19   37  )) ;;   73   145   289   577  1153))
-       (times  '(1.7  3.3  6.5  ))) ;; 13.8  31.9  80.0   223  722)))
-  (plt:plot 'plt nodes times
-            :clear t
-            :title "Randomness Generation vs Nbr Participants"
-            :xtitle "Nbr Participant Nodes"
-            :ytitle "Elapsed Time [sec]"
-            :symbol :circle
-            :plot-joined t
-            :xlog   nil
-            :ylog   nil))
+(let* ((nodes      #( 10   19   37   73   145   289   577  1153))
+       (times-tpm  #(1.7  3.3  6.5  13.8  31.9  80.0   223  722))
+       (times-rs   #(1.6  3.1  6.0  11.9  23.8  47.8   96.8 201)))
+  (multiple-value-bind (xmn ywmn slope wsigma niter)
+      (linfit:regression (map 'vector 'log nodes)
+                         (map 'vector 'log times-tpm)
+                         1)
+    (print (list :xmn xmn
+                 :ywmn ywmn
+                 :slope slope
+                 :wsigma wsigma
+                 :niter niter))
+    (plt:plot 'plt nodes times-tpm
+              :clear t
+              :title "Randomness Generation vs Nbr Participants"
+              :xtitle "Nbr Participant Nodes"
+              :ytitle "Elapsed Time [sec]"
+              :symbol :circle
+              :plot-joined t
+              :legend "TPM"
+              :xlog   t
+              :ylog   t)
+    (plt:fplot 'plt '(1 2000)
+               (lambda (x)
+                 (exp (+ ywmn (* slope (- (log x) xmn)))))
+               :color :red)
+    (plt:plot 'plt nodes times-rs
+              :color :blue
+              :symbol :circle
+              :plot-joined t
+              :legend "RS")
+    ))
 |#
 
 ;; ---------------------------------------------------------------------
 ;; Reed-Solomon Variant
 
 ;; Single-thread testing...
-(defun gen-randomness-rs ()
-  (let* ((f     6)            ;; number of potential Byzantine failures
-         (n     (1+ (* 3 f))) ;; number of nodes = 3*f+1
+(defun gen-randomness-rs (n)
+  (let* ((f     (floor (1- n) 3))            ;; number of potential Byzantine failures
+         ;; (n     (1+ (* 3 f))) ;; number of nodes = 3*f+1
          (kord  f)            ;; order of sharing polynomial = f, sharing threshold = k+1 = f+1
          (q     (pbc:get-order))
          (coffs (loop repeat (1+ kord) collect
@@ -443,9 +464,9 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                        pt))
              (chk2   (let ((ans nil))
                        (with-mod q
-                         (inspect coffs)
-                         (format t "~&sum of shares: ~A" (reduce 'm+ shares))
-                         (format t "~&sum of cvals:  ~A" (reduce 'm+ cvals))
+                         ;; (inspect coffs)
+                         ;; (format t "~&sum of shares: ~A" (reduce 'm+ shares))
+                         ;; (format t "~&sum of cvals:  ~A" (reduce 'm+ cvals))
                          (loop for s in shares
                                for c in cvals
                                do
@@ -454,25 +475,25 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                                                (m+ ans c*s)
                                              c*s)))))
                        ans)))
-        (format t "~&Chk2: ~A" chk2)
-        (format t "~&Chk:  ~A" (int chk))
-        (assert (zerop (int chk)))
+        ;; (format t "~&Chk2: ~A" chk2)
+        ;; (format t "~&Chk:  ~A" (int chk))
+        ;; (assert (zerop (int chk)))
         (list lst
               (mapcar (lambda (share skey)
                         (expt-pt-zr share (inv-zr skey)))
-                      shares skeys))
+                      encr-shares skeys))
         ))))
 
-(defun grand-randomness-rs (lst)
-  (destructuring-bind ((proofs encr-shares keys) ver-proofs shares) lst
-    (declare (ignore proofs encr-shares))
+(defun collect-randomness-rs (lst)
+  (destructuring-bind ((k proofs encr-shares keys xshares) shares) lst
+    (declare (ignore k encr-shares xshares))
     (assert (every (let ((g1 (get-g1))
                          (g2 (get-g2)))
-                     (lambda (ver-proof share)
-                       (let ((p1 (compute-pairing ver-proof g2))
-                             (p2 (compute-pairing g1        share)))
+                     (lambda (proof share)
+                       (let ((p1 (compute-pairing proof g2))
+                             (p2 (compute-pairing g1    share)))
                          (= (int p1) (int p2)))))
-                   ver-proofs shares))
+                   proofs shares))
     (let* ((pkeys (mapcar 'keying-triple-pkey keys))
            (q     (get-order))
            (xvals (mapcar (lambda (pkey)
