@@ -460,6 +460,16 @@
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
+(defmethod announce ((msg solicitation) thisnode srcuid)
+  "Announce a message to the collective. First arg of Msg is the announcement,
+   which can be any Lisp object. Recipient nodes are not expected to reply.
+   This is probably only useful for debugging gossip protocols, since the only
+   record of the announcement will be in the log."
+  (let ((content (first (args msg))))
+    (declare (ignore content))
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))))
+
 (defmethod relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
    new value will be added to the set; it won't replace them.
@@ -733,6 +743,7 @@
 
 ; (run-gossip-sim)
 ; (solicit (first (listify-nodes)) :count-alive)
+; (solicit (first (listify-nodes)) :announce :foo)
 ; (solicit 340 :count-alive)
 ; (inspect *log*) --> Should see :FINALREPLY with node count (or something slightly less, depending on *hop-factor*, network delays, etc.) 
 
