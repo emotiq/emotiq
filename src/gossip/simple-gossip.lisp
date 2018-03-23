@@ -12,7 +12,6 @@
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
-(defparameter *process-count* 0 "Just for simulation") ; NO LONGER NEEDED
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
@@ -34,6 +33,29 @@
    (with-slots (uid) thing
        (print-unreadable-object (thing stream :type t :identity t)
           (when uid (princ uid stream)))))
+
+;;; Should move these to mpcompat
+(defun all-processes ()
+  #+Allegro   mp:*all-processes*
+  #+LispWorks (mp:list-all-processes)
+  #+CCL       (ccl:all-processes)
+  #-(or Allegro LispWorks CCL)
+  (warn "No implementation of ALL-PROCESSES for this system.")
+  )
+
+(defun process-name (process)
+  #+Allegro                (mp:process-name process)
+  #+LispWorks              (mp:process-name process)
+  #+CCL                    (ccl:process-name process)
+  #-(or Allegro LispWorks CCL)
+  (warn "No implementation of PROCESS-NAME for this system."))
+
+(defun process-kill (process)
+  #+Allegro                (mp:process-kill process)
+  #+LispWorks              (mp:process-terminate process)
+  #+CCL                    (ccl:process-kill process)
+  #-(or Allegro LispWorks CCL)
+  (warn "No implementation of PROCESS-KILL for this system."))
 
 (defclass message-mixin (uid-mixin)
   ((timestamp :initarg :timestamp :initform (get-universal-time) :accessor timestamp
@@ -596,14 +618,6 @@
 
 ;;; END OF GOSSIP METHODS
 
-#+CCL
-(defun my-prf (fn &rest keys)
-  "So we can debug background processes in gui CCL. Also works in command-line CCL."
-  (if (find-package :gui)
-    (funcall (intern "BACKGROUND-PROCESS-RUN-FUNCTION" :gui) keys fn)
-    (ccl:process-run-function keys fn))
-  (incf *process-count*))
-
 ; NOT DONE YET
 (defmethod transmit-msg (msg (node remote-gossip-node) srcuid)
   "Send message across network"
@@ -634,11 +648,12 @@
   (let ((kindsym (accept-msg? msg node srcuid))) ; check this here only in simulator
     (when kindsym ; ignore the message here and now if it's ignorable, without creating a new thread
       (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
-        (pprint (ccl::all-processes) t)
+        (pprint (all-processes) t)
         (break "In deliver-msg"))
       ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
       (setf (gethash (uid msg) (message-cache node)) (or srcuid t)) ; solicitations from outside might not have a srcid
-      (my-prf (lambda () (locally-receive-msg msg node srcuid kindsym)) :name (format nil "Node ~D" (uid node))))))
+      (mpcompat:process-run-function (format nil "Node ~D" (uid node)) nil
+        (lambda () (locally-receive-msg msg node srcuid kindsym))))))
 
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
@@ -673,14 +688,13 @@
   ; Clear message space
   ; Archive the current log and clear it
   (kill-node-processes)
-  (setf *process-count* 0)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   (setf *message-space* (make-queue))
   (setf *message-space-lock* (mpcompat:make-lock))
   (mapc 'clear-caches (listify-nodes))
   ; Start daemon that dispatches messages to nodes
-  (my-prf (lambda () (dispatcher-loop)) :name "Dispatcher Loop")
+  (mpcompat:process-run-function "Dispatcher Loop" nil (lambda () (dispatcher-loop)))
   )
 
 
@@ -698,24 +712,24 @@
   "Returns a count of node processes."
   (let ((count 0))
     (mapc  #'(lambda (process)
-               (when (ignore-errors (string= "Node " (subseq (ccl:process-name process) 0 5)))
+               (when (ignore-errors (string= "Node " (subseq (process-name process) 0 5)))
                  (incf count)))
-           (ccl:all-processes))
+           (all-processes))
     count))
 
 (defun node-processes ()
   "Returns a list of node processes."
   (let ((node-processes nil))
     (mapc  #'(lambda (process)
-               (when (ignore-errors (string= "Node " (subseq (ccl:process-name process) 0 5)))
+               (when (ignore-errors (string= "Node " (subseq (process-name process) 0 5)))
                  (push process node-processes)))
-           (ccl:all-processes))
+           (all-processes))
     node-processes))
 
-; Mostly for debugging. Node processes should kill themselves.
+; Mostly for debugging. Node processes should automaticallykill themselves.
 (defun kill-node-processes ()
   (let ((node-processes (node-processes)))
-    (mapc 'ccl::process-kill node-processes)))
+    (mapc 'process-kill node-processes)))
 
 ; (run-gossip-sim)
 ; (solicit (first (listify-nodes)) :count-alive)
