@@ -87,9 +87,9 @@
     (convert-dotfile-to-svg dotpath svgpath)
     (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring svgpath))))
       #+LISPWORKS (sys:open-url urlstring)
-      #+OPENMCL
-      (let* ((url (NEXTSTEP-FUNCTIONS:|absoluteURL|
-                                      (make-instance 'ns:ns-url
-                                        :with-string (ccl::%make-nsstring urlstring)))))
+      #+CLOZURE
+      (let* ((url (NEXTSTEP-FUNCTIONS::|absoluteURL|
+                                       (make-instance 'ns:ns-url
+                                         :with-string (ccl::%make-nsstring urlstring)))))
         (ccl::%open-url-in-browser url))
       (values dotpath svgpath))))
