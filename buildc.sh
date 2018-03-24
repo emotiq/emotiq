@@ -2,8 +2,13 @@ set -x
 BASE=$PWD
 # where the tarballs should be
 TARDIR=${BASE}/src/Crypto/PBC-Intf
+# pbc intf files are in the same place
+PBCINTF=${TARDIR}
 GMP=gmp-6.1.2.tar.bz2
 PBC=pbc-0.5.14.tar
+
+MAKETARGET=makefile.linux
+#MAKETARGET=makefile.osx
 
 # where make install will install stuff
 DEST=${BASE}
@@ -60,3 +65,12 @@ cd ${PBCDIR}
 ./configure --prefix=${BASE}
 make
 make install
+
+# finally, build libLispPBCIntf.so
+if [ ! -d ${PBCINTF} ]
+then
+    echo the file /${PBCINTF}/ does not exist
+    exit 1
+fi
+cd ${PBCINTF}
+make --makefile=${MAKETARGET}

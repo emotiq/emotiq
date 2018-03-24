@@ -1,11 +1,40 @@
-GCC=g++ -shared -fpic -I/usr/local/include -I/usr/include -O2 -msse3 -mfpmath=sse -m64 -L/usr/local/lib
+# GCC=g++ -shared -fpic -I/usr/local/include -I/usr/include -O2 -msse3 -mfpmath=sse -m64 -L/usr/local/lib
+
+# all: pbc_intf
+
+# pbc_intf: pbc_intf.cpp pbc_intf.h
+# 	$(GCC) -o libLispPBCIntf.so \
+# 		pbc_intf.cpp \
+# 	-Wl,-rpath /usr/local/lib -l pbc
+# 	mv -f libLispPBCIntf.so /usr/local/lib
+
+# Wl,-rpath /usr/local/lib == linker option, pass -rpath /usr/local/lib to linker
+# -rpath /usr/local/lib == Add a directory to the runtime library search path.
+# -l pbc
+#       -llibrary
+#       -l library
+#           Search the library named library when linking.  (The second alternative with the library as a
+#           separate argument is only for POSIX compliance and is not recommended.)
+#
+
+
+SYSINC=-I/usr/local/include -I/usr/include
+EINC=-I../../../include
+LOCALLIB=/usr/local/lib
+EMTQLIB=../../../lib
+
+GCC=g++ -shared -fpic $(SYSINC) ${EINC} -O2 -msse3 -mfpmath=sse -m64 -L$(LOCALLIB) -L$(EMTQLIB)
 
 all: pbc_intf
 
 pbc_intf: pbc_intf.cpp pbc_intf.h
 	$(GCC) -o libLispPBCIntf.so \
 		pbc_intf.cpp \
-	-Wl,-rpath /usr/local/lib -l pbc
-	mv -f libLispPBCIntf.so /usr/local/lib
+	-Wl,-rpath $(LOCALLIB) \
+	-Wl,-rpath $(EMTQLIB)
+	mv -f libLispPBCIntf.so $(EMTQLIB)
+
+# dropped -l pbc since there are no .o or .so's in the pbc directory
+
 
 
