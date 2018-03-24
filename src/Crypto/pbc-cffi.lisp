@@ -96,9 +96,13 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
+; (defparameter *base* "/usr/local/lib64") ; mac
+; (defparameter *base* "/usr/local/lib") ; linux
+(defconstant +base+ "../../lib")
+
 (cffi:define-foreign-library libpbc
-  (:darwin "/usr/local/lib64/libLispPBCIntf.dylib")
-  (:linux  "/usr/local/lib/libLispPBCIntf.so")
+  (:darwin #.(concatenate 'string +base+ "/libLispPBCIntf.dylib"))
+  (:linux  #.(concatenate 'string +base+ "/libLispPBCIntf.so"))
   (t (:default "libLispPBCIntf"))
   )
 (cffi:use-foreign-library libpbc)
