@@ -9,4 +9,5 @@
   :serial t
   :components ((:file "package")
                (:file "simple-gossip")
+               #+(and :CLOZURE :DARWIN) (:file "ccl-darwin-special")
                (:file "graphviz")))
