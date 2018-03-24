@@ -1,7 +1,9 @@
+# debug
 set -x
 BASE=$PWD
 # where the tarballs should be
-TARDIR=${BASE}/src/Crypto/PBC-Intf
+CRYPTO=${BASE}/src/Crypto
+TARDIR=${CRYPTO}/PBC-Intf
 # pbc intf files are in the same place
 PBCINTF=${TARDIR}
 GMP=gmp-6.1.2.tar.bz2
@@ -74,3 +76,7 @@ then
 fi
 cd ${PBCINTF}
 make --makefile=${MAKETARGET}
+
+# currently not sure if this is used anywhere, anymore
+# cd ${CRYPTO}/C-Code
+# make
