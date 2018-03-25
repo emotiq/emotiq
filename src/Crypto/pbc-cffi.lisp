@@ -96,13 +96,14 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-; (defparameter *base* "/usr/local/lib64") ; mac
-; (defparameter *base* "/usr/local/lib") ; linux
-(defconstant +base+ "../../lib")
+; #.(defparameter *base* "/usr/local/lib64") ; mac
+; #.(defparameter *base* "/usr/local/lib") ; linux
+; #.(defparameter *dll-osx* "../../lib/libLispPBCIntf.dylib")
+; .(defparameter *dll-linux* "../../lib/libLispPBCIntf.so")
 
 (cffi:define-foreign-library libpbc
-  (:darwin #.(concatenate 'string +base+ "/libLispPBCIntf.dylib"))
-  (:linux  #.(concatenate 'string +base+ "/libLispPBCIntf.so"))
+  (:darwin "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib")
+  (:linux  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so")
   (t (:default "libLispPBCIntf"))
   )
 (cffi:use-foreign-library libpbc)
