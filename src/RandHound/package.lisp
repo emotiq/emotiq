@@ -82,7 +82,8 @@ THE SOFTWARE.
         :core-crypto
         :randhound/common
         :vec-repr
-        :pbc)
+        :pbc
+        :actors)
   (:export
    ))
 
