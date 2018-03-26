@@ -97,14 +97,10 @@ THE SOFTWARE.
 (fli:disconnect-module :pbclib
                        :remove t)
 
-;; (fli:register-module :pbclib
-;;                      :dlopen-flags t
-;;                      :real-name
-;;                      #+:MACOSX "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib"
-;;                      #+:LINUX  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so"
-;;                      )
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  #+:MACOSC(defparameter *libs* (concatenate 'string 
+					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
+					    "/libLispPBCIntf.dylib"))
   #+:LINUX(defparameter *libs* (concatenate 'string 
 					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
 					    "/libLispPBCIntf.so"))
