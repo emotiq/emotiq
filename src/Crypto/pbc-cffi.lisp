@@ -447,7 +447,7 @@ sign0 1
 
 (defun need-pairing ()
   (unless *curve*
-    (error "Pairing not initialized. Use INIT-PAIRING.")))
+    (init-pairing)))
 
 (defun need-keying ()
   (need-pairing)
@@ -969,7 +969,7 @@ sign0 1
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
-(init-pairing)
+;; (init-pairing)
 ;; --------------------------------------------------------
 #|
 (init-pairing)
