@@ -24,6 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
+
 (asdf:load-system :cffi)
 
 (defpackage :pbc-interface
@@ -353,19 +354,17 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
   pairing-text
   g1 g2)
 
-;; from: genfparam 256
+; from: genfparam 256
 (defparameter *curve-fr256-params*
   (make-curve-params
    :pairing-text
-   #>.end
-type f
+"type f
 q 16283262548997601220198008118239886027035269286659395419233331082106632227801
 r 16283262548997601220198008118239886026907663399064043451383740756301306087801
 b 10476541659213232777352255224319706265440471807344192411073251777589416636392
 beta 2588849289436542488537732220497504302700946308066126767616133606209888506551
 alpha0 15760619495780482509052463852330180194970833782280957391784969704642983647946
-alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
-.end
+alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735"
    :g1  (make-instance 'g1-cmpr
          :pt (make-instance 'base58
               :str "3CC2P9iZp4DguyULARTeE6LHc1jCLhEhm1kY8hLz48BgU"))
@@ -377,7 +376,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 (defparameter *curve-default-ar160-params*
   (make-curve-params
    :pairing-text
-   #>.end
+"
 type a
 q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791
 h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776
@@ -386,7 +385,7 @@ exp2 159
 exp1 107
 sign1 1
 sign0 1
-.end
+"
    :g1  (make-instance 'g1-cmpr
          :pt (make-instance 'base58
               :str "BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
@@ -917,58 +916,58 @@ sign0 1
 
 |#
 
-;; ------------------------------------------------------
-;;
-;; The PBC & GNU MP libs are possibly not thread-safe nor reentrant.
-;; The PBC interface in LibLispPBCInterface is certainly not
-;; reentrant, as it depends on C global values. And it is not
-;; thread-safe since those globals could change from activities in
-;; other threads.
-;;
-;; Hence we need a way to ensure that all use of it goes through a
-;; single thread. Actors to the resuce...
-;;
-;; Note that because of activities requested by other client code, the
-;; values of PBC elements may be arbitrary. If you need a known
-;; environment, you should reestablish it on entry. This applies
-;; in particular to the secret and public keying in effect.
+;;; ;; ------------------------------------------------------
+;;; ;;
+;;; ;; The PBC & GNU MP libs are possibly not thread-safe nor reentrant.
+;;; ;; The PBC interface in LibLispPBCInterface is certainly not
+;;; ;; reentrant, as it depends on C global values. And it is not
+;;; ;; thread-safe since those globals could change from activities in
+;;; ;; other threads.
+;;; ;;
+;;; ;; Hence we need a way to ensure that all use of it goes through a
+;;; ;; single thread. Actors to the resuce...
+;;; ;;
+;;; ;; Note that because of activities requested by other client code, the
+;;; ;; values of PBC elements may be arbitrary. If you need a known
+;;; ;; environment, you should reestablish it on entry. This applies
+;;; ;; in particular to the secret and public keying in effect.
 
-(defun do-with-pbc-exclusive (fn skey pkey)
-  (um:critical-section
-    (when skey
-      (set-secret-key skey))
-    (when pkey
-      (set-public-key pkey))
-    (funcall fn)))
+;;; (defun do-with-pbc-exclusive (fn skey pkey)
+;;;   (um:critical-section
+;;;     (when skey
+;;;       (set-secret-key skey))
+;;;     (when pkey
+;;;       (set-public-key pkey))
+;;;     (funcall fn)))
 
-(defun ado-with-pbc-exclusive (fn skey pkey)
-  ;; support parallelism better with an Actor service
-  ;; instead of blocking-wait lock
-  (let ((handler (load-time-value
-                  (ac:make-actor 'do-with-pbc-exclusive))))
-    (ac:send handler fn skey pkey)))
+;;; (defun ado-with-pbc-exclusive (fn skey pkey)
+;;;   ;; support parallelism better with an Actor service
+;;;   ;; instead of blocking-wait lock
+;;;   (let ((handler (load-time-value
+;;;                   (ac:make-actor 'do-with-pbc-exclusive))))
+;;;     (ac:send handler fn skey pkey)))
 
-(defmacro with-crypto ((&key skey pkey) &body body)
-  `(ado-with-pbc-exclusive (lambda ()
-                            ,@body)
-                          ,skey ,pkey))
+;;; (defmacro with-crypto ((&key skey pkey) &body body)
+;;;   `(ado-with-pbc-exclusive (lambda ()
+;;;                             ,@body)
+;;;                           ,skey ,pkey))
 
-#+:LISPWORKS
-(editor:setup-indent "with-crypto" 1)
+;;; #+:LISPWORKS
+;;; (editor:setup-indent "with-crypto" 1)
 
 
-(defun do-ask-crypto (fn skey pkey)
-  (let ((mbox (mp:make-mailbox)))
-    (with-crypto (:skey skey
-                  :pkey pkey)
-      (mp:mailbox-send mbox
-                       (um:capture-ans-or-exn fn)))
-    (um:recover-ans-or-exn (mp:mailbox-read mbox))))
+;;; (defun do-ask-crypto (fn skey pkey)
+;;;   (let ((mbox (mp:make-mailbox)))
+;;;     (with-crypto (:skey skey
+;;;                   :pkey pkey)
+;;;       (mp:mailbox-send mbox
+;;;                        (um:capture-ans-or-exn fn)))
+;;;     (um:recover-ans-or-exn (mp:mailbox-read mbox))))
 
-(defmacro ask-crypto ((&key skey pkey) &body body)
-  `(do-ask-crypto (lambda ()
-                    ,@body)
-                  ,skey ,pkey))
+;;; (defmacro ask-crypto ((&key skey pkey) &body body)
+;;;   `(do-ask-crypto (lambda ()
+;;;                     ,@body)
+;;;                   ,skey ,pkey))
 
-#+:LISPWORKS
-(editor:setup-indent "ask-crypto" 1)
+;;; #+:LISPWORKS
+;;; (editor:setup-indent "ask-crypto" 1)

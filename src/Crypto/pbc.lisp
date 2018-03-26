@@ -100,8 +100,8 @@ THE SOFTWARE.
 (fli:register-module :pbclib
                      :dlopen-flags t
                      :real-name
-                     #+:MACOSX "/usr/local/lib64/libLispPBCIntf.dylib"
-                     #+:LINUX  "/usr/local/lib/libLispPBCIntf.so"
+                     #+:MACOSX "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib"
+                     #+:LINUX  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so"
                      )
 
 ;; -----------------------------------------------------------------------
@@ -463,6 +463,8 @@ sign0 1
                (ntxt   (length txt))
                (ansbuf (fli:allocate-dynamic-foreign-object
                         :type :long :nelems 4)))
+      (format (cl-user::dbg) "ntxt /~A/ txt /~A/~%" ntxt txt)
+      (read-char)
       (assert (zerop (_init-pairing (fli:convert-to-dynamic-foreign-string
                                      txt
                                      :external-format :ASCII)

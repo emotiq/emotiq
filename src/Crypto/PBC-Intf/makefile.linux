@@ -23,7 +23,8 @@ EINC=-I../../../include
 LOCALLIB=/usr/local/lib
 EMTQLIB=../../../lib
 
-GCC=g++ -shared -fpic $(SYSINC) ${EINC} -O2 -msse3 -mfpmath=sse -m64 -L$(LOCALLIB) -L$(EMTQLIB)
+#GCC=g++ -shared -fpic $(SYSINC) ${EINC} -O2 -msse3 -mfpmath=sse -m64 -L$(LOCALLIB) -L$(EMTQLIB)
+GCC=g++ -shared -fpic $(SYSINC) ${EINC} -g -msse3 -mfpmath=sse -m64 -L$(LOCALLIB) -L$(EMTQLIB)
 
 all: pbc_intf
 
@@ -31,10 +32,10 @@ pbc_intf: pbc_intf.cpp pbc_intf.h
 	$(GCC) -o libLispPBCIntf.so \
 		pbc_intf.cpp \
 	-Wl,-rpath $(LOCALLIB) \
-	-Wl,-rpath $(EMTQLIB)
+	-Wl,-rpath $(EMTQLIB) \
+	-l pbc
 	mv -f libLispPBCIntf.so $(EMTQLIB)
 
-# dropped -l pbc since there are no .o or .so's in the pbc directory
 
 
 

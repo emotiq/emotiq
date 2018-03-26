@@ -48,9 +48,32 @@ extern "C"
 long init_pairing(char* param_str, long nel, long* psize)
 {
   long ans;
+
+  int c;
+  
+  printf ("inside init_pairing\n");
+  printf ("%ld /%s/\n", nel, param_str);
+      printf ("enter a char 1\n");
+      do { 
+	c = getchar(); 
+      } 
+      while (c != '\n');
+  printf ("%ld /%s/\n", nel, param_str);
+      printf ("enter a char 2\n");
+      do { 
+	c = getchar(); 
+      } 
+      while (c != '\n');
   
   if(init_flag)
     {
+      printf ("starting if\n");
+      printf ("enter a char 3\n");
+      do { 
+	c = getchar(); 
+      } 
+      while (c != '\n');
+      
       pairing_pp_clear(pp);
       element_clear(temp1);
       element_clear(temp2);
@@ -61,9 +84,16 @@ long init_pairing(char* param_str, long nel, long* psize)
       element_clear(g2);
       pairing_clear(pairing);
       init_flag = false;
+  printf ("finshed init\n");
     }
+  printf ("finshed if\n");
+      printf ("enter a char 4\n");
+      do { 
+	c = getchar(); 
+      } 
+      while (c != '\n');
   ans = pairing_init_set_buf(pairing, param_str, nel);
-  if(0 == ans)
+if(0 == ans)
     {
       element_init_G2(g2, pairing);
       element_init_G2(public_key, pairing);
