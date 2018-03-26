@@ -94,18 +94,26 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (format *standard-output* "~%working dir = /~A/~%" (truename ".")))
-
 (fli:disconnect-module :pbclib
                        :remove t)
 
+;; (fli:register-module :pbclib
+;;                      :dlopen-flags t
+;;                      :real-name
+;;                      #+:MACOSX "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib"
+;;                      #+:LINUX  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so"
+;;                      )
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+:LINUX(defparameter *libs* (concatenate 'string 
+					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
+					    "/libLispPBCIntf.so"))
+  )
+
 (fli:register-module :pbclib
-                     :dlopen-flags t
-                     :real-name
-                     #+:MACOSX "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib"
-                     #+:LINUX  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so"
-                     )
+		     :dlopen-flags t
+		     :real-name *libs*
+		     )
 
 ;; -----------------------------------------------------------------------
 ;; for initial test of strings transfer to/from C/Lisp
@@ -876,7 +884,6 @@ sign0 1
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
-(format *standard-output* "~%working directory /~A/~%" (truename "."))
 (init-pairing)
 ;; --------------------------------------------------------
 #|
