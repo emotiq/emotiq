@@ -27,14 +27,16 @@ env:
 
 install:
   - curl -L https://raw.githubusercontent.com/emotiq/roswell/mte-lispworks/scripts/install-for-ci.sh | sh
+  - sudo apt-get install openssl pgpgpg wget bash
 # Pin quicklisp to known version; install emotiq dist
   - ros -e '(ql-dist:install-dist 
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
                :replace t :prompt nil)
             (ql-dist:install-dist 
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
-               :prompt nil)'
-  - sudo apt-get install openssl pgpgpg wget bash
+               :prompt nil)
+            (uiop:quit 0)'
+
 
 # Add/remove test converage here
 # 
