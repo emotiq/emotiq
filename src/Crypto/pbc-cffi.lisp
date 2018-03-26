@@ -96,11 +96,6 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-;; (cffi:define-foreign-library libpbc
-;;   (:darwin "/usr/local/lib64/libLispPBCIntf.dylib")
-;;   (:linux  "/usr/local/lib/libLispPBCIntf.so")
-;;   (t (:default "libLispPBCIntf"))
-;;   )
 (cffi:define-foreign-library libpbc
   (:darwin "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib")
   (:linux  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so")

@@ -94,6 +94,9 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (format *standard-output* "~%working dir = /~A/~%" (truename ".")))
+
 (fli:disconnect-module :pbclib
                        :remove t)
 
@@ -873,6 +876,7 @@ sign0 1
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
+(format *standard-output* "~%working directory /~A/~%" (truename "."))
 (init-pairing)
 ;; --------------------------------------------------------
 #|

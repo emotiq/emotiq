@@ -30,8 +30,9 @@ THE SOFTWARE.
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :components  ((:file "pairing-curves")
-                (:file "pbc-cffi"))
+                (:file "pbc"))
+  ;;(:file "pbc-cffi"))
   :serial       t
   :depends-on   ("core-crypto"
-                 "cffi"))
-
+		 ))
+;;                 "cffi"))
