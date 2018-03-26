@@ -96,19 +96,14 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  #+:MACOSC(defparameter *libs* (concatenate 'string 
-					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
-					    "/libLispPBCIntf.dylib"))
-  #+:LINUX(defparameter *libs* (concatenate 'string 
-					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
-					    "/libLispPBCIntf.so"))
-  (format *standard-output* "~%libs= ~S~%" *libs*)
-  )
-
 (cffi:define-foreign-library libpbc
-  (:darwin *libs*)
-  (:linux  *libs*)
+  #+:MACOSX(:darwin (concatenate 'string 
+				 (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
+				 "/libLispPBCIntf.dylib"))
+  #+:LINUX(:linux(concatenate 'string 
+			      (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
+			      "/libLispPBCIntf.so"))
+
   (t (:default "libLispPBCIntf"))
   )
 (cffi:use-foreign-library libpbc)
