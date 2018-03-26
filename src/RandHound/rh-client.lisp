@@ -44,7 +44,7 @@ THE SOFTWARE.
     (loop for node across vnodes do
           ;; cheap hash is xor
           (let* ((pkey  (node-assoc-pkey node))
-                 (ix    (mod (logxor r (need-integer-form pkey)) ngrp)))
+                 (ix    (mod (logxor r (int pkey)) ngrp)))
             (push pkey (aref tgrp ix))))
     ;; return vector of groups, each group a list of pkeys
     tgrp))
@@ -63,7 +63,7 @@ THE SOFTWARE.
 (defstruct session-config-message
   hash-config tgrps purpose tstamp)
 
-(defun initialization (purpose &key (max-bft *max-bft*))
+(defun initialization (reply-to purpose &key (max-bft *max-bft*))
   (let* ((vnodes  (get-nodes-vector))
          (nnodes  (length vnodes))
          (nneed   (1+ (* 3 max-bft))))
@@ -73,7 +73,7 @@ THE SOFTWARE.
       (let* ((vnodes   (subseq vnodes 0 nneed))
              (tgrps    (create-server-groups vnodes))
              (config   (construct-session-config vnodes tgrps max-bft purpose))
-             (hconfig  (published-form (sha3/256-buffers config)))
+             (hconfig  (published-form (hash:hash/256 config)))
              (init-msg (make-session-config-message
                         :hash-config hconfig
                         :tgrps       tgrps
@@ -81,7 +81,7 @@ THE SOFTWARE.
                         :tstamp      (session-config-tstamp config))))
         (record-to-log config)
         (record-to-log init-msg)
-        (broadcast-message init-msg vnodes)))
+        (broadcast-message (list :randhount-init reply-to init-msg) vnodes)))
     ))
 
 ;; --------------------------------------------------------------------
@@ -399,6 +399,11 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
          (key-pairs (loop for ix from 1 to n collect (make-key-pair ix)))
          (pkeys     (mapcar 'keying-triple-pkey key-pairs))
          (xvals     (um:range 1 (1+ n)))
+
+         (xvals (mapcar (lambda (pkey)
+                          (mod (int pkey) q))
+                        pkeys))
+         
          (poly      (lambda (x)
                       (with-mod q
                         (um:nlet-tail iter ((coffs coffs)
@@ -412,12 +417,12 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
          (shares       (mapcar poly xvals))
          (encr-shares  (mapcar 'expt-pt-zr pkeys shares))
          (share-proofs (mapcar (um:curry 'expt-pt-zr (get-g1)) shares)))
-    (list kord share-proofs encr-shares key-pairs shares)))
+    (list kord share-proofs encr-shares key-pairs)))
 
 (defun validate-randomness-rs (lst)
   ;; the algorithm presented in the SCRAPE paper for computing the
   ;; dual vector is incorrect. This code does not work...
-  (destructuring-bind (k proofs encr-shares keys shares) lst
+  (destructuring-bind (k proofs encr-shares keys) lst
     (let* ((pkeys (mapcar 'keying-triple-pkey keys)))
       (assert (every (let ((g1 (get-g1)))
                        (lambda (proof pkey share)
@@ -430,6 +435,12 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
              (n     (length pkeys))
              (kord  (- n k 2))
              (xvals (um:range 1 (1+ n)))
+
+             (pkeys (mapcar 'keying-triple-pkey keys))
+             (xvals (mapcar (lambda (pkey)
+                              (mod (int pkey) q))
+                            pkeys))
+
              (coffs (loop repeat (1+ kord) collect
                           (random-between 1 q)))
              (invprod (lambda (x)
@@ -460,22 +471,7 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                                (setf pt (if pt
                                             (mul-pts pt c*p)
                                           c*p))))
-                       pt))
-             (chk2   (let ((ans nil))
-                       (with-mod q
-                         ;; (inspect coffs)
-                         ;; (format t "~&sum of shares: ~A" (reduce 'm+ shares))
-                         ;; (format t "~&sum of cvals:  ~A" (reduce 'm+ cvals))
-                         (loop for s in shares
-                               for c in cvals
-                               do
-                               (let ((c*s  (m* c s)))
-                                 (setf ans (if ans
-                                               (m+ ans c*s)
-                                             c*s)))))
-                       ans)))
-        (format t "~&Chk2: ~A" chk2)
-        ;; (format t "~&Chk:  ~A" (int chk))
+                       pt)))
         (assert (zerop (int chk)))
         (list lst
               (mapcar (lambda (share skey)
@@ -484,8 +480,8 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
         ))))
 
 (defun collect-randomness-rs (lst)
-  (destructuring-bind ((k proofs encr-shares keys xshares) shares) lst
-    (declare (ignore k encr-shares xshares))
+  (destructuring-bind ((k proofs encr-shares keys) shares) lst
+    (declare (ignore k encr-shares))
     (assert (every (let ((g1 (get-g1))
                          (g2 (get-g2)))
                      (lambda (proof share)
@@ -535,31 +531,37 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
           (iter (1+ m)))))
     ))
 
-(defun dft (m coffs &optional inv)
+(defun ntt (m coffs &optional inv)
+  ;; Number Theoretic Transform - DFT over Finite Field
   ;; n = nbr elements to produce
-  ;; m = order of FFT
+  ;; m = order of NTT
   ;; coffs = amplitudes for each spectral index
   (let* ((q  (get-order))
          (p  (with-mod q
-               (m^ 2 (truncate (1- q) m))))
+               (let ((p (m^ 2 (truncate (1- q) m))))
+                 (if inv
+                     (m/ p)
+                   p))))
+         (sf (if inv (with-mod q (m/ m)) 1))
          (xs (with-mod q
                (loop for ix from 1 to m
                    for x = 1 then (m* p x)
                    collect x)))
          (poly (lambda (x)
                  (with-mod q
-                   (um:nlet-tail iter ((cs   (reverse coffs))
-                                       (ans  0))
-                       (if (endp cs)
-                           ans
-                         (iter (cdr cs)
-                               (m+ (car cs)
-                                   (m* x ans)))
-                         )))))
+                   (m* sf
+                       (um:nlet-tail iter ((cs   (reverse coffs))
+                                           (ans  0))
+                         (if (endp cs)
+                             ans
+                           (iter (cdr cs)
+                                 (m+ (car cs)
+                                     (m* x ans)))
+                           ))))))
          (trev (lambda (lst)
                  (cons (car lst) (reverse (cdr lst)))))
          (spec  (mapcar poly xs)))
-    (if inv
+    (if (and nil inv)
         (funcall trev spec)
       spec)))
          
@@ -567,50 +569,113 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
 (let* ((q   (get-order))
        (cs  (loop for ix from 0 to 6 collect
                   (random-between 1 q)))
-       (xs  (dft 43 cs))
+       (xs  (ntt 43 cs))
        (css (append (make-list (length cs) :initial-element 0)
                     (loop for ix from (length cs) below 43 collect
                           (random-between 1 q))))
-       (xsi (dft 43 xs t))
-       (xsii (dft 43
+       (xsi (ntt 43 xs t))
+       (xsii (ntt 43
                   (let ((xs (copy-list xs)))
-                    (setf (cadr xs) (with-mod q (1+ (cadr xs))))
+                    (setf (cadr xs) (with-mod q (m+ 1 (cadr xs))))
                     xs)
                   t))
-       (ys  (dft 43 css))
-       (ysi (dft 43 ys t)))
+       (ys  (ntt 43 css))
+       (ysi (ntt 43 ys t)))
+  #|
   (inspect (with-mod q
              (mapcar 'm- xsi xsii)))
+  |#
   (plt:plot 'xx xsi :clear t
+            :yrange `(0 ,q)
             :symbol :circle
             :plot-joined t)
   (plt:plot 'xx cs :color :red
-            :symbol :circle
+            :alpha 0.5
+            :symbol :cross
             :plot-joined t)
   (plt:plot 'xx xsii :color :blue
             :symbol :circle
             :plot-joined t)
   (plt:plot 'x css :clear t
+            :yrange `(0 ,q)
             :symbol :circle
             :plot-joined t)
   (plt:plot 'x ysi :color :red
-            :symbol :circle
+            :alpha 0.5
+            :symbol :cross
             :plot-joined t)
   (with-mod q
     (reduce 'm+
-            (mapcar 'm*  xx cs))))
+            (mapcar 'm*  xs cs))))
+|#
+#|
+(let* ((q   (get-order))
+       (cs  (loop for ix from 0 to 6 collect
+                  (random-between 1 q)))
+       (xs  (loop for ix from 1 to 32 collect ix))
+       (poly (lambda (x)
+               (with-mod q
+                 (um:nlet-tail iter ((cs cs)
+                                     (ans 0))
+                   (if (endp cs)
+                       ans
+                     (iter (cdr cs)
+                           (m+ (car cs)
+                               (m* x ans))))
+                   ))))
+       (invfn (lambda (x)
+                (with-mod q
+                  (let ((prod 1))
+                    (loop for xj in xs do
+                          (unless (= xj x)
+                            (setf prod (m* prod (m- x xj)))))
+                    (m/ prod)))))
+       (rinvfn (lambda (x)
+                  (let ((prod 1))
+                    (loop for xj in xs do
+                          (unless (= xj x)
+                            (setf prod (* prod (- x xj)))))
+                    (/ 300d30 prod))))
+       (zs  (mapcar invfn xs))
+       (rzs (mapcar rinvfn xs))
+       (fzs (ntt 43 zs))
+       (ys  (mapcar poly xs))
+       (yzs (with-mod q (mapcar 'm* zs ys)))
+       (fys (ntt 43 ys)))
+  (print (with-mod q (reduce 'm+ yzs)))
+  (plt:plot 'xx zs
+            ;; (fft:fwd-magnitude-db (coerce rzs 'vector))
+            :clear t
+            ;; :yrange '(-0.0001 0.0001)
+            :symbol :circle
+            :plot-joined t))
+
+(let* ((xs (loop for ix from 1 to 31 collect ix))
+       (interp (lambda (x xc)
+                 (let ((prod 1))
+                   (loop for xj in xs do
+                         (unless (= xj xc)
+                           (setf prod (* prod (/ (- x xj) (- xc xj))))))
+                   prod))))
+  (plt:fplot 'interp '(1 31)
+             (lambda (x)
+               (loop for xc from 16 to 16 sum
+                     (funcall interp x xc)))
+             :clear t
+             :yrange '(-2 2)
+             ))
 |#
 
 (defun tst-fld (n k)
   (let* ((q     (get-order))
          (coffs (loop for ix from 0 below k collect (random-between 1 q)))
-         (xs    (loop for ix from 1 to n collect ix))
+         (xs    (loop for ix from 1 to n collect #|ix|# (random-between 1 q)))
          (poly  (lambda (x)
                   (with-mod q
                     (um:nlet-tail iter ((cs  (reverse coffs))
                                         (ans 0))
                       (if (endp cs)
-                          ans
+                            ans
                         (iter (cdr cs)
                               (m+ (car cs)
                                   (m* x ans))))))))
@@ -622,7 +687,7 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
          (g1      (get-g1))
          (cshares (mapcar (um:curry 'expt-pt-zr g1) shares))
          (bent-cshares (mapcar (um:curry 'expt-pt-zr g1) bent-shares))
-         (kdual   (- n k 1))
+         (kdual   (- n k))
          (coffsd  (loop for ix from 0 below kdual collect (random-between 1 q)))
          (invwt   (lambda (x)
                     (with-mod q

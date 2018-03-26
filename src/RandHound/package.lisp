@@ -68,7 +68,9 @@ THE SOFTWARE.
 (defpackage :randhound/server
   (:use :common-lisp
         :core-crypto
-        :randhound/common)
+        :randhound/common
+        :vec-repr
+        :pbc)
   (:export
    ))
 

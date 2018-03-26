@@ -34,3 +34,17 @@ THE SOFTWARE.
 
 (in-package :randhound/server)
 ;; ---------------------------------------------------------------
+
+(defun dispatch-message (node)
+  (make-actor
+   (um:dlambda (&rest msg)
+     (:randhound-init (reply-to config)
+      (rh-serve-init reply-to config))
+
+     (:randhound-decrypt-secrets (reply-to packet)
+      (rh-serve-decrypt-secrets reply-to packet))
+
+     (:randhound-fix-randomness (result)
+      (rh-serve-fix-randomness result))
+
+     )))
