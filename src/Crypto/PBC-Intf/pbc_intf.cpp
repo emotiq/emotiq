@@ -431,6 +431,40 @@ void exp_G2z(unsigned char* g2, unsigned char* zr)
   element_clear(z);
   element_clear(g);
 }
+
+extern "C"
+void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash)
+{
+  element_t g;
+
+  element_init_G1(g, pairing);
+  element_from_hash(g, phash, nhash);
+  element_to_bytes_compressed(g1_pt, g);
+  element_clear(g);
+}
+
+extern "C"
+void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash)
+{
+  element_t g;
+
+  element_init_G2(g, pairing);
+  element_from_hash(g, phash, nhash);
+  element_to_bytes_compressed(g2_pt, g);
+  element_clear(g);
+}
+
+extern "C"
+void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash)
+{
+  element_t z;
+
+  element_init_Zr(z, pairing);
+  element_from_hash(z, phash, nhash);
+  element_to_bytes(zr_val, z);
+  element_clear(z);
+}
+
   
 
 // -- end of pbc_intf.cpp -- //

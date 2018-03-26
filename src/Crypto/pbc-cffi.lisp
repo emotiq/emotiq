@@ -106,6 +106,10 @@ THE SOFTWARE.
    :crypto-packet-tstamp
    :crypto-packet-rval
    :crypto-packet-cmsg
+
+   :g1-from-hash
+   :g2-from-hash
+   :zr-from-hash
    ))
 
 (in-package :pbc-interface)
@@ -306,6 +310,23 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
   (gtbuf :pointer :unsigned-char)  ;; result returned here
   (hbuf  :pointer :unsigned-char)
   (gbuf  :pointer :unsigned-char))
+
+;; ----------------------------------------------------
+
+(cffi:defcfun ("get_G1_from_hash" _get-g1-from-hash) :void
+  (g1buf :pointer :unsigned-char)
+  (hbuf  :pointer :unsigned-char)
+  (nhash :long))
+
+(cffi:defcfun ("get_G2_from_hash" _get-g2-from-hash) :void
+  (g2buf :pointer :unsigned-char)
+  (hbuf  :pointer :unsigned-char)
+  (nhash :long))
+
+(cffi:defcfun ("get_Zr_from_hash" _get-zr-from-hash) :void
+  (zrbuf :pointer :unsigned-char)
+  (hbuf  :pointer :unsigned-char)
+  (nhash :long))
 
 ;; -------------------------------------------------
 ;; Abstract superclass for crypto objects. These are just wrappers
@@ -566,6 +587,38 @@ sign0 1
                                           2)))
             )))
 
+;; -------------------------------------------------
+
+(defmethod g1-from-hash ((hash hash))
+  (need-pairing)
+  (let ((nb  (hash-length hash)))
+    (with-fli-buffers ((ptbuf  *g1-size*)
+                       (hbuf   nb hash))
+      (_get-g1-from-hash ptbuf hbuf nb)
+      (make-instance 'g1-cmpr
+                     :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
+      )))
+                       
+(defmethod g2-from-hash ((hash hash))
+  (need-pairing)
+  (let ((nb (hash-length hash)))
+  (with-fli-buffers ((ptbuf  *g2-size*)
+                     (hbuf   nb  hash))
+    (_get-g2-from-hash ptbuf hbuf nb)
+    (make-instance 'g2-cmpr
+                   :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
+    )))
+                       
+(defmethod zr-from-hash ((hash hash))
+  (need-pairing)
+  (let ((nb (hash-length hash)))
+    (with-fli-buffers ((zbuf   *zr-size*)
+                       (hbuf   nb  hash))
+      (_get-zr-from-hash zbuf hbuf nb)
+      (make-instance 'zr
+                     :val  (xfer-foreign-to-lisp zbuf *zr-size*))
+      )))
+                       
 ;; -------------------------------------------------
 
 (defmethod set-element ((x crypto-val) set-fn nb)

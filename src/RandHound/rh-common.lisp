@@ -93,7 +93,13 @@ THE SOFTWARE.
   (declare (ignore msg ip port))
   (NYI :send-message))
 
+;; ------------------------------------------------------------------
 
+(defstruct session-config
+  pkeys tgrps max-bft purpose tstamp)
+
+(defstruct subgroup-commit
+  thresh encr-shares proofs)
 
 
                 

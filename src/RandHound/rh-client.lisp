@@ -49,9 +49,6 @@ THE SOFTWARE.
     ;; return vector of groups, each group a list of pkeys
     tgrp))
 
-(defstruct session-config
-  pkeys tgrps max-bft purpose tstamp)
-
 (defun construct-session-config (vnodes tgrps max-bft purpose)
   (make-session-config
    :pkeys   (map 'vector 'node-assoc-pkey vnodes)
@@ -59,9 +56,6 @@ THE SOFTWARE.
    :max-bft max-bft
    :purpose purpose
    :tstamp  (get-timestamp)))
-
-(defstruct session-config-message
-  hash-config tgrps purpose tstamp)
 
 (defun initialization (reply-to purpose &key (max-bft *max-bft*))
   (let* ((vnodes  (get-nodes-vector))

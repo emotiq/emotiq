@@ -54,6 +54,18 @@ THE SOFTWARE.
    :send-message
    :get-timestamp
    :NYI
+   :session-config
+   :session-config-pkeys
+   :session-config-tgrps
+   :session-config-max-bft
+   :session-config-purpose
+   :session-config-tstamp
+
+   :subgroup-commit
+   :subgroup-commit-thresh
+   :subgroup-commit-encr-shares
+   :subgroup-commit-proofs
+   :make-subgroup-commit
    ))
 
 (defpackage :randhound/client

@@ -73,6 +73,9 @@ extern "C" {
   void inv_Zr_val(unsigned char* zr);
   void exp_G1z(unsigned char* g1, unsigned char* zr);
   void exp_G2z(unsigned char* g2, unsigned char* zr);
+  void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash);
+  void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash);
+  void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash);
 }
 
 // -- end of pbc_intf.h -- //
