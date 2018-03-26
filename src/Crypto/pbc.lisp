@@ -100,8 +100,8 @@ THE SOFTWARE.
 (fli:register-module :pbclib
                      :dlopen-flags t
                      :real-name
-                     #+:MACOSX "/usr/local/lib64/libLispPBCIntf.dylib"
-                     #+:LINUX  "/usr/local/lib/libLispPBCIntf.so"
+                     #+:MACOSX "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.dylib"
+                     #+:LINUX  "/home/tarvydas/work/emotiq/lib/libLispPBCIntf.so"
                      )
 
 ;; -----------------------------------------------------------------------
