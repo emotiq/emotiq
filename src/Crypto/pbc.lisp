@@ -97,18 +97,15 @@ THE SOFTWARE.
 (fli:disconnect-module :pbclib
                        :remove t)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  #+:MACOSC(defparameter *libs* (concatenate 'string 
-					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
-					    "/libLispPBCIntf.dylib"))
-  #+:LINUX(defparameter *libs* (concatenate 'string 
-					    (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
-					    "/libLispPBCIntf.so"))
-  )
-
 (fli:register-module :pbclib
 		     :dlopen-flags t
-		     :real-name *libs*
+		     :real-name
+		     #+:MACOSC(concatenate 'string 
+					   (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
+					   "/libLispPBCIntf.dylib")
+		     #+:LINUX(concatenate 'string 
+					  (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
+					  "/libLispPBCIntf.so")
 		     )
 
 ;; -----------------------------------------------------------------------
