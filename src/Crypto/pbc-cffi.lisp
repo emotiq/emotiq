@@ -96,16 +96,15 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-(cffi:define-foreign-library 
- libpbc
- (:darwin (concatenate 'string 
+(cffi:define-foreign-library libpbc
+ (:darwin #.(concatenate 'string 
 		       (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
 		       "/libLispPBCIntf.dylib"))
- (:linux (concatenate 'string 
+ (:linux #.(concatenate 'string 
 		     (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
 		     "/libLispPBCIntf.so"))
-  (t (:default "libLispPBCIntf"))
-  )
+ (t (:default "libLispPBCIntf"))
+ )
 
 (cffi:use-foreign-library libpbc)
 
