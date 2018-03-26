@@ -1,11 +1,11 @@
-GCC=g++ -shared -fpic -I/usr/local/include -I/usr/include -O2 -msse3 -mfpmath=sse -m64 -L/usr/local/lib
+GCC=g++ -shared -fpic -I/home/tarvydas/work/emotiq/include -I/usr/include -O2 -msse3 -mfpmath=sse -m64 -L/home/tarvydas/work/emotiq/lib
 
 all: pbc_intf
 
 pbc_intf: pbc_intf.cpp pbc_intf.h
 	$(GCC) -o libLispPBCIntf.so \
 		pbc_intf.cpp \
-	-Wl,-rpath /usr/local/lib -l pbc
-	mv -f libLispPBCIntf.so /usr/local/lib
+	-Wl,-rpath /home/tarvydas/work/emotiq/lib -l pbc
+	mv -f libLispPBCIntf.so /home/tarvydas/work/emotiq/lib
 
 
