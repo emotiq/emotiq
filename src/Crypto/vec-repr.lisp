@@ -180,6 +180,9 @@ THE SOFTWARE.
 
 (defgeneric base58 (x))
 
+(defmethod base58-str (x)
+  (base58-str (base58 x)))
+
 ;; ----------------------------------------------------------
 ;; Base64 encodes UB8 vectors and integers into character strings of
 ;; the restricted alphabet. Encoding has a 6-character prefix that
@@ -193,6 +196,9 @@ THE SOFTWARE.
 
 (defgeneric base64 (x))
 
+(defmethod base64-str (x)
+  (base64-str (base64 x)))
+
 ;; -----------------------------------------------------------
 ;; Hex-string representation, 1 char per 4-bit nibble
 
@@ -201,6 +207,9 @@ THE SOFTWARE.
          :initarg :str)))
 
 (defgeneric hex (x))
+
+(defmethod hex-str (x)
+  (hex-str (hex x)))
 
 ;; -----------------------------------------------------------
 ;; LEV-UB8 are little-endian vectors of UB8 elements
@@ -212,6 +221,9 @@ THE SOFTWARE.
 
 (defgeneric lev (x))
 
+(defmethod lev-vec (x)
+  (lev-vec (lev x)))
+
 ;; -----------------------------------------------------------
 ;; BEV-UB8 are big-endian vectors of UB8 elements
 
@@ -221,6 +233,9 @@ THE SOFTWARE.
    ))
 
 (defgeneric bev (x))
+
+(defmethod bev-vec (x)
+  (bev-vec (bev x)))
 
 ;; ---------------------------------------------------------
 ;; Integer to/from vector form - conversion starts at LSB and works

@@ -340,12 +340,18 @@ extern "C"
 void mul_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G1(p1, pairing);
   element_init_G1(p2, pairing);
+  nel = element_length_in_bytes_compressed(p1);
   element_from_bytes_compressed(p1, pt1);
   element_from_bytes_compressed(p2, pt2);
   element_mul(p1, p1, p2);
-  element_to_bytes_compressed(pt1, p1);
+  if(element_is0(p1))
+    memset(pt1,0,nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
   element_clear(p1);
   element_clear(p2);
 }
@@ -354,12 +360,18 @@ extern "C"
 void mul_G2_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G2(p1, pairing);
   element_init_G2(p2, pairing);
+  nel = element_length_in_bytes_compressed(p1);
   element_from_bytes_compressed(p1, pt1);
   element_from_bytes_compressed(p2, pt2);
   element_mul(p1, p1, p2);
-  element_to_bytes_compressed(pt1, p1);
+  if(element_is0(p1))
+    memset(pt1, 0, nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
   element_clear(p1);
   element_clear(p2);
 }
@@ -382,6 +394,7 @@ extern "C"
 void inv_Zr_val(unsigned char* zr)
 {
   element_t z;
+  // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
   element_init_Zr(z, pairing);
   element_from_bytes(z, zr);
   element_invert(z, z);
@@ -393,6 +406,7 @@ extern "C"
 void exp_G1z(unsigned char* g1, unsigned char* zr)
 {
   element_t z, g;
+  // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
   element_init_Zr(z, pairing);
   element_init_G1(g, pairing);
   element_from_bytes(z, zr);
@@ -407,6 +421,7 @@ extern "C"
 void exp_G2z(unsigned char* g2, unsigned char* zr)
 {
   element_t z, g;
+  // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
   element_init_Zr(z, pairing);
   element_init_G2(g, pairing);
   element_from_bytes(z, zr);
@@ -416,6 +431,40 @@ void exp_G2z(unsigned char* g2, unsigned char* zr)
   element_clear(z);
   element_clear(g);
 }
+
+extern "C"
+void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash)
+{
+  element_t g;
+
+  element_init_G1(g, pairing);
+  element_from_hash(g, phash, nhash);
+  element_to_bytes_compressed(g1_pt, g);
+  element_clear(g);
+}
+
+extern "C"
+void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash)
+{
+  element_t g;
+
+  element_init_G2(g, pairing);
+  element_from_hash(g, phash, nhash);
+  element_to_bytes_compressed(g2_pt, g);
+  element_clear(g);
+}
+
+extern "C"
+void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash)
+{
+  element_t z;
+
+  element_init_Zr(z, pairing);
+  element_from_hash(z, phash, nhash);
+  element_to_bytes(zr_val, z);
+  element_clear(z);
+}
+
   
 
 // -- end of pbc_intf.cpp -- //

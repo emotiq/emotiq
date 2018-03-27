@@ -489,7 +489,7 @@ THE SOFTWARE.
 (defun ed-compress-pt (pt &key lev) ;; lev = little-endian vector
   ;;
   ;; Standard encoding for EdDSA is X in little-endian notation, with
-  ;; Odd(y) encoded as MSB beyond X.
+  ;; Odd(Y) encoded as MSB beyond X.
   ;;
   ;; If lev is true, then a little-endian UB8 vector is produced,
   ;; else an integer value.

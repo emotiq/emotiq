@@ -57,12 +57,18 @@ THE SOFTWARE.
    
    :init-pairing
    :set-generator  ;; 1 each for G1, and G2 groups
+   :set-public-key
+   :set-secret-key
+   
+   :get-g1
+   :get-g2
+   :get-signature
+   :get-public-key
+   :get-secret-key
+   :get-order
    
    :make-key-pair
    :check-public-key
-
-   :set-secret-key
-   :set-public-key
 
    :make-public-subkey
    :make-secret-subkey
@@ -75,12 +81,15 @@ THE SOFTWARE.
 
    :with-crypto
    :ask-crypto
-   
+
+   :compute-pairing
    :mul-pts  ;; bent nomenclature for ECC
    :add-zrs
    :inv-zr
    :expt-pt-zr
-
+   :add-pts  ;; non-bent nomenclature for ECC
+   :mul-pt-zr
+   
    :keying-triple
    :keying-triple-pkey
    :keying-triple-sig
@@ -90,6 +99,17 @@ THE SOFTWARE.
    :signed-message-msg
    :signed-message-sig
    :signed-message-pkey
+
+   :crypto-packet
+   :crypto-packet-pkey
+   :crypto-packet-id
+   :crypto-packet-tstamp
+   :crypto-packet-rval
+   :crypto-packet-cmsg
+
+   :g1-from-hash
+   :g2-from-hash
+   :zr-from-hash
    ))
 
 (in-package :pbc-interface)
@@ -282,7 +302,7 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
   (z     :pointer :unsigned-char))
 
-(cffi:defcfun ("exp_G1z" _exp_G1z) :void
+(cffi:defcfun ("exp_G1z" _exp-G1z) :void
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
@@ -294,6 +314,23 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
   (gtbuf :pointer :unsigned-char)  ;; result returned here
   (hbuf  :pointer :unsigned-char)
   (gbuf  :pointer :unsigned-char))
+
+;; ----------------------------------------------------
+
+(cffi:defcfun ("get_G1_from_hash" _get-g1-from-hash) :void
+  (g1buf :pointer :unsigned-char)
+  (hbuf  :pointer :unsigned-char)
+  (nhash :long))
+
+(cffi:defcfun ("get_G2_from_hash" _get-g2-from-hash) :void
+  (g2buf :pointer :unsigned-char)
+  (hbuf  :pointer :unsigned-char)
+  (nhash :long))
+
+(cffi:defcfun ("get_Zr_from_hash" _get-zr-from-hash) :void
+  (zrbuf :pointer :unsigned-char)
+  (hbuf  :pointer :unsigned-char)
+  (nhash :long))
 
 ;; -------------------------------------------------
 ;; Abstract superclass for crypto objects. These are just wrappers
@@ -351,7 +388,7 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
 
 (defstruct curve-params
   pairing-text
-  g1 g2)
+  g1 g2 order g1-len g2-len zr-len gt-len)
 
 ;; from: genfparam 256
 (defparameter *curve-fr256-params*
@@ -367,11 +404,13 @@ alpha0 1576061949578048250905246385233018019497083378228095739178496970464298364
 alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
 .end
    :g1  (make-instance 'g1-cmpr
-         :pt (make-instance 'base58
-              :str "3CC2P9iZp4DguyULARTeE6LHc1jCLhEhm1kY8hLz48BgU"))
+         :pt (bev
+              (make-instance 'hex
+                :str "0761cf30e9ce29716b7c5b7bb25b62371b64f73bb1515487de78beeda041f98f01")))
    :g2  (make-instance 'g2-cmpr
-         :pt (make-instance 'base58
-              :str "SiVvDVXDAzEFNYLqwboyPGuggSF7o4K6Hnhr4tQbFnkPcSHyDpaLKEejzpscLP39dMHxCF9W7VtYXKe8drDrCehu"))
+         :pt (bev
+              (make-instance 'hex
+                :str "05063635c1a668e13ff75dc50e3ee70691956c1e3a7a1aa753949bfc5a2c64b1089295808a7b287851ed003e0c03de12be1ab149825c21c909f0c440e145d0b000")))
    ))
 
 (defparameter *curve-default-ar160-params*
@@ -396,19 +435,23 @@ sign0 1
    ))
 
 (defparameter *curve*    nil)
-(defparameter *G1-size*  nil) ;; G1 corresponds to the h curve
-(defparameter *G2-size*  nil) ;; G2 corresponds to the g curve for keying
-(defparameter *Zr-size*  nil) ;; Zr corresponds to the secret-key
-(defparameter *GT-size*  nil) ;; GT corresponds to the pairings
 
 (defparameter *g2-init*  nil) ;; t if we have done set-generator
 (defparameter *zr-init*  nil) ;; t if we have done set-secret-key
+
+(define-symbol-macro *curve-order*   (curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
+(define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
+(define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
+(define-symbol-macro *g1-size*       (curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
+(define-symbol-macro *g2-size*       (curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
+(define-symbol-macro *zr-size*       (curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
+(define-symbol-macro *gt-size*       (curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
 
 ;; -------------------------------------------------
 
 (defun need-pairing ()
   (unless *curve*
-    (error "Pairing not initialized. Use INIT-PAIRING.")))
+    (init-pairing)))
 
 (defun need-keying ()
   (need-pairing)
@@ -423,12 +466,7 @@ sign0 1
 ;; -------------------------------------------------
 
 (defun init-pairing (&optional (params *curve-fr256-params*))
-  (setf *G1-size* nil
-        *G2-size* nil
-        *Zr-size* nil
-        *GT-size* nil
-        
-        *G2-init* nil
+  (setf *G2-init* nil
         *Zr-init* nil
         *curve*   nil)
   (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
@@ -444,13 +482,15 @@ sign0 1
             *g1-size*  (cffi:mem-aref ansbuf :long 0)
             *g2-size*  (cffi:mem-aref ansbuf :long 1)
             *gt-size*  (cffi:mem-aref ansbuf :long 2)
-            *zr-size*  (cffi:mem-aref ansbuf :long 3))
+            *zr-size*  (cffi:mem-aref ansbuf :long 3)
+            *curve-order* nil)
       (if g1
           (set-generator g1)
-        (setf (curve-params-g1 params) (get-g1)))
+        (setf *g1* (get-g1)))
       (if g2
           (set-generator g2)
-        (setf (curve-params-g2 params) (get-g2)))
+        (setf *g2* (get-g2)))
+      (get-order)
       (values)
       ))))
 
@@ -506,49 +546,83 @@ sign0 1
 ;; world returns the actual neededd lenght to us, and stores that into
 ;; the :LONG count buffer. Then we proceed as normal.
 
-(defun get-element (nb-sym get-fn)
+(defun get-element (nb get-fn)
   (need-pairing)
-  (let ((nb (symbol-value nb-sym)))
-    (unless nb
-      ;; size unknown - query first
-      (setf nb
-            (setf (symbol-value nb-sym)
-                  (funcall get-fn fli:*null-pointer* 0))))
-    (with-fli-buffers ((buf nb))
-      (assert (eql nb (funcall get-fn buf nb)))
-      (xfer-foreign-to-lisp buf nb))
-    ))
+  (with-fli-buffers ((buf nb))
+    (assert (eql nb (funcall get-fn buf nb)))
+    (xfer-foreign-to-lisp buf nb)))
               
 ;; -------------------------------------------------
 
 (defun get-g1 ()
-  (make-instance 'g1-cmpr
-   :pt (get-element '*g1-size* '_get-g1)))
+  (or *g1*
+      (setf *g1*
+            (make-instance 'g1-cmpr
+                           :pt (get-element *g1-size* '_get-g1))
+            )))
 
 (defun get-g2 ()
-  (make-instance 'g2-cmpr
-   :pt (get-element '*g2-size* '_get-g2)))
+  (or *g2*
+      (setf *g2*
+            (make-instance 'g2-cmpr
+                           :pt (get-element *g2-size* '_get-g2))
+            )))
 
 (defun get-signature ()
   (make-instance 'signature
-   :val (get-element '*g1-size* '_get-signature)))
+   :val (get-element *g1-size* '_get-signature)))
 
 (defun get-public-key ()
   (make-instance 'public-key
-   :val (get-element '*g2-size* '_get-public-key)))
+   :val (get-element *g2-size* '_get-public-key)))
 
 (defun get-secret-key ()
   (make-instance 'secret-key
-   :val (get-element '*zr-size* '_get-secret-key)))
+   :val (get-element *zr-size* '_get-secret-key)))
 
 (defun get-order ()
   ;; retuns an integer
-  (let ((txt (curve-params-pairing-text *curve*)))
-    (read-from-string txt t nil
-                      :start (+ (search "r " txt
-                                        :test 'string-equal)
-                                2))))
+  (or *curve-order*
+      (setf *curve-order*
+            (let ((txt (curve-params-pairing-text *curve*)))
+              (read-from-string txt t nil
+                                :start (+ (search "r " txt
+                                                  :test 'string-equal)
+                                          2)))
+            )))
 
+;; -------------------------------------------------
+
+(defmethod g1-from-hash ((hash hash))
+  (need-pairing)
+  (let ((nb  (hash-length hash)))
+    (with-fli-buffers ((ptbuf  *g1-size*)
+                       (hbuf   nb hash))
+      (_get-g1-from-hash ptbuf hbuf nb)
+      (make-instance 'g1-cmpr
+                     :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
+      )))
+                       
+(defmethod g2-from-hash ((hash hash))
+  (need-pairing)
+  (let ((nb (hash-length hash)))
+  (with-fli-buffers ((ptbuf  *g2-size*)
+                     (hbuf   nb  hash))
+    (_get-g2-from-hash ptbuf hbuf nb)
+    (make-instance 'g2-cmpr
+                   :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
+    )))
+                       
+(defmethod zr-from-hash ((hash hash))
+  (need-pairing)
+  (let ((nb (hash-length hash)))
+    (with-fli-buffers ((zbuf   *zr-size*)
+                       (hbuf   nb  hash))
+      (_get-zr-from-hash zbuf hbuf nb)
+      (make-instance 'zr
+                     :val  (xfer-foreign-to-lisp zbuf *zr-size*))
+      )))
+                       
 ;; -------------------------------------------------
 
 (defmethod set-element ((x crypto-val) set-fn nb)
@@ -559,9 +633,11 @@ sign0 1
       (funcall set-fn buf))))
 
 (defmethod set-generator ((g1 g1-cmpr))
+  (setf *g1* g1)
   (set-element g1 '_set-g1 *g1-size*))
 
 (defmethod set-generator ((g2 g2-cmpr))
+  (setf *g2* g2)
   (set-element g2 '_set-g2 *g2-size*)
   (setf *g2-init* t))
 
@@ -786,11 +862,11 @@ sign0 1
 
 (defun make-g2-ans (ans)
   (make-instance 'g2-cmpr
-   :pt ans))
+                 :pt ans))
 
 (defun make-zr-ans (ans)
   (make-instance 'zr
-   :val ans))
+                 :val ans))
 
 ;; -------------------------------
 
@@ -801,36 +877,80 @@ sign0 1
   ;; (should be obvious, but you can't mix G1 with G2, except by
   ;; pairing operations)
   ;;
-  (binop '_mul-g1-pts pt1 pt2
-         *g1-size* *g1-size* 'make-g1-ans))
+  (cond ((zerop (int pt1)) pt2)
+        ((zerop (int pt2)) pt1)
+        (t 
+         (binop '_mul-g1-pts pt1 pt2
+                *g1-size* *g1-size* 'make-g1-ans))
+        ))
+
+(defun add-pts (pt1 pt2)
+  ;; for non-bent nomenclature
+  (mul-pts pt1 pt2))
 
 (defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
   ;; multiply two elements from G2 field
-  (binop '_mul-g2-pts pt1 pt2
-         *g2-size* *g2-size* 'make-g2-ans))
-
+  (cond ((zerop (int pt1)) pt2)
+        ((zerop (int pt2)) pt1)
+        (t 
+         (binop '_mul-g2-pts pt1 pt2
+                *g2-size* *g2-size* 'make-g2-ans))
+        ))
+        
 (defmethod add-zrs ((z1 zr) (z2 zr))
   ;; add two elements from Zr ring
   (binop '_add-zr-vals z1 z2
          *zr-size* *zr-size* 'make-zr-ans))
 
+(defmethod add-zrs ((z1 integer) z2)
+  (add-zrs z2 (make-instance 'zr
+                             :val (mod z1 (get-order)))))
+
 (defmethod inv-zr ((z zr))
   ;; compute inverse of z in ring Zr
+  (when (zerop (int z))
+    (error "Can't invert zero"))
   (need-pairing)
   (with-fli-buffers ((z-buf  *zr-size* z))
     (_inv-zr-val z-buf)
     (make-instance 'zr
                    :val (xfer-foreign-to-lisp z-buf *zr-size*))))
 
+(defmethod inv-zr ((z integer))
+  (inv-zr (make-instance 'zr
+                         :val (mod z (get-order)))))
+
+(defvar *g1-zero*
+  (make-instance 'g1-cmpr
+                 :pt (bev 0)))
+
+(defvar *g2-zero*
+  (make-instance 'g2-cmpr
+                 :pt (bev 0)))
+
 (defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
-  (binop '_exp-G1z g1 z
-         *g1-size* *zr-size* 'make-g1-ans))
+  (cond ((zerop (int z)) *g1-zero*)
+        (t
+         (binop '_exp-G1z g1 z
+                *g1-size* *zr-size* 'make-g1-ans))
+        ))
 
 (defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
   ;; exponentiate an element of G2 by element z of ring Zr
-  (binop '_exp-G2z g2 z
-         *g2-size* *zr-size* 'make-g2-ans))
+  (cond ((zerop (int z)) *g2-zero*)
+        (t 
+         (binop '_exp-G2z g2 z
+                *g2-size* *zr-size* 'make-g2-ans))
+        ))
+
+(defmethod expt-pt-zr (g1 (z integer))
+  (expt-pt-zr g1 (make-instance 'zr
+                                :val (mod z (get-order)))))
+
+(defun mul-pt-zr (pt z)
+  ;; for non-bent nomenclature
+  (expt-pt-zr pt z))
 
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
@@ -853,7 +973,11 @@ sign0 1
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
+<<<<<<< HEAD
 ;(init-pairing)
+=======
+;; (init-pairing)
+>>>>>>> dbm
 ;; --------------------------------------------------------
 #|
 (init-pairing)
