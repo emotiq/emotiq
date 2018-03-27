@@ -60,7 +60,8 @@ script:
                   (system dependencies) 
               :in 
                   '((:emotiq :emotiq-test)
-                    (:cosi   :cosi-test))
+                    (:cosi-bls :cosi-bls-test)
+                    (:crypto-pairings :crypto-pairings/t))
               :doing 
                  (ql:quickload dependencies)
               :unless 

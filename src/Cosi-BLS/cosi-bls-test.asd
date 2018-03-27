@@ -6,11 +6,7 @@
                                        :all :cosi-test))
   :components ((:module package
                         :pathname "./"
-                        :components ((:file "package")))
-               (:module tests
-                        :pathname "./"
-                        :depends-on (package)
-                        :components ((:file "test-package")))))
+                        :components ((:file "package")))))
 
 
   
