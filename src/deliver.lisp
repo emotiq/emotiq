@@ -12,4 +12,4 @@
         (format *standard-output* "~%OK~%")
       (format *standard-output* "~%NOT OK~%"))))
 
-(deliver 'main "emotiq" 0 :multiprocessing t)
+(deliver 'main "emotiq" 0 :multiprocessing t :console t)
