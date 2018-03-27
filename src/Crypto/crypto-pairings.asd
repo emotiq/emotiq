@@ -22,15 +22,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cl-user)
-
-(asdf:defsystem "crypto-pairings"
+(defsystem "crypto-pairings"
   :description "crypto-pairings: bilinear pairings (PBC) functions"
-  :version     "1.0"
+  :version     "1.1.0"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
+  :serial       t
   :components  ((:file "pairing-curves")
 		(:file "pbc-cffi"))
-  :serial       t
   :depends-on   ("core-crypto"
-                 "cffi"))
+                 "cffi")
+  :perform (compile-op :after (o c)
+                    (unless (directory (asdf:system-relative-pathname
+                                        :emotiq "../var/local/lib/libLispPBCIntf.*"))
+                      (format *standard-output* "~&Attempting to build native libraries... hang on...")
+                      (run-program `("bash" ,(namestring (system-relative-pathname
+                                                          :emotiq "../etc/build-native-libs.bash")))
+                                   :output :string :error :string)
+                      (format *standard-output* "~tWhew!  Finished.~&"))))
+
+
+
+

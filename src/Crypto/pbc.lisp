@@ -100,12 +100,14 @@ THE SOFTWARE.
 (fli:register-module :pbclib
 		     :dlopen-flags t
 		     :real-name
-		     #+:MACOSC(concatenate 'string 
-					   (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
-					   "/libLispPBCIntf.dylib")
-		     #+:LINUX(concatenate 'string 
-					  (namestring (asdf:system-relative-pathname 'emotiq "../lib"))
-					  "/libLispPBCIntf.so")
+		     #+:macosx
+                     (concatenate 'string 
+                                  (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+                                  "/libLispPBCIntf.dylib")
+		     #+:linux
+                     (concatenate 'string 
+                                  (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+                                  "/libLispPBCIntf.so")
 		     )
 
 ;; -----------------------------------------------------------------------
