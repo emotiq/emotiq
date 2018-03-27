@@ -6,7 +6,6 @@
 (ql:quickload :core-crypto)
 
 (defun main ()
-  (pbc-interface:init-pairing)
   (pbc:make-key-pair :dave)
   (let ((signed (pbc:sign-message :hello)))
     (if (pbc:check-message signed)
