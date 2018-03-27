@@ -23,7 +23,7 @@
 
 (defun make-uid-mapper ()
   "Returns a table that maps UIDs to objects"
-  (make-hash-table :test 'equal))
+  (kvs:make-store ':hashtable :test 'equal))
 
 (defclass uid-mixin ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
@@ -124,15 +124,15 @@
    (reply-table-lock :initarg :reply-table-lock :initform (mpcompat:make-lock) :accessor reply-table-lock
                      :documentation "Lock for repliers-expected and reply-data. Changes to those must be
                      atomic to avoid a race condition in the simulator.")
-   (repliers-expected :initarg :repliers-expected :initform (make-hash-table :test 'equal)
+   (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
                       :accessor repliers-expected
                       :documentation "Hash-table mapping a solicitation id to a list of node UIDs
                   that I expect to reply to that solicitation")
-   (reply-data :initarg :reply-data :initform (make-hash-table :test 'equal)
+   (reply-data :initarg :reply-data :initform (kvs:make-store ':hashtable :test 'equal)
                :accessor reply-data
                :documentation "Hash-table mapping a solicitation id to some data being accumulated
                   from replies for that solicitation")
-   (kvs :initarg :kvs :initform (make-hash-table) :accessor kvs
+   (local-kvs :initarg :kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor kvs
         :documentation "Local key/value store for this node")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
               :documentation "List of UIDs of direct neighbors of this node")
@@ -142,10 +142,10 @@
 
 (defmethod clear-caches ((node gossip-node))
   "Caches should be cleared in the normal course of events, but this can be used to make sure."
-  (clrhash (message-cache node))
-  (clrhash (repliers-expected node))
-  (clrhash (reply-data node))
-  ; don't clear the kvs. That should be persistent.
+  (kvs:clear-store! (message-cache node))
+  (kvs:clear-store! (repliers-expected node))
+  (kvs:clear-store! (reply-data node))
+  ; don't clear the local-kvs. That should be persistent.
   )
 
 ; We'll use these for real (not simulated on one machine) protocol
@@ -242,7 +242,7 @@
       (write-slot :address (address node))
       (write-slot :neighbors (neighbors node))
       (write-slot :logfn (logfn node))
-      (write-slot :kvs (kvs node))
+      (write-slot :kvs (local-kvs node))
       (format stream "~T)~%"))))
 
 (defun save-graph (stream &optional (nodetable *nodes*))
@@ -473,7 +473,7 @@
   No reply expected."
   (destructuring-bind (key value &rest other) (args msg)
     (declare (ignore other))
-    (setf (kvs thisnode) (kvs:relate (kvs thisnode) key value))
+    (setf (local-kvs thisnode) (kvs:relate (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
@@ -485,7 +485,7 @@
   No reply expected."
   (destructuring-bind (key value &rest other) (args msg)
     (declare (ignore other))
-    (setf (kvs thisnode) (kvs:relate-unique (kvs thisnode) key value))
+    (setf (local-kvs thisnode) (kvs:relate-unique (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
@@ -495,7 +495,7 @@
    any node that currently has the given key will have that key/value removed.
    No reply expected."
   (let ((key (first (args msg))))
-    (setf (kvs thisnode) (kvs:remove-key (kvs thisnode) key))
+    (setf (local-kvs thisnode) (kvs:remove-key (local-kvs thisnode) key))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
@@ -516,7 +516,7 @@
   (let* ((soluid (uid msg))
          (repliers-expected (remove srcuid (neighbors thisnode)))
          (key (first (args msg)))
-         (myvalue (kvs:lookup-key (kvs thisnode) key)))
+         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     ; prepare reply tables
     (mpcompat:with-lock ((reply-table-lock thisnode))
       (kvs:relate-unique! (reply-data thisnode) soluid (list (cons myvalue 1)))
