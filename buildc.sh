@@ -1,3 +1,14 @@
+# Do a "set -x" (for debugging the script) then do some existence checks.
+# Then unravels the two tarballs into subdirectories of PBC_Intf.
+# Climb into those directories and run
+# ./configure --prefix=${BASE}
+# where BASE is set to point to work/emotiq, then run make and make install.
+
+# cd into work/emotiq/src/Crypto/PBC_Intf and call make --makefile=makefile.linux in work/emotiq/src/Crypto/PBC_Intf
+
+# The result should be work/emotiq/lib and work/emotiq/include and a pile of not-cleaned-up files under PBC_Intf
+
+
 # debug
 set -x
 BASE=$PWD
