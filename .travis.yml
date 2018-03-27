@@ -27,7 +27,7 @@ env:
 
 install:
   - curl -L https://raw.githubusercontent.com/emotiq/roswell/mte-lispworks/scripts/install-for-ci.sh | sh
-  - sudo apt-get install openssl pgpgpg wget bash
+  - sudo apt-get install openssl pgpgpg wget bash gcc make g++ flex bison
 # Pin quicklisp to known version; install emotiq dist
   - ros -e '(ql-dist:install-dist 
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 

@@ -32,6 +32,7 @@ THE SOFTWARE.
 		(:file "pbc-cffi"))
   :depends-on   ("core-crypto"
                  "cffi")
+  :in-order-to ((test-op (test-op "crypto-pairings/t")))
   :perform (compile-op :after (o c)
                     (unless (directory (asdf:system-relative-pathname
                                         :emotiq "../var/local/lib/libLispPBCIntf.*"))
@@ -41,6 +42,9 @@ THE SOFTWARE.
                                    :output :string :error :string)
                       (format *standard-output* "~tWhew!  Finished.~&"))))
 
-
+(defsystem "crypto-pairings/t"
+  :depends-on (crypto-pairings)
+  :perform (test-op (o s)
+                    (symbol-call :pbc :init-pairing)))
 
 
