@@ -1,8 +1,12 @@
-;;; simple-gossip.lisp
-;;; 8-Mar-2018 SVS
+;;; gossip.lisp
 
-;;; Simple gossip protocol for experimentation.
-;;;   No crypto. Just for gathering metrics.
+;;; More realistic gossip protocol.
+;;; Minimal changes to use actor concurrency model.
+;;; Gossip messages are simply sent as payload of a lower-level actor message.
+;;; No more process-run-function because actors take care of that.
+;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
+
+;;; NOT DONE YET: MESSAGES THAT EXPECT REPLIES. INSTEAD OF PROCESS-WAIT-WITH-TIMEOUT, WE NEED ACTOR TIMEOUTS.
 
 (in-package :gossip)
 
@@ -56,7 +60,7 @@
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-KILL for this system."))
 
-(defclass message-mixin (uid-mixin)
+(defclass gossip-message-mixin (uid-mixin)
   ((timestamp :initarg :timestamp :initform (get-universal-time) :accessor timestamp
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
@@ -71,7 +75,7 @@
           where messages are shared, in which case in order to increase hopcount,
           the message needs to be copied."))
 
-(defmethod copy-message ((msg message-mixin))
+(defmethod copy-message ((msg gossip-message-mixin))
   (let ((new-msg (make-instance (class-of msg)
                    :uid (uid msg)
                    :timestamp (timestamp msg)
@@ -80,7 +84,7 @@
                    :args (args msg))))
     new-msg))
 
-(defclass solicitation (message-mixin)
+(defclass solicitation (gossip-message-mixin)
   ((reply-requested? :initarg :reply-requested? :initform nil :accessor
                      reply-requested?
                      :documentation "True if a reply is requested to this solicitation.
@@ -94,7 +98,7 @@
 ;   message with a new UID. (Replies can often be changed as they percolate backwards;
 ;   they need new UIDs so that a node that has seen one set of information won't
 ;   automatically ignore it.)
-(defclass reply (message-mixin)
+(defclass reply (gossip-message-mixin)
   ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
                      :documentation "UID of solicitation message that elicited this reply."))
   (:documentation "Reply message. Used to reply to solicitations that need a reply.
@@ -115,26 +119,31 @@
   ((address :initarg :address :initform nil :accessor address
             :documentation "Network address (e.g. IP) of node.")))
    
+(defclass gossip-actor (ac:actor)
+  ((node :initarg :node :initform nil :accessor node
+         :documentation "The gossip-node this actor on behalf of which this actor works")))
+
 (defclass gossip-node (gossip-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
                   :documentation "Cache of seen messages. Table mapping UID of message to UID of sender.
                   Used to ensure identical messages are not acted on twice, and to determine where
                   replies to a message should be sent.")
-   (reply-table-lock :initarg :reply-table-lock :initform (mpcompat:make-lock) :accessor reply-table-lock
-                     :documentation "Lock for repliers-expected and reply-data. Changes to those must be
-                     atomic to avoid a race condition in the simulator.")
    (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
                       :accessor repliers-expected
                       :documentation "Hash-table mapping a solicitation id to a list of node UIDs
-                  that I expect to reply to that solicitation")
+                  that I expect to reply to that solicitation. Only accessed from this node's actor
+                     thread. No locking needed.")
    (reply-data :initarg :reply-data :initform (kvs:make-store ':hashtable :test 'equal)
                :accessor reply-data
                :documentation "Hash-table mapping a solicitation id to some data being accumulated
-                  from replies for that solicitation")
+                  from replies for that solicitation. Only accessed from this node's actor
+                     thread. No locking needed.")
    (local-kvs :initarg :local-kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor local-kvs
         :documentation "Local key/value store for this node")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
               :documentation "List of UIDs of direct neighbors of this node")
+   (actor :initarg :actor :initform nil :accessor actor
+          :documentation "Actor for this node")
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
@@ -153,9 +162,24 @@
   (:documentation "A local [to this process] standin for a gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
+(defun gossip-dispatcher (gossip-node &rest actor-msg)
+  "Extracts gossip-msg from actor-msg and calls deliver-msg on it"
+  (let ((srcuid (second actor-msg)) ; first is just :gossip
+        (gossip-msg (third actor-msg)))
+  (deliver-gossip-msg gossip-msg gossip-node srcuid)))
+
+(defun make-gossip-actor (gossip-node)
+  (make-instance 'gossip-actor
+    :node gossip-node
+    :fn 
+    (lambda (&rest msg)
+      (apply 'gossip-dispatcher gossip-node msg))))
+
 (defun make-node (&rest args)
   "Makes a new node"
-  (let ((node (apply 'make-instance 'gossip-node args)))
+  (let* ((node (apply 'make-instance 'gossip-node args))
+         (actor (make-gossip-actor node)))
+    (setf (actor node) actor)
     (kvs:relate-unique! *nodes* (uid node) node)
     node))
 
@@ -291,7 +315,7 @@
     (send-msg (make-solicitation
                :kind kind
                :args args)
-              uid        ; destination
+              uid         ; destination
               nil)))      ; srcuid
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
@@ -320,24 +344,6 @@
            (briefname msg)
            args)))
 
-(defparameter *stop-dispatcher* nil "Set to true to end an ongoing simulation")
-
-; Graham's Basic queue
-(defun make-queue ()
-  (cons nil nil))
-
-(defun enq (obj q)
-  (if (null (car q))
-    (setf (cdr q) (setf (car q) (list obj)))
-    (setf (cdr (cdr q)) (list obj)
-          (cdr q) (cdr (cdr q))))
-  (car q))
-
-(defun deq (q)
-  (pop (car q)))
-
-(defvar *message-space* (make-queue) "Queue of outgoing messages from local machine.")
-(defvar *message-space-lock* (mpcompat:make-lock) "Just a lock to manage access to the message space")
 (defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
@@ -368,17 +374,17 @@
     #-CCL
     (write-string logstring *standard-output*)))
   
-(defmethod send-msg ((msg message-mixin) destuid srcuid)
-  "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
-  a global space that all local and simulated nodes can read from."
-  ; Could just call deliver-msg here, but I like the abstraction of
-  ;   having a local message-space which is used for all messages in simulation mode,
-  ;   and all outgoing messages in 'real' network mode.
+(defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (unless (or (null srcuid)
               (numberp srcuid))
-    (break "In send-msg"))
-  (mpcompat:with-lock (*message-space-lock*)
-    (enq (list msg destuid srcuid) *message-space*)))
+    (break "In gossip:send-msg"))
+  (let* ((destnode (lookup-node destuid))
+         (destactor (when destnode (actor destnode))))
+    (ac:send
+           destactor
+           :gossip ; actor-verb
+           srcuid  ; first arg of actor-msg
+           msg)))  ; second arg of actor-msg
 
 (defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
   (declare (ignore thisnode srcuid kindsym))
@@ -387,7 +393,7 @@
       (error "*hop-factor* must be less than 1.0"))
     (call-next-method)))
 
-(defmethod accept-msg? ((msg message-mixin) (thisnode gossip-node) srcuid)
+(defmethod accept-msg? ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   "Returns kindsym if this message should be accepted by this node, nil otherwise.
    Kindsym is the name of the gossip method that should be called to handle this message.
    Doesn't change anything in message or node."
@@ -414,11 +420,10 @@
                            nil)))))))))
 
 (defmethod accept-msg? ((msg reply) (thisnode gossip-node) srcuid)
-  (let ((kindsym (call-next-method))) ; the one on message-mixin
+  (let ((kindsym (call-next-method))) ; the one on gossip-message-mixin
     ; Also ensure this reply is actually expected
     (cond ((and kindsym
-                (mpcompat:with-lock ((reply-table-lock thisnode))
-                  (member srcuid (kvs:lookup-key  (repliers-expected thisnode) (solicitation-uid msg)))))
+                (member srcuid (kvs:lookup-key  (repliers-expected thisnode) (solicitation-uid msg))))
            kindsym)
           (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
              nil))))
@@ -454,6 +459,8 @@
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
+;; NO-REPLY-NECESSARY methods
+
 (defmethod announce ((msg solicitation) thisnode srcuid)
   "Announce a message to the collective. First arg of Msg is the announcement,
    which can be any Lisp object. Recipient nodes are not expected to reply.
@@ -464,7 +471,7 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod relate ((msg solicitation) thisnode srcuid)
+(defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
    new value will be added to the set; it won't replace them.
   Sets value on this node and then forwards 
@@ -476,7 +483,7 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod relate-unique ((msg solicitation) thisnode srcuid)
+(defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
   Sets value on this node and then forwards 
   solicitation to other nodes, if any. This is a destructive operation --
@@ -488,7 +495,7 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod remove-key ((msg solicitation) thisnode srcuid)
+(defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
    solicitation to other nodes, if any. This is a destructive operation --
    any node that currently has the given key will have that key/value removed.
@@ -498,6 +505,18 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
+(defmethod gossip-tally ((msg solicitation) thisnode srcuid)
+  "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
+   solicitation to other nodes, if any. This is a destructive operation --
+   any node that currently has the given key will have that key/value removed.
+   No reply expected."
+  (let ((key (first (args msg)))
+        (increment (second (args msg))))
+    (setf (local-kvs thisnode) (kvs:tally (local-kvs thisnode) key increment))
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))))
+
+; just an auxiliary function. Not a gossip method
 (defun multiple-tally (store alist)
   "Given a key/value store and an alist like ((key1 . n1) (key2 . n2) ...)
    call kvs:tally for all pairs in alist."
@@ -505,7 +524,9 @@
     (setf store (kvs:tally store (car pair) (cdr pair))))
   store)
 
-(defmethod lookup-key ((msg solicitation) thisnode srcuid)
+;; REPLY-NECESSARY methods
+
+(defmethod gossip-lookup-key ((msg solicitation) thisnode srcuid)
   "Inquire as to the global value of a key. If this node has no further
   neighbors, just return its value. Otherwise collect responses from subnodes.
   Reply is of course expected.
@@ -517,9 +538,8 @@
          (key (first (args msg)))
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     ; prepare reply tables
-    (mpcompat:with-lock ((reply-table-lock thisnode))
-      (kvs:relate-unique! (reply-data thisnode) soluid (list (cons myvalue 1)))
-      (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected))
+    (kvs:relate-unique! (reply-data thisnode) soluid (list (cons myvalue 1)))
+    (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected)
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
     (maybe-log thisnode :WAITING msg repliers-expected)
@@ -534,14 +554,13 @@
       (let ((local-values nil)
             (where-to-forward-reply srcuid))
         ; clean up reply tables
-        (mpcompat:with-lock ((reply-table-lock thisnode))
-          (setf local-values (kvs:lookup-key (reply-data thisnode) soluid))
-          (remhash soluid (repliers-expected thisnode))
-          (remhash soluid (reply-data thisnode)))
+        (setf local-values (kvs:lookup-key (reply-data thisnode) soluid))
+        (remhash soluid (repliers-expected thisnode))
+        (remhash soluid (reply-data thisnode))
         ; must create a new reply here; cannot reuse an old one because its content has changed
         (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
             (let ((reply (make-reply :solicitation-uid soluid
-                                     :kind :lookup-key
+                                     :kind :gossip-lookup-key
                                      :args (list local-values))))
               (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-values)
               (send-msg reply
@@ -552,13 +571,12 @@
             ;   somebody running the sim told it to.
             (maybe-log thisnode :FINALREPLY msg local-values))))))
 
-(defmethod lookup-key ((rep reply) thisnode srcuid)
+(defmethod gossip-lookup-key ((rep reply) thisnode srcuid)
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
     (let ((values-in-reply (first (args rep))))
-      (mpcompat:with-lock ((reply-table-lock thisnode))
-        (let ((local-values (kvs:lookup-key (reply-data thisnode) soluid)))
-          (kvs:relate-unique! (reply-data thisnode) soluid (multiple-tally local-values values-in-reply)))))
+      (let ((local-values (kvs:lookup-key (reply-data thisnode) soluid)))
+        (kvs:relate-unique! (reply-data thisnode) soluid (multiple-tally local-values values-in-reply))))
     ; Now remove this srcuid from expected-replies list. (We know it's on
     ;  the list because this method would never have been called otherwise.)
     (let ((nodes-expected-to-reply (kvs:lookup-key (repliers-expected thisnode) soluid)))
@@ -696,61 +714,26 @@
       (let ((destnode (lookup-node destuid)))
         (locally-receive-msg msg destnode srcuid)))))
 
-; just for simulator
-(defmethod deliver-msg (msg (node gossip-node) srcuid)
-  (setf msg (copy-message msg)) ; must copy before incrementing hopcount because we can't
+(defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
+  "Actor version. Does not launch a new thread because actor infrastructure will already have done that."
+  (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
-  (incf (hopcount msg))
-  (let ((kindsym (accept-msg? msg node srcuid))) ; check this here only in simulator
+  (incf (hopcount gossip-msg))
+  (let ((kindsym (accept-msg? gossip-msg node srcuid))) ; check this here only in simulator
     (when kindsym ; ignore the message here and now if it's ignorable, without creating a new thread
-      (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
-        (pprint (all-processes) t)
-        (break "In deliver-msg"))
       ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-      (kvs:relate-unique! (message-cache node) (uid msg) (or srcuid t)) ; solicitations from outside might not have a srcid
-      (mpcompat:process-run-function (format nil "Node ~D" (uid node)) nil
-        (lambda () (locally-receive-msg msg node srcuid kindsym))))))
+      (kvs:relate-unique! (message-cache node) (uid gossip-msg) (or srcuid t)) ; solicitations from outside might not have a srcid
+      (locally-receive-msg gossip-msg node srcuid kindsym))))
 
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg msg node srcuid))
 
-(defun dispatch-msg (msg destuid srcuid)
-  "Call deliver-message on message for node with given destuid."
-  (let ((destnode (lookup-node destuid)))
-    (deliver-msg msg destnode srcuid)))
-
-(defun dispatcher-loop ()
-  "Process outgoing messages on this machine. Same code used in both simulation and 'real' modes."
-  (setf *stop-dispatcher* nil)
-  (let ((nextmsg nil))
-    (loop until *stop-dispatcher* do
-      (mpcompat:with-lock (*message-space-lock*)
-        (setf nextmsg (deq *message-space*)))
-      (if nextmsg
-          ; Process messages as fast as possible.
-          (apply 'dispatch-msg nextmsg)
-          ; But if no messages to process, wait a bit.
-          (sleep .05) ; this dramatically decreases CPU time taken up by Lisp
-          ))))
-
-(defun stop-gossip-sim ()
-  (setf *stop-dispatcher* t))
-
 (defun run-gossip-sim ()
-  (stop-gossip-sim) ; stop old simulation, if any
-  (sleep .2) ; give dispatcher-loop time to stop
-  ; Create gossip network
-  ; Clear message space
   ; Archive the current log and clear it
-  (kill-node-processes)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
-  (setf *message-space* (make-queue))
-  (setf *message-space-lock* (mpcompat:make-lock))
   (mapc 'clear-caches (listify-nodes))
-  ; Start daemon that dispatches messages to nodes
-  (mpcompat:process-run-function "Dispatcher Loop" nil (lambda () (dispatcher-loop)))
   )
 
 
@@ -764,6 +747,7 @@
 ; (make-graph 100)
 ; (visualize-nodes *nodes*)
 
+#+OBSOLETE
 (defun count-node-processes ()
   "Returns a count of node processes."
   (let ((count 0))
@@ -773,6 +757,7 @@
            (all-processes))
     count))
 
+#+OBSOLETE
 (defun node-processes ()
   "Returns a list of node processes."
   (let ((node-processes nil))
@@ -782,7 +767,8 @@
            (all-processes))
     node-processes))
 
-; Mostly for debugging. Node processes should automaticallykill themselves.
+; Mostly for debugging. Node processes should automatically kill themselves.
+#+OBSOLETE
 (defun kill-node-processes ()
   (let ((node-processes (node-processes)))
     (mapc 'process-kill node-processes)))
@@ -793,11 +779,31 @@
 ; (solicit 340 :count-alive)
 ; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on *hop-factor*, network delays, etc.) 
 
-; (solicit (first (listify-nodes)) :relate-unique :foo :bar)
-; (solicit (first (listify-nodes)) :lookup-key :foo)
-; (solicit (first (listify-nodes)) :relate :foo :baz)
-; (solicit (first (listify-nodes)) :lookup-key :foo)
+; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
+; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
+; (solicit (first (listify-nodes)) :gossip-relate :foo :baz)
+; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
+
 ;; should produce something like (:FINALREPLY "node209" "sol255" (((:BAZ :BAR) . 4))) as last *log* entry
+
+(defun get-kvs (key)
+  "Shows value of key for all nodes. Just for debugging."
+  (let ((nodes (listify-nodes)))
+    (mapcar (lambda (node)
+              (cons node (kvs:lookup-key (local-kvs node) key)))
+            nodes)))
+
+; TEST NO-REPLY MESSAGES
+; (make-graph 10)
+; (run-gossip-sim)
+; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
+; (get-kvs :foo) ; should return a list of (node . BAR)
+; (solicit (first (listify-nodes)) :gossip-remove-key :foo)
+; (get-kvs :foo) ; should just return a list of (node . nil)
+; (solicit (first (listify-nodes)) :gossip-tally :foo 1)
+; (get-kvs :foo) ; should return a list of (node . 1)
+; (solicit (first (listify-nodes)) :gossip-tally :foo 1)
+; (get-kvs :foo) ; should return a list of (node . 2)
 
 #+IGNORE
 (setf node (make-node
