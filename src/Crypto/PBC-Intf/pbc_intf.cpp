@@ -37,10 +37,10 @@ long echo(long nel, char* msg_in, char* msg_out)
 // ---------------------------------------------------
 
 bool      init_flag = false;
-pairing_t pairing;
-element_t g1, g2; // base generators for G1 and G2
-element_t public_key, secret_key;
-element_t sig;
+pairing_t gPairing;
+element_t gG1_gen, gG2_gen; // base generators for G1 and G2
+element_t gPublic_key, gSecret_key;
+element_t gSig;
 element_t temp1, temp2;
 pairing_pp_t pp;
 
@@ -54,34 +54,34 @@ long init_pairing(char* param_str, long nel, long* psize)
       pairing_pp_clear(pp);
       element_clear(temp1);
       element_clear(temp2);
-      element_clear(public_key);
-      element_clear(secret_key);
-      element_clear(sig);
-      element_clear(g1);
-      element_clear(g2);
-      pairing_clear(pairing);
+      element_clear(gPublic_key);
+      element_clear(gSecret_key);
+      element_clear(gSig);
+      element_clear(gG1_gen);
+      element_clear(gG2_gen);
+      pairing_clear(gPairing);
       init_flag = false;
     }
-  ans = pairing_init_set_buf(pairing, param_str, nel);
+  ans = pairing_init_set_buf(gPairing, param_str, nel);
   if(0 == ans)
     {
-      element_init_G2(g2, pairing);
-      element_init_G2(public_key, pairing);
-      element_init_G1(g1, pairing);
-      element_init_G1(sig, pairing);
-      element_init_GT(temp1, pairing);
-      element_init_GT(temp2, pairing);
-      element_init_Zr(secret_key, pairing);
+      element_init_G2(gG2_gen, gPairing);
+      element_init_G2(gPublic_key, gPairing);
+      element_init_G1(gG1_gen, gPairing);
+      element_init_G1(gSig, gPairing);
+      element_init_GT(temp1, gPairing);
+      element_init_GT(temp2, gPairing);
+      element_init_Zr(gSecret_key, gPairing);
       
-      element_random(g1); // default random values
-      element_random(g2);
-      element_random(secret_key);
-      element_pow_zn(public_key, g2, secret_key);
+      element_random(gG1_gen); // default random values
+      element_random(gG2_gen);
+      element_random(gSecret_key);
+      element_pow_zn(gPublic_key, gG2_gen, gSecret_key);
 
-      psize[0] = element_length_in_bytes_compressed(g1);
-      psize[1] = element_length_in_bytes_compressed(g2);
+      psize[0] = element_length_in_bytes_compressed(gG1_gen);
+      psize[1] = element_length_in_bytes_compressed(gG2_gen);
       psize[2] = element_length_in_bytes(temp1);
-      psize[3] = element_length_in_bytes(secret_key);
+      psize[3] = element_length_in_bytes(gSecret_key);
       
       init_flag = true;
     }
@@ -91,26 +91,26 @@ long init_pairing(char* param_str, long nel, long* psize)
 extern "C"
 long set_g2(unsigned char* pbuf)
 {
-  return element_from_bytes_compressed(g2, pbuf);
+  return element_from_bytes_compressed(gG2_gen, pbuf);
 }
 
 extern "C"
 long set_g1(unsigned char* pbuf)
 {
-  return element_from_bytes_compressed(g1, pbuf);
+  return element_from_bytes_compressed(gG1_gen, pbuf);
 }
 
 extern "C"
 void set_secret_key (unsigned char* pbuf)
 {
-  element_from_bytes(secret_key, pbuf);
-  element_pow_zn(public_key, g2, secret_key);
+  element_from_bytes(gSecret_key, pbuf);
+  element_pow_zn(gPublic_key, gG2_gen, gSecret_key);
 }
 
 extern "C"
 long set_public_key (unsigned char* pbuf)
 {
-  return element_from_bytes_compressed(public_key, pbuf);
+  return element_from_bytes_compressed(gPublic_key, pbuf);
 }
 
 // --------------------------------------------
@@ -118,8 +118,8 @@ long set_public_key (unsigned char* pbuf)
 extern "C"
 void make_key_pair(unsigned char* phash, long nhash)
 {
-  element_from_hash(secret_key, phash, nhash);
-  element_pow_zn(public_key, g2, secret_key);
+  element_from_hash(gSecret_key, phash, nhash);
+  element_pow_zn(gPublic_key, gG2_gen, gSecret_key);
 }
 
 extern "C"
@@ -127,9 +127,10 @@ void sign_hash(unsigned char* phash, long nhash)
 {
   element_t h;
 
-  element_init_G1(h, pairing);
+  element_init_Zr(h, gPairing);
   element_from_hash(h, phash, nhash);
-  element_pow_zn(sig, h, secret_key);
+  element_mul(h, h, gSecret_key);
+  element_pow_zn(gSig, gG1_gen, h);
   element_clear(h);
 }
 
@@ -141,13 +142,13 @@ void make_public_subkey(unsigned char* abuf,
   element_t z;
   element_t gx, gp;
   
-  element_init_Zr(z, pairing);
-  element_init_G2(gx, pairing);
-  element_init_G2(gp, pairing);
+  element_init_Zr(z, gPairing);
+  element_init_G2(gx, gPairing);
+  element_init_G2(gp, gPairing);
   element_from_bytes_compressed(gp, pkey);
   element_from_hash(z, phash_id, nhash);
-  element_mul_zn(gx, g2, z);
-  element_add(gp, gx, gp);
+  element_pow_zn(gx, gG2_gen, z);
+  element_mul(gp, gx, gp);
   element_to_bytes_compressed(abuf, gp); // ans is G2
   element_clear(z);
   element_clear(gx);
@@ -161,14 +162,14 @@ void make_secret_subkey(unsigned char* abuf,
 {
   element_t z, zs, s;
 
-  element_init_Zr(z, pairing);
-  element_init_Zr(zs, pairing);
-  element_init_G1(s, pairing);
+  element_init_Zr(z, gPairing);
+  element_init_Zr(zs, gPairing);
+  element_init_G1(s, gPairing);
   element_from_hash(z, phash_id, nhash);   // get ID
   element_from_bytes(zs, skey);            // user's secret key
   element_add(z, z, zs);
   element_invert(z, z);
-  element_mul_zn(s, g1, z);
+  element_pow_zn(s, gG1_gen, z);
   element_to_bytes_compressed(abuf, s);    // ans is G1
   element_clear(z);
   element_clear(zs);
@@ -182,11 +183,11 @@ void compute_pairing(unsigned char* gtbuf,
 {
   element_t hh, gg;
 
-  element_init_G1(hh, pairing);
-  element_init_G2(gg, pairing);
+  element_init_G1(hh, gPairing);
+  element_init_G2(gg, gPairing);
   element_from_bytes_compressed(hh, hbuf);
   element_from_bytes_compressed(gg, gbuf);
-  pairing_apply(temp1, hh, gg, pairing);
+  pairing_apply(temp1, hh, gg, gPairing);
   element_to_bytes(gtbuf, temp1);
   element_clear(hh);
   element_clear(gg);
@@ -205,16 +206,16 @@ void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
   /* result R = zr*Psubkey */
   /* result pairing e(zr*U,Psubkey) = e(U,zr*Psubkey) */
   
-  element_init_G2(pk, pairing);
-  element_init_Zr(zr, pairing);
-  element_init_GT(gt, pairing);
+  element_init_G2(pk, gPairing);
+  element_init_Zr(zr, gPairing);
+  element_init_GT(gt, gPairing);
   element_from_bytes_compressed(pk, pkey);
   element_from_hash(zr, phash, nhash);
-  element_mul_zn(pk, pk, zr);
+  element_pow_zn(pk, pk, zr);
   element_to_bytes_compressed(rbuf, pk);
 
-  element_mul_zn(pk, g2, zr);
-  pairing_apply(gt, g1, pk, pairing);
+  element_pow_zn(pk, gG2_gen, zr);
+  pairing_apply(gt, gG1_gen, pk, gPairing);
   element_to_bytes(pbuf, gt);
 
   element_clear(zr);
@@ -232,12 +233,12 @@ void sakai_kasahara_decrypt(unsigned char* pbuf, // pairing result in GT
   /* rk, rbuf is the R value from encryption */
   /* sk, sbuf is the secret_subkey */
   
-  element_init_G1(sk, pairing);
-  element_init_G2(rk, pairing);
-  element_init_GT(gt, pairing);
+  element_init_G1(sk, gPairing);
+  element_init_G2(rk, gPairing);
+  element_init_GT(gt, gPairing);
   element_from_bytes_compressed(sk, sbuf);
   element_from_bytes_compressed(rk, rbuf);
-  pairing_apply(gt, sk, rk, pairing);
+  pairing_apply(gt, sk, rk, gPairing);
   element_to_bytes(pbuf, gt);
   element_clear(sk);
   element_clear(rk);
@@ -256,13 +257,13 @@ long sakai_kasahara_check(unsigned char* rkey, // R in G2
   /* pkey, pk1 is the public_subkey */
   /* phash is hash(ID || Tstamp || msg) */
   
-  element_init_G2(pk1, pairing);
-  element_init_G2(pk2, pairing);
-  element_init_Zr(zr, pairing);
+  element_init_G2(pk1, gPairing);
+  element_init_G2(pk2, gPairing);
+  element_init_Zr(zr, gPairing);
   element_from_bytes_compressed(pk1, pkey);
   element_from_bytes_compressed(pk2, rkey);
   element_from_hash(zr, phash, nhash);
-  element_mul_zn(pk1, pk1, zr);
+  element_pow_zn(pk1, pk1, zr);
   ans = element_cmp(pk1, pk2);
   element_clear(pk1);
   element_clear(pk2);
@@ -296,31 +297,31 @@ static long get_datum(element_t elt, unsigned char* pbuf, long buflen, bool cmpr
 extern "C"
 long get_secret_key(unsigned char* pbuf, long buflen)
 {
-  return get_datum(secret_key, pbuf, buflen, false);
+  return get_datum(gSecret_key, pbuf, buflen, false);
 }
 
 extern "C"
 long get_public_key(unsigned char* pbuf, long buflen)
 {
-  return get_datum(public_key, pbuf, buflen);
+  return get_datum(gPublic_key, pbuf, buflen);
 }
 
 extern "C"
 long get_g2(unsigned char* pbuf, long buflen)
 {
-  return get_datum(g2, pbuf, buflen);
+  return get_datum(gG2_gen, pbuf, buflen);
 }
 
 extern "C"
 long get_g1(unsigned char* pbuf, long buflen)
 {
-  return get_datum(g1, pbuf, buflen);
+  return get_datum(gG1_gen, pbuf, buflen);
 }
 
 extern "C"
 long get_signature(unsigned char* pbuf, long buflen)
 {
-  return get_datum(sig, pbuf, buflen);
+  return get_datum(gSig, pbuf, buflen);
 }
 
 // ------------------------------------------------
@@ -330,11 +331,17 @@ long check_signature(unsigned char* psig,
 		     unsigned char* phash, long nhash,
 		     unsigned char *pkey)
 {
-  element_from_bytes_compressed(sig, psig);
-  element_from_hash(g1, phash, nhash);
-  element_from_bytes_compressed(public_key, pkey);
-  pairing_apply(temp1, sig, g2, pairing);
-  pairing_apply(temp2, g1, public_key, pairing);
+  element_t z, gpt1;
+  element_init_Zr(z, gPairing);
+  element_init_G1(gpt1, gPairing);
+  element_from_bytes_compressed(gSig, psig);
+  element_from_hash(z, phash, nhash);
+  element_pow_zn(gpt1, gG1_gen, z);
+  element_from_bytes_compressed(gPublic_key, pkey);
+  pairing_apply(temp1, gSig, gG2_gen, gPairing);
+  pairing_apply(temp2, gpt1, gPublic_key, gPairing);
+  element_clear(z);
+  element_clear(gpt1);
   return element_cmp(temp1, temp2);
 }
 
@@ -344,8 +351,8 @@ void mul_G1_pts(unsigned char* pt1, unsigned char* pt2)
   element_t p1, p2;
   long      nel;
   // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
-  element_init_G1(p1, pairing);
-  element_init_G1(p2, pairing);
+  element_init_G1(p1, gPairing);
+  element_init_G1(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
   element_from_bytes_compressed(p1, pt1);
   element_from_bytes_compressed(p2, pt2);
@@ -364,8 +371,8 @@ void mul_G2_pts(unsigned char* pt1, unsigned char* pt2)
   element_t p1, p2;
   long      nel;
   // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
-  element_init_G2(p1, pairing);
-  element_init_G2(p2, pairing);
+  element_init_G2(p1, gPairing);
+  element_init_G2(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
   element_from_bytes_compressed(p1, pt1);
   element_from_bytes_compressed(p2, pt2);
@@ -382,8 +389,8 @@ extern "C"
 void add_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 {
   element_t z1, z2;
-  element_init_Zr(z1, pairing);
-  element_init_Zr(z2, pairing);
+  element_init_Zr(z1, gPairing);
+  element_init_Zr(z2, gPairing);
   element_from_bytes(z1, zr1);
   element_from_bytes(z2, zr2);
   element_add(z1, z1, z2);
@@ -397,7 +404,7 @@ void inv_Zr_val(unsigned char* zr)
 {
   element_t z;
   // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
-  element_init_Zr(z, pairing);
+  element_init_Zr(z, gPairing);
   element_from_bytes(z, zr);
   element_invert(z, z);
   element_to_bytes(zr, z);
@@ -409,8 +416,8 @@ void exp_G1z(unsigned char* g1, unsigned char* zr)
 {
   element_t z, g;
   // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
-  element_init_Zr(z, pairing);
-  element_init_G1(g, pairing);
+  element_init_Zr(z, gPairing);
+  element_init_G1(g, gPairing);
   element_from_bytes(z, zr);
   element_from_bytes_compressed(g, g1);
   element_pow_zn(g, g, z);
@@ -424,8 +431,8 @@ void exp_G2z(unsigned char* g2, unsigned char* zr)
 {
   element_t z, g;
   // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
-  element_init_Zr(z, pairing);
-  element_init_G2(g, pairing);
+  element_init_Zr(z, gPairing);
+  element_init_G2(g, gPairing);
   element_from_bytes(z, zr);
   element_from_bytes_compressed(g, g2);
   element_pow_zn(g, g, z);
@@ -437,23 +444,29 @@ void exp_G2z(unsigned char* g2, unsigned char* zr)
 extern "C"
 void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash)
 {
-  element_t g;
+  element_t z, g;
 
-  element_init_G1(g, pairing);
-  element_from_hash(g, phash, nhash);
+  element_init_Zr(z, gPairing);
+  element_init_G1(g, gPairing);
+  element_from_hash(z, phash, nhash);
+  element_pow_zn(g, gG1_gen, z);
   element_to_bytes_compressed(g1_pt, g);
   element_clear(g);
+  element_clear(z);
 }
 
 extern "C"
 void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash)
 {
-  element_t g;
+  element_t z, g;
 
-  element_init_G2(g, pairing);
-  element_from_hash(g, phash, nhash);
+  element_init_Zr(z, gPairing);
+  element_init_G2(g, gPairing);
+  element_from_hash(z, phash, nhash);
+  element_pow_zn(g, gG2_gen, z);
   element_to_bytes_compressed(g2_pt, g);
   element_clear(g);
+  element_clear(z);
 }
 
 extern "C"
@@ -461,13 +474,11 @@ void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash)
 {
   element_t z;
 
-  element_init_Zr(z, pairing);
+  element_init_Zr(z, gPairing);
   element_from_hash(z, phash, nhash);
   element_to_bytes(zr_val, z);
   element_clear(z);
 }
-
-  
 
 // -- end of pbc_intf.cpp -- //
 
