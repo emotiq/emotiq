@@ -344,26 +344,6 @@
            (briefname msg)
            args)))
 
-#+OBSOLETE
-(defparameter *stop-dispatcher* nil "Set to true to end an ongoing simulation")
-
-; Graham's Basic queue
-(defun make-queue ()
-  (cons nil nil))
-
-(defun enq (obj q)
-  (if (null (car q))
-    (setf (cdr q) (setf (car q) (list obj)))
-    (setf (cdr (cdr q)) (list obj)
-          (cdr q) (cdr (cdr q))))
-  (car q))
-
-(defun deq (q)
-  (pop (car q)))
-
-;;;x
-(defvar *message-space* (make-queue) "Queue of outgoing messages from local machine.")
-(defvar *message-space-lock* (mpcompat:make-lock) "Just a lock to manage access to the message space")
 (defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
@@ -405,19 +385,6 @@
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
            msg)))  ; second arg of actor-msg
-
-#+OBSOLETE
-(defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
-  "Abstraction for asynchronous message sending. Post a message with src-id and dest-id onto
-  a global space that all local and simulated nodes can read from."
-  ; Could just call deliver-msg here, but I like the abstraction of
-  ;   having a local message-space which is used for all messages in simulation mode,
-  ;   and all outgoing messages in 'real' network mode.
-  (unless (or (null srcuid)
-              (numberp srcuid))
-    (break "In send-msg"))
-  (mpcompat:with-lock (*message-space-lock*)
-    (enq (list msg destuid srcuid) *message-space*)))
 
 (defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
   (declare (ignore thisnode srcuid kindsym))
@@ -492,6 +459,8 @@
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
+;; NO-REPLY-NECESSARY methods
+
 (defmethod announce ((msg solicitation) thisnode srcuid)
   "Announce a message to the collective. First arg of Msg is the announcement,
    which can be any Lisp object. Recipient nodes are not expected to reply.
@@ -547,12 +516,15 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
+; just an auxiliary function. Not a gossip method
 (defun multiple-tally (store alist)
   "Given a key/value store and an alist like ((key1 . n1) (key2 . n2) ...)
    call kvs:tally for all pairs in alist."
   (dolist (pair alist)
     (setf store (kvs:tally store (car pair) (cdr pair))))
   store)
+
+;; REPLY-NECESSARY methods
 
 (defmethod gossip-lookup-key ((msg solicitation) thisnode srcuid)
   "Inquire as to the global value of a key. If this node has no further
@@ -753,63 +725,15 @@
       (kvs:relate-unique! (message-cache node) (uid gossip-msg) (or srcuid t)) ; solicitations from outside might not have a srcid
       (locally-receive-msg gossip-msg node srcuid kindsym))))
 
-; just for simulator
-#+OBSOLETE
-(defmethod deliver-msg (msg (node gossip-node) srcuid)
-  (setf msg (copy-message msg)) ; must copy before incrementing hopcount because we can't
-  ;  modify the original without affecting other threads.
-  (incf (hopcount msg))
-  (let ((kindsym (accept-msg? msg node srcuid))) ; check this here only in simulator
-    (when kindsym ; ignore the message here and now if it's ignorable, without creating a new thread
-      (when (> (count-node-processes) (+ 100 (hash-table-count *nodes*))) ; just a WAG for debugging combinatorial explosions in simulator
-        (pprint (all-processes) t)
-        (break "In deliver-msg"))
-      ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-      (kvs:relate-unique! (message-cache node) (uid msg) (or srcuid t)) ; solicitations from outside might not have a srcid
-      (mpcompat:process-run-function (format nil "Node ~D" (uid node)) nil
-        (lambda () (locally-receive-msg msg node srcuid kindsym))))))
-
 (defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg msg node srcuid))
 
-#+OBSOLETE
-(defun dispatch-msg (msg destuid srcuid)
-  "Call deliver-message on message for node with given destuid."
-  (let ((destnode (lookup-node destuid)))
-    (deliver-msg msg destnode srcuid)))
-
-#+OBSOLETE
-(defun dispatcher-loop ()
-  "Process outgoing messages on this machine. Same code used in both simulation and 'real' modes."
-  (setf *stop-dispatcher* nil)
-  (let ((nextmsg nil))
-    (loop until *stop-dispatcher* do
-      (mpcompat:with-lock (*message-space-lock*)
-        (setf nextmsg (deq *message-space*)))
-      (if nextmsg
-          ; Process messages as fast as possible.
-          (apply 'dispatch-msg nextmsg)
-          ; But if no messages to process, wait a bit.
-          (sleep .05) ; this dramatically decreases CPU time taken up by Lisp
-          ))))
-
-#+OBSOLETE
-(defun stop-gossip-sim ()
-  (setf *stop-dispatcher* t))
-
 (defun run-gossip-sim ()
-  ;;;x (stop-gossip-sim) ; stop old simulation, if any
-  ;;;x (sleep .2) ; give dispatcher-loop time to stop
   ; Archive the current log and clear it
-  ;;;x (kill-node-processes)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
-  ;;;x (setf *message-space* (make-queue))
-  ;;;x (setf *message-space-lock* (mpcompat:make-lock))
   (mapc 'clear-caches (listify-nodes))
-  ;;;x ; Start daemon that dispatches messages to nodes
-  ;;;x (mpcompat:process-run-function "Dispatcher Loop" nil (lambda () (dispatcher-loop)))
   )
 
 
