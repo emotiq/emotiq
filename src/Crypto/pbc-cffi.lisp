@@ -110,6 +110,14 @@ THE SOFTWARE.
    :g1-from-hash
    :g2-from-hash
    :zr-from-hash
+
+   :compute-vrf
+   :validate-vrf
+   :vrf
+   :vrf-seed
+   :vrf-x
+   :vrf-y
+   :vrf-proof
    ))
 
 (in-package :pbc-interface)
@@ -970,6 +978,36 @@ sign0 1
                      :sig  (change-class (mul-pts sig1 sig2)   'signature)
                      :pkey (change-class (mul-pts pkey1 pkey2) 'public-key))
       )))
+
+;; ------------------------------------------------------
+;; VRF - Publicly Verifiable Random Functions
+
+(defstruct vrf
+  seed x y proof)
+
+(defmethod compute-vrf (seed (skey secret-key))
+  (need-pairing)
+  (let* ((x      (zr-from-hash (hash:hash/256 seed)))
+         (1/x+s  (with-mod (get-order)
+                   (m/ (m+ (int x) (int skey)))))
+         (g1     (mul-pt-zr (get-g1) 1/x+s))
+         (y      (compute-pairing g1 (get-g2))))
+    (make-vrf
+     :seed  seed
+     :x     x
+     :y     y
+     :proof g1)))
+
+(defmethod validate-vrf ((vrf vrf) (pkey public-key))
+  (need-pairing)
+  (let* ((x   (zr-from-hash (hash:hash/256 (vrf-seed vrf))))
+         (g2  (add-pts (mul-pt-zr (get-g2) x) pkey))
+         (c   (compute-pairing (vrf-proof vrf) g2))
+         (y   (compute-pairing (vrf-proof vrf) (get-g2)))
+         (chk (compute-pairing (get-g1) (get-g2))))
+    (and (= (int c) (int chk))
+         (= (int x) (int (vrf-x vrf)))
+         (= (int y) (int (vrf-y vrf))))))
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)

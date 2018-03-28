@@ -169,8 +169,28 @@ These proof sums correspond directly to the proofs presented in the previous sec
 However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about half as fast when $N=1024$. But the method is equivalent in its information content, and every bit as secure.
 
 \chapter{Verifiable Random Functions}
-A verifiable random function (VRF) uses a pseudo-random function (PRF) in such a way as to furnish proof that the result was fed a specific seed value to produce the pseudo-random result. We follow the work of\cite{vrf}
+A verifiable random function (VRF)\cite{vrf2} uses a pseudo-random function (PRF) in such a way as to furnish proof that the result was fed a specific seed value to produce the pseudo-random result. We follow the work of Dodis and Yampolskiy\cite{vrf}, to provide a PRF as follows:
 
+For arbitrary input seeding values, form the hash $H(seed)$ using SHA3/256. This converts arbitrary objects of any length into a 256-bit random-like, but reproducible, pattern. Then map that hash value into our $Zr$ field, which has dimension $q = |Zr| \approx 2^{254}$, to produce $x = Zr(H(seed))$.
+
+Output of the VRF is a pseudo-random value in the pairing field (3072 bits) $$y = VRF(s, x) = e(U,V)^{1/(x + s)} \in GT$$ for secret key $s \in Zr$,  generators $U \in G1$, $V \in G2$, and with proof $$R = \frac{1}{x+s}U \in G1$$ 
+
+Output of the VRF is the quadruple $(seed, x, y, R)$, i.e., the original seed, the seed deterministically reduced to an element of $Zr$, the output of the VRF computation, and the point in $G1$ that represents the proof.
+
+Verification of proof checks the pairing $$e(R, x V + P) = e(U,V)  \in GT$$ for public key $P = s V \in G2$, and to verify that $$y = e(R,V)$$ and that $$x = Zr(H(seed))$$
+
+\chapter{Cosi Multisignatures}
+We use Cosi trees\cite{cosi} to provide scalable, distributed, multisignature generation. Validator nodes are selected from among a group of stakeholder nodes, using random sortition to assign $N$ of them to a position in a Cosi tree. 
+
+A Cosi tree is an n-way tree, where each node in the tree interior is a group leader over $n$ subnodes, each of which may be group leaders over their own subtrees. At any one time, there may be several Cosi trees operating for different purposes, and some nodes might belong to more than one Cosi tree.
+
+When a signature is requested from a Cosi tree, the message is distributed down through the tree to all participant nodes. Each node then attempts to validate the message and decides whether or not to add its signature to the collective signature formed from the sum of all signatures of its subgroup, before passing the augmented signature back up to its parent node in the tree. Accompanying that signature is a composite public key consisting of the sum of participant node public keys, and a bitmap that represents which nodes actually signed the message.
+
+Validation of a message requires varying computation based on the type of message. For randomness generation, it means validating all publicly verifiable quantities and producing decrypted shares. For block validation it means verifying the public keys of all signers of the block, validating all transactions, and so on.
+
+At the top of the tree the bitmap is converted into a list of public keys for all participating nodes, which is used to verify the summed public key, and to gain a census count on how many nodes actually signed the message. That census count is checked against a pBFT threshold of $2 f+ 2$, where $f = \lfloor \frac{N-2}{3} \rfloor$ is the tolerance for Byzantine failures among the nodes, to decide whether the multisignature is acceptable. 
+
+\chapter{XX}
 
 \chapter{Safe Hierarchical Keying}
 
@@ -200,7 +220,9 @@ In this form, a new private key cannot be used to sign messages in the same mann
 \bibitem{thesis} Ben Lynn, PhD Thesis, {\em{On the Implementation of Pairing-Based Cryptosystems}}, June 2007
 \bibitem{lib} Ben Lynn, PBC Library, https://crypto.stanford.edu/pbc/download.html
 \bibitem{bls} Ben Lynn, {\em{BLS Signatures}}, https://crypto.stanford.edu/pbc/manual/ch02s01.html
+\bibitem{vrf2}Silvio Micali, Michael Rabin, Salil Vadhan, {\em{Verifiable Random Functions}}
 \bibitem{sakke}Sakai-Kasahara, {\em{IETF RFC 6508 Sakai-Kasahara Key Encryption (SAKKE)}} 
+\bibitem{cosi}Ewa Syta, Iulia Tamas, Dylan Visher, David Isaac Wolinsky, Philipp Jovanovic, Linus Gasser, Nicolas Gailly, Ismail Khoffi, Bryan Ford, {\em{Keeping Authorities ``Honest or Bust'' with Decentralized Witness Cosigning}}
 \bibitem{randhound} Ewa Syta, Philipp Jovanovic, Eleftherios Kokoris Kogias, Nocals Gailly, Linus Gasser, Ismail Khoffi, Michael J. Fisher, Bryan Ford, {\em{Scalable Bias-Resistant Distributed Randomness}}
 \bibitem{tpm} Youlian Tian, Changgen Peng, Jianfeng Ma, {\em{Publicly Verifiable Secret Sharing Scheme Using Bilinear Pairings}} 
 \end{thebibliography} 
