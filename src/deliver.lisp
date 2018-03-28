@@ -8,4 +8,7 @@
 (ql:quickload :simple-test)
 (ql:quickload :core-crypto)
 
+;; when actually delivering, change the symbol 'simple-test to whatever needs to be called at the top
+;; level when the binary is executed
+
 (deliver 'simple-test "emotiq" 0 :multiprocessing t :console t)
