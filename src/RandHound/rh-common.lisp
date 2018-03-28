@@ -36,39 +36,46 @@ THE SOFTWARE.
 (defstruct node-assoc
   pkey ip port)
 
-(defvar *node-table*  (make-hash-table
-                       :test 'equal)) ;; to compare case-sensitive Base-58 strings in pkeys
+;; NODE-TABLE -- assoc between public key and IPv4 addr/port
+;; Keys are int form of pkey, data contains original key struct
+(defvar *node-table*  (make-hash-table))
 
 (defun init-nodes ()
   (clrhash *node-table*))
 
 (defun add-node (pkey ip port)
-  (setf (gethash pkey *node-table*)
+  (setf (gethash (int pkey) *node-table*)
         (make-node-assoc
          :pkey  pkey
          :ip    ip
          :port  port)))
 
 (defun remove-node (pkey)
-  (remhash pkey *node-table*))
+  (remhash (int pkey) *node-table*))
 
 (defun find-node (pkey)
-  (gethash pkey *node-table*))
+  (gethash (int pkey) *node-table*))
+
+;; NODES-VECTOR - cached ordered node asssoc in pkey order
+(defparameter *nodes-vector*  nil)
 
 (defun get-nodes-vector ()
-  (let ((nodes (sort (coerce
-                      (um:accum acc
-                        (maphash (lambda (k v)
-                                   ;; accumulate nodes with the
-                                   ;; numeric value of the public key
-                                   ;; for use in sort
-                                   (acc (cons (need-integer-form k) v)))
-                                 *node-table*))
-                      'vector)
-                     '<
-                     :key 'first)))
-    ;; discard the numeric pkeys used by sort
-    (map-into nodes 'cdr nodes)))
+  (or *nodes-vector*
+      (setf *nodes-vector*
+            (let ((nodes (sort (coerce
+                                (um:accum acc
+                                  (maphash (lambda (k v)
+                                             ;; accumulate nodes with the
+                                             ;; numeric value of the public key
+                                             ;; for use in sort
+                                             (acc (cons k v)))
+                                           *node-table*))
+                                'vector)
+                               '<
+                               :key 'first)))
+              ;; discard the numeric pkeys used by sort
+              (map-into nodes 'cdr nodes)))
+      ))
 
 ;; -------------------------------------------------------------
 
@@ -86,7 +93,13 @@ THE SOFTWARE.
   (declare (ignore msg ip port))
   (NYI :send-message))
 
+;; ------------------------------------------------------------------
 
+(defstruct session-config
+  pkeys tgrps max-bft purpose tstamp)
+
+(defstruct subgroup-commit
+  thresh encr-shares proofs)
 
 
                 

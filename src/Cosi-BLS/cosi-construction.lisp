@@ -34,7 +34,8 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("Malachite.local" . "10.0.1.6")
+(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.2")
+                         ("Malachite.local" . "10.0.1.6")
                          ("Dachshund.local" . "10.0.1.3")
                          ("Rambo"           . "10.0.1.13")
                          ("ChromeKote.local" . "10.0.1.36")))
@@ -47,7 +48,7 @@ THE SOFTWARE.
   (get-local-ipv4 (machine-instance)))
 
 (defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "Dachshund.local"))
+(defvar *leader-node* (get-local-ipv4 "Arroyo.local"))
 ;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
 
 (defvar *top-node*   nil) ;; current leader node
@@ -73,8 +74,6 @@ THE SOFTWARE.
 (defclass node ()
   ((ip       :accessor node-ip       ;; IPv4 string for this node
              :initarg  :ip)
-   (uuid     :accessor node-uuid     ;; UUID for this node
-             :initarg  :uuid)
    (pkeyzkp  :accessor node-pkeyzkp  ;; public key + ZKP
              :initarg  :pkeyzkp)
    (skey     :accessor node-skey     ;; private key
@@ -92,15 +91,7 @@ THE SOFTWARE.
    ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
              :initarg  :real-ip)
-   (ok       :accessor node-ok       ;; t if we participated in round 1
-             :initform nil)
-   (v        :accessor node-v        ;; first round random seed
-             :initform nil)
-   (seq      :accessor node-seq      ;; first round ID
-             :initform nil)
    (byz      :accessor node-byz      ;; Byzantine misbehav type
-             :initform nil)
-   (parts    :accessor node-parts    ;; group participants in first round commitment
              :initform nil)
    (bad      :accessor node-bad      ;; if true then node was corrupted
              :initform nil)
@@ -134,15 +125,13 @@ THE SOFTWARE.
                   sum  (node-load sub)))))
 
 ;; --------------------------------------------------------------------
-;; For now, 4 different ways to specify a node:
+;; For now, 3 different ways to specify a node:
 ;;   1. node structure pointer
 ;;   2. IPv4 address (in dotted string notation)
-;;   3. UUID (needs uuid-to-integer for keying *uuid-node* table)
-;;   4. PKEY (compressed public key ECC point)
+;;   3. PKEY (compressed public key ECC point)
 
 ;; XREF from IPv4 address to Tree Node
 (defvar *ip-node-tbl*   (make-hash-table :test 'equal)) ;; IPv4 string as key
-(defvar *uuid-node-tbl* (make-hash-table))              ;; UUID integer as key
 (defvar *pkey-node-tbl* (make-hash-table))              ;; compressed ECC pt integer as key
 
 (defvar *pkey-skey-tbl* (make-hash-table))              ;; commpressed ECC pt integer as key
@@ -151,89 +140,32 @@ THE SOFTWARE.
 
 (defvar *comm-ip*  nil)
 
-(defun make-node (ipstr uuid pkeyzkp parent)
-  (let* ((cmpr-pkey (third pkeyzkp))
+(defun make-node (ipstr pkeyzkp parent)
+  (let* ((cmpr-pkey (first pkeyzkp))
+         (pval      (keyval cmpr-pkey))
          (node (make-instance 'node
                               :ip      ipstr
-                              :uuid    uuid
-                              :skey    (gethash cmpr-pkey *pkey-skey-tbl*)
-                              :pkey    (edec:ed-decompress-pt cmpr-pkey)
+                              :skey    (gethash pval *pkey-skey-tbl*)
+                              :pkey    cmpr-pkey
                               :pkeyzkp pkeyzkp
                               :parent  parent
                               :real-ip *comm-ip*
                               )))
     (setf (node-self node) (make-node-dispatcher node)
-          (gethash ipstr *ip-node-tbl*)              node
-          (gethash (node-uuid node) *uuid-node-tbl*) node
-          (gethash cmpr-pkey *pkey-node-tbl*)        node)))
+          (gethash ipstr *ip-node-tbl*)   node
+          (gethash pval  *pkey-node-tbl*) node)))
 
 (defun need-to-specify (&rest args)
   (declare (ignore args))
   (error "Need to specify..."))
 
-;; --------------------------------------------
-;; Hashing with SHA3
-
-(defun select-sha3-hash ()
-  (let ((nb  (1+ (integer-length *ed-q*))))
-    (cond ((> nb 384) :sha3)
-          ((> nb 256) :sha3/384)
-          (t          :sha3/256)
-          )))
-
-(defun sha3-buffers (&rest bufs)
-  ;; assumes all buffers are UB8
-  (let ((dig  (ironclad:make-digest (select-sha3-hash))))
-    (dolist (buf bufs)
-      (ironclad:update-digest dig buf))
-    (ironclad:produce-digest dig)))
-
-(defun convert-pt-to-v (pt)
-  (let ((nb (ceiling (1+ (integer-length *ed-q*)) 8)))
-    (convert-int-to-nbytesv (ed-compress-pt pt) nb)))
-  
-(defun hash-pt-pt (p1 p2)
-  (convert-bytes-to-int
-   (sha3-buffers (convert-pt-to-v p1)
-                 (convert-pt-to-v p2))))
-
-(defun hash-pt-msg (pt msg) 
-  ;; We hash an ECC point by first converting to compressed form, then
-  ;; to a UB8 vector. A message is converted to a UB8 vector by calling
-  ;; on LOENC:ENCODE.
-  ;;
-  ;; Max compressed point size is 1 bit more than the integer-length
-  ;; of the underlying curve field prime modulus.
-  ;;
-  ;; We return the SHA3 hash as a big-integer
-  ;;
-  ;; This is callled with the *ed-curve* binding in effect. Client
-  ;; functions should call this function from within a WITH-ED-CURVE.
-  ;;
-  (let ((v  (convert-pt-to-v pt))
-        (mv (loenc:encode msg)))
-    (convert-bytes-to-int (sha3-buffers v mv))))
-
 ;; --------------------------------------------------------------
-
-(defun compute-pkey-zkp (skey pkey)
-  ;; from private skey and public ECC pt pkey, compute the pkey ZKP
-  (multiple-value-bind (v vpt) (ed-random-pair)
-    (let* ((c     (hash-pt-pt vpt pkey)) ;; Fiat-Shamir NIZKP challenge
-           (r     (with-mod *ed-r*
-                    (m- v (m* skey c))))
-           (pcmpr (ed-compress-pt pkey)))
-      (list r c pcmpr)))) ;; NIZKP and public key
 
 (defun check-pkey (zkp)
   ;; verify pkey zkp, return decompressed pkey ECC point
-  (destructuring-bind (r c pcmpr) zkp
-    (let* ((pt   (ed-decompress-pt pcmpr)) ;; node's public key
-           (vpt  (ed-add (ed-nth-pt r)    ;; validate with NIZKP 
-                         (ed-mul pt c))))
-      (values pt
-              (= c (hash-pt-pt vpt pt)))
-      )))
+  (destructuring-bind (pkey psig) zkp
+    (values pkey
+            (cosi-keying:validate-pkey pkey psig))))
 
 #+:ALLEGRO
 (defun allegro-dotted-to-integer (string)
@@ -273,24 +205,29 @@ THE SOFTWARE.
   #-(or :LISPWORKS :ALLEGRO :CLOZURE)
   (usocket:hbo-to-dotted-quad val))
 
+(defun keyval (key)
+  (vec-repr:int key))
+
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
 
 (defun gen-node-id (ip)
   (if (consp ip)
       (values-list ip)
-    (multiple-value-bind (skey pkey) (edec:ed-random-pair)
-      (let ((zkp (compute-pkey-zkp skey pkey)))
-        (setf (gethash (third zkp) *pkey-skey-tbl*) skey)
-        (values ip
-                (gen-uuid-int)
-                zkp)
-        ))))
+    (with-accessors ((pkey  pbc:keying-triple-pkey)
+                     (psig  pbc:keying-triple-sig)
+                     (skey  pbc:keying-triple-skey))
+        (pbc:with-crypto ()
+          (pbc:make-key-pair ip))
+      (setf (gethash (keyval pkey) *pkey-skey-tbl*) skey)
+      (values ip
+              (list pkey psig))
+      )))
 
 ;; -------------------------------------------------------------
 
 ;; the *NODE-BIT-TBL* is really an ordered vector of all nodes in the
-;; tree, ordered by UUID magnitude
+;; tree, ordered by public key magnitude
 
 (defvar *node-bit-tbl* #())
 
@@ -302,7 +239,8 @@ THE SOFTWARE.
                       (declare (ignore k))
                       (acc node))
                     *ip-node-tbl*))))
-    (setf collected (sort collected '< :key 'node-uuid))
+    (setf collected (sort collected '<
+                          :key (um:compose 'keyval 'node-pkey)))
     (loop for node in collected
           for ix from 0 do
           (setf (node-bit node) ix))
@@ -325,9 +263,9 @@ THE SOFTWARE.
     (setf (node-subs node) bins)))
 
 (defun inner-make-node-tree (ip ip-list &optional parent)
-  (multiple-value-bind (ipstr uuid pkeyzkp)
+  (multiple-value-bind (ipstr pkeyzkp)
       (gen-node-id ip)
-    (let ((node (make-node ipstr uuid pkeyzkp parent)))
+    (let ((node (make-node ipstr pkeyzkp parent)))
       (when ip-list
         (let ((bins (partition node ip-list
                                :key (lambda (ip-arg)
@@ -346,10 +284,10 @@ THE SOFTWARE.
 (defun make-node-tree (ip vlist)
   ;; main entry point - captures IPv4 of arg ip for use as real-ip in
   ;; succeeding nodes
-  (multiple-value-bind (ipstr uuid pkeyzp)
+  (multiple-value-bind (ipstr pkeyzp)
       (gen-node-id ip)
     (let ((*comm-ip*  ipstr))
-      (inner-make-node-tree (list ipstr uuid pkeyzp) vlist))))
+      (inner-make-node-tree (list ipstr pkeyzp) vlist))))
 
 ;; --------------------------------------------------------------------
 ;; for visual debugging...
@@ -403,8 +341,8 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Initial Tree Generation and Persistence
 
-(defvar *default-data-file* (asdf:system-relative-pathname :cosi "config/cosi-nodes.txt"))
-(defvar *default-key-file*  (asdf:system-relative-pathname :cosi "config/cosi-keying.txt"))
+(defvar *default-data-file* (asdf:system-relative-pathname :cosi-bls "config/cosi-nodes.txt"))
+(defvar *default-key-file*  (asdf:system-relative-pathname :cosi-bls "config/cosi-keying.txt"))
 
 (defun generate-ip ()
   ;; generate a unique random IPv4 address
@@ -413,13 +351,16 @@ THE SOFTWARE.
         (generate-ip) ;; should be unlikely, would be 50% at around 2^16 nodes
       (setf (gethash ip *ip-node-tbl*) ip))))
 
-(defmethod pair-ip-uuid ((node node))
+(defmethod pair-ip-pkey ((node node))
+  ;; used during initial tree generation
+  ;; we need numeric values of keys for store in file
   (list (node-ip node)
-        (node-uuid node)
         (node-pkeyzkp node)))
 
-(defmethod pair-ip-uuid ((ip string))
-  (pair-ip-uuid (gethash ip *ip-node-tbl*)))
+(defmethod pair-ip-pkey ((ip string))
+  ;; used during initial tree generation
+  ;; we need numeric values of keys for store in file
+  (pair-ip-pkey (gethash ip *ip-node-tbl*)))
 
 (defun gen-main-tree (leader real-nodes grps)
   (let* ((trees     (mapcar 'make-node-tree real-nodes grps))
@@ -438,7 +379,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------
 ;; Generate Tree / Keying and save to startup init files
 
-(defun generate-tree (&key datafile keyfile (nel 1000))
+(defun generate-tree (&key datafile keyfile (nodes 1000))
   (let* ((leader     *leader-node*)
          (real-nodes  (remove-duplicates *real-nodes*
                                          :test 'string=)))
@@ -448,7 +389,6 @@ THE SOFTWARE.
     
     ;; pre-populate hash table with real-nodes
     (clrhash *ip-node-tbl*)
-    (clrhash *uuid-node-tbl*)
     (clrhash *pkey-node-tbl*)
     (clrhash *pkey-skey-tbl*)
     (dolist (ip real-nodes)
@@ -456,9 +396,9 @@ THE SOFTWARE.
 
     ;; build the trees
     (let* ((nreal       (length real-nodes))
-           (nel/grp     (ceiling nel nreal))
+           (nodes/grp   (ceiling nodes nreal))
            (grps        (loop repeat nreal collect
-                              (loop repeat nel/grp collect
+                              (loop repeat nodes/grp collect
                                     (generate-ip))))
            (main-tree   (gen-main-tree leader real-nodes grps)))
 
@@ -471,12 +411,12 @@ THE SOFTWARE.
                          :if-does-not-exist :create
                          :if-exists :rename)
         (with-standard-io-syntax
-          (let ((*print-readably*     t) ;; to get readable UUID's
+          (let ((*print-readably*     t)
                 (*print-right-margin* 128))
             (pprint `(:leader     ,leader
-                      :real-nodes ,(mapcar 'pair-ip-uuid real-nodes)
+                      :real-nodes ,(mapcar 'pair-ip-pkey real-nodes)
                       :groups     ,(mapcar (lambda (grp)
-                                             (mapcar 'pair-ip-uuid grp))
+                                             (mapcar 'pair-ip-pkey grp))
                                            grps))
                     f))))
       
@@ -523,19 +463,15 @@ THE SOFTWARE.
                     :key  'car))
     (labels ((no-dups (lst)
                (dolist (ip lst)
-                 (destructuring-bind (ipstr uuid zkp) ip
+                 (destructuring-bind (ipstr zkp) ip
                    (assert (null (gethash ipstr *ip-node-tbl*)))
-                   (assert (null (gethash uuid  *uuid-node-tbl*)))
-                   (destructuring-bind (r c pcmpr) zkp
-                     (declare (ignore r c))
-                     (assert (null (gethash pcmpr *pkey-node-tbl*)))
-                     (check-pkey zkp)
+                   (let ((pval (keyval (first zkp))))
+                     (assert (null (gethash pval *pkey-node-tbl*)))
+                     (assert (apply 'cosi-keying:validate-pkey zkp))
                      (setf (gethash ipstr *ip-node-tbl*)   ip
-                           (gethash uuid  *uuid-node-tbl*) ip
-                           (gethash pcmpr *pkey-node-tbl*) ip)
+                           (gethash pval  *pkey-node-tbl*) ip)
                      )))))
       (clrhash *ip-node-tbl*)
-      (clrhash *uuid-node-tbl*)
       (clrhash *pkey-node-tbl*)
       (no-dups real-nodes)
       (mapc #'no-dups grps))
@@ -545,9 +481,7 @@ THE SOFTWARE.
     (mapc (lambda (pair)
             (destructuring-bind (k . v) pair
               ;; k is integer, compressed pkey ECC pt
-              ;; v is skey integer
-              ;; decompression checks for valid ECC pt
-              (assert (ed-pt= (ed-nth-pt v) (ed-decompress-pt k)))
+              ;; v is skey secret key
               (setf (gethash k *pkey-skey-tbl*) v)))
           keys)
     

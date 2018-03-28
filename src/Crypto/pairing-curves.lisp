@@ -27,8 +27,10 @@ THE SOFTWARE.
 (defpackage :pairing-curves
   (:use :common-lisp :core-crypto)
   (:import-from :ecc-crypto-b571
-   :encode-bytes-to-base64
-   :decode-bytes-from-base64
+   :encode-bytes-to-base58
+   :decode-bytes-from-base58
+   :convert-int-to-lev
+   :convert-lev-to-int
    :ecc-pt
    :ecc-pt-x
    :ecc-pt-y
@@ -92,6 +94,10 @@ sign0 1
 ;; Type A curves are symmetric super-singular curves of specified order
 ;; in a specified group order q prime.
 ;; Curve order r prime, #E = r*h = q+1, embedding order 2
+;;
+;; NOTE: Type A curves *do not* admit Elligator encodings
+;; Find another way to hash onto the curves.
+;;
 (defclass type-a-curve (pairing-curve)
   ((exp2  :reader a-curve-exp2
           :initarg :exp2)
@@ -165,6 +171,8 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 |#
 
 ;; Type F curves have embedding degree 12, are asymmetric pairings
+;; NOTE: Type F curves *do not* admit Elligator encodings. Find another
+;; way to hash onto the curves.
 (defclass type-f-curve (pairing-curve)
   ((beta   :reader f-curve-beta
            :initarg :beta)
@@ -434,24 +442,10 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
                           (lambda ()
                             (ceiling (pt-nbits) 8))))
 
-(defun convert-int-to-lev (v &optional (nel (pt-nbytes)))
+(defun chk-convert-int-to-lev (v &optional (nel (pt-nbytes)))
   (unless (<= (integer-length v) (* 8 nel))
     (error "Operation would truncate value"))
-  (let ((vec (make-array nel
-                         :element-type '(unsigned-byte 8))))
-    (loop for ix from 0 below nel
-          for pos from 0 by 8
-          do
-          (setf (aref vec ix) (ldb (byte 8 pos) v)))
-    vec))
-
-(defun convert-lev-to-int (vec)
-  (let ((ans  0))
-    (loop for v across vec
-          for pos from 0 by 8
-          do
-          (setf (ldb (byte 8 pos) ans) v))
-    ans))
+  (convert-int-to-lev v nel))
 
 ;; ----------------------------------------
 
@@ -481,14 +475,14 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
                (dpb 1 (byte 1 (pt-nbits)) x)
              x)))
       (if lev
-          (let ((enc (convert-int-to-lev enc (pt-compressed-nbytes))))
-            (if (eq lev :base64)
-                (encode-bytes-to-base64 enc)
+          (let ((enc (chk-convert-int-to-lev enc (pt-compressed-nbytes))))
+            (if (eq lev :base58)
+                (encode-bytes-to-base58 enc)
               enc))
         enc))))
 
 (defmethod decompress-pt ((s string)) ;; assumed Base64
-  (decompress-pt (decode-bytes-from-base64 s)))
+  (decompress-pt (decode-bytes-from-base58 s)))
 
 (defmethod decompress-pt ((v vector)) ;; assumed LE UB8V
   (decompress-pt (convert-lev-to-int v)))
@@ -543,9 +537,12 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
                              :x x
                              :y (msqrt yy))
                             h)))
-              (if (ecc-infinite-p gen)
-                  (iter)
-                gen))
+              (multiple-value-bind (pt err)
+                  (ignore-errors
+                    (validate-point gen))
+                (if err
+                    (iter)
+                  pt)))
           (iter)))
       )))
 
@@ -557,3 +554,21 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
           (format t "I got it! N = ~D" ix)
         (iter (1+ ix))))
     ))
+
+(defun find-pt (x)
+  (with-mod *q*
+    (um:nlet-tail iter ((x x))
+      (let ((yy (m+ (m* x x x) (m* *a* x) *b*)))
+        (if (quadratic-residue-p yy)
+            (let ((pt  (pt^ (make-ecc-pt
+                             :x x
+                             :y (msqrt yy))
+                            *h*)))
+              (multiple-value-bind (pt err)
+                  (ignore-errors
+                   (validate-point pt))
+                (if err
+                    (iter (1+ x))
+                  pt)))
+          (iter (1+ x)))))))
+

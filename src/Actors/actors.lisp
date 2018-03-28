@@ -521,9 +521,16 @@ THE SOFTWARE.
   (defun release-mailbox (mbox)
     (mpcompat:with-lock (lock)
        (push mbox (car queue)))))
-  
+
+(defun ensure-mbox-empty (mbox)
+  (um:nlet-tail iter ()
+    (when (mp:mailbox-peek mbox)
+      (mp:mailbox-read mbox)
+      (iter))))
+
 (defun do-with-borrowed-mailbox (fn)
   (let ((mbox (get-mailbox)))
+    (ensure-mbox-empty mbox)
     (unwind-protect
         (funcall fn mbox)
       (release-mailbox mbox))))
@@ -906,11 +913,41 @@ THE SOFTWARE.
         (=values nil)))
     ))
 
+(=defun pmapc (fn &rest lists)
+  ;;
+  ;; Parallel mapc - no returned value
+  ;; Use like PAR for indefinite number of parallel forms,
+  ;; each of which is the same function applied to different args.
+  ;;
+  ;; The function fn should be defined with =DEFUN or =LAMBDA, and
+  ;; return via =VALUES
+  ;;
+  ;; PMAPC is intended for use within an (=BIND () (PMAPC ... ) ...)
+  ;;  (see example below)
+  ;;
+  (let* ((grps   (trn lists))
+         (len    (length grps))
+         (count  (list len)))
+    (labels ((done (&rest ans)
+               (declare (ignore ans))
+               (when (zerop (mpcompat:atomic-decf (car (the cons count))))
+                 (=values))))
+      (if grps
+          (loop for grp in grps
+                do
+                (apply 'spawn fn #'done grp))
+        ;; else - empty lists, nothing to do
+        (=values)))
+    ))
+
+#|
 (defun as-list (seq)
   (coerce seq 'list))
 
-(=defun pmap (fn &rest seqs)
+(=defun pmapc (fn &rest seqs)
+  ;; >>> I don't think this is correct...
   (=apply '=pmapcar fn (mapcar 'as-list seqs)))
+|#
 
 (defun par-xform (pfn &rest clauses)
   ;; Internal transform function. Converts a list of clauses to a form
@@ -1037,3 +1074,35 @@ THE SOFTWARE.
             '(:one :two :three))
   (pr which))
 |#
+
+;; -------------------------------------------------------------
+;; SMAPCAR, SMAP = sequential mapping where fn might require async
+;; Actor participation. No spawning of transient Actors is used here.
+;; But fn might.
+
+(=defun smapcar (fn &rest lsts)
+  ;; fn must be defined with =DEFUN or =LAMBDA, and return via =VALUES
+  (labels ((mapper (lsts accum)
+             (if (some 'endp lsts)
+                 (=values (nreverse accum))
+               (let ((hds (mapcar 'car lsts))
+                     (tls (mapcar 'cdr lsts)))
+                 (=bind (ans)
+                     (=apply fn hds)
+                   (mapper tls (cons ans accum))))
+               )))
+    (mapper lsts nil)))
+
+(=defun smapc (fn &rest lsts)
+  ;; fn must be defined with =DEFUN or =LAMBDA, and return via =VALUES
+  (labels ((mapper (lsts)
+             (if (some 'endp lsts)
+                 (=values)
+               (let ((hds (mapcar 'car lsts))
+                     (tls (mapcar 'cdr lsts)))
+                 (=bind (&rest ans)
+                     (=apply fn hds)
+                   ans ;; just to remove unused warning...
+                   (mapper tls)))
+               )))
+    (mapper lsts)))

@@ -28,7 +28,9 @@ THE SOFTWARE.
 
 (defpackage :randhound/common
   (:use :common-lisp
-   :core-crypto)
+   :core-crypto
+   :pbc
+   :vec-repr)
   (:import-from :cosi-keying
    :need-integer-form
    :published-form
@@ -52,19 +54,36 @@ THE SOFTWARE.
    :send-message
    :get-timestamp
    :NYI
+   :session-config
+   :session-config-pkeys
+   :session-config-tgrps
+   :session-config-max-bft
+   :session-config-purpose
+   :session-config-tstamp
+
+   :subgroup-commit
+   :subgroup-commit-thresh
+   :subgroup-commit-encr-shares
+   :subgroup-commit-proofs
+   :make-subgroup-commit
    ))
 
 (defpackage :randhound/client
   (:use :common-lisp
         :core-crypto
-        :randhound/common)
+        :randhound/common
+        :pbc
+        :vec-repr)
   (:export
    ))
 
 (defpackage :randhound/server
   (:use :common-lisp
         :core-crypto
-        :randhound/common)
+        :randhound/common
+        :vec-repr
+        :pbc
+        :actors)
   (:export
    ))
 

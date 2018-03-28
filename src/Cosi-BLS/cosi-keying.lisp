@@ -38,75 +38,17 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------
 
-(defmethod need-integer-form ((v integer))
-  v)
-
-(defmethod need-integer-form ((v vector)) ;; assumed to be ub8v-le
-  (ed-convert-lev-to-int v))
-
-(defmethod need-integer-form ((v string)) ;; assumed to be base64 string
-  (need-integer-form (base58:decode v)))
-
-(defmethod need-integer-form ((v ecc-pt))
-  (ed-compress-pt v))
-
-(defmethod need-integer-form ((v ed-proj-pt))
-  (need-integer-form (ed-affine v)))
-
-(defmethod need-integer-form (v)
-  (need-integer-form (loenc:encode v)))
-
-;; -----------------
-
-(defmethod published-form ((v integer))
-  (base58:encode v))
-
-(defmethod published-form ((v vector)) ;; assumed to be ub8v le
-  (published-form (need-integer-form v)))
-
-(defmethod published-form ((v ecc-pt))
-  (published-form (need-integer-form v)))
-
-(defmethod published-form ((v ed-proj-pt))
-  (published-form (need-integer-form v)))
-
-(defmethod published-form ((v string)) ;; assumed to be base64
-  (if (ignore-errors
-        (base58:decode v))
-      v
-    (call-next-method)))
-
-(defmethod published-form (v)
-  (published-form (need-integer-form v)))
-
 ;; ---------------------------------------------------
-;; The IETF EdDSA standard as a primitive
+;; BLS Signatures
 
-(defun cosi-dsa (msg skey)
-  #-:ELLIGATOR
-  (let ((quad  (ed-dsa msg skey)))
-    (list
-     :msg  (getf quad :msg)
-     :pkey (published-form (getf quad :pkey))
-     :r    (published-form (getf quad :r))
-     :s    (published-form (getf quad :s))
-     ))
-  #+:ELLIGATOR
-  (let ((quad (elligator-ed-dsa msg skey)))
-    (list
-     :msg  (getf quad :msg)
-     :pkey (published-form (getf quad :tau-pub))
-     :r    (published-form (getf quad :tau-r))
-     :s    (published-form (getf quad :s))
-     )))
+(defmethod cosi-sign (msg (skey pbc:secret-key))
+  (pbc:ask-crypto (:skey skey)
+    (pbc:sign-message msg)))
 
-(defun cosi-dsa-validate (msg pkey r s)
-  (let ((pkey (need-integer-form pkey))
-        (r    (need-integer-form r))
-        (s    (need-integer-form s)))
-    (#-:ELLIGATOR ed-dsa-validate 
-     #+:ELLIGATOR elligator-ed-dsa-validate
-     msg pkey r s)))
+(defmethod cosi-validate-signed-message ((sm pbc:signed-message))
+  (pbc:ask-crypto ()
+    (values (pbc:signed-message-msg sm)
+            (pbc:check-message sm))))
 
 ;; --------------------------------------------
 ;; Keying for attribution. User keys, and signatures. You really don't
@@ -114,64 +56,31 @@ THE SOFTWARE.
 ;; math operations like for range proofs and such. And range proofs
 ;; also present special problems with respect to Elligator encodings.
 
-(um:defconstant+ +keying-msg+  #(:keying-{61031482-17DB-11E8-8786-985AEBDA9C2A}))
-
-(defun make-deterministic-keypair (seed &optional (index 0))
+(defun make-deterministic-keypair (seed)
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  #-:ELLIGATOR
-  (let* ((skey  (compute-deterministic-skey seed index))
-         (plist (cosi-dsa +keying-msg+ skey)))
-    (list
-     :skey  skey
-     :pkey  (getf plist :pkey)
-     :index index
-     :r     (getf plist :r)
-     :s     (getf plist :s)))
-  #+:ELLIGATOR
-  (multiple-value-bind (skey tau ix)
-      (compute-deterministic-elligator-skey seed index)
-    ;; Note that Elligator encoding may have to search for a suitable
-    ;; key. Hence the index returned may be different from the index
-    ;; suggested.
-    (declare (ignore tau))
-    (let ((plist (cosi-dsa +keying-msg+ skey)))
-      (list
-       :skey  skey
-       :pkey  (getf plist :pkey)
-       :index ix
-       :r     (getf plist :r)
-       :s     (getf plist :s)
-       ))))
-
-(defun make-unique-deterministic-keypair (seed)
-  ;; create a unique deterministic keypair, using a Bloom filter to
-  ;; record keys, and adding an incrementing index to the seed until
-  ;; we have uniqueness.
-  (um:nlet-tail iter ((ix  0))
-    (let* ((plist (make-deterministic-keypair seed ix))
-           (pkey  (getf plist :pkey))
-           (proof (list (getf plist :r) (getf plist :s))))
-      (if (unique-key-p pkey proof)
-          ;; when was unique, it also got added to table
-          plist
-        (iter (1+ ix))))))
+  (pbc:ask-crypto ()
+    (pbc:make-key-pair seed)))
 
 ;; --------------------------------------------------------------
 
 (defun get-seed (seed)
-  (if seed
-      (ed-convert-int-to-lev (need-integer-form seed))
-    (ctr-drbg 256)))
+  (vec-repr:bev
+   (if seed
+       (hash:hash/256 (vec-repr:lev
+                  (loenc:encode seed)))
+     (ctr-drbg 256))))
 
 (defun get-salt (salt)
   (let ((pref (loenc:encode "salt")))
-    (if salt
-        (concatenate 'vector
-                     pref 
-                     (ed-convert-int-to-lev (need-integer-form salt)))
-      pref)))
+    (hash:hash-val
+     (hash:hash/256
+      (if salt
+          (concatenate 'vector
+                       pref 
+                       (vec-repr:lev-vec (vec-repr:levn salt 32)))
+        pref)))))
 
 ;; --------------------------------------------------------------
 ;; User level access functions for keying
@@ -181,23 +90,29 @@ THE SOFTWARE.
   ;; This is the normal entry point when making new user keys.
   (let* ((seed  (get-seed seed))
          (salt  (get-salt salt))
-         (rseed (ironclad:pbkdf2-hash-password seed
-                                               :salt       salt
+         (rseed (ironclad:pbkdf2-hash-password (vec-repr:bev-vec seed)
+                                               :salt       (vec-repr:bev-vec salt)
                                                :digest     :sha3
                                                :iterations 2048)))
-    (make-unique-deterministic-keypair rseed)))
+    (make-deterministic-keypair rseed)))
 
-(defun make-subkey (skey sub-seed)
+(defmethod make-public-subkey ((pkey pbc:public-key) sub-seed)
   ;; Need to do one at a time, since unique may have created an index
   ;; value, and you can't retrace the path without that index value.
   ;; That is to say, you really do need to keep a record of all the
   ;; private keys along the way...
-  (make-unique-deterministic-keypair
-   (list (need-integer-form skey)
-         sub-seed)))
+  (pbc:ask-crypto ()
+    (pbc:make-public-subkey pkey sub-seed)))
 
-(defun validate-pkey (pkey r s)
-  (cosi-dsa-validate +keying-msg+ pkey r s))
+(defmethod make-secret-subkey ((skey pbc:secret-key) sub-seed)
+  (pbc:ask-crypto ()
+    (pbc:make-secret-subkey skey sub-seed)))
+  
+(defmethod validate-pkey ((pkey pbc:public-key) (psig pbc:signature))
+  ;; only works on primary keys. Can't validate subkeys because
+  ;; signatures require secret key.
+  (pbc:ask-crypto ()
+    (pbc:check-public-key pkey psig)))
         
 ;; ------------------------------------------------------
 
@@ -224,33 +139,13 @@ THE SOFTWARE.
 ;; probability is that we need only 7 hashes instead of 10.
 ;;
 
-(defvar *pkey-filter*
-  (bloom-filter:make-bloom-filter :nitems  1000000
-                                  :pfalse  0.001
-                                  :hash-fn 'identity))
 (defvar *pkeys* (maps:empty)) ;; for now...
 
-(defun true-pkey (pkey)
-  (#-:ELLIGATOR identity
-   #+:ELLIGATOR to-elligator-range
-    (need-integer-form pkey)))
-
-(defun unique-key-p (pkey proof)
-  (let* ((pk    (true-pkey pkey))
-         (hashv (ed-convert-int-to-lev pk)))
-    (um:critical-section ;; for SMP safety
-      (unless (bloom-filter:test-membership *pkey-filter* hashv)
-        (bloom-filter:add-obj-to-bf *pkey-filter* hashv)
-        (setf *pkeys* (maps:add pk proof *pkeys*))
-        (cosi-blkdef:add-key-to-block pkey proof)
-        t)
-      )))
-
-(defun lookup-pkey (pkey)
+(defmethod lookup-pkey ((pkey pbc:public-key))
   ;; return t if pkey found and valid, nil if not found or invalid
-  (let ((proof (maps:find (true-pkey pkey) *pkeys*)))
-    (when proof
-      (apply 'validate-pkey pkey proof))))
+  (let ((psig (maps:find (vec-repr:int pkey) *pkeys*)))
+    (when psig
+      (validate-pkey pkey psig))))
 
 
 (defun NYI (&rest args)
@@ -266,7 +161,7 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------------
 
-(defvar *wordlist-folder*  (asdf:system-relative-pathname :cosi "wordlists/"))
+(defvar *wordlist-folder*  (asdf:system-relative-pathname :cosi-bls "wordlists/"))
 (defvar *ws* '(#\space #\tab #\linefeed #\newline #\page))
 
 (defun import-wordlist (filename)
@@ -304,7 +199,7 @@ THE SOFTWARE.
   (assert (= 2048 (length wref)))
   (check-type val (integer 0))
   (assert (<= (integer-length val) 256))
-  (let* ((h  (sha3/256-buffers (ed-convert-int-to-lev val 32)))
+  (let* ((h  (hash:hash/256 (vec-repr:levn val 32)))
          (v  (dpb (aref h 0) (byte 8 256) val)))
     (loop for ct from 0 below 24
           for pos from 0 by 11
@@ -332,7 +227,7 @@ THE SOFTWARE.
           (setf (ldb (byte 11 pos) v) (position wrd wref
                                                 :test 'string-equal)))
     (let* ((val (ldb (byte 256 0) v))
-           (h   (sha3/256-buffers (ed-convert-int-to-lev val 32))))
+           (h   (hash:hash/256 (vec-repr:levn val 32))))
       (unless (= (aref h 0) (ldb (byte 8 256) v))
         (error "Invalid wordlist"))
       val)))

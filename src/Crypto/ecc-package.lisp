@@ -40,8 +40,49 @@ THE SOFTWARE.
    :quadratic-residue-p
    ))
 
+(defpackage vec-repr
+  (:use :common-lisp)
+  (:export
+   :ub8        ;; type
+   :ub8-vector ;; type
+   :make-ub8-vector
+   :ub8v-repr  ;; mixin class
+   :ub8v
+   :ub8v-vec
+   :lev
+   :lev-vec
+   :bev
+   :bev-vec
+   :base58
+   :base58-str
+   :base64
+   :base64-str
+   :hex
+   :hex-str
+   :int
+   :levn
+   :bevn
+   :convert-int-to-vector
+   :convert-vector-to-int
+   ))
+
+(defpackage :hash
+  (:use :common-lisp
+        :vec-repr)
+  (:export
+   :hash
+   :hash-val
+   :hash-bytes
+   :hash-length
+   :hash/256
+   :hash/512
+   :get-hash-nbytes
+   :hashable
+   ))
+
 (defpackage :ecc-crypto-b571
   (:use :common-lisp :crypto-mod-math)
+  (:nicknames :ecc)
   (:export
    :ctr-hash-prng
    :basic-random
@@ -53,6 +94,7 @@ THE SOFTWARE.
    :convert-bytes-to-int
    :ctr-drbg
    :ctr-drbg-int
+   
    :sha3-buffers
    :sha3/256-buffers
    
@@ -60,6 +102,13 @@ THE SOFTWARE.
 
    :encode-bytes-to-base64
    :decode-bytes-from-base64
+
+   :convert-int-to-lev
+   :convert-lev-to-int
+   :encode-object-to-base58
+   :decode-object-from-base58
+   :encode-bytes-to-base58
+   :decode-bytes-from-base58
 
    :get-cached-symbol-data
    ))
@@ -109,11 +158,17 @@ THE SOFTWARE.
 
 (defpackage :edwards-ecc
   (:nicknames :edec)
-  (:use :common-lisp :ecc-crypto-b571 :crypto/modular-arith)
+  (:use :common-lisp
+   :ecc-crypto-b571
+   :crypto/modular-arith
+   :vec-repr
+   :hash)
   (:import-from :ecc-crypto-b571
 		:convert-int-to-nbytes
 		:convert-int-to-nbytesv
 		:convert-bytes-to-int
+                :convert-int-to-lev
+                :convert-lev-to-int
 		:ctr-drbg-int
 		:sha3-buffers
 		:random-between

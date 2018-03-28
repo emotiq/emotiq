@@ -1,0 +1,54 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1561\cocoasubrtf200
+{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;\f1\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\csgray\c0;\cssrgb\c0\c0\c0;}
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf2 From: Martin Simmons <martin@lispworks.com>\
+Subject: Re: (Lisp Support Call #41418)  Curious Loading Effects during SMP Multithreading\
+Date: February 8, 2018 at 8:56:02 AM MST\
+To: David McClain <dbm@refined-audiometrics.com>\
+Cc: lisp-support@lispworks.com\
+Reply-To: lisp-support@lispworks.com\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f1 \cf2 \
+\pard\pardeftab720\sl280\partightenfactor0
+\cf3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec3 Hi David,\
+\
+Thanks for the profiler output. \'a0It shows that the slowdown is caused by\
+locking code that LispWorks uses to cache temporary bignums. \'a0Mailboxes code\
+hardly appear in the profiler output.\
+\
+It would be useful if you could test the attached patch, which allows either\
+caching of temporary bignums per thread without a lock (the default), or\
+doesn't cache at all (which causes more allocation). \'a0We are not sure which is\
+better.\
+\
+The function \
+\
+\'a0\'a0(sys::set-temporary-bignum-caching on-p)\
+\
+Can be used to switch between caching per-thread (when ON-P is non-nil) to not\
+cahcing at all. \'a0The default is caching per thread.\
+\
+Either way it should perform much better than without the patch. \'a0We are\
+interested in seeing the results of timing your program with both settings.\
+\
+Detach the patch into the private-patches directory as described in\
+http://www.lispworks.com/documentation/lw71/RNIG/html/readme-129.htm#pgfId-891913\
+and add the following form in the body of the flet in\
+private-patches/load.lisp immediately after the commented example there:\
+\
+(load-one-private-patch "process-tempbig-cache" :system)\
+\
+This will take effect after restarting LispWorks (the patch cannot be loaded\
+after starting multiprocessing or the LispWorks IDE).\
+\
+Regards,\
+\
+Martin Simmons\
+LispWorks Technical Support\
+http://www.lispworks.com/support/\
+}

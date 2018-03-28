@@ -1,0 +1,118 @@
+Imperative mapping is incompatible with asynchronous Actor calls. The
+presence of Actor calls inside the mapping function causes immediate
+pass-through with delayed results that are simply dropped. This
+article describes the general transform needed from imperative mapping
+to Actor-compatible forms.
+
+Consider the following idealized mapping operation. We have a list of
+operands that we want to map using some actor service which runs code
+for us. It won't work as written here:
+
+       (map (lambda (arg)
+	      (send actor-service (lambda ()
+				    (computation arg)))
+	   operands)
+
+A SEND to an Actor completes immediately and returns nothing of
+value. And later, when the Actor runs our code, the results of
+computation will just be dropped on the floor.
+
+So, to get back the result of the Actor computation, we need to recast
+the Actor call with =BIND and =VALUES as shown here:
+
+       (map (lambda (arg)
+	      (=bind (ans)
+		     (send actor-service (lambda ()
+					   (=values (computation arg))))
+		  ans))
+	    operands)
+
+But this still won't work properly because upon encountering the =BIND
+form, it still calls SEND, which just falls through immediately,
+producing no results. The result binding and delayed body of =BIND
+will happen later when the Actor peforms the =VALUES form.
+
+The solution to this quandry is to recast imperative mapping with the
+use of LABELS and recursion:
+
+       (labels ((mapper (opnds accum)
+		  ;; operands is our list of operands remaining to be mapped
+		  ;; accum is an accumulator of results
+		  (if (endp opnds)     ;; are we finished?
+		      (nreverse accum) ;; return list of results
+		    ;; else
+		      (let ((hd (car opnds))
+			    (tl (cdr opnds)))
+			(=bind (ans)
+			       (send actor-service (lambda ()
+						     (=values (computation hd))))
+			   (mapper tl (cons ans accum))) ;; recursive call
+			))))
+	 (mapper operands nil))
+
+Now, when the =BIND is performed, the code simply falls through. But
+when =VALUES finally makes the =BIND binding and runs the body
+continuation, we accumulate the computed result and make a recursive
+call to our LABELS mapper function on the remaining operands.
+
+Note that we must use LABELS and not FLET here, so that we can
+properly refer to our function via recursion. Because =BIND falls
+through immediately, we see that the code runs in constant stack
+space, despite being a recursive routine with indefinite extent.
+
+But note that the initial call to mapper returns immediately with no
+useful results. So, in general, at the end of recursion, rather than
+returning the list of accumulated results, one must do something else
+with them. By the time the results have been accumulated there is
+nobody waiting to receive them here. One possibility is to SEND the
+results to some other Actor.
+
+---------------------------------
+
+There is another alternative provided by the Actors package:
+PMAPCAR (= parallel mapcar). With this macro we can write our mapping
+example as:
+
+(=bind (lst)
+       (pmapcar (=lambda (val)
+			 (=values (computation val)))
+		operands)
+   (do-something-with-result lst))
+
+This form fires off a parallel collection of transient Actors, each of
+which evaluates one item from the operands list. Once all such Actors
+have finished, the outer =BIND is bound with a list of the results and
+its continuation is performed.
+
+Note the use of =LAMBDA in the function sent to PMAPCAR. The =VALUES
+inside that function refer, not to the outer =BIND, but to an internal
+one created by PMAPCAR. But the effect overall is to bind that outer
+=BIND to the entire list of results.
+
+The use of PMAPCAR implies truly parallel operations on each of the
+operands in the original list of operands. Sometimes that is
+appropriate. But other times, when the mapping is intended to produce
+side effects of folding over the list of operands, then a sequential
+mapping is called for. And that is the transformation discussed in the
+first section of this article.
+
+---------------------------------
+
+Finally, as a late addition to the Actors package, I decided to add
+the serialized mapping transformation as an Actor primitive, called
+SMAPCAR (= sequential mapcar). It is to be used within an outer =BIND
+form.
+
+Unlike PMAPCAR, SMAPCAR does not fire off any transient Actors, and
+unless your mapping function actually uses async Actor calls, it
+behaves immediately just like normal MAPCAR. But if your function does
+use async Actor calls, then the result is just as described for the
+transform in the first section of this article.
+
+      (=bind (lst)
+            (smapcar 'computation operands)
+         (do-something-with-result lst))
+
+But unlike a normal MAPCAR, the function 'computation must be defined
+using either =DEFUN or =LAMBDA, and it must contain a return via
+=VALUES.
