@@ -6,12 +6,18 @@ env:
   global:
     - PATH=~/.roswell/bin:$PATH
     - ROSWELL_INSTALL_DIR=$HOME/.roswell
+    - secure: "jT0RfQZ2wuv2nxCBS364lc1PrnO+5gyvZgAkpUyyRik80pxUpSUEUPehTKUX+j7QrOzszw55MRlKnR88vZ/mzDP2o/ogCjdLFdTJMFY60twex0Zog1+h993XtQrhMXb+XcJDd1FBptgJQN3/O+B+1PYk1rdWgik9kvNfNRfsehr6ueuwgZhGVtQJYe0+5wyWCnLSsdzy4odPjhNk3IDieqNNPj/NgihDmPRU7MRN8W6bn4NxY8nfTzhvT/6waLbP32CQUmH/dso3GAYK9sxo/kNtq6vUgiK5Zcs/t50uTydSqRrdxeOehuRPH5IE6rubqYXNt1IrKLsRbJDjLjyyx1VwBRO3WzCUmnc6YiLxfYs53wWz7+6YI9u+XUobfR+Jv8DbzB1hDVs2ZRbGtALROqIR8R5DzsAoa8sePyJinczDkoj1iw/kvfpTjXZ9ooGxvBXJGud8GU1NWTT908hOCaeu6b+F934SnaifnyVT8yxmPS481mLkltdQrmQSez/rTShKw2GxWu3/4AeCiYuyflZ3GcCX4zt1X2z0VdKrxW+S7/PPeExmA03Dms/JbNTwXUsbbHnrCEY0EZ9ZbVTN3eUe47BdtzPeWuBWzS91owMQFUkc+mFL5wiuMkhqhi+syu59CfaWFr/qEvlxJf1sqnRgbYrrHMwB/GfqHwIIF00="
+    - secure: "JXq5XzAyhao/mHPyTHp2nQdcKkCbcq3Q7NReCZc11WWOYcbMYBGJJhiOBOOPgwZpJmSoI3U55iRb+RTsv9ogUZAthAJX9B7GFhNday+Wmh2I4w4oRkfPCuYoJE7Pu0db4VjvOcht3J0scZ0meejITMJF3tsnN8o4hq4pnryaR+vCqxz1Wh+QB1yF680el7u4JFeGKwss6GzVGhOpIMVUBFf6bOFZPe3mZtsqxEaLD+nCym7m1dc1CUJR2GXbuac9VJz1ZNn8LAqypNs8vKl5F0vF6EIi6zbKz6HXweseV2AshP4/8EotR52ayHM73AYtczqYlU+R7aUFlMZxHWMmpENXm/Nl2I4Li/iA5IwUM4EQyGtZml68Jt4s9J0uyK24tCDAGcqrXe29htvcO4NNGMDQQnsFC+xJpC5nbveBzs9L7VyAVzhW4G4aKv2BcHKDelmp20xtWMoYrlLf1DgmUeL6SdKGorPnNUi6pVwvP0fB58+iOMyQgajnncdQ+Lgz9srK+haybfcNMvCJb4Fyfly8/lqahYE/LIPFDwrmZfR3oitzxFNUS9eQDWyThnaPQ0sbRhCoUAzJhicKR7wi/4e1w98rAdbMkpHpQdQofwloR0R4qmdrR3qUjMv8f/77PRXSCj7kLwVHAZCaOa5S6wE3t02zvpe5aUUr99RI6CA="
+    - secure: "MJQD4YXkM7fAk9OK1VLOdqb4NxDKDTOwh6+NJWtHRmNfHW7kabgrkUbsTLyR/urSFWbFmXjrBEYUiIhDmavBrqhhydLR4LGZQ8bouu5VAYFg4N6XQll5CG0wduS6aXIutq83oy9i/QCtzUjQqjyXaztMnfPv7HqnP53FEvX5GiyuLvSr9wZZQzsyFFEY19ptX3vfWxuEsH9+NizlrxLmAKBuzJoowpt2c1N52zqpK+GGumX+kr+nPvkPHspc9XerNdGG5Mf/vZyLMTSKWMUqEh+ZZ9ipzVBLnbjvMQnU5AH0qWDhwuwIEIPTWoTlqtkKnawXqPnfAXl++A66PZxbxn2KDLE9gY55ClbZUoEq9u3Tal+kWtgeaTqYbuO6Kz3RCtdI6w3wtXLAPl5ktBLbOrAP9t2Sr5gctgEYawSbA29ARYdaBzbUAL2zakhXh3mpXmwLIIdjonsVgi/irA6iNKGnV7iKh5jnSWTR2szGblHfM8BaFf23aD6fEgGy6SqifCiSF+GdildrPrvMVpIjOH7CsojiBt9M2ZiV2pp4QpyE5olNZANa2bdsSKW+ZyFz+H0k2Gw5ReUP0mNyhSxUFZ1ASjyQwOr8aHlJ1+uLuXLNM/KfqmJ7tfqpqqXpTYpeHok7cIB96oSPT6l5fe0cktBgbWfX0cS4ipvLm2uoDk0="
+    - secure: "gQ087RnmcCZ9YPIjv87pQ0EUWG9SCimHoHRfqNlZKP9h30BQvuGGRmvJUUbn6A0NIUv4XkiavTyUFm23YixDpWsNIhFoX1ozEUDoVfMBtyW1ut8K95E40nA0u94CUP37TjP6qhUPSnk6b3EO1kPWKCfBjsD9Gr0uR4i/LfZQguAdCJVlYSvgwCncwyATsVxWMh1pw80kcj90bxL8GIjdp3BqBkmpNSqjTmpxl/9QvjfMXZfHGoWHckJqGWuHzK5FWiSEJOB8g1DLt7ZYIpNGKEtyRj780T8BV3CT14S4cChhtOZRaETWw8OkG1GoJNRkdISPHRrFkZ4b9WiwQAJHAMk/LvAu9MIs3cDesA/nUHXvuabC47JgsSvrXsGnHvbD22eJsVf1/elcidB5gG8+PtG4Pft9ZpbwPxG4cBQhnIx83LpZhmRmDyF3b7Go2os0KMyseNQ0QRM9nzLXELpPXaeoK5iDIUpM4QrYtLfWaJQJ7dQcbdAJo8iI6VtQ//8EyAmEeQoZcacnhm/QnE6Urvjj66zkSct6po/bxW6hjWzQ7ScGlXqYOgUVYYVvmkpVuw/STtqcb66CXWKM+iZIh1vW/Afui/KM1T3tklRUkkpxuYDl4NvBnWLpOQIdrRkhvHwn6SVpqGsWHEFP9w7coZAP4wMQNjMQtbIjkcnQy1g="
+
   matrix:
+    - LISP=lispworks-bin
     - LISP=ccl-bin
     - LISP=sbcl-bin
 # Uncomment to enable the build farm resource to be spent on
 # implementations that might actually produce useful results.
-    - LISP=abcl-bin
+#    - LISP=abcl-bin
 # Non-binary distributions need to be built from source, which
 # currently times out for the Travis CI builds we are currently paying
 # for.
@@ -20,17 +26,16 @@ env:
 #    - LISP=clasp
 
 install:
-  - curl -L https://raw.githubusercontent.com/snmsts/roswell/release/scripts/install-for-ci.sh | sh
-# Add needed Quicklisp dependencies for testing here  
-  - ros install prove
+  - curl -L https://raw.githubusercontent.com/emotiq/roswell/mte-lispworks/scripts/install-for-ci.sh | sh
+  - sudo apt-get install openssl pgpgpg wget bash gcc make g++ flex bison
 # Pin quicklisp to known version; install emotiq dist
   - ros -e '(ql-dist:install-dist 
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
                :replace t :prompt nil)
             (ql-dist:install-dist 
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
-               :prompt nil)'
-  - sudo apt-get install openssl pgpgpg wget bash
+               :prompt nil)
+            (uiop:quit 0)'
 
 # Add/remove test converage here
 # 
@@ -54,7 +59,8 @@ script:
                   (system dependencies) 
               :in 
                   '((:emotiq :emotiq-test)
-                    (:cosi   :cosi-test))
+                    (:cosi-bls :cosi-bls-test)
+                    (:crypto-pairings :crypto-pairings/t))
               :doing 
                  (ql:quickload dependencies)
               :unless 

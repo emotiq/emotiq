@@ -95,6 +95,30 @@ At end you should see a result like
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
+
+## Building the native libraries required by CRYPTO-PAIRINGS
+
+Currently, we have a dependency on a C library to do our pair based
+curve (PBC) cryptography.
+
+The library currently only builds on Linux/MacOS.  It requires a
+development tool-chain to be in place, of which dependencies include:
+
+    gcc make g++ flex bison
+    
+Once these tools are installed so that they may be invoked from a
+shell, the script in `etc/build-crypto-pairings.bash` can be used to drive
+the build.  The results of that script are created under a `var/`
+subdirectory.
+
+As a convenience, loading the ASDF definition for `crypto-pairings`
+will attempt to run the script to create the native libraries.  If one
+is updating this tree from a previous version, one may explicitly have
+to force the asdf `prepare-op` via so:
+
+    (asdf:make :crypto-pairings)
+
+
 # Test Coverage
 
 All pushed to the source tree result in "Continuous Integration" build
@@ -107,4 +131,4 @@ artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-03-16 Fri 12:48Z>
+    Revised: <2018-03-28 Wed 11:57Z>
