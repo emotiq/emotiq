@@ -98,11 +98,17 @@ THE SOFTWARE.
                        :remove t)
 
 (fli:register-module :pbclib
-                     :dlopen-flags t
-                     :real-name
-                     #+:MACOSX "/usr/local/lib64/libLispPBCIntf.dylib"
-                     #+:LINUX  "/usr/local/lib/libLispPBCIntf.so"
-                     )
+		     :dlopen-flags t
+		     :real-name
+		     #+:macosx
+                     (concatenate 'string 
+                                  (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+                                  "/libLispPBCIntf.dylib")
+		     #+:linux
+                     (concatenate 'string 
+                                  (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+                                  "/libLispPBCIntf.so")
+		     )
 
 ;; -----------------------------------------------------------------------
 ;; for initial test of strings transfer to/from C/Lisp

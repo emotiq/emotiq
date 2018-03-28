@@ -117,11 +117,15 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 
 (cffi:define-foreign-library libpbc
-  (:darwin "/usr/local/lib64/libLispPBCIntf.dylib")
-  (:linux  "/usr/local/lib/libLispPBCIntf.so")
-  (t (:default "libLispPBCIntf"))
-  )
-(cffi:reload-foreign-libraries)
+ (:darwin #.(concatenate 'string 
+		       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		       "/libLispPBCIntf.dylib"))
+ (:linux #.(concatenate 'string 
+		     (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		     "/libLispPBCIntf.so"))
+ (t (:default "libLispPBCIntf"))
+ )
+
 (cffi:use-foreign-library libpbc)
 
 ;; -----------------------------------------------------------------------
@@ -969,7 +973,7 @@ sign0 1
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
-;; (init-pairing)
+;(init-pairing)
 ;; --------------------------------------------------------
 #|
 (init-pairing)
