@@ -1,9 +1,12 @@
 (in-package "CL-USER")
 
-(defun main ()
+(defun simple-test ()
   (pbc:make-key-pair :dave)
   (let ((signed (pbc:sign-message :hello)))
-    (if (pbc:check-message signed)
-        (format *standard-output* "~%OK~%")
-      (format *standard-output* "~%NOT OK~%"))))
+    (let ((ok (pbc:check-message signed)))
+      ;; it seems that the delivered version does not print out the result by default, so let's print something
+      (if ok 
+	  (format *standard-output* "~%OK~%~%")
+	(format *standard-output* "~%NOT OK~%~%"))
+      ok)))
 
