@@ -168,7 +168,8 @@ These proof sums correspond directly to the proofs presented in the previous sec
 
 However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about half as fast when $N=1024$. But the method is equivalent in its information content, and every bit as secure.
 
-
+\chapter{Verifiable Random Functions}
+A verifiable random function (VRF) uses a pseudo-random function (PRF) in such a way as to furnish proof that the result was fed a specific seed value to produce the pseudo-random result. We follow the work of\cite{vrf}
 
 
 \chapter{Safe Hierarchical Keying}
@@ -195,6 +196,7 @@ In this form, a new private key cannot be used to sign messages in the same mann
 %[ ... TBD: fill out the bibliography ... ]
 
 \bibitem{scrape}Ignacio Casudo and Bernardo David, {\em{ SCRAPE: Scalable Randomness Attested by Public Entities}} 
+\bibitem{vrf}Yevgeniy Dodis and Aleksandr Yampolskiy, {\em{A Verifiable Random Function With Short Proofs and Keys}}
 \bibitem{thesis} Ben Lynn, PhD Thesis, {\em{On the Implementation of Pairing-Based Cryptosystems}}, June 2007
 \bibitem{lib} Ben Lynn, PBC Library, https://crypto.stanford.edu/pbc/download.html
 \bibitem{bls} Ben Lynn, {\em{BLS Signatures}}, https://crypto.stanford.edu/pbc/manual/ch02s01.html
