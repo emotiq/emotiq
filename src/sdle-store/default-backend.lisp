@@ -55,7 +55,7 @@
 (defconstant +unbound-slot-code+        (register-code 40 'unbound-slot))
 (defconstant +rawbytes-code+            (register-code 41 'rawbytes))
 
-(defconstant $unbound-marker #(:unbound-marker))
+(um:defconstant+ $unbound-marker #(:unbound-marker))
 
 ;; setups for type code mapping
 (defun output-type-code (code stream)
@@ -254,7 +254,7 @@
 ;; Implementations are to provide an implementation for the create-float-value
 ;; function
 
-#-:LISPWORKS
+#-(or lispworks sbcl)
 (defun create-float-values (value &rest codes)
   "Returns a alist of special float to float code mappings."
   (declare (ignore value codes))
@@ -430,7 +430,7 @@
 ;; added DM/RAL 07/09
 (defun find-or-make-package (pkg-name)
   (or (find-package pkg-name)
-      (make-package pkg-name :use :COMMON-LISP)))
+      (make-package pkg-name :use '(:COMMON-LISP))))
 
 (defrestore-sdle-store (gensym stream)
   (make-symbol (restore-object stream)))
@@ -492,7 +492,7 @@
         (when (and *check-for-circs*
                    (referrer-p obj))
           (let ((x x))
-            (push (lazy
+            (push (um.lazy:lazy
                       (setf (nth x ret)
                             (referred-value obj *restored-values*)))
                   *need-to-fix*)))
@@ -505,7 +505,7 @@
       ;; and check for the last possible circularity
       (if (and *check-for-circs*
                (referrer-p last1))
-          (push (lazy
+          (push (um.lazy:lazy
                     (setf (cdr tail)
                           (referred-value last1 *restored-values*)))
                 *need-to-fix*)
@@ -701,7 +701,7 @@
             ;; have to worry about circularities
             (let ((val (restore-object stream)))
               (when #+:LISPWORKS (clos:slot-exists-p new-instance slot-name)
-                    #+:ALLEGRO   (slot-exists-p new-instance slot-name)
+                    #-:LISPWORKS (slot-exists-p new-instance slot-name)
                 (setting (slot-value obj slot-name) val))) ))
     (after-retrieve new-instance)
     new-instance))

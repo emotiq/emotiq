@@ -34,7 +34,8 @@ THE SOFTWARE.
 (in-package #:primes)
 ;; -------------------------------------------
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))          (inline empty singleton create))
+(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))
+          (inline empty singleton create))
 
 ;; -----------------------------------------------------------------------------
 ;;
@@ -44,7 +45,8 @@ THE SOFTWARE.
   ;; return a random integer 0 <= val < ix
   #+:LISPWORKS (ecc-crypto-b571:basic-random ix)
   #+:ALLEGRO   (random ix);; Allegro uses Mersenne Twister already
-  #-(OR :LISPWORKS :ALLEGRO) (error "Not-yet-implemented"))
+  #+sbcl (random ix)   ;; <http://www.sbcl.org/manual/#Random-Number-Generation>
+  #-(OR :LISPWORKS :ALLEGRO :SBCL) (error "Not-yet-implemented"))
 
 (defun random-between (lower upper)
   ;; generate random integer in [lower, upper)
@@ -499,7 +501,8 @@ THE SOFTWARE.
   (do ((e 0 (1+ e))
        (r number (/ r divisor)))
       ((/= (mod r divisor) 0) (values r e))
-    (declare (integer e r)) ))
+    (declare (integer e r))
+    (values r e)))
 
 (defun perfect-square? (c)
   (declare (integer c))
@@ -542,18 +545,24 @@ THE SOFTWARE.
      
      (t (multiple-value-bind (a1 e) (factor-out a 2)
           (let* ((rem (mod n 8))
-                 (s   (cond
-                       ((evenp e) 1)
-                       ((or (= 1 rem)
-                            (= 7 rem)) 1)
-                       ((or (= 3 rem)
-                            (= 5 rem)) -1))))
+                 (s 0))
             (declare (integer rem s))
+
+            (cond
+              ((evenp e) 
+               (setq s 1))
+              ((or (= 1 rem)
+                   (= 7 rem)) 
+               (setq s 1))
+              ((or (= 3 rem)
+                   (= 5 rem)) 
+               (setq s -1)))
+
             (when (and (= 3 (mod n 4))
                        (= 3 (mod a1 4)))
               (setf s (- s)))
-            (* s (jacobi-symbol (mod n a1) a1)) )))
-     )))
+
+            (* s (jacobi-symbol (mod n a1) a1))))))))
                  
 (defun probabilistic-lucas-test (c)
   (declare (integer c))
@@ -934,7 +943,7 @@ THE SOFTWARE.
   ;;                 If the printout shows: Make Base Prime: Absolute
   ;;                    then we will have a proven prime result.
   ;;                 Otherwise, we will have a probabilistic prime result.
-  (declare (fixnum nbits nlevels))
+  (declare (fixnum nbits))
   (labels ((find-incremental-prime (u)
              (declare (integer u))
              ;; start with large prime U, and compute 2*k*U+1 until prime
@@ -1089,6 +1098,7 @@ THE SOFTWARE.
                (rch:execevt #'generate-safe-prime nbits)
                (rch:execEvt #'generate-safe-prime nbits))))
 
+#+(AND :COM.RAL :LISPWORKS)
 (defun par-gen-safe-primes (nbits nprimes)
   (loop repeat nprimes collect (print (par-gen-safe-prime nbits))))
 
@@ -1297,6 +1307,7 @@ THE SOFTWARE.
           (iter))
       )))
 
+#+(AND :COM.RAL :LISPWORKS)
 (defun par-make-2kp+1-prime (nbits &optional (mr-iters 50))
   (declare (fixnum nbits mr-iters))
   (par-try 4 300 #'make-2kp+1-prime nbits mr-iters))
@@ -1580,6 +1591,7 @@ THE SOFTWARE.
             (rch:execEvt #'generate-safe-prime 512))
 |#
 
+#+(AND :COM.RAL :LISPWORKS)
 (defun collect-safe-primes (nprimes nbits &optional (mr-iters 50))
   (declare (fixnum nprimes nbits mr-iters))
   (um:nlet-tail iter ((primes nil))

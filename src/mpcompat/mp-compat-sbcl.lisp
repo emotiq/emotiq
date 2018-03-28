@@ -32,6 +32,10 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------
 (in-package #:mp-compatibility)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :sb-concurrency))
+
 ;; equiv to #F
 (declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
 ;; --------------------------------------------------
@@ -66,7 +70,8 @@ THE SOFTWARE.
 
 (defun process-run-function (name flags proc &rest args)
   "Spawn a new Lisp thread and run the indicated function with inital args."
-  (declare (ignore flags))
+  (declare (ignore flags)
+           (type function proc))
   (sb-thread:make-thread (lambda ()
 			   (apply proc args))
 			 :name name))
@@ -81,6 +86,7 @@ THE SOFTWARE.
 
 (defun process-interrupt (proc fn &rest args)
   "Interrupt the indicated Lisp process to have it perform a function."
+  (declare (type function fn))
   (sb-thread:interrupt-thread proc (lambda ()
 				     (apply fn args))))
 
@@ -102,16 +108,16 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------------
 
 (defun do-with-lock (lock timeout fn)
+  (declare (type function fn))
   (cond ((eq sb-thread:*current-thread* (sb-thread:mutex-owner lock))
 	 (funcall fn))
-
 	(timeout
 	 (tagbody
 	    (sb-sys:without-interrupts
 	      (handler-case
 		  (sb-ext:with-timeout timeout
 		    (sb-sys:allow-with-interrupts
-		      (sb-thread:get-mutex lock nil t))
+		      (sb-thread:get-mutex lock nil t)) ;; Deprecated 
 		    (go have-lock))
 		(timeout (cx)
 		  (declare (ignore cx))
@@ -127,7 +133,7 @@ THE SOFTWARE.
 	     (funcall fn)))
 	))
 
-(defmacro with-spin-lock ((lock) &body body)
+(defmacro with-spinlock ((lock) &body body)
   `(with-lock (,lock) ,@body))
 
 (defmacro with-lock ((lock &optional whostate timeout) &body body)
@@ -142,95 +148,67 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------------------
 
-(defun process-lock (lock &optional whostate timeout)
-  (declare (ignore whostate))
-  (cond ((eq sb-thread:*current-thread* (sb-thread:mutex-owner lock))
-	 (funcall fn))
-	
-	(timeout
-	 (tagbody
-	    (sb-sys:without-interrupts
-	      (handler-case
-		  (sb-ext:with-timeout timeout
-		    (sb-sys:allow-with-interrupts
-		      (sb-thread:get-mutex lock nil t))
-		    (go have-lock))
-		(timeout (cx)
-		  (declare (ignore cx))
-		  (return-from process-lock nil))
-		))
-	  have-lock
-	    (unwind-protect
-		 (funcall fn)
-	      (sb-sys:without-interrupts
-		(sb-thread:release-mutex lock)))
-	  beyond))
-	
-	(t (sb-thread:with-mutex (lock)
-	     (funcall fn)))
-	))
-
-;; --------------------------------------------------------------------------
-
-(defun process-unlock (lock)
-  (sb-sys:without-interrupts
-    (sb-thread:release-mutex lock)))
-
-;; --------------------------------------------------------------------------
-
 (defun make-mailbox (&key size)
   "Make a Lisp mailbox."
   (declare (ignorable size))
-  (mrmb:create))
+  (sb-concurrency:make-mailbox))
 
 ;; --------------------------------------------------------------------------
 
 (defun mailbox-send (mbox msg)
   "Send a message to a Lisp mailbox."
-  (mrmb:send msg mbox))
+  (sb-concurrency:send-message mbox msg))
 
 ;; --------------------------------------------------------------------------
 
-(defun mailbox-read (mbox &optional timeout)
+
+(defun mailbox-read (mbox &optional timeout) 
   "Wait with timeout for a message to arrive at the Lisp mailbox and return it.
 A null timeout means wait forever."
-  (mrmb:receive mbox timeout))
+  (if timeout 
+      (sb-concurrency:receive-message mbox :timeout timeout)
+      (sb-concurrency:receive-message mbox)))
 
 ;; --------------------------------------------------------------------------
 
 (defun mailbox-empty? (mbox)
   "Check if the Lisp mailbox is empty. Return generalized T/F."
-  (mrmb:is-empty mbox))
+  (sb-concurrency:mailbox-empty-p mbox))
+  
 
 ;; --------------------------------------------------------------------------
 
 (defun process-wait (wait-reason wait-fn &rest wait-args)
-  #+:LISPWORKS
-  (apply #'sb-thread:process-wait wait-reason wait-fn wait-args)
-  #+:ALLEGRO
-  (apply #'sb-thread:process-wait wait-reason wait-fn wait-args)
-  #+:CLOZURE
-  (apply #'sb-thread:process-wait wait-reason wait-fn wait-args))
+  (declare (ignore wait-reason))
+  (sb-ext:wait-for
+   (apply wait-fn wait-args)))
+
 
 ;; --------------------------------------------------------------------------
 
 (defun process-wait-with-timeout (wait-reason timeout
 				  &optional wait-fn &rest wait-args)
-  #+:LISPWORKS
-  (apply #'sb-thread:process-wait-with-timeout wait-reason timeout wait-fn wait-args)
-  #+:ALLEGRO
-  (if timeout
-      (apply #'sb-thread:process-wait-with-timeout wait-reason timeout wait-fn wait-args)
-    (progn
-      (apply #'sb-thread:process-wait wait-reason wait-fn wait-args)
-      t))
-  #+:CLOZURE
-  (apply #'sb-thread:process-wait-with-timeout wait-reason
-	 (round (* timeout sb-thread*ticks-per-second*))
-	 wait-fn wait-args))
+  (if wait-fn
+      (sb-ext:wait-for (apply wait-fn wait-args) :timeout timeout)
+      (sb-ext:wait-for t :timeout timeout)))
+
 
 ;; --------------------------------------------------------------------------
 
 (defun generate-uuid ()
   (uuid:make-v4-uuid))
+
+(defmacro atomic-incf (place)
+  `(sb-ext:atomic-incf ,place))
+
+(defmacro atomic-decf (place)
+  `(sb-ext:atomic-decf ,place))
+
+(defmacro compare-and-swap (place old new)
+  `(sb-ext:compare-and-swap ,place ,old ,new))
+
+(defmacro CAS (place old new)
+  `(sb-ext:CAS ,place ,old ,new))
+
+
 

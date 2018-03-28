@@ -365,7 +365,7 @@ THE SOFTWARE.
    ((zerop x)  0)
    ((= 1 x)    1)
    (t          ;; right-to-left
-               (labels ((expt (n)
+               (labels ((local-expt (n)
                           (cond ((zerop n) 1)
                                 ((= 1 n)   x)
                                 (t  (do ((ans   x)
@@ -376,8 +376,8 @@ THE SOFTWARE.
                                         (setf ans (gf* ans x))) ))
                                 )))
                  (if (minusp n)
-                     (gfinv (expt (- n)))
-                   (expt n))))
+                     (gfinv (local-expt (- n)))
+                   (local-expt n))))
    ))
 
 
@@ -388,7 +388,7 @@ THE SOFTWARE.
    ((zerop x)  0)
    ((= 1 x)    1)
    (t          ;; right-to-left
-               (labels ((expt (n)
+               (labels ((local-expt (n)
                           (cond ((zerop n) 1)
                                 ((= 1 n)   x)
                                 (t  (do ((ans   x)
@@ -399,8 +399,8 @@ THE SOFTWARE.
                                         (setf ans (lisp-bin-gf* ans x))) ))
                                 )))
                  (if (minusp n)
-                     (lisp-gfinv (expt (- n)))
-                   (expt n))))
+                     (lisp-gfinv (local-expt (- n)))
+                   (local-expt n))))
    ))
 
 (defun gfdeg (x)

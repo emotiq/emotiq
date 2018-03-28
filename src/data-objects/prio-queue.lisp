@@ -491,6 +491,37 @@ THE SOFTWARE.
                 (mp:wait-on-semaphore sem nil wait-reason)
                 (popq mbox)))))))
 
+#+:SBCL
+(progn
+  (defclass prio-mailbox (priq)
+    ((sem  :reader   prio-mailbox-sem
+           :initform (sb-thread:make-semaphore))))
+  
+  (defun make-prio-mailbox (&key name)
+    (make-instance 'prio-mailbox))
+  
+  (defmethod mailbox-send ((mbox prio-mailbox) msg &key (prio 0))
+    (with-accessors ((sem  prio-mailbox-sem)) mbox
+      (addq mbox msg :prio prio)
+      (sb-thread:signal-semaphore sem)))
+  
+  (defmethod mailbox-empty-p ((mbox prio-mailbox))
+    (emptyq-p mbox))
+  
+  (defmethod mailbox-not-empty-p ((mbox prio-mailbox))
+    (not (mailbox-empty-p mbox)))
+  
+  (defmethod mailbox-read ((mbox prio-mailbox) &optional wait-reason timeout)
+    (declare (ignore wait-reason))
+    (with-accessors ((sem prio-mailbox-sem)) mbox
+      (if timeout
+          (and (sb-thread:wait-on-semaphore sem :timeout timeout)
+               (popq mbox))
+          (progn
+            (sb-thread:wait-on-semaphore sem)
+            (popq mbox))))))
+
+
 ;; ------------------------------------------------------
 
 #+:ALLEGRO

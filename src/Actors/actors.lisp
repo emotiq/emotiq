@@ -171,7 +171,7 @@ THE SOFTWARE.
              
              (run ()
                (#+:LISPWORKS hcl:unwind-protect-blocking-interrupts-in-cleanups
-                #+(OR :ALLEGRO :CLOZURE)  unwind-protect
+                #+(OR :ALLEGRO :CLOZURE sbcl)  unwind-protect
                    (let ((*current-actor* self))
                      (loop for (msg ok) = (multiple-value-list
                                            (next-message mbox))
@@ -388,12 +388,14 @@ THE SOFTWARE.
   (:metaclass #+:LISPWORKS clos:funcallable-standard-class
               #+:ALLEGRO   mop:funcallable-standard-class
               #+:CLOZURE   ccl:funcallable-standard-class
+              #+:SBCL      sb-mop:funcallable-standard-class
               ))
 
 (defmethod initialize-instance :after ((obj callback-function) &key behavior &allow-other-keys)
   (#+:LISPWORKS clos:set-funcallable-instance-function
    #+:ALLEGRO   mop:set-funcallable-instance-function
    #+:CLOZURE   ccl:set-funcallable-instance-function
+   #+:SBCL      sb-mop:set-funcallable-instance-function
    obj behavior))
 
 (defmethod =cont ((contfn callback-function))
@@ -670,7 +672,7 @@ THE SOFTWARE.
     ;; All under a global lock - called infrequently
     ((terminate-actor (actor)
        (dolist (exec *executive-processes*)
-         (mp:process-interrupt exec 'exec-terminate-actor actor)))
+         (mpcompat:process-interrupt exec 'exec-terminate-actor actor)))
      
      (check-sufficient-execs ()
        (let (age)

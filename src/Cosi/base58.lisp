@@ -35,7 +35,7 @@ THE SOFTWARE.
 
 ;; from https://bitcointalk.org/index.php?topic=1026.0
 
-(defconstant +alphabet+
+(um:defconstant+ +alphabet+
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 (defconstant +len+
   (length +alphabet+)) ;; should be 58

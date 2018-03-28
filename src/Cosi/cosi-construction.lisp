@@ -57,7 +57,9 @@ THE SOFTWARE.
 (defparameter *default-timeout-period*   ;; good for 1600 nodes on single machine
   #+:LISPWORKS   10
   #+:ALLEGRO     70
-  #+:CLOZURE     70)
+  #+:CLOZURE     70
+  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
+  70)
 
 ;; ----------------------------------------------------------------------
 ;; Network Tree Nodes
@@ -260,12 +262,16 @@ THE SOFTWARE.
 (defun dotted-string-to-integer (string)
   #+:LISPWORKS (comm:string-ip-address string)
   #+:OPENMCL   (ccl::dotted-to-ipaddr string)
-  #+:ALLEGRO   (allegro-dotted-to-integer string))
+  #+:ALLEGRO   (allegro-dotted-to-integer string)
+  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
+  (usocket:host-byte-order string))
 
 (defun integer-to-dotted-string (val)
   #+:LISPWORKS (comm:ip-address-string val)
   #+:OPENMCL (CCL::ipaddr-to-dotted val)
-  #+:ALLEGRO (allegro-integer-to-dotted val))
+  #+:ALLEGRO (allegro-integer-to-dotted val)
+  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
+  (usocket:hbo-to-dotted-quad val))
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
@@ -397,8 +403,8 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Initial Tree Generation and Persistence
 
-(defvar *default-data-file* "cosi-nodes.txt")
-(defvar *default-key-file*  "cosi-keying.txt")
+(defvar *default-data-file* (asdf:system-relative-pathname :cosi "config/cosi-nodes.txt"))
+(defvar *default-key-file*  (asdf:system-relative-pathname :cosi "config/cosi-keying.txt"))
 
 (defun generate-ip ()
   ;; generate a unique random IPv4 address
@@ -432,7 +438,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------
 ;; Generate Tree / Keying and save to startup init files
 
-(defun generate-tree (&key fname (nel 1000))
+(defun generate-tree (&key datafile keyfile (nel 1000))
   (let* ((leader     *leader-node*)
          (real-nodes  (remove-duplicates *real-nodes*
                                          :test 'string=)))
@@ -457,12 +463,10 @@ THE SOFTWARE.
            (main-tree   (gen-main-tree leader real-nodes grps)))
 
       ;; save nodes as a text file for later
-      (with-open-file (f (merge-pathnames
-                          #+:LISPWORKS
-                          (sys:get-folder-path :documents)
-                          #+(OR :ALLEGRO :OPENMCL)
-                          "~/Documents/"
-                          (or fname *default-data-file*))
+      (ensure-directories-exist *default-key-file*  :verbose t)
+      (ensure-directories-exist *default-data-file* :verbose t)
+      
+      (with-open-file (f (or datafile *default-data-file*)
                          :direction :output
                          :if-does-not-exist :create
                          :if-exists :rename)
@@ -477,12 +481,7 @@ THE SOFTWARE.
                     f))))
       
       ;; write the pkey/skey associations
-      (with-open-file (f (merge-pathnames
-                          #+:LISPWORKS
-                          (sys:get-folder-path :documents)
-                          #+(OR :ALLEGRO :OPENMCL)
-                          "~/Documents/"
-                          *default-key-file*)
+      (with-open-file (f (or keyfile *default-key-file*)
                          :direction :output
                          :if-does-not-exist :create
                          :if-exists :rename)
@@ -506,21 +505,13 @@ THE SOFTWARE.
                      :direction :input)
     (read f)))
       
-(defun reconstruct-tree (&key fname)
+(defun reconstruct-tree (&key datafile keyfile)
   ;; read the keying file
-  (let* ((key-path  (merge-pathnames
-                     #+:LISPWORKS
-                     (sys:get-folder-path :documents)
-                     #+(OR :ALLEGRO :OPENMCL)
-                     "~/Documents/"
+  (let* ((key-path  (or keyfile 
                      *default-key-file*))
          (keys       (read-data-file key-path))
-         (data-path   (merge-pathnames
-                       #+:LISPWORKS
-                       (sys:get-folder-path :documents)
-                       #+(OR :ALLEGRO :OPENMCL)
-                       "~/Documents/"
-                       (or fname *default-data-file*)))
+         (data-path   (or datafile
+                          *default-data-file*))
          (data        (read-data-file data-path))
          (leader      (getf data :leader))
          (real-nodes  (getf data :real-nodes))
