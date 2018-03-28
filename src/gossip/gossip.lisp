@@ -164,8 +164,8 @@
 
 (defun gossip-dispatcher (gossip-node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-msg on it"
-  (let ((srcuid (first actor-msg))
-        (gossip-msg (second actor-msg)))
+  (let ((srcuid (second actor-msg)) ; first is just :gossip
+        (gossip-msg (third actor-msg)))
   (deliver-gossip-msg gossip-msg gossip-node srcuid)))
 
 (defun make-gossip-actor (gossip-node)
@@ -344,6 +344,7 @@
            (briefname msg)
            args)))
 
+#+OBSOLETE
 (defparameter *stop-dispatcher* nil "Set to true to end an ongoing simulation")
 
 ; Graham's Basic queue
@@ -399,7 +400,7 @@
     (break "In gossip:send-msg"))
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
-    (apply 'ac:send
+    (ac:send
            destactor
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
@@ -501,7 +502,7 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod relate ((msg solicitation) thisnode srcuid)
+(defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
    new value will be added to the set; it won't replace them.
   Sets value on this node and then forwards 
@@ -513,7 +514,7 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod relate-unique ((msg solicitation) thisnode srcuid)
+(defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
   Sets value on this node and then forwards 
   solicitation to other nodes, if any. This is a destructive operation --
@@ -525,13 +526,24 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-(defmethod remove-key ((msg solicitation) thisnode srcuid)
+(defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
    solicitation to other nodes, if any. This is a destructive operation --
    any node that currently has the given key will have that key/value removed.
    No reply expected."
   (let ((key (first (args msg))))
     (setf (local-kvs thisnode) (kvs:remove-key (local-kvs thisnode) key))
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (remove srcuid (neighbors thisnode)))))
+
+(defmethod gossip-tally ((msg solicitation) thisnode srcuid)
+  "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
+   solicitation to other nodes, if any. This is a destructive operation --
+   any node that currently has the given key will have that key/value removed.
+   No reply expected."
+  (let ((key (first (args msg)))
+        (increment (second (args msg))))
+    (setf (local-kvs thisnode) (kvs:tally (local-kvs thisnode) key increment))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
@@ -782,14 +794,13 @@
           (sleep .05) ; this dramatically decreases CPU time taken up by Lisp
           ))))
 
+#+OBSOLETE
 (defun stop-gossip-sim ()
   (setf *stop-dispatcher* t))
 
 (defun run-gossip-sim ()
-  (stop-gossip-sim) ; stop old simulation, if any
+  ;;;x (stop-gossip-sim) ; stop old simulation, if any
   ;;;x (sleep .2) ; give dispatcher-loop time to stop
-  ; Create gossip network
-  ; Clear message space
   ; Archive the current log and clear it
   ;;;x (kill-node-processes)
   (vector-push-extend *log* *archived-logs*)
@@ -844,11 +855,31 @@
 ; (solicit 340 :count-alive)
 ; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on *hop-factor*, network delays, etc.) 
 
-; (solicit (first (listify-nodes)) :relate-unique :foo :bar)
+; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
-; (solicit (first (listify-nodes)) :relate :foo :baz)
+; (solicit (first (listify-nodes)) :gossip-relate :foo :baz)
 ; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
+
 ;; should produce something like (:FINALREPLY "node209" "sol255" (((:BAZ :BAR) . 4))) as last *log* entry
+
+(defun get-kvs (key)
+  "Shows value of key for all nodes. Just for debugging."
+  (let ((nodes (listify-nodes)))
+    (mapcar (lambda (node)
+              (cons node (kvs:lookup-key (local-kvs node) key)))
+            nodes)))
+
+; TEST NO-REPLY MESSAGES
+; (make-graph 10)
+; (run-gossip-sim)
+; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
+; (get-kvs :foo) ; should return a list of (node . BAR)
+; (solicit (first (listify-nodes)) :gossip-remove-key :foo)
+; (get-kvs :foo) ; should just return a list of (node . nil)
+; (solicit (first (listify-nodes)) :gossip-tally :foo 1)
+; (get-kvs :foo) ; should return a list of (node . 1)
+; (solicit (first (listify-nodes)) :gossip-tally :foo 1)
+; (get-kvs :foo) ; should return a list of (node . 2)
 
 #+IGNORE
 (setf node (make-node
