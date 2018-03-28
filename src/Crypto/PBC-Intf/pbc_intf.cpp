@@ -202,7 +202,9 @@ void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
 
   /* pk, pkey is the public-subkey */
   /* phash, zr is the hash(ID || Tstamp || msg) */
-
+  /* result R = zr*Psubkey */
+  /* result pairing e(zr*U,Psubkey) = e(U,zr*Psubkey) */
+  
   element_init_G2(pk, pairing);
   element_init_Zr(zr, pairing);
   element_init_GT(gt, pairing);
