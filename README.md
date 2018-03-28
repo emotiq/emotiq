@@ -99,7 +99,7 @@ stay equal, with other counts staying zero.
 ## Building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
-curve cryptography.
+curve (PBC) cryptography.
 
 The library currently only builds on Linux/MacOS.  It requires a
 development tool-chain to be in place, of which dependencies include:
@@ -107,16 +107,16 @@ development tool-chain to be in place, of which dependencies include:
     gcc make g++ flex bison
     
 Once these tools are installed so that they may be invoked from a
-shell, the script in `etc/build-native-libs.bash` can be used to drive
+shell, the script in `etc/build-crypto-pairings.bash` can be used to drive
 the build.  The results of that script are created under a `var/`
 subdirectory.
 
 As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
 is updating this tree from a previous version, one may explicitly have
-to force the asdf `compile-op` via so:
+to force the asdf `prepare-op` via so:
 
-    (asdf:make :crypto-pairings :force t)
+    (asdf:make :crypto-pairings)
 
 
 # Test Coverage
@@ -131,4 +131,4 @@ artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
     
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-03-27 Tue 16:37Z>
+    Revised: <2018-03-28 Wed 11:57Z>

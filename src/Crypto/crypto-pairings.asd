@@ -31,16 +31,26 @@ THE SOFTWARE.
   :components  ((:file "pairing-curves")
 		(:file "pbc-cffi"))
   :depends-on   ("core-crypto"
-                 "cffi")
-  :in-order-to ((test-op (test-op "crypto-pairings/t")))
-  :perform (compile-op :after (o c)
-                    (unless (directory (asdf:system-relative-pathname
-                                        :emotiq "../var/local/lib/libLispPBCIntf.*"))
-                      (format *standard-output* "~&Attempting to build native libraries... hang on...")
-                      (run-program `("bash" ,(namestring (system-relative-pathname
-                                                          :emotiq "../etc/build-native-libs.bash")))
-                                   :output :string :error :string)
-                      (format *standard-output* "~tWhew!  Finished.~&"))))
+                 "cffi"
+                 "crypto-pairings/libraries"))
+
+(defsystem "crypto-pairings/libraries"
+  :perform
+  (prepare-op
+   :before (o c)
+   (let ((wildcard-for-libraries
+          (asdf:system-relative-pathname
+           :emotiq "../var/local/lib/libLispPBCIntf.*")))
+     (unless (directory wildcard-for-libraries)
+       (format *standard-output*
+               "~&Failed to find libraries matching~&~t~a~&~
+~&Attempting to build native libraries... hang on for a minute, please..."
+               wildcard-for-libraries)
+       (run-program `("bash"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-pairings.bash")))
+                    :output :string :error :string)
+       (format *standard-output* "~tWhew!  Finished.~&")))))
 
 (defsystem "crypto-pairings/t"
   :depends-on (crypto-pairings)

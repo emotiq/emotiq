@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+#
+#  Assuming the proper development tools are in place, make the
+#  libraries needed, and produce a shared object suitable for loading
+#  the code for Pair Based Curves (PBC).
+#
+# Linux
+#   apt-get install gcc make g++ flex bison
+# MacOS
+#   XCode needs to be installed
+
+
 # debug
 set -x
 
@@ -93,7 +104,4 @@ cd ${src} \
 cd ${pbcintf} && \
     make --makefile=${MAKETARGET} PREFIX=${prefix}
 
-# currently not sure if this is used anywhere, anymore
-# cd ${CRYPTO}/C-Code
-# make
 
