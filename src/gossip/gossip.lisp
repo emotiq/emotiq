@@ -12,7 +12,7 @@
 
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
-(defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 
@@ -164,13 +164,10 @@
    (actor :initarg :actor :initform nil :accessor actor
           :documentation "Actor for this node")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
-                     :documentation "Table of functions of 2 args: node and timed-out-p that should be
+                     :documentation "Table of functions of 1 arg: timed-out-p that should be
           called to clean up after waiting operations are done. Keyed on solicitation id.
           Timed-out-p is true if a timeout happened. If nil, it means operations completed without
-          timing out."
-                     ; TODO: Don't require these handlers to accept a node parameter, because they should all be lexical
-                     ;       closures with current-node bound anyway???
-                     )
+          timing out.")
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
@@ -478,7 +475,8 @@
     (setf kindsym (accept-msg? gossip-msg node srcuid)))
   (kvs:relate-unique! (message-cache node) (uid gossip-msg) (or srcuid t)) ; solicitations from outside might not have a srcid
   (when kindsym
-    (maybe-log node logsym gossip-msg (kind gossip-msg) :from (briefname srcuid "node") (args gossip-msg))
+    (when logsym
+      (maybe-log node logsym gossip-msg (kind gossip-msg) :from (briefname srcuid "node") (args gossip-msg)))
     (funcall kindsym gossip-msg node srcuid)))
 
 (defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid &optional (kindsym nil))
@@ -491,7 +489,7 @@
 
 (defmethod locally-receive-msg ((rep timeout) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (%locally-receive-msg rep thisnode :timeout srcuid kindsym))
+  (%locally-receive-msg rep thisnode nil srcuid kindsym))
 
 (defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid &optional (kindsym nil))
   (declare (ignore srcuid kindsym))
@@ -685,12 +683,11 @@
   "Timeouts are a special kind of message in the gossip protocol,
   and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
-         (if (null (solicitation-uid msg)) (break))
-         (maybe-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
+         ;;(maybe-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
          (let* ((soluid (solicitation-uid msg))
                 (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
            (when timeout-handler
-             (funcall timeout-handler thisnode t))))
+             (funcall timeout-handler t))))
         (t ; log an error and do nothing
          (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
 
@@ -721,25 +718,28 @@
   (let ((soluid (uid msg))
         (repliers-expected (remove srcuid (neighbors thisnode)))
         (timer nil))
-    ; prepare reply tables
-    (kvs:relate-unique! (reply-data thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
-    (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected)
-    (forward msg thisnode repliers-expected)
-    ; wait a finite time for all replies
-    (kvs:relate-unique! (timeout-handlers thisnode) soluid
-                        (lambda (node timed-out-p)
-                          "Cleanup operations if timeout happens"
-                          (cond (timed-out-p
-                                 ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-                                 (maybe-log node :DONE-WAITING-TIMEOUT msg))
-                                (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
-                                 (ac::unschedule-timer timer)
-                                 (maybe-log node :DONE-WAITING-WIN msg)))
-                          (cleanup-from-count-alive node soluid srcuid)
-                          (kvs:remove-key (timeout-handlers node) soluid) ; always do this so table gets cleaned up
-                          ))
-    (maybe-log thisnode :WAITING msg (ceiling *seconds-to-wait*) repliers-expected)
-    (setf timer (schedule-gossip-timeout (ceiling *seconds-to-wait*) (actor thisnode) soluid))))
+    (flet ((cleanup (timed-out-p)
+             "Cleanup operations if timeout happens, or all expected replies come in."
+             (cond (timed-out-p
+                    ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
+                    (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
+                   (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
+                    (when timer (ac::unschedule-timer timer) ; if no timer, then this is a leaf node
+                      (maybe-log thisnode :DONE-WAITING-WIN msg))))
+             (cleanup-from-count-alive thisnode soluid srcuid)
+             (kvs:remove-key (timeout-handlers thisnode) soluid) ; always do this so table gets cleaned up
+             ))
+      (kvs:relate-unique! (reply-data thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
+      (cond (repliers-expected
+             ; prepare reply tables
+             (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected)
+             (forward msg thisnode repliers-expected)
+             ; wait a finite time for all replies
+             (kvs:relate-unique! (timeout-handlers thisnode) soluid #'cleanup)
+             (maybe-log thisnode :WAITING msg (ceiling *seconds-to-wait*) repliers-expected)
+             (setf timer (schedule-gossip-timeout (ceiling *seconds-to-wait*) (actor thisnode) soluid)))
+            (t ; this is a leaf node. Just reply upwards.
+             (cleanup nil))))))
  
 (defmethod count-alive ((rep reply) thisnode srcuid)
   "Handler for replies of type :count-alive. These will come from children of a given node."
@@ -756,7 +756,7 @@
         ;; We're all done. All expected replies have been received. Clean up.
         (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
           (when timeout-handler
-            (funcall timeout-handler thisnode nil)))))))
+            (funcall timeout-handler nil)))))))
 
 ; For debugging count-alive
 (defun missing? (alive-list)
