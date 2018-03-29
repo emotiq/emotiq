@@ -570,9 +570,8 @@
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
 (defmethod gossip-tally ((msg solicitation) thisnode srcuid)
-  "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
-   solicitation to other nodes, if any. This is a destructive operation --
-   any node that currently has the given key will have that key/value removed.
+  "Increment the value of a given key by an increment amount.
+   If no value for that key exists currently, set it to 1.
    No reply expected."
   (let ((key (first (args msg)))
         (increment (second (args msg))))
