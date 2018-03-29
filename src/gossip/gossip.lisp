@@ -144,6 +144,11 @@
               :documentation "List of UIDs of direct neighbors of this node")
    (actor :initarg :actor :initform nil :accessor actor
           :documentation "Actor for this node")
+   (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
+                     :documentation "Table of functions of 2 args: node and timed-out-p that should be
+          called to clean up after waiting operations are done. Keyed on solicitation id.
+          Timed-out-p is true if a timeout happened. If nil, it means operations completed without
+          timing out.")
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
@@ -380,8 +385,7 @@
     (break "In gossip:send-msg"))
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
-    (ac:send
-           destactor
+    (ac:send destactor
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
            msg)))  ; second arg of actor-msg
@@ -456,6 +460,26 @@
   (mapc (lambda (destuid)
           (send-msg msg destuid srcuid))
         destuids))
+
+(defun send-gossip-timeout-message (actor soluid)
+  "Send a gossip-timeout message to an actor. (We're not using the actors' native timeout mechanisms at this time.)"
+  (ac:send actor
+        :gossip
+        'ac::*master-timer* ; source of timeout messages is *master-timer* thread
+        (make-solicitation
+         :kind :timeout
+         :args (list soluid))))
+
+(defun schedule-gossip-timeout (delta actor soluid)
+  "Call this to schedule a timeout message to be sent to an actor after delta seconds from now.
+   Keep the returned value in case you need to call ac::unschedule-timer before it officially times out."
+  (when delta
+    (let ((timer (ac::make-timer
+                  'send-gossip-timeout-message actor soluid)))
+      (ac::schedule-timer-relative timer delta)
+      timer)))
+
+; call (ac::unschedule-timer timer) to cancel a timer prematurely.
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
@@ -615,57 +639,81 @@
    leaving the group, or joining the group."
   )
 
+(defmethod timeout ((msg solicitation) thisnode srcuid)
+  "Timeouts are just ordinary solicitation messages in the gossip protocol,
+  but they're typically sent by a special timer thread."
+  (cond ((eq srcuid 'ac::*master-timer*)
+         (let* ((soluid (first (args msg)))
+                (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+           (when timeout-handler
+             (funcall timeout-handler thisnode t))))
+        (t ; log an error and do nothing
+         (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
+
+; this should be a flet inside count-alive
+(defun cleanup-from-count-alive (thisnode soluid where-to-forward-reply)
+  "Cleanup when count-alive replies for a given soluid are done"
+  (let ((local-alive nil))
+    ; clean up reply tables
+    (setf local-alive (kvs:lookup-key (reply-data thisnode) soluid))
+    (remhash soluid (repliers-expected thisnode))
+    (remhash soluid (reply-data thisnode))
+    ; must create a new reply here; cannot reuse an old one because its content has changed
+    (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
+        (let ((reply (make-reply :solicitation-uid soluid
+                                 :kind :count-alive
+                                 :args (list local-alive))))
+          (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-alive)
+          (send-msg reply
+                    where-to-forward-reply
+                    (uid thisnode)))
+        ; if no place left to reply to, just log the result.
+        ;   This can mean that thisnode autonomously initiated the request, or
+        ;   somebody running the sim told it to.
+        (maybe-log thisnode :FINALREPLY msg local-alive))))
+
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
   (let ((soluid (uid msg))
-        (repliers-expected (remove srcuid (neighbors thisnode))))
+        (repliers-expected (remove srcuid (neighbors thisnode)))
+        (timer nil))
     ; prepare reply tables
-    (mpcompat:with-lock ((reply-table-lock thisnode))
-      (kvs:relate-unique! (reply-data thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
-      (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected))
+    (kvs:relate-unique! (reply-data thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
+    (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected)
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
+    (kvs:relate-unique! (timeout-handlers thisnode) soluid
+                        (lambda (node timed-out-p)
+                          "Cleanup operations if timeout happens"
+                          (cond (timed-out-p
+                                 ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
+                                 (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
+                                (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
+                                 (ac::unschedule-timer timer)
+                                 (maybe-log thisnode :DONE-WAITING-WIN msg)))
+                          (cleanup-from-count-alive thisnode soluid srcuid)
+                          (kvs:remove-key (timeout-handlers thisnode) soluid) ; always do this so table gets cleaned up
+                          ))
     (maybe-log thisnode :WAITING msg repliers-expected)
-    (let ((win
-           (mpcompat:process-wait-with-timeout "reply-wait"
-                                          *seconds-to-wait*
-                                          (lambda ()
-                                            (null (kvs:lookup-key (repliers-expected thisnode) soluid))))))
-      (if win
-          (maybe-log thisnode :DONE-WAITING-WIN msg)
-          (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
-      (let ((local-alive nil)
-            (where-to-forward-reply srcuid))
-        ; clean up reply tables
-        (mpcompat:with-lock ((reply-table-lock thisnode))
-          (setf local-alive (kvs:lookup-key (reply-data thisnode) soluid))
-          (remhash soluid (repliers-expected thisnode))
-          (remhash soluid (reply-data thisnode)))
-        ; must create a new reply here; cannot reuse an old one because its content has changed
-        (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
-            (let ((reply (make-reply :solicitation-uid soluid
-                                     :kind :count-alive
-                                     :args (list local-alive))))
-              (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-alive)
-              (send-msg reply
-                        where-to-forward-reply
-                        (uid thisnode)))
-            ; if no place left to reply to, just log the result.
-            ;   This can mean that thisnode autonomously initiated the request, or
-            ;   somebody running the sim told it to.
-            (maybe-log thisnode :FINALREPLY msg local-alive))))))
-
+    (setf timer (schedule-gossip-timeout (delta actor soluid)))))
+ 
 (defmethod count-alive ((rep reply) thisnode srcuid)
-  (let ((soluid (solicitation-uid rep)))
-    ; First record the data in the reply appropriately
-    (let ((alive-in-reply (first (args rep))))
-      (mpcompat:with-lock ((reply-table-lock thisnode))
-        (let ((local-alive (kvs:lookup-key (reply-data thisnode) soluid)))
-          (kvs:relate-unique! (reply-data thisnode) soluid (append alive-in-reply local-alive)))))
+  "Handler for replies of type :count-alive. These will come from children of a given node."
+  ; First record the data in the reply appropriately
+  (let* ((soluid (solicitation-uid rep))
+         (alive-in-reply (first (args rep)))
+         (local-alive (kvs:lookup-key (reply-data thisnode) soluid))
+         (kvs:relate-unique! (reply-data thisnode) soluid (append alive-in-reply local-alive)))
     ; Now remove this srcuid from expected-replies list. (We know it's on
     ;  the list because this method would never have been called otherwise.)
     (let ((nodes-expected-to-reply (kvs:lookup-key (repliers-expected thisnode) soluid)))
-      (kvs:relate-unique! (repliers-expected thisnode) soluid (delete srcuid nodes-expected-to-reply)))))
+      (kvs:relate-unique! (repliers-expected thisnode) soluid (delete srcuid nodes-expected-to-reply))
+      (when (null (kvs:lookup-key (repliers-expected thisnode) soluid))
+        ;; We're all done. All expected replies have been received.
+        
+        (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+          (when timeout-handler
+            (funcall timeout-handler thisnode nil)))))))
 
 ; For debugging count-alive
 (defun missing? (alive-list)
