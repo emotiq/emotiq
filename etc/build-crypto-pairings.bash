@@ -36,7 +36,7 @@ case ${uname_s} in
 		configflags=--config=Darwin32
 		archflags=ARCHFLAGS="-arch i386"
 		MAKETARGET=makefile.osx
-		echo Using ${MAKETARGET} ${configlags}
+		echo Using ${MAKETARGET} ${configflags}
 		;;
 	    *)
 		MAKETARGET=makefile.osx
