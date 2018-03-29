@@ -31,9 +31,18 @@ case ${uname_s} in
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
-        MAKETARGET=makefile.osx
-        echo Using ${MAKETARGET}
-        ;;
+	case $1 in
+	    32*)  # this is ONLY for Paul's testing
+		configflags=--config=Darwin32
+		archflags=ARCHFLAGS="-arch i386"
+		MAKETARGET=makefile.osx
+		echo Using ${MAKETARGET} ${configlags}
+		;;
+	    *)
+		MAKETARGET=makefile.osx
+		echo Using ${MAKETARGET}
+		;;
+	esac
     *)
         MAKETARGET=makefile.linux
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
@@ -75,7 +84,7 @@ mkdir -p ${src}
 cd ${src} \
     && tar -xjv -f ${gmp_tbz} \
     && cd ${gmp} \
-    && ./configure --prefix=${prefix} \
+    && ./configure --prefix=${prefix} ${configflags} \
     && make \
     && make install
 
@@ -97,11 +106,11 @@ export LDFLAGS=-L${lib}
 cd ${src} \
     && tar -xv -f ${pbc_tar} \
     && cd ${pbc} \
-    && ./configure --prefix=${prefix} \
+    && ./configure --prefix=${prefix} ${configflags} \
     && make \
     && make install
 
 cd ${pbcintf} && \
-    make --makefile=${MAKETARGET} PREFIX=${prefix}
+    make --makefile=${MAKETARGET} PREFIX=${prefix} ${archflags}
 
 
