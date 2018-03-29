@@ -42,7 +42,7 @@ case ${uname_s} in
 		MAKETARGET=makefile.osx
 		echo Using ${MAKETARGET}
 		;;
-	esac
+	esac ;;
     *)
         MAKETARGET=makefile.linux
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
