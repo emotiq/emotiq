@@ -710,11 +710,11 @@
           (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-alive)
           (send-msg reply
                     where-to-forward-reply
-                    (uid thisnode))
-          ; if no place left to reply to, just log the result.
-          ;   This can mean that thisnode autonomously initiated the request, or
-          ;   somebody running the sim told it to.
-          (maybe-log thisnode :FINALREPLY (briefname soluid "sol") local-alive)))))
+                    (uid thisnode)))
+        ; if no place left to reply to, just log the result.
+        ;   This can mean that thisnode autonomously initiated the request, or
+        ;   somebody running the sim told it to.
+        (maybe-log thisnode :FINALREPLY (briefname soluid "sol") local-alive))))
 
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
