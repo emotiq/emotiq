@@ -12,7 +12,7 @@
 
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
-(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 5 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 
@@ -94,26 +94,45 @@
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
 
+
+(defclass solicitation-uid-mixin ()
+  ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
+                     :documentation "UID of solicitation message that elicited this reply.")))
+
 ; Note: If you change a message before forwarding it, you need to create a new
 ;   message with a new UID. (Replies can often be changed as they percolate backwards;
 ;   they need new UIDs so that a node that has seen one set of information won't
 ;   automatically ignore it.)
-(defclass reply (gossip-message-mixin)
-  ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
-                     :documentation "UID of solicitation message that elicited this reply."))
+(defclass reply (gossip-message-mixin solicitation-uid-mixin)
+  ()
   (:documentation "Reply message. Used to reply to solicitations that need a reply.
      It is common and expected to receive multiple replies matching a given solicitation-uid.
      Most replies are 'inverse broadcasts' in that they have many sources that funnel
      back to one ultimate receiver -- the originator of the solicitation. However,
      a few replies (e.g. to sound-off) are full broadcasts unto themselves."))
 
+(defun make-reply (&rest args)
+  (apply 'make-instance 'reply args))
+
+(defclass timeout (gossip-message-mixin solicitation-uid-mixin)
+  ()
+  (:documentation "Used only for special timeout messages. In this case, solicitation-uid field
+    is used to indicate which solicitation should be timed out at the receiver of this message."))
+
+(defun make-timeout (&rest args)
+  (let ((timeout (apply 'make-instance 'timeout args)))
+    (if (null (solicitation-uid timeout)) (break))
+    timeout))
+
 (defmethod copy-message :around ((msg reply))
   (let ((new-msg (call-next-method)))
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
 
-(defun make-reply (&rest args)
-  (apply 'make-instance 'reply args))
+(defmethod copy-message :around ((msg timeout))
+  (let ((new-msg (call-next-method)))
+    (setf (solicitation-uid new-msg) (solicitation-uid msg))
+    new-msg))
 
 (defclass gossip-mixin (uid-mixin)
   ((address :initarg :address :initform nil :accessor address
@@ -335,8 +354,18 @@
 (defmethod briefname ((msg reply) &optional (prefix "rep"))
   (format nil "~A~D" prefix (uid msg)))
 
+(defmethod briefname ((msg timeout) &optional (prefix "timeout"))
+  (format nil "~A~D" prefix (uid msg)))
+
 (defmethod briefname ((id integer) &optional (prefix ""))
   (format nil "~A~D" prefix id))
+
+(defmethod briefname ((id symbol) &optional (prefix ""))
+  (declare (ignore prefix))
+  (format nil "~A" id))
+
+(defmethod briefname ((id string) &optional (prefix ""))
+  (format nil "~A~A" prefix id))
 
 (defmethod briefname ((id null) &optional (prefix ""))
   (declare (ignore prefix))
@@ -428,6 +457,11 @@
           (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
              nil))))
 
+(defmethod accept-msg? ((msg timeout) (thisnode gossip-node) srcuid)
+  'timeout ; timeouts are always accepted
+  )
+
+
 ; TODO: Remove old entries in message-cache, eventually.
 ;       Might want to also check hopcount and reject message where it's too big.
 ; TODO: Eliminate the kindsym parameter here because we're never using it in the actor model.
@@ -455,6 +489,10 @@
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
   (%locally-receive-msg rep thisnode :reply-accepted srcuid kindsym))
 
+(defmethod locally-receive-msg ((rep timeout) (thisnode gossip-node) srcuid &optional (kindsym nil))
+  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
+  (%locally-receive-msg rep thisnode :timeout srcuid kindsym))
+
 (defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid &optional (kindsym nil))
   (declare (ignore srcuid kindsym))
   (error "Bug: Cannot locally-receive to a remote node!"))
@@ -469,11 +507,10 @@
 (defun send-gossip-timeout-message (actor soluid)
   "Send a gossip-timeout message to an actor. (We're not using the actors' native timeout mechanisms at this time.)"
   (ac:send actor
-        :gossip
-        'ac::*master-timer* ; source of timeout messages is *master-timer* thread
-        (make-solicitation
-         :kind :timeout
-         :args (list soluid))))
+           :gossip
+           'ac::*master-timer* ; source of timeout messages is always *master-timer* thread
+           (make-timeout :solicitation-uid soluid
+                         :kind :timeout)))
 
 (defun schedule-gossip-timeout (delta actor soluid)
   "Call this to schedule a timeout message to be sent to an actor after delta seconds from now.
@@ -481,7 +518,7 @@
   (when delta
     (let ((timer (ac::make-timer
                   'send-gossip-timeout-message actor soluid)))
-      (ac::schedule-timer-relative timer delta)
+      (ac::schedule-timer-relative timer (ceiling delta)) ; delta MUST be an integer number of seconds here
       timer)))
 
 ; call (ac::unschedule-timer timer) to cancel a timer prematurely.
@@ -571,7 +608,7 @@
     (kvs:relate-unique! (repliers-expected thisnode) soluid repliers-expected)
     (forward msg thisnode repliers-expected)
     ; wait a finite time for all replies
-    (maybe-log thisnode :WAITING msg repliers-expected)
+    (maybe-log thisnode :WAITING msg *seconds-to-wait* repliers-expected)
     (let ((win
            (mpcompat:process-wait-with-timeout "reply-wait"
                                                *seconds-to-wait*
@@ -644,11 +681,13 @@
    leaving the group, or joining the group."
   )
 
-(defmethod timeout ((msg solicitation) thisnode srcuid)
-  "Timeouts are just ordinary solicitation messages in the gossip protocol,
-  but they're typically sent by a special timer thread."
+(defmethod timeout ((msg timeout) thisnode srcuid)
+  "Timeouts are a special kind of message in the gossip protocol,
+  and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
-         (let* ((soluid (first (args msg)))
+         (if (null (solicitation-uid msg)) (break))
+         (maybe-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
+         (let* ((soluid (solicitation-uid msg))
                 (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
            (when timeout-handler
              (funcall timeout-handler thisnode t))))
@@ -671,11 +710,11 @@
           (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-alive)
           (send-msg reply
                     where-to-forward-reply
-                    (uid thisnode)))
-        ; if no place left to reply to, just log the result.
-        ;   This can mean that thisnode autonomously initiated the request, or
-        ;   somebody running the sim told it to.
-        (maybe-log thisnode :FINALREPLY msg local-alive))))
+                    (uid thisnode))
+          ; if no place left to reply to, just log the result.
+          ;   This can mean that thisnode autonomously initiated the request, or
+          ;   somebody running the sim told it to.
+          (maybe-log thisnode :FINALREPLY (briefname soluid "sol") local-alive)))))
 
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
@@ -699,8 +738,8 @@
                           (cleanup-from-count-alive node soluid srcuid)
                           (kvs:remove-key (timeout-handlers node) soluid) ; always do this so table gets cleaned up
                           ))
-    (maybe-log thisnode :WAITING msg repliers-expected)
-    (setf timer (schedule-gossip-timeout *seconds-to-wait* (actor thisnode) soluid))))
+    (maybe-log thisnode :WAITING msg (ceiling *seconds-to-wait*) repliers-expected)
+    (setf timer (schedule-gossip-timeout (ceiling *seconds-to-wait*) (actor thisnode) soluid))))
  
 (defmethod count-alive ((rep reply) thisnode srcuid)
   "Handler for replies of type :count-alive. These will come from children of a given node."
@@ -782,6 +821,10 @@
   ; Archive the current log and clear it
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
+  (mapc (lambda (node)
+          (setf (car (ac::actor-busy (actor node))) nil))
+        (listify-nodes))
+  (ac::kill-executives) ; only for debugging
   (mapc 'clear-caches (listify-nodes))
   )
 
