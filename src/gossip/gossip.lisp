@@ -148,7 +148,10 @@
                      :documentation "Table of functions of 2 args: node and timed-out-p that should be
           called to clean up after waiting operations are done. Keyed on solicitation id.
           Timed-out-p is true if a timeout happened. If nil, it means operations completed without
-          timing out.")
+          timing out."
+                     ; TODO: Don't require these handlers to accept a node parameter, because they should all be lexical
+                     ;       closures with current-node bound anyway???
+                     )
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
@@ -168,7 +171,7 @@
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
 (defun gossip-dispatcher (gossip-node &rest actor-msg)
-  "Extracts gossip-msg from actor-msg and calls deliver-msg on it"
+  "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((srcuid (second actor-msg)) ; first is just :gossip
         (gossip-msg (third actor-msg)))
   (deliver-gossip-msg gossip-msg gossip-node srcuid)))
@@ -390,17 +393,10 @@
            srcuid  ; first arg of actor-msg
            msg)))  ; second arg of actor-msg
 
-(defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
-  (declare (ignore thisnode srcuid kindsym))
-  (let ((*seconds-to-wait* (* *max-seconds-to-wait* (expt *hop-factor* (hopcount msg)))))
-    (when (> *seconds-to-wait* *max-seconds-to-wait*)
-      (error "*hop-factor* must be less than 1.0"))
-    (call-next-method)))
-
 (defmethod accept-msg? ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   "Returns kindsym if this message should be accepted by this node, nil otherwise.
-   Kindsym is the name of the gossip method that should be called to handle this message.
-   Doesn't change anything in message or node."
+  Kindsym is the name of the gossip method that should be called to handle this message.
+  Doesn't change anything in message or node."
   (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
          (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
          nil)
@@ -427,32 +423,41 @@
   (let ((kindsym (call-next-method))) ; the one on gossip-message-mixin
     ; Also ensure this reply is actually expected
     (cond ((and kindsym
-                (member srcuid (kvs:lookup-key  (repliers-expected thisnode) (solicitation-uid msg))))
+                (member srcuid (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
            kindsym)
           (t (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
              nil))))
 
 ; TODO: Remove old entries in message-cache, eventually.
 ;       Might want to also check hopcount and reject message where it's too big.
+; TODO: Eliminate the kindsym parameter here because we're never using it in the actor model.
+;       (actors always look it up themselves)
+(defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
+  (declare (ignore thisnode srcuid kindsym))
+  (let ((*seconds-to-wait* (* *max-seconds-to-wait* (expt *hop-factor* (hopcount msg)))))
+    (when (> *seconds-to-wait* *max-seconds-to-wait*)
+      (error "*hop-factor* must be less than 1.0"))
+    (call-next-method)))
+
+(defun %locally-receive-msg (gossip-msg node logsym srcuid kindsym)
+  (unless kindsym
+    (setf kindsym (accept-msg? gossip-msg node srcuid)))
+  (kvs:relate-unique! (message-cache node) (uid gossip-msg) (or srcuid t)) ; solicitations from outside might not have a srcid
+  (when kindsym
+    (maybe-log node logsym gossip-msg (kind gossip-msg) :from (briefname srcuid "node") (args gossip-msg))
+    (funcall kindsym gossip-msg node srcuid)))
+
 (defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
-  (unless kindsym
-    (setf kindsym (accept-msg? sol thisnode srcuid)))
-  (when kindsym
-    (maybe-log thisnode :accepted sol (kind sol) :from (briefname srcuid "node") (args sol))
-    (funcall kindsym sol thisnode srcuid)))
+  (%locally-receive-msg sol thisnode :accepted srcuid kindsym))
+
+(defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
+  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
+  (%locally-receive-msg rep thisnode :reply-accepted srcuid kindsym))
 
 (defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid &optional (kindsym nil))
   (declare (ignore srcuid kindsym))
   (error "Bug: Cannot locally-receive to a remote node!"))
-
-(defmethod locally-receive-msg ((msg reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
-  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (unless kindsym
-    (setf kindsym (accept-msg? msg thisnode srcuid)))
-  (when kindsym
-    (maybe-log thisnode :reply-accepted msg (kind msg) :from (briefname srcuid "node") (args msg))
-    (funcall kindsym msg thisnode srcuid)))
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
@@ -687,30 +692,29 @@
                           "Cleanup operations if timeout happens"
                           (cond (timed-out-p
                                  ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-                                 (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
+                                 (maybe-log node :DONE-WAITING-TIMEOUT msg))
                                 (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                                  (ac::unschedule-timer timer)
-                                 (maybe-log thisnode :DONE-WAITING-WIN msg)))
-                          (cleanup-from-count-alive thisnode soluid srcuid)
-                          (kvs:remove-key (timeout-handlers thisnode) soluid) ; always do this so table gets cleaned up
+                                 (maybe-log node :DONE-WAITING-WIN msg)))
+                          (cleanup-from-count-alive node soluid srcuid)
+                          (kvs:remove-key (timeout-handlers node) soluid) ; always do this so table gets cleaned up
                           ))
     (maybe-log thisnode :WAITING msg repliers-expected)
-    (setf timer (schedule-gossip-timeout (delta actor soluid)))))
+    (setf timer (schedule-gossip-timeout *seconds-to-wait* (actor thisnode) soluid))))
  
 (defmethod count-alive ((rep reply) thisnode srcuid)
   "Handler for replies of type :count-alive. These will come from children of a given node."
   ; First record the data in the reply appropriately
   (let* ((soluid (solicitation-uid rep))
          (alive-in-reply (first (args rep)))
-         (local-alive (kvs:lookup-key (reply-data thisnode) soluid))
-         (kvs:relate-unique! (reply-data thisnode) soluid (append alive-in-reply local-alive)))
+         (local-alive (kvs:lookup-key (reply-data thisnode) soluid)))
+    (kvs:relate-unique! (reply-data thisnode) soluid (append alive-in-reply local-alive))
     ; Now remove this srcuid from expected-replies list. (We know it's on
     ;  the list because this method would never have been called otherwise.)
     (let ((nodes-expected-to-reply (kvs:lookup-key (repliers-expected thisnode) soluid)))
       (kvs:relate-unique! (repliers-expected thisnode) soluid (delete srcuid nodes-expected-to-reply))
       (when (null (kvs:lookup-key (repliers-expected thisnode) soluid))
-        ;; We're all done. All expected replies have been received.
-        
+        ;; We're all done. All expected replies have been received. Clean up.
         (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
           (when timeout-handler
             (funcall timeout-handler thisnode nil)))))))
@@ -767,13 +771,10 @@
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
-  (let ((kindsym (accept-msg? gossip-msg node srcuid))) ; check this here only in simulator
-    (when kindsym ; ignore the message here and now if it's ignorable, without creating a new thread
-      ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-      (kvs:relate-unique! (message-cache node) (uid gossip-msg) (or srcuid t)) ; solicitations from outside might not have a srcid
-      (locally-receive-msg gossip-msg node srcuid kindsym))))
+  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
+  (locally-receive-msg gossip-msg node srcuid))
 
-(defmethod deliver-msg (msg (node remote-gossip-node) srcuid)
+(defmethod deliver-gossip-msg (msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg msg node srcuid))
 
