@@ -18,7 +18,7 @@ LWPRO=${LWPRO_MACOS_64}
 
 mkdir -p ${PROD_DIR}
 mv emotiq ${PROD_DIR}
-cp ${VAR_DIR}/*.so* ${PROD_DIR}
+cp ${VAR_DIR}/*dylib* ${PROD_DIR}
 
 
 
