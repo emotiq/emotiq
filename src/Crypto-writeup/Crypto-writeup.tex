@@ -87,7 +87,9 @@ In our system group $G_1$ is always the smaller group, with the shortest represe
 
 Private keys belong to the finite field $Z_q$ with the same prime group order. Public keys are generated in $G_2$, and signatures are generated in $G_1$. The embedding degree of our curves is 12, and correspond to {\emph{Type f}} asymmetric pairing curves in Lynn's Thesis\cite{thesis}. Wherever they occur, we use  compressed point representation for group elements from $G_1$ and $G_2$.
 
-The complete specification of the Emotiq cryptosystem requires knowledge of all curve pairing parameters, plus two chosen generators $U \in G_1$, and $V \in G_2$.
+The complete specification of the Emotiq cryptosystem requires knowledge of all curve pairing parameters, plus two chosen generators $U \in G_1$, and $V \in G_2$. Hash values are first mapped to an element of $Z_q$ before creating points in $G_1$ and $G_2$ as $$G_1(H(x)) \equiv Z_q(H(x))U$$ and $$G_2(H(x)) \equiv Z_q(H(x)) V$$
+
+In the following presentation we abide by the notation that groups $G_1$ an $G_2$ are additive groups, while $Z_q$ and $G_T$ are both additive and multiplicative.
 
 \chapter{Boneh-Lynn-Shacham (BLS) Signatures}
 
