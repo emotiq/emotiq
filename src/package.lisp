@@ -38,3 +38,14 @@
    #:production-p
    #:production-start
    #:dev-start))
+
+(defpackage #:emotiq/chain
+  (:use #:cl)
+  (:export
+   #:chain/block
+   #:version #:epoch #:block-hash #:previous-block #:genesis-block
+   #:transaction-blocks
+   #:validator-keys-joining #:validator-keys-leaving
+
+   #:make-genesis-block))
+
