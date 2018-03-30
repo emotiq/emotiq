@@ -13,3 +13,10 @@
            #:hash-256-string #:hash-256-vector
            #:keygen #:sign-message #:verify-signature)
   (:export))
+
+(defpackage #:emotiq/chains
+  (:use #:cl)
+  (:export
+   #:block/identity
+   #:block/transaction))
+

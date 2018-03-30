@@ -14,3 +14,16 @@
                (:file "external")
                (:file "blockchain")))
 
+
+(defsystem "emotiq/chains"
+  :version "0.0.1"
+  :author "Copyright (c) 2018 Emotiq AG"
+  :license "MIT (see LICENSE.txt)"
+  :depends-on (ads-clos)
+  :components ((:module package
+                        :pathname "./"
+                        :components ((:file "package")))
+               (:module source
+                        :pathname "./"
+                        :components ((:file "chains")))))
+
