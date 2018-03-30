@@ -26,11 +26,10 @@
     (when (or 
 	   (string= "emotiq" (first argv))
 	   (string= "./emotiq" (first argv)))
+      (setq *production* t)
 
       ;; -- start delete --
       (format *standard-output* "~%running production~%~%")
-      (setq *production* t)
-
       (simple-test)
       ;; -- end delete --
 
