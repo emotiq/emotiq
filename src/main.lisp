@@ -35,5 +35,7 @@
 
       ;; call node startup code
 
-      )))
+      )
+    (unless (production-p)
+      (format *standard-output* "~%running developer version~%~%"))))
 

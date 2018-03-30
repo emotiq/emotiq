@@ -123,10 +123,10 @@ THE SOFTWARE.
         (:linux "./libLispPBCIntf.so")
         (t (:default "libLispPBCIntf")))
     (cffi:define-foreign-library libpbc
-      (:darwin (concatenate 'string 
+      (:darwin #.(concatenate 'string 
                             (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
                             "/libLispPBCIntf.dylib"))
-      (:linux (concatenate 'string 
+      (:linux #.(concatenate 'string 
                            (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
                            "/libLispPBCIntf.so"))
       (t (:default "libLispPBCIntf"))))
