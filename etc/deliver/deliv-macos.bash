@@ -1,17 +1,24 @@
 #!/usr/bin/env bash -x
 
-# this has been test only on 32-bit LWM
 # Cocoa adds complications (see Delivery manual).  This binary appears not to need Cocoa, so things are simple.
 # basically, this script calls LWM with two arguments '-build' and 'deliver.lisp'
 # Change the pathname appropriately for 64-bit LWM
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-LWPRO_MACOS_32=${LWPRO_MACOS_32:-/Applications/LispWork\ 7.0\ \(32-bit\)/LispWorks\ \(32-bit\).app/Contents/MacOS/lispworks-7-0-0-x86-darwin}
+VAR_DIR=../../var/local/lib
+PROD_DIR=../../var/local/production-macos
+
+# LWPRO_MACOS_32=${LWPRO_MACOS_32:-/Applications/LispWork\ 7.0\ \(32-bit\)/LispWorks\ \(32-bit\).app/Contents/MacOS/lispworks-7-0-0-x86-darwin}
 LWPRO_MACOS_64=${LWPRO_MACOS_64:-/Applications/LispWorks\ 7.1\ \(64-bit\)/LispWorks\ \(64-bit\).app/Contents/MacOS/lispworks-7-1-0-amd64-darwin}
 
 LWPRO=${LWPRO_MACOS_64}
 
-exec "${LWPRO}" -build "${DIR}/../../src/deliver.lisp"
+"${LWPRO}" -build "${DIR}/../../src/deliver.lisp"
+
+mkdir -p ${PROD_DIR}
+mv emotiq ${PROD_DIR}
+cp ${VAR_DIR}/*.so* ${PROD_DIR}
+
 
 

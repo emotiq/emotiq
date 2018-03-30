@@ -142,8 +142,3 @@
             (verify-signature public-key "NotTheSame" signature))
       (assert-eql (length signature) 128)
       (assert-false verification))))
-
-
-
-
-

@@ -116,17 +116,21 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-(cffi:define-foreign-library libpbc
- (:darwin #.(concatenate 'string 
-		       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		       "/libLispPBCIntf.dylib"))
- (:linux #.(concatenate 'string 
-		     (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		     "/libLispPBCIntf.so"))
- (t (:default "libLispPBCIntf"))
- )
-
-(cffi:use-foreign-library libpbc)
+(defun init-libraries (production)
+  (if production
+      (cffi:define-foreign-library libpbc
+        (:darwin "./libLispPBCIntf.dylib")
+        (:linux "./libLispPBCIntf.so")
+        (t (:default "libLispPBCIntf")))
+    (cffi:define-foreign-library libpbc
+      (:darwin (concatenate 'string 
+                            (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+                            "/libLispPBCIntf.dylib"))
+      (:linux (concatenate 'string 
+                           (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+                           "/libLispPBCIntf.so"))
+      (t (:default "libLispPBCIntf"))))
+  (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
 
@@ -451,6 +455,7 @@ sign0 1
 
 (defun need-pairing ()
   (unless *curve*
+    (init-libraries (emotiq:production-p))
     (init-pairing)))
 
 (defun need-keying ()
