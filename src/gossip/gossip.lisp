@@ -289,7 +289,7 @@
       (write-slot :address (address node))
       (write-slot :neighbors (neighbors node))
       (write-slot :logfn (logfn node))
-      (write-slot :kvs (local-kvs node))
+      (write-slot :local-kvs (local-kvs node))
       (format stream "~T)~%"))))
 
 (defun save-graph (stream &optional (nodetable *nodes*))
@@ -563,6 +563,8 @@
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
    solicitation to other nodes, if any. This is a destructive operation --
    any node that currently has the given key will have that key/value removed.
+   There's no harm in calling this more than once with the same key; if key
+   wasn't present in the first place, this is a no-op.
    No reply expected."
   (let ((key (first (args msg))))
     (setf (local-kvs thisnode) (kvs:remove-key (local-kvs thisnode) key))
@@ -635,6 +637,7 @@
             (maybe-log thisnode :FINALREPLY msg local-values))))))
 
 (defmethod gossip-lookup-key ((rep reply) thisnode srcuid)
+  "Handler for replies of type :gossip-lookup-key. These will come from children of a given node."
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
     (let ((values-in-reply (first (args rep))))
@@ -690,27 +693,30 @@
         (t ; log an error and do nothing
          (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
 
-; this should be a flet inside count-alive
-(defun cleanup-from-count-alive (thisnode soluid where-to-forward-reply)
-  "Cleanup when count-alive replies for a given soluid are done"
-  (let ((local-alive nil))
+(defun cleanup&reply (thisnode reply-kind soluid where-to-forward-reply)
+  "Generic cleanup function needed for any message after all replies have come in or
+   timeout has happened.
+   Clean up reply tables and reply to our solicitor with coalesced data."
+  (let ((local-data (kvs:lookup-key (reply-data thisnode) soluid)))
     ; clean up reply tables
-    (setf local-alive (kvs:lookup-key (reply-data thisnode) soluid))
-    (remhash soluid (repliers-expected thisnode))
-    (remhash soluid (reply-data thisnode))
+    (kvs:remove-key (repliers-expected thisnode) soluid)
+    (kvs:remove-key (reply-data thisnode) soluid)
+    (kvs:remove-key (timeout-handlers thisnode) soluid)
     ; must create a new reply here; cannot reuse an old one because its content has changed
     (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
         (let ((reply (make-reply :solicitation-uid soluid
-                                 :kind :count-alive
-                                 :args (list local-alive))))
-          (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-alive)
+                                 :kind reply-kind
+                                 :args (list local-data))))
+          (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-data)
           (send-msg reply
                     where-to-forward-reply
                     (uid thisnode)))
         ; if no place left to reply to, just log the result.
         ;   This can mean that thisnode autonomously initiated the request, or
         ;   somebody running the sim told it to.
-        (maybe-log thisnode :FINALREPLY (briefname soluid "sol") local-alive))))
+        (maybe-log thisnode :FINALREPLY (briefname soluid "sol") local-data))
+    local-data ; mostly for debugging
+    ))
 
 (defmethod count-alive ((msg solicitation) thisnode srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
@@ -725,8 +731,7 @@
                    (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                     (when timer (ac::unschedule-timer timer) ; if no timer, then this is a leaf node
                       (maybe-log thisnode :DONE-WAITING-WIN msg))))
-             (cleanup-from-count-alive thisnode soluid srcuid)
-             (kvs:remove-key (timeout-handlers thisnode) soluid) ; always do this so table gets cleaned up
+             (cleanup&reply thisnode :count-alive soluid srcuid)
              ))
       (kvs:relate-unique! (reply-data thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
       (cond (repliers-expected
