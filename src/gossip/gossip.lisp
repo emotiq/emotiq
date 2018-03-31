@@ -690,32 +690,25 @@
 ;;;; Count-alive
 (defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
-  (let ((soluid (uid msg))
-        (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
-        (timer nil))
-    (flet ((cleanup (timed-out-p)
-             "Cleanup operations if timeout happens, or all expected replies come in."
-             (cond (timed-out-p
-                    ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-                    (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
-                   (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
-                    (when timer (ac::unschedule-timer timer) ; if no timer, then this is a leaf node
-                      (maybe-log thisnode :DONE-WAITING-WIN msg))))
-             (cleanup&finalreply thisnode :count-alive soluid)))
-      (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
-      (cond (downstream
-             ; prepare reply tables
-             (let ((interim-table (kvs:make-store ':hashtable :test 'equal)))
-               (dolist (replier-uid downstream)
-                 (kvs:relate-unique! interim-table replier-uid nil))
-               (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table))
-             (forward msg thisnode downstream)
-             ; wait a finite time for all replies
-             (kvs:relate-unique! (timeout-handlers thisnode) soluid #'cleanup)
-             (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
-             (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid)))
-            (t ; this is a leaf node. Just reply upstream.
-             (cleanup nil))))))
+  (let* ((soluid (uid msg))
+         (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
+         (timer nil)
+         (cleanup (make-timeout-handler thisnode msg :count-alive timer)))
+    (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
+    (cond (downstream
+           ; prepare reply tables
+           (let ((interim-table (kvs:make-store ':hashtable :test 'equal)))
+             (dolist (replier-uid downstream)
+               (kvs:relate-unique! interim-table replier-uid nil))
+             (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table))
+           (forward msg thisnode downstream)
+           ; wait a finite time for all replies
+           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
+           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
+          
+          (t ; this is a leaf node. Just reply upstream.
+           (funcall cleanup nil)))))
 
 (defmethod count-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
   "Handler for interim replies of type :count-alive. These will come from children of a given node.
