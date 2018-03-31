@@ -467,27 +467,33 @@ doesn't need to send node1 that solicitation.
   "Returns kindsym if this message should be accepted by this node, nil otherwise.
   Kindsym is the name of the gossip method that should be called to handle this message.
   Doesn't change anything in message or node."
-  (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
-         (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
-         nil)
-        (t
-         (let ((already-seen? (kvs:lookup-key (message-cache thisnode) (uid msg))))
-           (cond (already-seen? ; ignore if already seen
-                  (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :already-seen)
-                  nil)
-                 (t ; it's a new message
-                  (let* ((kind (kind msg))
-                         (kindsym nil))
-                    (cond (kind
-                           (setf kindsym (intern (symbol-name kind) :gossip))
-                           (if (and kindsym (fboundp kindsym))
-                               kindsym ;; SUCCESS! We accept the message.
-                               (progn
-                                 (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unknown-kind kindsym)
-                                 nil)))
-                          (t
-                           (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :no-kind)
-                           nil)))))))))
+  (let ((soluid (uid msg)))
+    (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
+           (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
+           nil)
+          (t
+           (let ((already-seen? (kvs:lookup-key (message-cache thisnode) soluid)))
+             (cond (already-seen? ; ignore if already seen
+                    ; If node x is ignoring a solicitation from node y because it already
+                    ; saw that solicitation, then it must also not expect a reply from node y
+                    ; for that same solicitation.
+                    ; I have a nice proof for this but the margin is too small to contain it.
+                    (cancel-replier thisnode (kind msg) soluid srcuid)
+                    (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :already-seen)
+                    nil)
+                   (t ; it's a new message
+                    (let* ((kind (kind msg))
+                           (kindsym nil))
+                      (cond (kind
+                             (setf kindsym (intern (symbol-name kind) :gossip))
+                             (if (and kindsym (fboundp kindsym))
+                                 kindsym ;; SUCCESS! We accept the message.
+                                 (progn
+                                   (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unknown-kind kindsym)
+                                   nil)))
+                            (t
+                             (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :no-kind)
+                             nil))))))))))
 
 (defmethod accept-msg? ((msg reply) (thisnode gossip-node) srcuid)
   (let ((kindsym (call-next-method))) ; the one on gossip-message-mixin
@@ -868,8 +874,6 @@ doesn't need to send node1 that solicitation.
          (interim-data (loop for reply being each hash-value of interim-table
                          while reply collect (first (args reply))))
          (coalescer (coalescer kind)))
-    (print local-data)
-    (print interim-data)
     (reduce coalescer
             interim-data
             :initial-value local-data)))
@@ -886,6 +890,21 @@ doesn't need to send node1 that solicitation.
       (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) (solicitation-uid rep))))
         (send-interim-reply thisnode :count-alive soluid where-to-send-reply)))))
 
+(defun cancel-replier (thisnode reply-kind soluid srcuid)
+  "Actions to take when a replier should be canceled.
+   Must reply upstream with either an interim or final reply."
+  (multiple-value-bind (no-more-repliers errorp) (remove-previous-reply thisnode soluid srcuid)
+    (when (eq :notable errorp)
+      (maybe-log thisnode :ERROR errorp))
+    (cond (no-more-repliers
+           (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+             (when timeout-handler
+               (funcall timeout-handler nil))))
+          (t
+           ; functionally coalesce all known data and send it upstream as another interim reply
+           (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) soluid)))
+             (send-interim-reply thisnode reply-kind soluid where-to-send-reply))))))
+
 (defmethod count-alive ((rep final-reply) thisnode srcuid)
   "Handler for final replies of type :count-alive. These will come from children of a given node.
   Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
@@ -899,18 +918,7 @@ doesn't need to send node1 that solicitation.
     (kvs:relate-unique! (reply-cache thisnode)
                         soluid
                         (funcall coalescer local-data (first (args rep))))
-    
-    (multiple-value-bind (no-more-repliers errorp) (remove-previous-reply thisnode soluid srcuid)
-      (when (eq :notable errorp)
-        (maybe-log  thisnode :ERROR rep errorp))
-      (cond (no-more-repliers
-             (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
-               (when timeout-handler
-                 (funcall timeout-handler nil))))
-            (t
-             ; functionally coalesce all known data and send it upstream as another interim reply
-             (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) (solicitation-uid rep))))
-               (send-interim-reply thisnode :count-alive soluid where-to-send-reply)))))))
+    (cancel-replier thisnode :count-alive soluid srcuid)))
 
 ; For debugging count-alive
 (defun missing? (alive-list)
