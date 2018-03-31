@@ -9,19 +9,9 @@
 ;;; New mechanism: Interim replies instead of carefully-timed timeouts.
 
 ;;;; TODO:
-;;; Search for " reply)". Anything need to be re-specialized?
-
-#|
-(:IGNORE "node6" "sol582" :FROM "node1" :ALREADY-SEEN)
-(:IGNORE "node1" "sol582" :FROM "node6" :ALREADY-SEEN)
-
-above shouldn't happen.
-If node6 has ignored a solicitation from node1, it can
-deduce that node1 has already seen it, which means it
-doesn't need to send node1 that solicitation.
-
-|#
-
+;;; Change gossip-lookup-key to use the new mechanism now used by count-alive.
+;;; Get rid of *seconds-to-wait* and *hop-factor* entirely (but keep *max-seconds-to-wait*).
+;;; Reorganize code after all the recent chaos.
 
 ;;;; NOTES: "Upstream" means "back to the node that sent me a solicitation in the first place"
 
@@ -512,11 +502,8 @@ doesn't need to send node1 that solicitation.
   'timeout ; timeouts are always accepted
   )
 
-
 ; TODO: Remove old entries in message-cache, eventually.
-;       Might want to also check hopcount and reject message where it's too big.
-; TODO: Eliminate the kindsym parameter here because we're never using it in the actor model.
-;       (actors always look it up themselves)
+;       Might want to also check hopcount and reject message where hopcount is too large.
 (defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
   (declare (ignore thisnode srcuid kindsym))
   (let ((*seconds-to-wait* (* *max-seconds-to-wait* (expt *hop-factor* (hopcount msg)))))
@@ -863,6 +850,10 @@ doesn't need to send node1 that solicitation.
       t)))
 
 (defmethod coalescer ((kind (eql :COUNT-ALIVE)))
+  "Proper coalescer for :count-alive responses. Might
+   want to add a call to remove-duplicates here if we start
+   doing a less deterministic gossip protocol (one not guaranteed to fully cover the graph,
+   and also not guaranteed not to contain redundancies)."
   'append)
 
 (defmethod coalesce ((node gossip-node) kind soluid)
