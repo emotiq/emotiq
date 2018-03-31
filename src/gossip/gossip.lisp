@@ -12,7 +12,6 @@
 
 ;;;; TODO:
 ;;; Change gossip-lookup-key to use the new mechanism now used by count-alive.
-;;; Get rid of *seconds-to-wait* and *hop-factor* entirely (but keep *max-seconds-to-wait*).
 ;;; Reorganize code after all the recent chaos.
 
 ;;;; NOTES: "Upstream" means "back to the node that sent me a solicitation in the first place"
@@ -22,8 +21,6 @@
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
 (defparameter *max-seconds-to-wait* 30 "Max seconds to wait for all replies to come in")
-(defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
-(defparameter *hop-factor* 1.0 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
@@ -514,13 +511,6 @@
 
 ; TODO: Remove old entries in message-cache, eventually.
 ;       Might want to also check hopcount and reject message where hopcount is too large.
-(defmethod locally-receive-msg :around (msg thisnode srcuid &optional (kindsym nil))
-  (declare (ignore thisnode srcuid kindsym))
-  (let ((*seconds-to-wait* (* *max-seconds-to-wait* (expt *hop-factor* (hopcount msg)))))
-    (when (> *seconds-to-wait* *max-seconds-to-wait*)
-      (error "*hop-factor* must be less than 1.0"))
-    (call-next-method)))
-
 (defun %locally-receive-msg (gossip-msg node logsym srcuid kindsym)
   (unless kindsym
     (setf kindsym (accept-msg? gossip-msg node srcuid)))
@@ -686,8 +676,8 @@
              (forward msg thisnode downstream)
              ; wait a finite time for all replies
              (kvs:relate-unique! (timeout-handlers thisnode) soluid #'cleanup)
-             (maybe-log thisnode :WAITING msg (ceiling *seconds-to-wait*) downstream)
-             (setf timer (schedule-gossip-timeout (ceiling *seconds-to-wait*) (actor thisnode) soluid)))
+             (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
+             (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid)))
             (t ; this is a leaf node. Just reply upstream.
              (cleanup nil))))))
 
@@ -734,10 +724,10 @@
     (kvs:relate-unique! (repliers-expected thisnode) soluid downstream)
     (forward msg thisnode downstream)
     ; wait a finite time for all replies
-    (maybe-log thisnode :WAITING msg *seconds-to-wait* downstream)
+    (maybe-log thisnode :WAITING msg *max-seconds-to-wait* downstream)
     (let ((win
            (mpcompat:process-wait-with-timeout "reply-wait"
-                                               *seconds-to-wait*
+                                               *max-seconds-to-wait*
                                                (lambda ()
                                                  (null (kvs:lookup-key (repliers-expected thisnode) soluid))))))
       (if win
@@ -1015,7 +1005,7 @@
 ; (solicit (first (listify-nodes)) :count-alive)
 ; (solicit (first (listify-nodes)) :announce :foo)
 ; (solicit 340 :count-alive)
-; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on *hop-factor*, network delays, etc.) 
+; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.) 
 
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
