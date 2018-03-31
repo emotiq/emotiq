@@ -168,7 +168,7 @@
 
 (defclass gossip-node (gossip-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
-                  :documentation "Cache of seen messages. Table mapping UID of message to UID of sender.
+                  :documentation "Cache of seen messages. Table mapping UID of message to UID of upstream sender.
                   Used to ensure identical messages are not acted on twice, and to determine where
                   replies to a message should be sent.")
    (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
@@ -460,24 +460,19 @@
            srcuid  ; first arg of actor-msg
            msg)))  ; second arg of actor-msg
 
+;  TODO: Might want to also check hopcount and reject message where hopcount is too large.
 (defmethod accept-msg? ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
-  "Returns kindsym if this message should be accepted by this node, nil otherwise.
+  "Returns kindsym if this message should be accepted by this node, nil and a failure-reason otherwise.
   Kindsym is the name of the gossip method that should be called to handle this message.
   Doesn't change anything in message or node."
+  (declare (ignore srcuid)) ; not using this for acceptance criteria in the general method
   (let ((soluid (uid msg)))
     (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
-           (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :too-old)
-           nil)
+           (values nil :too-old))
           (t
            (let ((already-seen? (kvs:lookup-key (message-cache thisnode) soluid)))
-             (cond (already-seen? ; ignore if already seen
-                    ; If node x is ignoring a solicitation from node y because it already
-                    ; saw that solicitation, then it must also not expect a reply from node y
-                    ; for that same solicitation.
-                    ; I have a nice proof for this but the margin is too small to contain it.
-                    (cancel-replier thisnode (kind msg) soluid srcuid)
-                    (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :already-seen)
-                    nil)
+             (cond (already-seen? ; Ignore if already seen
+                    (values nil :already-seen))
                    (t ; it's a new message
                     (let* ((kind (kind msg))
                            (kindsym nil))
@@ -485,59 +480,90 @@
                              (setf kindsym (intern (symbol-name kind) :gossip))
                              (if (and kindsym (fboundp kindsym))
                                  kindsym ;; SUCCESS! We accept the message.
-                                 (progn
-                                   (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unknown-kind kindsym)
-                                   nil)))
+                                 (values nil (list :unknown-kind kindsym))))
                             (t
-                             (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :no-kind)
-                             nil))))))))))
+                             (values nil :no-kind)))))))))))
 
 (defmethod accept-msg? ((msg reply) (thisnode gossip-node) srcuid)
-  (let ((kindsym (call-next-method))) ; the one on gossip-message-mixin
+  (multiple-value-bind (kindsym failure-reason) (call-next-method) ; the one on gossip-message-mixin
     ; Also ensure this reply is actually expected
-    (when kindsym
-      (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
-        (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
-          (declare (ignore val))
-          (if present-p
-              kindsym
-              (progn
-                (maybe-log thisnode :ignore msg :from (briefname srcuid "node") :unexpected)
-                nil)))))))
+    (cond (kindsym
+           (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
+             (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+               (declare (ignore val))
+               (if present-p
+                   kindsym
+                   (values nil :unexpected)))))
+          (t (values nil failure-reason)))))
 
 (defmethod accept-msg? ((msg timeout) (thisnode gossip-node) srcuid)
+  (declare (ignore srcuid))
   'timeout ; timeouts are always accepted
   )
 
 ; TODO: Remove old entries in message-cache, eventually.
-;       Might want to also check hopcount and reject message where hopcount is too large.
-(defun %locally-receive-msg (gossip-msg node logsym srcuid kindsym)
-  (unless kindsym
-    (setf kindsym (accept-msg? gossip-msg node srcuid)))
-  (kvs:relate-unique! (message-cache node) (uid gossip-msg) (or srcuid t)) ; solicitations from outside might not have a srcid
-  (when kindsym
-    (when logsym
-      (maybe-log node logsym gossip-msg (kind gossip-msg) :from (briefname srcuid "node") (args gossip-msg)))
-    (funcall kindsym gossip-msg node srcuid)))
+(defmethod memoize-message ((node gossip-node) (msg gossip-message-mixin) srcuid)
+  "Record the fact that this node has seen this particular message.
+   In cases of solicitation messages, we also care about the upstream sender, so
+   we just save that as the value in the key/value pair."
+  (kvs:relate-unique! (message-cache node)
+                      (uid msg)
+                      (or srcuid t) ; because solicitations from outside might not have a srcid
+                      ))
 
-(defmethod locally-receive-msg ((sol solicitation) (thisnode gossip-node) srcuid &optional (kindsym nil))
-  "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
-  (%locally-receive-msg sol thisnode :accepted srcuid kindsym))
+(defmethod get-upstream-source ((node gossip-node) soluid)
+  "Retrieves the upstream source uid for a given soluid on this node"
+  (kvs:lookup-key (message-cache node) soluid))
 
-(defmethod locally-receive-msg ((rep interim-reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
-  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (%locally-receive-msg rep thisnode :interim-reply-accepted srcuid kindsym))
+(defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
+  "The main dispatch function for gossip messages. Runs entirely within an actor.
+  First checks to see whether this message should be accepted by the node at all, and if so,
+  it calls the function named in the kind field of the message to handle it."
+  (let ((soluid (uid msg)))
+    (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
+      (cond (kindsym ; message accepted
+             (memoize-message node msg srcuid)
+             (let ((logsym (typecase msg
+                             (solicitation :accepted)
+                             (interim-reply :interim-reply-accepted)
+                             (final-reply :final-reply-accepted)
+                             (t nil) ; don't log timeouts here. Too much noise.
+                             )))
+               (when logsym
+                 (maybe-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
+               (handler-case (funcall kindsym msg node srcuid)
+                 (error (c) (maybe-log node :ERROR msg c)))))
+            (t ; not accepted
+             (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)
+             (when (and (eq :already-seen failure-reason) ; this is extremely important. See note A below.
+                        (typep msg 'solicitation))
+               (let ((additional-info (cancel-replier node (kind msg) soluid srcuid)))
+                 (unless (eq :NOTABLE additional-info)
+                   ; Don't log a :STOP-WAITING message if we were never waiting for a reply in the first place
+                   (maybe-log node :STOP-WAITING msg srcuid)))))))))
 
-(defmethod locally-receive-msg ((rep final-reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
-  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (%locally-receive-msg rep thisnode :final-reply-accepted srcuid kindsym))
+; NOTE A:
+; If node X is ignoring a solicitation* from node Y because it already
+; saw that solicitation, then it must also not expect a reply from node Y
+; for that same solicitation.
+; Here's why [In this scenario, imagine #'locally-receive-msg is acting on behalf of node X]:
+; If node X ignores a solicition from node Y -- because it's already seen that solicitation --
+;   then X knows the following:
+;   1. Node Y did not receive the solicition from X. It must have received it from somewhere else,
+;      because nodes *never* forward messages to their upstream.
+;   2. Therefore, if X forwards (or forwarded) the solicitation to Y, Y
+;      is definitely going to ignore it. Because Y has already seen it.
+;   3. Therefore (to recap) if X just ignored a solicitation from Y, then it
+;      knows Y is going to ignore that same solicitation from X.
+;   4. THEREFORE: X must not expect Y to respond, and that's why
+;      we call cancel-replier here. If we don't do this, Y will ignore
+;      and X will eventually time out, which it doesn't need to do.
+;
+; * we take no special action for non-solicitation messages because they can't
+;   ever be replied to anyway.
 
-(defmethod locally-receive-msg ((rep timeout) (thisnode gossip-node) srcuid &optional (kindsym nil))
-  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (%locally-receive-msg rep thisnode nil srcuid kindsym))
-
-(defmethod locally-receive-msg ((sol t) (thisnode remote-gossip-node) srcuid &optional (kindsym nil))
-  (declare (ignore srcuid kindsym))
+(defmethod locally-receive-msg ((msg t) (thisnode remote-gossip-node) srcuid)
+  (declare (ignore srcuid))
   (error "Bug: Cannot locally-receive to a remote node!"))
 
 (defun forward (msg srcuid destuids)
@@ -564,7 +590,18 @@
       (ac::schedule-timer-relative timer (ceiling delta)) ; delta MUST be an integer number of seconds here
       timer)))
 
-; call (ac::unschedule-timer timer) to cancel a timer prematurely.
+(defmethod make-timeout-handler ((node gossip-node) (msg solicitation) (kind keyword) timer)
+  (let ((soluid (uid msg)))
+    (lambda (timed-out-p)
+      "Cleanup operations if timeout happens, or all expected replies come in."
+      (cond (timed-out-p
+             ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
+             (maybe-log node :DONE-WAITING-TIMEOUT msg))
+            (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
+             (when timer (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
+               ; if no timer, then this is a leaf node
+               (maybe-log node :DONE-WAITING-WIN msg))))
+      (cleanup&finalreply node kind soluid))))
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
@@ -664,8 +701,7 @@
                    (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                     (when timer (ac::unschedule-timer timer) ; if no timer, then this is a leaf node
                       (maybe-log thisnode :DONE-WAITING-WIN msg))))
-             (cleanup&finalreply thisnode :count-alive soluid srcuid)
-             ))
+             (cleanup&finalreply thisnode :count-alive soluid)))
       (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
       (cond (downstream
              ; prepare reply tables
@@ -690,8 +726,8 @@
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it off to solicitor as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) (solicitation-uid rep))))
-        (send-interim-reply thisnode :count-alive soluid where-to-send-reply)))))
+      (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
+        (send-interim-reply thisnode :count-alive soluid upstream-source)))))
 
 (defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
   "Handler for final replies of type :count-alive. These will come from children of a given node.
@@ -813,11 +849,12 @@
 
 ;;; REPLY SUPPORT ROUTINES
 
-(defun cleanup&finalreply (thisnode reply-kind soluid where-to-send-reply)
+(defun cleanup&finalreply (thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or
    timeout has happened.
    Clean up reply tables and reply to our solicitor with final reply with coalesced data."
-  (let ((coalesced-data (kvs:lookup-key (reply-cache thisnode) soluid))) ; will already have been coalesced here
+  (let ((coalesced-data (kvs:lookup-key (reply-cache thisnode) soluid)) ; will already have been coalesced here
+        (where-to-send-reply (get-upstream-source thisnode soluid)))
     ; clean up reply tables.
     (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
     (kvs:remove-key (reply-cache thisnode) soluid)
@@ -874,10 +911,10 @@
 
 (defmethod remove-previous-reply ((node gossip-node) soluid srcuid)
   "Remove interim reply (if any) indexed by soluid and srcuid from repliers-expected table.
-  Return false if any other expected repliers remain."
+  Return true if table is now empty; false if any other expected repliers remain."
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (unless interim-table
-      (return-from remove-previous-reply (values t :notable))) ; no table found. Shouldn't happen.
+      (return-from remove-previous-reply (values t :notable))) ; no table found. Happens for soluids where no replies were ever expected.
     (kvs:remove-key interim-table srcuid) ; whatever was there before should have been nil or an interim-reply, but we're not checking for that
     (when (zerop (hash-table-count interim-table))
       ; if this is the last reply, kill the whole table for this soluid and return true
@@ -917,17 +954,17 @@
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
   "Actions to take when a replier should be canceled.
    Must reply upstream with either an interim or final reply."
-  (multiple-value-bind (no-more-repliers errorp) (remove-previous-reply thisnode soluid srcuid)
-    (when (eq :notable errorp)
-      (maybe-log thisnode :ERROR errorp))
+  (multiple-value-bind (no-more-repliers additional-info) (remove-previous-reply thisnode soluid srcuid)
     (cond (no-more-repliers
            (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
-             (when timeout-handler
+             (when timeout-handler ; will be nil for messages that don't expect a reply
                (funcall timeout-handler nil))))
-          (t
+          (t ; more repliers are expected
            ; functionally coalesce all known data and send it upstream as another interim reply
            (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) soluid)))
-             (send-interim-reply thisnode reply-kind soluid where-to-send-reply))))))
+             (send-interim-reply thisnode reply-kind soluid where-to-send-reply))))
+    additional-info ; because some callers care about the :notable case
+    ))
 
 ;;;; END OF REPLY SUPPORT ROUTINES
 
