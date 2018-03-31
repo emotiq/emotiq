@@ -14,7 +14,7 @@
 ;;; Change gossip-lookup-key to use the new mechanism now used by count-alive.
 ;;; Reorganize code after all the recent chaos.
 
-;;;; NOTES: "Upstream" means "back to the node that sent me a solicitation in the first place"
+;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
 
 (in-package :gossip)
 
@@ -92,11 +92,7 @@
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
-  ((reply-requested? :initarg :reply-requested? :initform nil :accessor
-                     reply-requested?
-                     :documentation "True if a reply is requested to this solicitation.
-            Kind will dictate nature of reply. Not sure we need this, since whether
-             a reply is needed is implicit in kind.")))
+  ())
 
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
@@ -183,13 +179,6 @@
                :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
                   for that solicitation. Only accessed from this node's actor
                   thread. No locking needed. Only used for duration of a solicitation/reply cycle.")
-   
-   #+OBSOLETE
-   (reply-data :initarg :reply-data :initform (kvs:make-store ':hashtable :test 'equal)
-               :accessor reply-data
-               :documentation "Hash-table mapping a solicitation id to some data being accumulated
-                  from replies for that solicitation. Only accessed from this node's actor
-                     thread. No locking needed.")
    (local-kvs :initarg :local-kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor local-kvs
         :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
@@ -405,9 +394,14 @@
 (defmethod briefname ((id string) &optional (prefix ""))
   (format nil "~A~A" prefix id))
 
+#+IGNORE
 (defmethod briefname ((id null) &optional (prefix ""))
   (declare (ignore prefix))
   "nil")
+
+(defmethod briefname ((id t) &optional (prefix ""))
+  (declare (ignore prefix))
+  id)
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
@@ -603,9 +597,16 @@
                (maybe-log node :DONE-WAITING-WIN msg))))
       (cleanup&finalreply node kind soluid))))
 
+(defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
+  "Prepare reply tables for given node, solicitation uid, and set of downstream repliers."
+  (let ((interim-table (kvs:make-store ':hashtable :test 'equal)))
+    (dolist (replier-uid downstream)
+      (kvs:relate-unique! interim-table replier-uid nil))
+    (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table)))
+
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
-;; NO-REPLY-NECESSARY methods
+;; NO-REPLY-NECESSARY methods. One method per message.
 
 ;;;; Timeout. Generic message handler for all methods that scheduled a timeout.
 ;;;; These never expect a reply but they can happen for methods that did expect one.
@@ -677,15 +678,33 @@
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
-; just an auxiliary function. Not a gossip method
-(defun multiple-tally (store alist)
-  "Given a key/value store and an alist like ((key1 . n1) (key2 . n2) ...)
-   call kvs:tally for all pairs in alist."
-  (dolist (pair alist)
-    (setf store (kvs:tally store (car pair) (cdr pair))))
-  store)
+;;; TODO: add this to key-value-store
+(defmethod tally-nondestructive ((store list) key amount &key (test #'equal))
+  "Purely functional version of kvs:tally. Only works on alists.
+  Increments the key . value pair in alist indicated by key, by the indicated amount.
+  If such a pair doesn't exist, create it."
+  (let* ((found nil)
+         (result (mapcar (lambda (pair)
+                           (if (funcall test key (car pair))
+                               (progn
+                                 (setf found t)
+                                 (cons key (+ (cdr pair) amount)))
+                               pair))
+                         store)))
+    (if found
+        result
+        (acons key amount result))))
 
-;; REPLY-NECESSARY methods
+; just an auxiliary function. Not a gossip method
+(defun multiple-tally (alist1 alist2)
+  "Given two alists like ((key1 . n1) (key2 . n2) ...)
+  call kvs:tally for all pairs in alist."
+  (let ((output nil))
+    (dolist (pair alist2)
+      (setf output (tally-nondestructive alist1 (car pair) (cdr pair))))
+    output))
+
+;; REPLY-NECESSARY methods. Three methods per message
 
 ;;;; Count-alive
 (defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
@@ -696,17 +715,12 @@
          (cleanup (make-timeout-handler thisnode msg :count-alive timer)))
     (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
     (cond (downstream
-           ; prepare reply tables
-           (let ((interim-table (kvs:make-store ':hashtable :test 'equal)))
-             (dolist (replier-uid downstream)
-               (kvs:relate-unique! interim-table replier-uid nil))
-             (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table))
+           (prepare-repliers thisnode soluid downstream)
            (forward msg thisnode downstream)
            ; wait a finite time for all replies
            (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
            (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
            (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
-          
           (t ; this is a leaf node. Just reply upstream.
            (funcall cleanup nil)))))
 
@@ -714,10 +728,10 @@
   "Handler for interim replies of type :count-alive. These will come from children of a given node.
   Incoming interim-replies never change the local reply-cache. Rather, they
   coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
-  ; First record the reply including its data appropriately
   (let* ((soluid (solicitation-uid rep)))
+    ; First record the reply including its data appropriately
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
-      ; coalesce all known data and send it off to solicitor as another interim reply.
+      ; coalesce all known data and send it upstream as another interim reply.
       ; (if this reply is not later, drop it on the floor)
       (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
         (send-interim-reply thisnode :count-alive soluid upstream-source)))))
@@ -737,6 +751,7 @@
                         (funcall coalescer local-data (first (args rep))))
     (cancel-replier thisnode :count-alive soluid srcuid)))
 
+;;;; Gossip-lookup-key
 (defmethod gossip-lookup-key ((msg solicitation) (thisnode gossip-node) srcuid)
   "Inquire as to the global value of a key. If this node has no further
   neighbors, just return its value. Otherwise collect responses from subnodes.
@@ -745,53 +760,49 @@
   value1 is value reported by n1 nodes downstream of thisnode,
   value2 is value reported by n2 nodes downstream of thisnode, etc."
   (let* ((soluid (uid msg))
-         (downstream (remove srcuid (neighbors thisnode)))
+         (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
+         (timer nil)
+         (cleanup (make-timeout-handler thisnode msg :gossip-lookup-key timer))
          (key (first (args msg)))
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
-    ; prepare reply tables
-    (kvs:relate-unique! (reply-data thisnode) soluid (list (cons myvalue 1)))
-    (kvs:relate-unique! (repliers-expected thisnode) soluid downstream)
-    (forward msg thisnode downstream)
-    ; wait a finite time for all replies
-    (maybe-log thisnode :WAITING msg *max-seconds-to-wait* downstream)
-    (let ((win
-           (mpcompat:process-wait-with-timeout "reply-wait"
-                                               *max-seconds-to-wait*
-                                               (lambda ()
-                                                 (null (kvs:lookup-key (repliers-expected thisnode) soluid))))))
-      (if win
-          (maybe-log thisnode :DONE-WAITING-WIN msg)
-          (maybe-log thisnode :DONE-WAITING-TIMEOUT msg))
-      (let ((local-values nil)
-            (where-to-forward-reply srcuid))
-        ; clean up reply tables
-        (setf local-values (kvs:lookup-key (reply-data thisnode) soluid))
-        (remhash soluid (repliers-expected thisnode))
-        ; must create a new reply here; cannot reuse an old one because its content has changed
-        (if (uid? where-to-forward-reply) ; should be a uid or T. Might be nil if there's a bug.
-            (let ((reply (make-reply :solicitation-uid soluid
-                                     :kind :gossip-lookup-key
-                                     :args (list local-values))))
-              (maybe-log thisnode :SEND-REPLY reply :to (briefname where-to-forward-reply "node") local-values)
-              (send-msg reply
-                        where-to-forward-reply
-                        (uid thisnode)))
-            ; if no place left to reply to, just log the result.
-            ;   This can mean that thisnode autonomously initiated the request, or
-            ;   somebody running the sim told it to.
-            (maybe-log thisnode :FINALREPLY msg local-values))))))
+    (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))
+    ; (kvs:relate-unique! (repliers-expected thisnode) soluid downstream)
+    (cond (downstream
+           (prepare-repliers thisnode soluid downstream)
+           (forward msg thisnode downstream)
+           ; wait a finite time for all replies
+           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
+           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
+          (t ; this is a leaf node. Just reply upstream.
+           (funcall cleanup nil)))))
 
-(defmethod gossip-lookup-key ((rep reply) (thisnode gossip-node) srcuid)
-  "Handler for replies of type :gossip-lookup-key. These will come from children of a given node."
+(defmethod gossip-lookup-key ((rep interim-reply) (thisnode gossip-node) srcuid)
+  "Handler for replies of type :gossip-lookup-key. These will come from children of a given node.
+  Incoming interim-replies never change the local reply-cache. Rather, they
+  coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
   (let ((soluid (solicitation-uid rep)))
     ; First record the data in the reply appropriately
-    (let ((values-in-reply (first (args rep))))
-      (let ((local-values (kvs:lookup-key (reply-data thisnode) soluid)))
-        (kvs:relate-unique! (reply-data thisnode) soluid (multiple-tally local-values values-in-reply))))
-    ; Now remove this srcuid from expected-replies list. (We know it's on
-    ;  the list because this method would never have been called otherwise.)
-    (let ((nodes-expected-to-reply (kvs:lookup-key (repliers-expected thisnode) soluid)))
-      (kvs:relate-unique! (repliers-expected thisnode) soluid (delete srcuid nodes-expected-to-reply)))))
+    (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
+      ; coalesce all known data and send it upstream as another interim reply.
+      ; (if this reply is not later, drop it on the floor)
+      (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
+        (send-interim-reply thisnode :gossip-lookup-key soluid upstream-source)))))
+
+(defmethod gossip-lookup-key ((rep final-reply) (thisnode gossip-node) srcuid)
+  "Handler for final replies of type :gossip-lookup-key. These will come from children of a given node.
+  Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
+  Furthermore, they remove srcuid from downstream for this soluid.
+  Furthermore, they always cause either an interim reply or a final reply to be sent upstream,
+  depending on whether no further replies are expected or not."
+  (let* ((soluid (solicitation-uid rep))
+         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
+         (coalescer (coalescer :GOSSIP-LOOKUP-KEY)))
+    ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
+    (kvs:relate-unique! (reply-cache thisnode)
+                        soluid
+                        (funcall coalescer local-data (first (args rep))))
+    (cancel-replier thisnode :gossip-lookup-key soluid srcuid)))
 
 (defmethod find-max (msg thisnode srcuid)
   "Retrieve maximum value of a given key on all the nodes"
@@ -845,7 +856,7 @@
 (defun cleanup&finalreply (thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or
    timeout has happened.
-   Clean up reply tables and reply to our solicitor with final reply with coalesced data."
+   Clean up reply tables and reply upstream with final reply with coalesced data."
   (let ((coalesced-data (kvs:lookup-key (reply-cache thisnode) soluid)) ; will already have been coalesced here
         (where-to-send-reply (get-upstream-source thisnode soluid)))
     ; clean up reply tables.
@@ -869,7 +880,7 @@
     ))
 
 (defun send-interim-reply (thisnode reply-kind soluid where-to-send-reply)
-  (let* ((coalesced-data (coalesce thisnode reply-kind soluid)))
+  (let ((coalesced-data (coalesce thisnode reply-kind soluid)))
     (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
@@ -931,6 +942,10 @@
    and also not guaranteed not to contain redundancies)."
   'append)
 
+(defmethod coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
+  "Proper coalescer for :GOSSIP-LOOKUP-KEY responses."
+  'multiple-tally)
+
 (defmethod coalesce ((node gossip-node) kind soluid)
   "Grab all the data that interim repliers have sent me so far, combine it with my
   local reply-cache in a way that's specific to kind, and return result.
@@ -940,9 +955,13 @@
          (interim-data (loop for reply being each hash-value of interim-table
                          while reply collect (first (args reply))))
          (coalescer (coalescer kind)))
-    (reduce coalescer
+    ;;(maybe-log node :COALESCE interim-data local-data)
+    (let ((coalesced-output
+           (reduce coalescer
             interim-data
             :initial-value local-data)))
+      ;;(maybe-log node :COALESCED-OUTPUT coalesced-output)
+      coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
   "Actions to take when a replier should be canceled.
