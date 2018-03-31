@@ -29,7 +29,7 @@ doesn't need to send node1 that solicitation.
 
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
 
-(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 30 "Max seconds to wait for all replies to come in")
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 1.0 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 
@@ -531,9 +531,13 @@ doesn't need to send node1 that solicitation.
   "Deal with an incoming solicitation. Srcuid could be nil in case of initiating messages."
   (%locally-receive-msg sol thisnode :accepted srcuid kindsym))
 
-(defmethod locally-receive-msg ((rep reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
+(defmethod locally-receive-msg ((rep interim-reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
-  (%locally-receive-msg rep thisnode :reply-accepted srcuid kindsym))
+  (%locally-receive-msg rep thisnode :interim-reply-accepted srcuid kindsym))
+
+(defmethod locally-receive-msg ((rep final-reply) (thisnode gossip-node) srcuid &optional (kindsym nil))
+  "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
+  (%locally-receive-msg rep thisnode :final-reply-accepted srcuid kindsym))
 
 (defmethod locally-receive-msg ((rep timeout) (thisnode gossip-node) srcuid &optional (kindsym nil))
   "Deal with an incoming reply. Srcuid could be nil in case of initiating messages."
@@ -755,7 +759,7 @@ doesn't need to send node1 that solicitation.
         (let ((reply (make-final-reply :solicitation-uid soluid
                                  :kind reply-kind
                                  :args (list coalesced-data))))
-          (maybe-log thisnode :FINAL-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
+          (maybe-log thisnode :SEND-FINAL-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
           (send-msg reply
                     where-to-send-reply
                     (uid thisnode)))
@@ -771,7 +775,7 @@ doesn't need to send node1 that solicitation.
     (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
-                                         :args coalesced-data)))
+                                         :args (list coalesced-data))))
           (maybe-log thisnode :SEND-INTERIM-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
           (send-msg reply
                     where-to-send-reply
@@ -859,24 +863,28 @@ doesn't need to send node1 that solicitation.
   "Grab all the data that interim repliers have sent me so far, combine it with my
   local reply-cache in a way that's specific to kind, and return result.
   This purely functional and does not change reply-cache."
-  (let ((local-data    (kvs:lookup-key (reply-cache node) soluid))
-        (interim-table (kvs:lookup-key (repliers-expected node) soluid))
-        (coalescer (coalescer kind)))
+  (let* ((local-data    (kvs:lookup-key (reply-cache node) soluid))
+         (interim-table (kvs:lookup-key (repliers-expected node) soluid))
+         (interim-data (loop for reply being each hash-value of interim-table
+                         while reply collect (first (args reply))))
+         (coalescer (coalescer kind)))
+    (print local-data)
+    (print interim-data)
     (reduce coalescer
-            (loop for reply being each hash-value of interim-table
-              while reply collect (first (args reply)))
+            interim-data
             :initial-value local-data)))
 
 (defmethod count-alive ((rep interim-reply) thisnode srcuid)
   "Handler for interim replies of type :count-alive. These will come from children of a given node.
-   Incoming interim-replies never change the local reply-cache. Rather, they
-   coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
+  Incoming interim-replies never change the local reply-cache. Rather, they
+  coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
   ; First record the reply including its data appropriately
   (let* ((soluid (solicitation-uid rep)))
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it off to solicitor as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (send-interim-reply thisnode :count-alive soluid srcuid))))
+      (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) (solicitation-uid rep))))
+        (send-interim-reply thisnode :count-alive soluid where-to-send-reply)))))
 
 (defmethod count-alive ((rep final-reply) thisnode srcuid)
   "Handler for final replies of type :count-alive. These will come from children of a given node.
@@ -889,8 +897,8 @@ doesn't need to send node1 that solicitation.
          (coalescer (coalescer :COUNT-ALIVE)))
     ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
     (kvs:relate-unique! (reply-cache thisnode)
-                         soluid
-                         (funcall coalescer local-data (first (args rep))))
+                        soluid
+                        (funcall coalescer local-data (first (args rep))))
     
     (multiple-value-bind (no-more-repliers errorp) (remove-previous-reply thisnode soluid srcuid)
       (when (eq :notable errorp)
@@ -901,7 +909,8 @@ doesn't need to send node1 that solicitation.
                  (funcall timeout-handler nil))))
             (t
              ; functionally coalesce all known data and send it upstream as another interim reply
-             (send-interim-reply thisnode :count-alive soluid srcuid))))))
+             (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) (solicitation-uid rep))))
+               (send-interim-reply thisnode :count-alive soluid where-to-send-reply)))))))
 
 ; For debugging count-alive
 (defun missing? (alive-list)
