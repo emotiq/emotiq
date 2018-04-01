@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# this script is for building the 'production' version in ../var/local/production-{linux,macos}
+
 #
 #  Assuming the proper development tools are in place, make the
 #  libraries needed, and produce a shared object suitable for loading
@@ -14,8 +17,18 @@
 set -x
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 BASE=${DIR}/..
+
+# where make install will install stuff
+var=${BASE}/var
+src=${BASE}/src
+prefix=${var}/local
+gmp=${src}/gmp-6.1.2
+pbc=${src}/pbc-0.5.14
+
+lib=${prefix}/lib
+inc=${prefix}/include
+
 # where the tarballs should be
 CRYPTO=${BASE}/src/Crypto
 dist=${CRYPTO}/PBC-Intf
@@ -25,13 +38,16 @@ gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
 pbc_tar=${dist}/pbc-0.5.14.tar
 
 uname_s=$(uname -s)
+#  ${deliver} will be used at bottom (for production)
 case ${uname_s} in
     Linux*)
         MAKETARGET=makefile.linux
+	deliver=${DIR}/deliver/deliv-linux.bash
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
+	deliver=${DIR}/deliver/deliv-macos.bash
         echo Using ${MAKETARGET}
         ;;
     *)
@@ -40,16 +56,6 @@ case ${uname_s} in
 
         ;;
 esac
-
-# where make install will install stuff
-var=${BASE}/var
-src=${var}/src
-prefix=${var}/local
-gmp=${src}/gmp-6.1.2
-pbc=${src}/pbc-0.5.14
-
-lib=${prefix}/lib
-inc=${prefix}/include
 
 if [ ! -f ${gmp_tbz} ]
 then
