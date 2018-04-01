@@ -122,11 +122,11 @@ mv emotiq ${prod_dir}
 cd ${lib}
 tar cf libs.tar *
 cd ${prod_dir}
-tar xf ${lib}/libs.tar
-# now, all dll's and emotiq are in ${prod_dir}
 mv ${lib}/libs.tar ${prod_dir}
-cd ${lib}
-rm *
+tar xf libs.tar
+# now, all dll's and emotiq are in ${prod_dir}
+# cd ${lib}
+# rm *
 # < /test >
 
 # cp ${VAR_DIR}/*.so* ${prod_dir}
