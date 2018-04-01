@@ -12,4 +12,4 @@
            #:hash-160-string #:hash-160-vector
            #:hash-256-string #:hash-256-vector
            #:keygen #:sign-message #:verify-signature)
-  (:export #:production-p #:start))
+  (:export #:production-p #:dev-start #:production-start))
