@@ -1,9 +1,5 @@
 (in-package :emotiq)
 
-(defparameter *production* nil)
-
-(defun production-p () *production*)
-
 (defun simple-test ()
   (pbc:make-key-pair :dave)
   (let ((signed (pbc:sign-message :hello)))

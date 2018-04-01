@@ -24,17 +24,19 @@ THE SOFTWARE.
 
 (defsystem "crypto-pairings"
   :description "crypto-pairings: bilinear pairings (PBC) functions"
-  :version     "1.1.0"
+  :version     "1.1.1"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
   :components  ((:file "pairing-curves")
 		(:file "pbc-cffi"))
-  :depends-on   ("core-crypto"
-                 "cffi"
-                 "crypto-pairings/libraries"))
+  :depends-on   (emotiq/delivery
+                 core-crypto
+                 cffi
+                 crypto-pairings/libraries))
 
 (defsystem "crypto-pairings/libraries"
+  :depends-on (emotiq/delivery)
   :perform
   (prepare-op
    :before (o c)

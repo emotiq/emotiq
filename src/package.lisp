@@ -11,5 +11,12 @@
            #:sha3-512-string #:sha3-512-vector
            #:hash-160-string #:hash-160-vector
            #:hash-256-string #:hash-256-vector
-           #:keygen #:sign-message #:verify-signature)
-  (:export #:production-p #:dev-start #:production-start))
+; <<<<<<< HEAD
+;           #:keygen #:sign-message #:verify-signature)
+;  (:export #:production-p #:dev-start #:production-start))
+;=======
+           #:keygen #:sign-message #:verify-signature
+
+           #:production-p)
+  (:export #:production-p #:dev-start #:prouction-start))
+; >>>>>>> pt2-deliver-mte
