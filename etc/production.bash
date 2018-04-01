@@ -38,16 +38,18 @@ gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
 pbc_tar=${dist}/pbc-0.5.14.tar
 
 uname_s=$(uname -s)
-#  ${deliver} will be used at bottom (for production)
+#  ${deliver} and ${prod_dir} will be used at bottom (for production)
 case ${uname_s} in
     Linux*)
         MAKETARGET=makefile.linux
 	deliver=${DIR}/deliver/deliv-linux.bash
+	prod_dir=${prefix}/production-linux
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
 	deliver=${DIR}/deliver/deliv-macos.bash
+	prod_dir=${prefix}/production-macos
         echo Using ${MAKETARGET}
         ;;
     *)
@@ -112,7 +114,18 @@ cd ${pbcintf} && \
 
 cd ${DIR}
 bash ${deliver}
-# mkdir -p ${PROD_DIR}
-# mv emotiq ${PROD_DIR}
-# cp ${VAR_DIR}/*.so* ${PROD_DIR}
+
+mkdir -p ${prod_dir}
+mv emotiq ${prod_dir}
+# < test >
+# for testing - we must use tar to preserve hard links
+cd ${lib}
+tar cf libs.tar *
+cd ${prod_dir}
+tar xf ${lib}/libs.tar
+# now, all dll's and emotiq are in ${prod_dir}
+mv ${lib}/libs.tar ${prod_dir}
+# < /test >
+
+# cp ${VAR_DIR}/*.so* ${prod_dir}
 
