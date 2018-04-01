@@ -1,11 +1,12 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
 (defsystem "emotiq-test"
-  :version "0.0.1"
+  :version "0.0.2"
   :description "Emotiq Tests"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
-  :depends-on (emotiq lisp-unit)
+  :depends-on (lisp-unit
+               emotiq/utilities)
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
                           :all :emotiq-test))
