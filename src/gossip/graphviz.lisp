@@ -117,19 +117,22 @@
 (defmethod visualize-nodes ((nodelist list))
   "Calls visualize-nodes-svg, then converts that file into an html file that automatically
   resizes the svg image as you resize your browser window. Opens html file in browser."
-  (multiple-value-bind (dotpath svgpath)
-                       (visualize-nodes-svg nodelist)
-    (let ((htmlpath (make-pathname :host (pathname-host svgpath)
-                                   :directory (pathname-directory svgpath)
-                                   :name (pathname-name svgpath)
-                                   :type "html")))
-      (massage-graphviz-svg-file svgpath htmlpath)
-      (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring htmlpath))))
-        #+LISPWORKS (sys:open-url urlstring)
-        #+CLOZURE
-        (let* ((url (NEXTSTEP-FUNCTIONS::|absoluteURL|
-                                         (make-instance 'ns:ns-url
-                                           :with-string (ccl::%make-nsstring urlstring)))))
-          (ccl::%open-url-in-browser url))
-        (values dotpath htmlpath)))))
+  (let ((len (length nodelist)))
+    (when (> len 5000)
+      (cerror "Do it anyway." "There are ~D nodes. It will take a long time to visualize that many." len))
+    (multiple-value-bind (dotpath svgpath)
+                         (visualize-nodes-svg nodelist)
+      (let ((htmlpath (make-pathname :host (pathname-host svgpath)
+                                     :directory (pathname-directory svgpath)
+                                     :name (pathname-name svgpath)
+                                     :type "html")))
+        (massage-graphviz-svg-file svgpath htmlpath)
+        (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring htmlpath))))
+          #+LISPWORKS (sys:open-url urlstring)
+          #+CLOZURE
+          (let* ((url (NEXTSTEP-FUNCTIONS::|absoluteURL|
+                                           (make-instance 'ns:ns-url
+                                             :with-string (ccl::%make-nsstring urlstring)))))
+            (ccl::%open-url-in-browser url))
+          (values dotpath htmlpath))))))
     
