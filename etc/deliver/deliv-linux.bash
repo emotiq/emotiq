@@ -9,8 +9,8 @@ LWPRO=${LWPRO:-/usr/local/lib64/LispWorks/lispworks-7-1-0-amd64-linux}
 
 "${LWPRO}" -build "${DIR}/../../src/deliver.lisp"
 
-mkdir -p ${PROD_DIR}
-mv emotiq ${PROD_DIR}
-cp ${VAR_DIR}/*.so* ${PROD_DIR}
+# mkdir -p ${PROD_DIR}
+# mv emotiq ${PROD_DIR}
+# cp ${VAR_DIR}/*.so* ${PROD_DIR}
 
 

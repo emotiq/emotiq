@@ -110,4 +110,9 @@ cd ${src} \
 cd ${pbcintf} && \
     make --makefile=${MAKETARGET} PREFIX=${prefix}
 
+cd ${DIR}
+bash ${deliver}
+# mkdir -p ${PROD_DIR}
+# mv emotiq ${PROD_DIR}
+# cp ${VAR_DIR}/*.so* ${PROD_DIR}
 
