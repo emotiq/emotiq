@@ -31,7 +31,7 @@ pbc_tar=${dist}/pbc-0.5.14.tar
 
 # where make install will install stuff
 var=${BASE}/var
-src=${var}/src
+src=${BASE}/src
 gmp=${src}/gmp-6.1.2
 pbc=${src}/pbc-0.5.14
 prefix=${var}/local
@@ -121,6 +121,7 @@ case $1 in
 	cd ${DIR}
 	bash ${deliver} ${prod_dir}
 	# at this point, the 3 DLL's (hard linked with versioned DLL)
+	# ... and emotiq (the delivered binary is sitting here (${DIR})
 	# are sitting in ../var/local/lib and the delivered emotiq binary is in ../var/local/production-linux
 
 	# copy *.so* into ../var/local/production-linux, preserving hard links (.e. use tar)

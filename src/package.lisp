@@ -12,6 +12,5 @@
            #:hash-160-string #:hash-160-vector
            #:hash-256-string #:hash-256-vector
            #:keygen #:sign-message #:verify-signature
-
            #:production-p)
-  (:export #:dev-start #:prouction-start))
+  (:export #:dev-start #:production-start))
