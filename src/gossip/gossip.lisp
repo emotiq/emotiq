@@ -19,10 +19,19 @@
 (in-package :gossip)
 
 (defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
-
-(defparameter *max-seconds-to-wait* 30 "Max seconds to wait for all replies to come in")
-
+(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defvar *last-uid* 0 "Simple counter for making UIDs")
+(defparameter *log-filter* t "t to log all messages; nil to log none")
+(defparameter *delay-intermediate-replies* nil "True to delay intermediate replies. Should be true when everything's working.")
+
+(defun log-exclude (&rest strings)
+  "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
+ (lambda (logcmd)
+   (let ((logcmdname (symbol-name logcmd)))
+     (notany (lambda (x) (search x logcmdname :test #'char-equal)) strings))))
+
+;; Ex: Don't log any messages that contain "WAIT" or "ACCEPT"
+;; (setf *log-filter* (log-exclude "WAIT" "ACCEPT" "IGNORE"))
 
 (defun new-uid ()
   (incf *last-uid*))
@@ -210,9 +219,18 @@
 
 (defun gossip-dispatcher (gossip-node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
-  (let ((srcuid (second actor-msg)) ; first is just :gossip
-        (gossip-msg (third actor-msg)))
-  (deliver-gossip-msg gossip-msg gossip-node srcuid)))
+  (let ((gossip-cmd (first actor-msg)))
+    (case gossip-cmd
+      (:gossip
+       (unless gossip-node (error "No node attached to this actor!"))
+       (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
+         (deliver-gossip-msg gossip-msg gossip-node srcuid)))
+      (:relay
+       ; we expect gossip-node to be nil in this case, but it's actually
+       ;   irrelevant. We could just as well use an actor attached to a node
+       ;   for relaying if we wanted to.
+       (destructuring-bind (srcuid destuid gossip-msg) (cdr actor-msg)
+         (send-msg gossip-msg destuid srcuid))))))
 
 (defun make-gossip-actor (gossip-node)
   (make-instance 'gossip-actor
@@ -220,6 +238,24 @@
     :fn 
     (lambda (&rest msg)
       (apply 'gossip-dispatcher gossip-node msg))))
+
+(defparameter *relay-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
+
+(defmethod relay-msg ((msg gossip-message-mixin) destuid srcuid)
+  "Cause a message to be relayed to another node -- or back to myself.
+  Usually we use this in echo mode (where destuid = srcuid),
+  so an actor can send a message to itself but forcing itself to first yield and
+  handle other messages before handling the one herein."
+  (unless (or (null srcuid)
+              (numberp srcuid))
+    (break "In gossip:relay-msg"))
+  (unless *relay-actor*
+    (setf *relay-actor* (make-gossip-actor nil)))
+  (ac:send *relay-actor*
+           :relay ; actor-verb
+           srcuid  ; source node
+           destuid ; must send this as a parameter for relays, so relayer will know who to send it to
+           msg))
 
 (defun make-node (&rest args)
   "Makes a new node"
@@ -285,7 +321,8 @@
     ; following guarantees a single connected graph
     (linear-path nodelist)
     ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
-    (add-random-connections nodelist (round (* fraction (length nodelist))))))
+    (add-random-connections nodelist (round (* fraction (length nodelist)))))
+  numnodes)
 
 ;;;; Graph saving/restoring routines
 
@@ -406,12 +443,15 @@
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
 (defmethod maybe-log ((node gossip-node) logcmd msg &rest args)
-  (when (logfn node)
-    (apply (logfn node)
-           logcmd
-           (briefname node)
-           (briefname msg)
-           args)))
+  (when *log-filter*
+    (when (or (eq t *log-filter*)
+              (funcall *log-filter* logcmd))
+      (when (logfn node)
+        (apply (logfn node)
+               logcmd
+               (briefname node)
+               (briefname msg)
+               args)))))
 
 (defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
@@ -483,11 +523,13 @@
     ; Also ensure this reply is actually expected
     (cond (kindsym
            (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
-             (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
-               (declare (ignore val))
-               (if present-p
-                   kindsym
-                   (values nil :unexpected)))))
+             (cond (interim-table
+                    (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+                      (declare (ignore val))
+                      (if present-p
+                          kindsym
+                          (values nil :unexpected-1))))
+                    (t (values nil :unexpected-2)))))
           (t (values nil failure-reason)))))
 
 (defmethod accept-msg? ((msg timeout) (thisnode gossip-node) srcuid)
@@ -547,11 +589,12 @@
 ;      because nodes *never* forward messages to their upstream.
 ;   2. Therefore, if X forwards (or forwarded) the solicitation to Y, Y
 ;      is definitely going to ignore it. Because Y has already seen it.
-;   3. Therefore (to recap) if X just ignored a solicitation from Y, then it
+;   3. Therefore (to recap) if X just ignored a solicitation from Y, then X
 ;      knows Y is going to ignore that same solicitation from X.
 ;   4. THEREFORE: X must not expect Y to respond, and that's why
 ;      we call cancel-replier here. If we don't do this, Y will ignore
 ;      and X will eventually time out, which it doesn't need to do.
+;   5. FURTHERMORE: Y knows X knows this. So it knows X will stop waiting for it.
 ;
 ; * we take no special action for non-solicitation messages because they can't
 ;   ever be replied to anyway.
@@ -621,6 +664,26 @@
              (funcall timeout-handler t))))
         (t ; log an error and do nothing
          (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
+
+(defmethod more-replies-expected? ((node gossip-node) soluid)
+  (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
+    (when interim-table
+      (not (zerop (hash-table-count interim-table))))))
+
+(defmethod maybe-sir ((msg solicitation) thisnode srcuid)
+  "Maybe-send-interim-reply. This is strictly a message handler; it's not a function
+  a node actor should call. The sender of this message will usually be thisnode itself, via
+  the *relay-actor*."
+  (declare (ignore srcuid))
+  ; srcuid will usually (always) be that of thisnode, but we're not checking for that
+  ;   because it doesn't matter if it's not true. For now.
+  (let* ((soluid (first (args msg)))
+         (reply-kind (second (args msg)))
+         (where-to-send-reply (get-upstream-source thisnode soluid)))
+    (if (more-replies-expected? thisnode soluid)
+      (send-interim-reply thisnode reply-kind soluid where-to-send-reply)
+      ; else we'd have already sent a final reply and no further action is needed.
+      )))
 
 (defmethod announce ((msg solicitation) thisnode srcuid)
   "Announce a message to the collective. First arg of Msg is the announcement,
@@ -733,8 +796,10 @@
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it upstream as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
-        (send-interim-reply thisnode :count-alive soluid upstream-source)))))
+      (if *delay-intermediate-replies*
+          (send-delayed-interim-reply thisnode :count-alive soluid)
+          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
+            (send-interim-reply thisnode :count-alive soluid upstream-source))))))
 
 (defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
   "Handler for final replies of type :count-alive. These will come from children of a given node.
@@ -766,8 +831,7 @@
          (key (first (args msg)))
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))
-    ; (kvs:relate-unique! (repliers-expected thisnode) soluid downstream)
-    (cond (downstream
+   (cond (downstream
            (prepare-repliers thisnode soluid downstream)
            (forward msg thisnode downstream)
            ; wait a finite time for all replies
@@ -879,7 +943,60 @@
     coalesced-data ; mostly for debugging
     ))
 
+#|
+DISCUSSION:
+send-interim-reply needs to be delayed, and I don't know how to do this with actors.
+interim-replies don't resolve anything in the gossip model; they just provide (sometimes valuable)
+partial information to the ultimate solicitor. However, if things are moving along properly,
+a huge flurry of almost content-free interim-replies doesn't accomplish anything except to
+clog up communication.
+
+I don't want to get rid of interim-replies altogether because they'll be needed in cases of any
+malfunctioning nodes. But I'd like to delay them a bit -- put them on the actor's back-burner
+as it were.
+Specifically what I need is a way to tell an actor
+1. Put the send-interim-reply on the back burner and if nothing usurps it, execute it after a 1 second
+delay.
+2. If a send-final-reply happens, remove any send-interim-reply requests from the back-burner.
+3. If a second send-interim-reply request comes in when one is already on the back-burner, do nothing,
+because the original will take care of it. However, do reset the clock to make it execute 1 second
+from now, rather than 1 second from whatever time the original request set up.
+
+There are a couple of tricky issues here I don't know how to solve:
+-- How to create a local "back-burner" queue on an actor. Conceivably this could just be another slot
+on an actor, and #'next-message could be made to look at it last. Or possibly it could be put on the
+actor-message-mbox at lowest priority?
+-- How to ensure the actor gets put back on the *actor-ready-queue* 1 second from now.
+
+Another solution might be to just give actors a "yield" capability such that they put themselves back
+onto the far end of the *actor-ready-queue* and give other actors (or technically, other messages to
+themselves) a chance to run first.
+
+Can an actor be on the *actor-ready-queue* more than once? I would hope so. But no. The queue doesn't even
+really contain actors per se; it just contains lexical closures, all of which are associated with some
+actor. However, the way #'send works is that it never re-adds an actor's run closure to the queue if the
+actor is already busy.
+
+I suppose the simplest solution is to just make a timer for this, but the resolution of the timers
+is 1 second and that's almost too coarse-grained for the job.
+
+IDEA: An actor cannot re-insert itself onto the ready-queue -- because even if an actor added
+some code to the ready-queue for itself to run later, the actor-busy flag would still be a problem.
+When the current function ended, the actor would negate the actor-busy flag, but the other body
+of code would already be in the queue. Without its actor-busy flag (the flag is attached to the actor,
+not to the lambda body in the ready-queue) the other lambda body could cause problems. We could
+change the actor-busy flag to a semaphore so it could take on a integral value of how many times the
+actor occurred in the queue, but I think a better solution is:
+
+Just spin up another actor. We'll call it the echo-actor. And it's sole job will be to "reflect" a message
+back to us. This way, an actor can cause a message to itself to get reinserted into the head of the queue
+normally and that code will be executed later, if any other lambda bodies are in the queue ahead of it.
+Because an actor cannot properly send a message to itself, but it can send a message to another actor that
+gets sent back, and everything will be copacetic.
+|#
+
 (defun send-interim-reply (thisnode reply-kind soluid where-to-send-reply)
+  "Send an interim reply, right now."
   (let ((coalesced-data (coalesce thisnode reply-kind soluid)))
     (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
         (let ((reply (make-interim-reply :solicitation-uid soluid
@@ -894,7 +1011,19 @@
         ;   somebody running the sim told it to.
         (maybe-log thisnode :INTERIMREPLY (briefname soluid "sol") coalesced-data))))
 
+(defun send-delayed-interim-reply (thisnode reply-kind soluid)
+  "Called by a node actor to tell itself (or another actor, but we never do that now)
+  to maybe send an interim reply after it processes any possible interim messages, which
+  could themselves obviate the need for an interim reply."
+  ; Should we make these things be yet another class with solicitation-uid-mixin?
+  ; Or just make a general class of administrative messages with timeout being one?
+  (let ((msg (make-solicitation
+              :kind :maybe-sir
+              :args (list soluid reply-kind))))
+    (relay-msg msg (uid thisnode) (uid thisnode))))
+
 (defun later-reply? (new old)
+  "Returns true if old is nil or new has a higher uid"
   (or (null old)
       (> (uid new) (uid old))))
 
@@ -952,8 +1081,8 @@
   This purely functional and does not change reply-cache."
   (let* ((local-data    (kvs:lookup-key (reply-cache node) soluid))
          (interim-table (kvs:lookup-key (repliers-expected node) soluid))
-         (interim-data (loop for reply being each hash-value of interim-table
-                         while reply collect (first (args reply))))
+         (interim-data (when interim-table (loop for reply being each hash-value of interim-table
+                         while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
     ;;(maybe-log node :COALESCE interim-data local-data)
     (let ((coalesced-output
@@ -1028,16 +1157,18 @@
    (transmit-msg msg node srcuid))
 
 (defun run-gossip-sim ()
-  ; Archive the current log and clear it
+  "Archive the current log and clear it.
+   Prepare all nodes for new simulation.
+   Only necessary to call this once, or
+   again if you change the graph or want to start with a clean log."
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
-  (mapc (lambda (node)
-          (setf (car (ac::actor-busy (actor node))) nil))
-        (listify-nodes))
-  (ac::kill-executives) ; only for debugging
-  (mapc 'clear-caches (listify-nodes))
-  )
-
+  (maphash (lambda (uid node)
+             (declare (ignore uid))
+             (setf (car (ac::actor-busy (actor node))) nil)
+             (clear-caches node))
+           *nodes*)
+  (hash-table-count *nodes*))
 
 ; (make-graph 10)
 ; (save-graph-to-file "~/gossip/10nodes.lisp")
@@ -1048,7 +1179,9 @@
 ; (restore-graph-from-file "~/gossip/5nodes.lisp")
 
 ; (make-graph 100)
-; (visualize-nodes *nodes*)
+; (make-graph 1000)
+; (make-graph 10000)
+; (visualize-nodes *nodes*)  ; probably not a great idea for >100 nodes
 
 ; (run-gossip-sim)
 ; (solicit (first (listify-nodes)) :count-alive)
@@ -1064,7 +1197,7 @@
 ;; should produce something like (:FINALREPLY "node209" "sol255" (((:BAZ :BAR) . 4))) as last *log* entry
 
 (defun get-kvs (key)
-  "Shows value of key for all nodes. Just for debugging."
+  "Shows value of key for all nodes. Just for debugging. :gossip-lookup-key for real way to do this."
   (let ((nodes (listify-nodes)))
     (mapcar (lambda (node)
               (cons node (kvs:lookup-key (local-kvs node) key)))
