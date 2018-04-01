@@ -120,21 +120,21 @@ case $1 in
 	    make --makefile=${MAKETARGET}.production PREFIX=${prefix}
 	cd ${DIR}
 	bash ${deliver} ${prod_dir}
-	# at this point, the emotiq binary and the 3 DLL's (hard linked with versioned DLL)
+	# at this point, the 3 DLL's (hard linked with versioned DLL)
 	# are sitting in ../var/local/lib and the delivered emotiq binary is in ../var/local/production-linux
 
 	# copy *.so* into ../var/local/production-linux, preserving hard links (.e. use tar)
-	cd ${lib}
-	tar cf libs.tar *.so*
-	mv libs.tar ${prod_dir}
-	cd ${prod_dir}
-	tar xf libs.tar
+#	cd ${lib}
+#	tar cf libs.tar *.so*
+#	mv libs.tar ${prod_dir}
+#	cd ${prod_dir}
+#	tar xf libs.tar
 
-	# now emotiq (binary) and *.so* are in ../var/local/production-linux ( ${prod_dir} )
+#	# now emotiq (binary) and *.so* are in ../var/local/production-linux ( ${prod_dir} )
 
-	rm libs.tar
-	file * | grep 'symbolic link' | sed -e 's/:.*$//g' >links.txt
-	rm -f `echo links.txt`
+#	rm libs.tar
+#	file * | grep 'symbolic link' | sed -e 's/:.*$//g' >links.txt
+#	rm -f `echo links.txt`
 
 
 # cd ${VAR_DIR}
