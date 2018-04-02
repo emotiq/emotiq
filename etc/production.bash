@@ -19,8 +19,13 @@ set -x
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=${DIR}/..
 
+# where the tarballs should be
+CRYPTO=${BASE}/src/Crypto
+dist=${CRYPTO}/PBC-Intf
+
 # where make install will install stuff
 var=${BASE}/var
+src=${var}/src
 src=${BASE}/src
 etc=${BASE}/etc
 
@@ -31,9 +36,6 @@ pbc=${src}/pbc-0.5.14
 lib=${prefix}/lib
 inc=${prefix}/include
 
-# where the tarballs should be
-CRYPTO=${BASE}/src/Crypto
-dist=${CRYPTO}/PBC-Intf
 # pbc intf files are in the same place
 pbcintf=${dist}
 gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
