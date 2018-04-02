@@ -22,7 +22,9 @@
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
-(defparameter *delay-intermediate-replies* nil "True to delay intermediate replies. Should be true when everything's working.")
+(defparameter *delay-intermediate-replies* t "True to delay intermediate replies.
+  Should be true, especially on larger networks. Reduces unnecessary intermediate-replies while still ensuring
+  some partial information is propagating in case of node failures.")
 
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
@@ -194,6 +196,8 @@
               :documentation "List of UIDs of direct neighbors of this node")
    (actor :initarg :actor :initform nil :accessor actor
           :documentation "Actor for this node")
+   (timers :initarg :timers :initform nil :accessor timers
+            :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
                      :documentation "Table of functions of 1 arg: timed-out-p that should be
           called to clean up after waiting operations are done. Keyed on solicitation id.
@@ -495,6 +499,7 @@
            msg)))  ; second arg of actor-msg
 
 ;  TODO: Might want to also check hopcount and reject message where hopcount is too large.
+;        Might want to not accept maybe-sir messages at all if their soluid is expired.
 (defmethod accept-msg? ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   "Returns kindsym if this message should be accepted by this node, nil and a failure-reason otherwise.
   Kindsym is the name of the gossip method that should be called to handle this message.
@@ -627,18 +632,22 @@
       (ac::schedule-timer-relative timer (ceiling delta)) ; delta MUST be an integer number of seconds here
       timer)))
 
-(defmethod make-timeout-handler ((node gossip-node) (msg solicitation) (kind keyword) timer)
+(defmethod make-timeout-handler ((node gossip-node) (msg solicitation) (kind keyword))
   (let ((soluid (uid msg)))
     (lambda (timed-out-p)
       "Cleanup operations if timeout happens, or all expected replies come in."
-      (cond (timed-out-p
-             ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-             (maybe-log node :DONE-WAITING-TIMEOUT msg))
-            (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
-             (when timer (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
-               ; if no timer, then this is a leaf node
-               (maybe-log node :DONE-WAITING-WIN msg))))
-      (cleanup&finalreply node kind soluid))))
+      (let ((timer (kvs:lookup-key (timers node) soluid)))
+        (cond (timed-out-p
+               ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
+               (maybe-log node :DONE-WAITING-TIMEOUT msg))
+              (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
+               (cond (timer
+                      (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
+                      ; if no timer, then this is a leaf node
+                      (maybe-log node :DONE-WAITING-WIN msg))
+                     (t
+                      (maybe-log node :NO-TIMER-FOUND msg)))))
+        (cleanup&finalreply node kind soluid)))))
 
 (defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
   "Prepare reply tables for given node, solicitation uid, and set of downstream repliers."
@@ -775,13 +784,14 @@
   (let* ((soluid (uid msg))
          (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
          (timer nil)
-         (cleanup (make-timeout-handler thisnode msg :count-alive timer)))
+         (cleanup (make-timeout-handler thisnode msg :count-alive)))
     (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
     (cond (downstream
            (prepare-repliers thisnode soluid downstream)
            (forward msg thisnode downstream)
            ; wait a finite time for all replies
            (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+           (kvs:relate-unique! (timers thisnode) soluid timer)
            (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
            (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
           (t ; this is a leaf node. Just reply upstream.
@@ -827,7 +837,7 @@
   (let* ((soluid (uid msg))
          (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
          (timer nil)
-         (cleanup (make-timeout-handler thisnode msg :gossip-lookup-key timer))
+         (cleanup (make-timeout-handler thisnode msg :gossip-lookup-key))
          (key (first (args msg)))
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))
@@ -836,6 +846,7 @@
            (forward msg thisnode downstream)
            ; wait a finite time for all replies
            (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+           (kvs:relate-unique! (timers thisnode) soluid timer)
            (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
            (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
           (t ; this is a leaf node. Just reply upstream.
@@ -850,8 +861,10 @@
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it upstream as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
-        (send-interim-reply thisnode :gossip-lookup-key soluid upstream-source)))))
+      (if *delay-intermediate-replies*
+          (send-delayed-interim-reply thisnode :gossip-lookup-key soluid)
+          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
+            (send-interim-reply thisnode :gossip-lookup-key soluid upstream-source))))))
 
 (defmethod gossip-lookup-key ((rep final-reply) (thisnode gossip-node) srcuid)
   "Handler for final replies of type :gossip-lookup-key. These will come from children of a given node.
@@ -926,6 +939,7 @@
     ; clean up reply tables.
     (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
     (kvs:remove-key (reply-cache thisnode) soluid)
+    (kvs:remove-key! (timers thisnode) soluid)
     (kvs:remove-key (timeout-handlers thisnode) soluid)
     ; must create a new reply here; cannot reuse an old one because its content has changed
     (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
@@ -1020,6 +1034,7 @@ gets sent back, and everything will be copacetic.
   (let ((msg (make-solicitation
               :kind :maybe-sir
               :args (list soluid reply-kind))))
+    (maybe-log thisnode :ECHO-MAYBE-SIR nil)
     (relay-msg msg (uid thisnode) (uid thisnode))))
 
 (defun later-reply? (new old)
@@ -1094,7 +1109,7 @@ gets sent back, and everything will be copacetic.
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
   "Actions to take when a replier should be canceled.
-   Must reply upstream with either an interim or final reply."
+  Must reply upstream with either an interim or final reply."
   (multiple-value-bind (no-more-repliers additional-info) (remove-previous-reply thisnode soluid srcuid)
     (cond (no-more-repliers
            (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
@@ -1102,8 +1117,10 @@ gets sent back, and everything will be copacetic.
                (funcall timeout-handler nil))))
           (t ; more repliers are expected
            ; functionally coalesce all known data and send it upstream as another interim reply
-           (let ((where-to-send-reply (kvs:lookup-key (message-cache thisnode) soluid)))
-             (send-interim-reply thisnode reply-kind soluid where-to-send-reply))))
+           (if *delay-intermediate-replies*
+               (send-delayed-interim-reply thisnode reply-kind soluid)
+               (let ((upstream-source (get-upstream-source thisnode soluid)))
+                 (send-interim-reply thisnode reply-kind soluid upstream-source)))))
     additional-info ; because some callers care about the :notable case
     ))
 
