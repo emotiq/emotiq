@@ -1,5 +1,6 @@
 x comment out rm of ../libs/
 x put ./ back into pbc-cffi.lisp
+-- removed ../lib/*,  have ./ in pbc-cffi, emotiq dies
 
 obs: with ./ in pbc-cffi.lisp, build production, copy libs to .../production-linux, leave libs in .../lib, ./emotiq works
 obs: as above, but removed pbsLispPBCIntf.so, ./emotiq still works
@@ -48,8 +49,8 @@ works
 test: mv libgmp.so ../temp
 works (don't need *.so)
 
+test: works with script emotiq.bash on VirtualBox ubuntu 16.04
 
--- removed ../lib/*,  have ./ in pbc-cffi, emotiq dies
 
 - build dev with pbc.lisp instead of pbc-cffi.lisp
 - test if working in dev mode
