@@ -26,12 +26,11 @@ dist=${CRYPTO}/PBC-Intf
 # where make install will install stuff
 var=${BASE}/var
 src=${var}/src
-src=${BASE}/src
 etc=${BASE}/etc
 
 prefix=${var}/local
-gmp=${src}/gmp-6.1.2
-pbc=${src}/pbc-0.5.14
+gmp=${dist}/gmp-6.1.2
+pbc=${dist}/pbc-0.5.14
 
 lib=${prefix}/lib
 inc=${prefix}/include
