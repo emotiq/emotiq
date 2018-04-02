@@ -110,6 +110,14 @@ THE SOFTWARE.
    :g1-from-hash
    :g2-from-hash
    :zr-from-hash
+
+   :compute-vrf
+   :validate-vrf
+   :vrf
+   :vrf-seed
+   :vrf-x
+   :vrf-y
+   :vrf-proof
    ))
 
 (in-package :pbc-interface)
@@ -129,64 +137,6 @@ THE SOFTWARE.
 (cffi:use-foreign-library libpbc)
 
 ;; -----------------------------------------------------------------------
-
-#|
-(cffi:defcfun "foo_c" :void
-    "C function that takes a pointer to an array as input; fills a pointer to another array as output"
-    (input  :pointer)
-    (output :pointer))
-
-(defun foo ()
-  (let ((output-array (make-array 100 :element-type '(unsigned-byte 8))))
-    (cffi:with-foreign-pointer (from-c 100)
-      (cffi:with-foreign-pointer (to-c 100)
-        (dotimes (i 100)
-          (setf (cffi:mem-aref to-c :unsigned-char i) (random 256)))
-        ;;; call c function
-        (cffi:foreign-funcall "foo_c" :pointer to-c :pointer from-c :void)
-        (dotimes (j 100)
-          (setf (aref output-array j) (cffi:mem-aref from-c :unsigned-char j)))
-        output-array))))
-
-(defmacro with-foreign-pointer ((var size &optional size-var) &body body)
-  "Bind VAR to SIZE bytes of foreign memory during BODY.  The
-pointer in VAR is invalid beyond the dynamic extent of BODY, and
-may be stack-allocated if supported by the implementation.  If
-SIZE-VAR is supplied, it will be bound to SIZE during BODY."
-  (unless size-var
-    (setf size-var (gensym "SIZE")))
-  `(let ((,size-var ,size))
-     (fli:with-dynamic-foreign-objects ((,var ,size-var))
-       ,@body)))
-|#
-
-;; -----------------------------------------------------------------------
-;; for initial test of strings transfer to/from C/Lisp
-
-#|
-(cffi:defcfun "echo" :long
-  (nel     :long)
-  (msg     :pointer :unsigned-char)
-  (ret-msg :pointer :unsigned-char))
-
-(defun echo ()
-  (let ((msg "Hello Dave!"))
-    (fli:with-dynamic-foreign-objects ()
-      (let ((buf (fli:allocate-dynamic-foreign-object
-                  :type '(:unsigned :char) :nelems 1024)))
-        (let ((nel  (_echo (length msg)
-                           (fli:convert-to-dynamic-foreign-string
-                            msg
-                            :external-format :ASCII)
-                           buf)))
-          (list nel (subseq (fli:convert-from-foreign-string
-                             buf
-                             :external-format :ASCII)
-                            0 nel))
-          )))))
-|#
-
-;; -------------------------------------------------
 ;; Init interface - this must be performed first
 
 (cffi:defcfun ("init_pairing" _init-pairing) :long
@@ -390,8 +340,173 @@ SIZE-VAR is supplied, it will be bound to SIZE during BODY."
   pairing-text
   g1 g2 order g1-len g2-len zr-len gt-len)
 
-;; from: genfparam 256
+;; ---------------------------------------------------------------------------------------
+;; from modified genfparam 256
 (defparameter *curve-fr256-params*
+  (make-curve-params
+   :pairing-text
+   #>.end
+type f
+q 115792089237314936872688561244471742058375878355761205198700409522629664518163
+r 115792089237314936872688561244471742058035595988840268584488757999429535617037
+b 3
+beta 76600213043964638334639432839350561620586998450651561245322304548751832163977
+alpha0 82889197335545133675228720470117632986673257748779594473736828145653330099944
+alpha1 66367173116409392252217737940259038242793962715127129791931788032832987594232
+.end
+   :g1  (make-instance 'g1-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "ff8f256bbd48990e94d834fba52da377b4cab2d3e2a08b6828ba6631ad4d668500")))
+   :g2  (make-instance 'g2-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "e20543135c81c67051dc263a2bc882b838da80b05f3e1d7efa420a51f5688995e0040a12a1737c80def47c1a16a2ecc811c226c17fb61f446f3da56c420f38cc01"))))
+
+  "Curve parameters adapted to ensure q is as large as possible within
+the constraints that q < 2^256, q and r prime, q = 3 mod 4, q = 4 mod
+9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
+square roots.  This curve will wrap 1 in 92 trillion hash/256.
+Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
+Barreto and Naehrig")
+
+;; ---------------------------------------------------------------------------------------
+;; from modified genfparam 255
+(defparameter *curve-fr255-params*
+  (make-curve-params
+   :pairing-text
+   #>.end
+type f
+q 57896044618657242796275912003089040872670005837955836828594514493287093416899
+r 57896044618657242796275912003089040872429389868787834093544968723639815668573
+b 3
+beta 55803917036574816430082368241718705273146220885597405985627421222965120451030
+alpha0 36745065291682366075254502967669756043233951020839323524243711945517092183438
+alpha1 48463065091351977226261302315306999962633968949407617433093635561838515781540
+.end
+#|
+   :g1  (make-instance 'g1-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "ff8f256bbd48990e94d834fba52da377b4cab2d3e2a08b6828ba6631ad4d668500")))
+   :g2  (make-instance 'g2-cmpr
+         :pt (bev
+              (make-instance 'hex
+                             :str "e20543135c81c67051dc263a2bc882b838da80b05f3e1d7efa420a51f5688995e0040a12a1737c80def47c1a16a2ecc811c226c17fb61f446f3da56c420f38cc01")))
+|#
+)
+
+  "Curve parameters adapted to ensure q is as large as possible within
+the constraints that q < 2^255, q and r prime, q = 3 mod 4, q = 4 mod
+9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
+square roots.  This curve will wrap 1 in 68 trillion hash/256,
+truncated to 255 bits.  Algorithm from 'Pairing-Friendly Elliptic
+Curves of Prime Order' by Barreto and Naehrig")
+
+;; ---------------------------------------------------------------------------------------
+;; from: genfparam 250
+(defparameter *curve-fr250-params*
+  (make-curve-params
+   :pairing-text
+   #>.end
+type f
+q 1809251394332986959257939850161114686612631097102842638593643553811817328791
+r 1809251394332986959257939850161114686570095801237726254523530744446827763441
+b 3
+beta 1437141908251968146817076402274864795341362088762910734010474370732118688574
+alpha0 536271594856618124639488944906714824552130805762113454417772030647384157770
+alpha1 28425959349375493106220488310181159417866476731095721227729238529329201869
+.end
+#|
+   :g1  (make-instance 'g1-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "ff8f256bbd48990e94d834fba52da377b4cab2d3e2a08b6828ba6631ad4d668500")))
+   :g2  (make-instance 'g2-cmpr
+         :pt (bev
+              (make-instance 'hex
+                             :str "e20543135c81c67051dc263a2bc882b838da80b05f3e1d7efa420a51f5688995e0040a12a1737c80def47c1a16a2ecc811c226c17fb61f446f3da56c420f38cc01")))
+|#
+)
+
+  "Curve parameters adapted to ensure q is as large as possible within
+the constraints that q < 2^250, q and r prime, q = 3 mod 4, q = 4 mod
+9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
+square roots.  This curve will wrap 1 in 23 trillion hash/256,
+truncated to 250 bits.  Algorithm from 'Pairing-Friendly Elliptic
+Curves of Prime Order' by Barreto and Naehrig")
+
+
+;; ---------------------------------------------------------------------------------------
+;; from: genfparam 248
+(defparameter *curve-fr248-params*
+  (make-curve-params
+   :pairing-text
+   #>.end
+type f
+q 452312848583254953884744365750739939688865847938171536927600539923801802599
+r 452312848583254953884744365750739939667598200005613151790322367567049477473
+b 3
+beta 397249851777460990708985571352217434120562840764162776983847378519420311973
+alpha0 304231671163681708906096514291872830602548274253692921780966369109574403653
+alpha1 345706227803693509060549771291435615772039886420137687701437165115462066273
+.end
+#|
+   :g1  (make-instance 'g1-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "ff8f256bbd48990e94d834fba52da377b4cab2d3e2a08b6828ba6631ad4d668500")))
+   :g2  (make-instance 'g2-cmpr
+         :pt (bev
+              (make-instance 'hex
+                             :str "e20543135c81c67051dc263a2bc882b838da80b05f3e1d7efa420a51f5688995e0040a12a1737c80def47c1a16a2ecc811c226c17fb61f446f3da56c420f38cc01")))
+|#
+)
+
+  "Curve parameters adapted to ensure q is as large as possible within
+the constraints that q < 2^248, q and r prime, q = 3 mod 4, q = 4 mod
+9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
+square roots.  This curve will wrap 1 in 40 trillion hash/256,
+truncated to 248 bits..  Algorithm from 'Pairing-Friendly Elliptic
+Curves of Prime Order' by Barreto and Naehrig")
+
+
+;; ---------------------------------------------------------------------------------------
+;; from: genfparam 247
+(defparameter *curve-fr247-params*
+  (make-curve-params
+   :pairing-text
+   #>.end
+type f
+q 226156424291628771614785038744124807180463434874498764847568283250641725631
+r 226156424291628771614785038744124807165424936801498629912928666264952945481
+b 3
+beta 157581236914492743008411029886095484341247996949025327085235169276682226769
+alpha0 102203583261777748687691191922467678782639793054014524719597751476114479682
+alpha1 183476226787262761591357671373987444584218941387482623829885679422372771068
+.end
+#|
+   :g1  (make-instance 'g1-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "ff8f256bbd48990e94d834fba52da377b4cab2d3e2a08b6828ba6631ad4d668500")))
+   :g2  (make-instance 'g2-cmpr
+         :pt (bev
+              (make-instance 'hex
+                             :str "e20543135c81c67051dc263a2bc882b838da80b05f3e1d7efa420a51f5688995e0040a12a1737c80def47c1a16a2ecc811c226c17fb61f446f3da56c420f38cc01")))
+|#
+)
+
+  "Curve parameters adapted to ensure q is as large as possible within
+the constraints that q < 2^247, q and r prime, q = 3 mod 4, q = 4 mod
+9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
+square roots.  This curve will wrap 1 in 51 trillion hash/256,
+truncated to 247 bits.  Algorithm from 'Pairing-Friendly Elliptic
+Curves of Prime Order' by Barreto and Naehrig")
+
+;; ---------------------------------------------------------------------------------------
+;; from: genfparam 256
+(defparameter *curve-fr256-params-old*
   (make-curve-params
    :pairing-text
    #>.end
@@ -410,9 +525,12 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
    :g2  (make-instance 'g2-cmpr
          :pt (bev
               (make-instance 'hex
-                :str "05063635c1a668e13ff75dc50e3ee70691956c1e3a7a1aa753949bfc5a2c64b1089295808a7b287851ed003e0c03de12be1ab149825c21c909f0c440e145d0b000")))
-   ))
+                :str "05063635c1a668e13ff75dc50e3ee70691956c1e3a7a1aa753949bfc5a2c64b1089295808a7b287851ed003e0c03de12be1ab149825c21c909f0c440e145d0b000"))))
 
+  "Ben Lynn's quick and dirty F-type generation. This curve will wrap
+3 out of 4 hash/256")
+
+;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
   (make-curve-params
    :pairing-text
@@ -431,8 +549,15 @@ sign0 1
               :str "BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
    :g2  (make-instance 'g2-cmpr
          :pt (make-instance 'base58
-              :str "FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8"))
-   ))
+              :str
+"FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8")))
+"Ben Lynn's favorite default - 160 bits symmetric pairing.
+Unfortunately, we are a decade later than when these curves were
+developed and 80-bit security is no longer sufficient. But this curve
+serves as a check on our implementation with his pbc-calc for
+comparison.")
+
+;; ---------------------------------------------------------------------------------------
 
 (defparameter *curve*    nil)
 
@@ -593,11 +718,30 @@ sign0 1
 
 ;; -------------------------------------------------
 
+(defmethod mod-hash ((hash hash) nb)
+  ;; the PBC library has a terrible inconsistency once the hash value
+  ;; exceeds the order of the fields. At that point, instead of
+  ;; wrapping, it appears to shift right by one or more bits before
+  ;; being consumed into the field element. Collisions occur for
+  ;; adjacent values thereafter.
+  ;;
+  ;; PBC also ignores any bits beyond the field size for large hashes,
+  ;; effectively making it take only the MSB portion of the hash.
+  ;;
+  ;; We correct that by taking the hash value modulo the field size
+  ;; before submitting to the PBC libraary. 
+  ;;
+  (let ((v  (int hash))
+        (r  (get-order)))
+    (if (> v r)
+        (bevn (mod v r) nb)
+      hash)))
+
 (defmethod g1-from-hash ((hash hash))
   (need-pairing)
   (let ((nb  (hash-length hash)))
     (with-fli-buffers ((ptbuf  *g1-size*)
-                       (hbuf   nb hash))
+                       (hbuf   nb (mod-hash hash nb)))
       (_get-g1-from-hash ptbuf hbuf nb)
       (make-instance 'g1-cmpr
                      :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
@@ -607,7 +751,7 @@ sign0 1
   (need-pairing)
   (let ((nb (hash-length hash)))
   (with-fli-buffers ((ptbuf  *g2-size*)
-                     (hbuf   nb  hash))
+                     (hbuf   nb  (mod-hash hash nb)))
     (_get-g2-from-hash ptbuf hbuf nb)
     (make-instance 'g2-cmpr
                    :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
@@ -617,7 +761,7 @@ sign0 1
   (need-pairing)
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
-                       (hbuf   nb  hash))
+                       (hbuf   nb  (mod-hash hash nb)))
       (_get-zr-from-hash zbuf hbuf nb)
       (make-instance 'zr
                      :val  (xfer-foreign-to-lisp zbuf *zr-size*))
@@ -708,7 +852,7 @@ sign0 1
   ;; seed can be literally anything at all...
   (need-generator)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
-    (with-fli-buffers ((hbuf hlen hsh))
+    (with-fli-buffers ((hbuf hlen (mod-hash hsh hlen)))
       (_make-key-pair hbuf hlen)
       (setf *zr-init* t)
       (let* ((pkey (get-public-key)) ;; public key
@@ -732,7 +876,7 @@ sign0 1
 (defmethod make-public-subkey ((pkey public-key) seed)
   (need-generator)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
-    (with-fli-buffers ((hbuf hlen      hsh)
+    (with-fli-buffers ((hbuf hlen      (mod-hash hsh hlen))
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
       (_make-public-subkey abuf pbuf hbuf hlen)
@@ -742,7 +886,7 @@ sign0 1
 (defmethod make-secret-subkey ((skey secret-key) seed)
   (need-generator)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
-    (with-fli-buffers ((hbuf hlen      hsh)
+    (with-fli-buffers ((hbuf hlen      (mod-hash hsh hlen))
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
       (_make-secret-subkey abuf sbuf hbuf hlen)
@@ -786,7 +930,7 @@ sign0 1
                       msg-bytes))
          (xmsg      (construct-bev xbytes))
          (rhsh      (hash/256 id tstamp xmsg)))
-    (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
+    (with-fli-buffers ((hbuf  32         (mod-hash rhsh 32))   ;; hash value
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
@@ -971,6 +1115,36 @@ sign0 1
                      :pkey (change-class (mul-pts pkey1 pkey2) 'public-key))
       )))
 
+;; ------------------------------------------------------
+;; VRF - Publicly Verifiable Random Functions
+
+(defstruct vrf
+  seed x y proof)
+
+(defmethod compute-vrf (seed (skey secret-key))
+  (need-pairing)
+  (let* ((x      (zr-from-hash (hash:hash/256 seed)))
+         (1/x+s  (with-mod (get-order)
+                   (m/ (m+ (int x) (int skey)))))
+         (g1     (mul-pt-zr (get-g1) 1/x+s))
+         (y      (compute-pairing g1 (get-g2))))
+    (make-vrf
+     :seed  seed
+     :x     x
+     :y     y
+     :proof g1)))
+
+(defmethod validate-vrf ((vrf vrf) (pkey public-key))
+  (need-pairing)
+  (let* ((x   (zr-from-hash (hash:hash/256 (vrf-seed vrf))))
+         (g2  (add-pts (mul-pt-zr (get-g2) x) pkey))
+         (c   (compute-pairing (vrf-proof vrf) g2))
+         (y   (compute-pairing (vrf-proof vrf) (get-g2)))
+         (chk (compute-pairing (get-g1) (get-g2))))
+    (and (= (int c) (int chk))
+         (= (int x) (int (vrf-x vrf)))
+         (= (int y) (int (vrf-y vrf))))))
+
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
 ;(init-pairing)
@@ -1092,3 +1266,5 @@ sign0 1
 
 #+:LISPWORKS
 (editor:setup-indent "ask-crypto" 1)
+
+

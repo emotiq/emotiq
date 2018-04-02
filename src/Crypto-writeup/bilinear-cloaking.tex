@@ -1,0 +1,38 @@
+\subsection{Transaction Privacy}
+The basis for transactions is that the amount paid must equal the product cost plus fees, plus change returned to purchaser
+$$ {paid} = {cost} + {fees} + {change}$$
+or rather, 
+$$ {paid} - {change} = {cost} + {fees}$$
+
+So using our pairing-based cryptography, we can encrypt the purchase offer as a triple 
+$(T_{buy},R_{sell}, P_{buy})$
+$$ T_{buy} = \frac{k_{rand} \, s_{buy}}{paid - change} \, U \in G_1$$
+$$ R_{sell} = \frac{1}{k_{rand}}\,P_{sell} \in G_2$$
+for some random value $k_{rand}$ as a blinding factor, the buyer's secret key $s_{buy} \in Z_q$, buyer's public key $P_{buy} = s_{buy} \, V \in G_2$,  seller's public key $P_{sell} \in G_2$, and generators $U \in G_1$, and $V \in G_2$.
+
+Blinding factors ensure that repeated transactions for the same amount will appear different each time. Only the buyer needs to know the amount paid, and the change returned. The seller only needs assurance that their cost plus fees is covered.
+
+At the seller's end, this transaction can be completed by computing $C_{sell}$ 
+$$ C_{sell} = \frac{cost+fees}{s_{sell}} \, R_{sell} \in G_2$$
+for seller's private key $s_{sell} \in Z_q$, 
+and then verifying the pairing relation:
+$$ e(T_{buy},C_{sell}) = e(U,P_{buy}) \in G_T$$
+for buyer's public key $P_{buy}$. 
+
+This accomplishes three things. First, only the intended seller can verify the pairing relation, since it requires their private key, $s_{sell}$. Second, it proves to the seller that the buyer, identified by their public key, $P_{buy}$, originated the transaction. And third, it proves to the seller that the buyer paid the proper amount after receiving their change. 
+
+Any mismatch between the two pairings indicates either that the seller was illegitimate and could not decrypt the $R_{sell}$ value properly, or that a presumed buyer did not originate the transaction, or else they didn't send a proper amount of currency. 
+
+Buyer and seller are protected against forgery and fraud, and seller is protected against denial on the part of the buyer. The purchase offer is completely cloaked to third parties. And currency amounts, beyond what is already known to the seller, are hidden from  view.
+
+To complete the transaction the seller must indicate acceptance and then the entire transaction must be published to the public blockchain with publicly verifiable proofs that the transaction was legitimate. 
+
+To accept the proposed purchase, the seller publishes the triple $(T_{buy}, C_{sell}, P_{buy})$ to the blockchain, where $T_{buy}$ was received from the buyer, and $C_{sell}$ was computed by the seller during verification. Together, these group elements form pairings that anyone can verify with the same pairing relation used by the seller:
+$$ e(T_{buy},C_{sell}) = e(U,P_{buy}) \in G_T$$
+This publication should be signed by the seller and posted to the blockchain. Doing so carries the signature weight of the seller as having accepted the purchase transaction. It would not have been published unless the seller accepted it. It proves that the buyer originated the transaction. And anyone can now verify that the transaction occurred. But all currency amounts remain hidden from view.
+
+But more is needed. Nothing here prevents a buyer from claiming fraudulent values for amounts paid and change received. All we know is that their difference was matched by the seller's cost plus fees. Nor can we see if buyer and seller were colluding with fraudulent values on both sides of the transaction. 
+
+So accompanying the purchase transaction, we must provide cryptographic proofs that the individual currency values lie within legitimate ranges. In particular, the difference, $(paid - change)$, and $paid$,  $change$, $cost$, and $fees$, must all be nonnegative amounts within some range, like $[0..2^{64})$.   This is provided by Bulletproofs. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

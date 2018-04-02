@@ -81,21 +81,23 @@ escapeinside={\%*}{*)}          % if you want to add a comment within your code
 
 Emotiq utilizes advanced bilinear pairing-based cryptography\cite{thesis}\cite{lib} (PBC) for user keying, Boneh-Lynn-Shacham (BLS) Signatures\cite{bls}, fast multi-party signatures, and for Randomness Generation. The advantages of PBC are numerous and include short signatures, fast signature generation, safe deterministic hierarchical wallet keying, and fast multiparty randomness generation.
 
-A bilinear pairing uses pairs of Elliptic Curves, defined over two separate groups, such that their bilinear mappings produce homomorphic encryption in a resulting composite field. If we denote the two curve groups as $G1$ and $G2$,  their pairing field $GT$, and prime order finite field $Zr$, then their pairing $e(G1,G2) \in GT$ is such that $$e(a U, V) = e(U, a V)= g^a$$ where $U \in G1$, $V \in G2$, $a \in Zr$, and $g \in GT$.
+A bilinear pairing uses pairs of Elliptic Curves, defined over two separate groups, such that their bilinear mappings produce homomorphic encryption in a resulting composite field. If we denote the two curve groups as $G_1$ and $G_2$,  their Tate pairing field $G_T$, and prime order finite field $Z_q$, then their pairing $e(G_1,G_2) \in G_T$ is such that $$e(a U, V) = e(U, a V)= g^a$$ where $U \in G_1$, $V \in G_2$, $a \in Z_q$, and $g \in G_T$.
 
-In our system group $G1$ is always the smaller group, with the shortest representation. Specifically, our $Zr$ uses 256 bits, $G1$ was chosen to have a 264-bit representation, $G2$ has a 520-bit representation, $GT$ has a 3072-bit representation, and the prime order of the groups is $q \approx  2^{254}$, which gives us roughly $2^{127}$ security.
+In our system group $G_1$ is always the smaller group, with the shortest representation. Specifically, our $Z_q$ uses 256 bits, $G_1$ was chosen to have a 264-bit representation, $G_2$ has a 520-bit representation, $G_T$ has a 3072-bit representation, and the prime order of the groups is $q \approx  2^{254}$, which gives us roughly $2^{127}$ security.
 
-Private keys belong to the finite field $Zr$ with the same prime group order. Public keys are generated in $G2$, and signatures are generated in $G1$. The embedding degree of our curves is 12, and correspond to {\emph{Type f}} asymmetric pairing curves in Lynn's Thesis\cite{thesis}. Wherever they occur, we use  compressed point representation for group elements from $G1$ and $G2$.
+Private keys belong to the finite field $Z_q$ with the same prime group order. Public keys are generated in $G_2$, and signatures are generated in $G_1$. The embedding degree of our curves is 12, and correspond to {\emph{Type f}} asymmetric pairing curves in Lynn's Thesis\cite{thesis}. Wherever they occur, we use  compressed point representation for group elements from $G_1$ and $G_2$.
 
-The complete specification of the Emotiq cryptosystem requires knowledge of all curve pairing parameters, plus two chosen generators $U \in G1$, and $V \in G2$.
+The complete specification of the Emotiq cryptosystem requires knowledge of all curve pairing parameters, plus two chosen generators $U \in G_1$, and $V \in G_2$. Hash values are first mapped to an element of $Z_q$ before creating points in $G_1$ and $G_2$ as $$G_1(H(x)) \equiv Z_q(H(x))U$$ and $$G_2(H(x)) \equiv Z_q(H(x)) V$$
+
+In the following presentation we abide by the notation that groups $G_1$ an $G_2$ are additive groups, while $Z_q$ and $G_T$ are both additive and multiplicative.
 
 \chapter{Boneh-Lynn-Shacham (BLS) Signatures}
 
-BLS signatures are the shortest possible, and enable multisignature generation in just one pass. A BLS signature on message $msg$ is computed as $$sig = s G1(H(msg))$$ where $H(x)$ is the SHA3/256 hash of its argument, $s \in Zr$ is the user's secret key value, and $G1(H(x)) \in G1$ is the group member that corresponds to that hash value. A signature is always accompanied by the public key of the signer, $P = s V$, for generator $V \in G2$,  producing a signed message as a triple $$(msg, sig, P)$$
+BLS signatures are the shortest possible, and enable multisignature generation in just one pass. A BLS signature on message $msg$ is computed as $$sig = s G_1(H(msg))$$ where $H(x)$ is the SHA3/256 hash of its argument, $s \in Z_q$ is the user's secret key value, and $G_1(H(x)) \in G_1$ is the group member that corresponds to that hash value. A signature is always accompanied by the public key of the signer, $P = s V$, for generator $V \in G_2$,  producing a signed message as a triple $$(msg, sig, P)$$
 
-Because of homomorphism we can verify a signature by noting that a valid signature exhibits the pairing relationship $$e(s  G1(H(msg)),V) = e(G1(H(msg)), s V) = e(G1(H(msg)), P)$$
+Because of homomorphism we can verify a signature by noting that a valid signature exhibits the pairing relationship $$e(s  G_1(H(msg)),V) = e(G_1(H(msg)), s V) = e(G_1(H(msg)), P)$$
 
-And also because of homomorphism, we can easily compute a multi-party signature by simply summing the individual signatures and also summing their corresponding public keys: $$e({\sum_i s_i} G1(H(msg)),V) = e(G1(H(msg)), {\sum_i P_i})$$ producing the collective triple $$(msg, {\sum_i sig_i}, {\sum_i P_i})$$
+And also because of homomorphism, we can easily compute a multi-party signature by simply summing the individual signatures and also summing their corresponding public keys: $$e({\sum_i s_i} G_1(H(msg)),V) = e(G_1(H(msg)), {\sum_i P_i})$$ producing the collective triple $$(msg, {\sum_i sig_i}, {\sum_i P_i})$$
 
 Therefore, during the computation of collective signatures, we need only a single pass through all participants as we gather and sum their signture components. A collective signature appears no different than a single signature.
 
@@ -113,7 +115,7 @@ The use of BLS Signatures allows an abbreviated form of PVSS randomness generati
 
 Within each group, a sharing threshold is set at $t = \lfloor \frac{N}{3} \rfloor + 1$ for group size $N$. Secret random seeds are generated by each participant, then encrypted shares are formed over that secret and distributed to other group members, along with cryptographic proofs on the shares.
 
-For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $p(i)$, are then encrypted by multiplying the share value by the public key of each member, $E(share_i) = Zr(p(i)) P_i \in G2$, and proofs are generated by forming a point, $proof_i = Zr(p(i)) U \in G1$, for generator $U \in G1$. 
+For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $p(i)$, are then encrypted by multiplying the share value by the public key of each member, $E(share_i) = Z_q(p(i)) P_i \in G_2$, and proofs are generated by forming a point, $proof_i = Z_q(p(i)) U \in G_1$, for generator $U \in G_1$. 
 
 A vector of shares and a vector of proofs is generated, one element for each member of the group, and these vectors are then transmitted to each group member.
 $$(E(share_1), E(share_2), ..., E(share_N))$$
@@ -127,20 +129,20 @@ $$f(x) = b_0 + b_1 x + ... + b_{N-t-1} x^{N-t-1}$$
 $$c_{\perp} = (\lambda_1 f(1), \lambda_2 f(2), ... , \lambda_N f(N))$$
 where weights $\lambda_i = \prod_{j \ne i} \frac{1}{i-j}$, for $ i,j = 1...N$.
 Then the consistency of the encrypted shares is verified by checking that:
-$$\sum_i {c_{\perp}}_i proof_i = G1(0)$$
+$$\sum_i {c_{\perp}}_i proof_i = G_1(0)$$
 
 This consistency check is absolutely certain for valid sharing vectors, and has an inconsequential probability of failing to detect an improper sharing set given as $\approx 1/q$, or about 1 chance in $2^{254}$. There is a greater likelihood of finding a hash collision in SHA3/256 than in seeing a failure to detect an inconsistent sharing vector.
 
-After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, $$G2(share_i) = \frac{1}{s_i}E(share_i) \in G2$$ for secret key $s_i \in Zr$.
+After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, $$G_2(share_i) = \frac{1}{s_i}E(share_i) \in G_2$$ for secret key $s_i \in Z_q$.
 
 This decrypted share is then broadcast to all group members. Decrypted shares can be verified from the pairing relation:
-$$ e(proof_i, V) = e(U, G2(share_i))$$
+$$ e(proof_i, V) = e(U, G_2(share_i))$$
 
 As soon as a sharing threshold number, $(n \ge t)$, of decrypted shares has been seen for any one sharing set, the secret randomness from that set can be discovered via Lagrange interpolation:
-$$G2(random) = \sum_i G2(share_i) \prod_{j \ne i} \frac{i}{i-j}$$
+$$G_2(random) = \sum_i G_2(share_i) \prod_{j \ne i} \frac{i}{i-j}$$
 
-Finally, after a supermajority of sharing sets has been decrypted, $(n \ge 2 \lfloor \frac{N}{3} \rfloor + 1)$, their randomness is combined as a simple sum in $G2$, and forwarded to all other groups.
-$$G2(random_{grp}) = \sum_i G2(random_i)$$
+Finally, after a supermajority of sharing sets has been decrypted, $(n \ge 2 \lfloor \frac{N}{3} \rfloor + 1)$, their randomness is combined as a simple sum in $G_2$, and forwarded to all other groups.
+$$G_2(random_{grp}) = \sum_i G_2(random_i)$$
 
 Proof of group randomness comes from the sum of Lagrange interpolations of the individual proof sets.
 Final randomness results from a supermajority sum of randomness obtained from each group, and its proof results from the sum of group proofs. 
@@ -157,7 +159,7 @@ Timing tests show that this approach scales linearly with number of group partic
 \end{figure}
 
 \chapter{Alternative Method for Randomness Generation}
-There is an alternative method for generating randomness with PVSS, which I call the TPM Method.\cite{tpm}\footnote{The paper has an error in that it specifies that encrypted shares should be formed as the product of the share value and the generator of the curve. That is incorrect, as the encryption needs to incorporate information about the target node keying. It seems likely that the error crept in by way of fractured translation to English. I found the nomenclature terribly inconsistent and confusing.} It performs the same share generation procedure as seen above, but instead of sending along a vector of proofs on each encrypted share, it sends along proofs on the sharing polynomial coefficients, $a_i, i = 0..t-1$ using $aproof_i = a_i U$ for generator $U \in G1$.
+There is an alternative method for generating randomness with PVSS, which I call the TPM Method.\cite{tpm}\footnote{The paper has an error in that it specifies that encrypted shares should be formed as the product of the share value and the generator of the curve. That is incorrect, as the encryption needs to incorporate information about the target node keying. It seems likely that the error crept in by way of fractured translation to English. I found the nomenclature terribly inconsistent and confusing.} It performs the same share generation procedure as seen above, but instead of sending along a vector of proofs on each encrypted share, it sends along proofs on the sharing polynomial coefficients, $a_i, i = 0..t-1$ using $aproof_i = a_i U$ for generator $U \in G_1$.
 
 Then, at each receiving node, the shares are verified by computing the sums
 $$ proof_i = \sum_{j=0..t-1} i^j aproof_j, i = 1..N$$
@@ -169,8 +171,26 @@ These proof sums correspond directly to the proofs presented in the previous sec
 However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about half as fast when $N=1024$. But the method is equivalent in its information content, and every bit as secure.
 
 \chapter{Verifiable Random Functions}
-A verifiable random function (VRF) uses a pseudo-random function (PRF) in such a way as to furnish proof that the result was fed a specific seed value to produce the pseudo-random result. We follow the work of\cite{vrf}
+A verifiable random function (VRF)\cite{vrf2} uses a pseudo-random function (PRF) in such a way as to furnish proof that the resulting pseudo-random value came from a specific seed value mixed with the creator's secret key. And even though a secret key was involved in the generation of randomness, anyone can duplicate the calculation by knowing only the seed value and creator's public key. We follow the work of Dodis and Yampolskiy\cite{vrf}, to provide a PRF as follows:
 
+For arbitrary input seeding values, form the hash $H(seed)$ using SHA3/256. This converts arbitrary objects of any length into a 256-bit random-like, but reproducible, pattern. Then map that hash value into our $Z_q$ field, which has dimension $q = |Z_q| \approx 2^{254}$, to produce $x = Z_q(H(seed))$.
+
+Output of the VRF is a pseudo-random value in the pairing field (3072 bits) $$y = VRF(s, x) = e(U,V)^{1/(x + s)} \in G_T$$ for secret key $s \in Z_q$,  generators $U \in G_1$, $V \in G_2$, and with proof $$R = \frac{1}{x+s}U \in G_1$$ 
+
+Output of the VRF is the quadruple $(seed, x, y, R)$, i.e., the original seed, the seed deterministically reduced to an element of $Z_q$, the output of the VRF computation, and the point in $G_1$ that represents the proof.
+
+Verification of proof checks the pairing $$e(R, x V + P) = e(U,V)  \in G_T$$ for public key $P = s V \in G_2$, and to verify that $$y = e(R,V)$$ and that $$x = Z_q(H(seed))$$
+
+\chapter{Cosi Multisignatures}
+We use Cosi trees\cite{cosi} to provide scalable, distributed, multisignature generation. Validator nodes are selected from among a group of stakeholder nodes, using random sortition to assign $N$ of them to a position in a Cosi tree. 
+
+A Cosi tree is an n-way tree, where each node in the tree interior is a group leader over $n$ subnodes, each of which may be group leaders over their own subtrees. At any one time, there may be several Cosi trees operating for different purposes, and some nodes might belong to more than one Cosi tree.
+
+When a signature is requested from a Cosi tree, the message is distributed down through the tree to all participant nodes. Each node then attempts to validate the message and decides whether or not to add its signature to the collective signature formed from the sum of all signatures of its subgroup, before passing the augmented signature back up to its parent node in the tree. Accompanying that signature is a composite public key consisting of the sum of participant node public keys, and a bitmap that represents which nodes actually signed the message.
+
+Validation of a message requires varying computation based on the type of message. For randomness generation, it means validating all publicly verifiable quantities and producing decrypted shares. For block validation it means verifying the public keys of all signers of the block, validating all transactions, and so on.
+
+At the top of the tree the bitmap is converted into a list of public keys for all participating nodes, which is used to verify the summed public key, and to gain a census count on how many nodes actually signed the message. That census count is checked against a pBFT threshold of $2 f+ 2$, where $f = \lfloor \frac{N-2}{3} \rfloor$ is the tolerance for Byzantine failures among the nodes, to decide whether the multisignature is acceptable. 
 
 \chapter{Safe Hierarchical Keying}
 
@@ -181,14 +201,14 @@ With PBC we can safely generate both public and private keys without exposing ou
 Anyone can generate new public keys at any time, based on previously known public keys.
 But in order to obtain a decryption key for the new public keys, you must ask the primary secret key holder for a decryption key. Doing so puts the primary key holder at no risk for exposing his or her private key.
 
-A new public key can be generated by asking for a subkey of a given public key, using an arbitrary identity value to identify that subkey. The new public key is computed as $$ P_{id} = Zr(H(id)) V + P$$ for identity $id$, generator $V \in G2$, public key $P \in G2$, and where $Zr(H(id)) \in Zr$ is the element of the field that corresponds to the hash of the supplied identity. 
+A new public key can be generated by asking for a subkey of a given public key, using an arbitrary identity value to identify that subkey. The new public key is computed as $$ P_{id} = Z_q(H(id)) V + P$$ for identity $id$, generator $V \in G_2$, public key $P \in G_2$, and where $Z_q(H(id)) \in Z_q$ is the element of the field that corresponds to the hash of the supplied identity. 
 
-You can use this public key to encrypt a message by making use of the hash of a pairing value as an XOR mask against a message $$E(msg) = msg \oplus H(g^r)$$ where $r = Zr(H(msg, id)) \in Zr$, and pairing element $g^r = e(U, r V)$, for generator $U \in G1$, generator $V \in G2$. The message is transmitted as the triple $(E(msg), R, id)$, with $R = r P_{id} \in G2$.
+You can use this public key to encrypt a message by making use of the hash of a pairing value as an XOR mask against a message $$E(msg) = msg \oplus H(g^r)$$ where $r = Z_q(H(msg, id)) \in Z_q$, and pairing element $g^r = e(U, r V)$, for generator $U \in G_1$, generator $V \in G_2$. The message is transmitted as the triple $(E(msg), R, id)$, with $R = r P_{id} \in G_2$.
 
-In order to produce a decryption key for that new public key, the primary key holder computes $$S_{id} = \frac{1}{s + Zr(H(id))} U \in G1$$ for secret key $s \in Zr$. Producing a decryption key in $G1$ ensures, by difficulty of ECDLP, that our master private key remains safe against exposure.
+In order to produce a decryption key for that new public key, the primary key holder computes $$S_{id} = \frac{1}{s + Z_q(H(id))} U \in G_1$$ for secret key $s \in Z_q$. Producing a decryption key in $G_1$ ensures, by difficulty of ECDLP, that our master private key remains safe against exposure.
 
 Homomorphism allows us to see that the pairings 
-$$e(S_{id}, R) = e(\frac{1}{s + Zr(H(id))} U, r(Zr(H(id)) V + P)) = e(U, r V) = g^r$$ which allows us to recreate the XOR mask and decrypt to the original message $$msg = E(msg) \oplus H(g^r)$$ Verification of the message is done by computing $r = Zr(H(msg, id))$ and checking that $$r (Zr(H(id)) V + P) = R \in G2$$
+$$e(S_{id}, R) = e(\frac{1}{s + Z_q(H(id))} U, r(Z_q(H(id)) V + P)) = e(U, r V) = g^r$$ which allows us to recreate the XOR mask and decrypt to the original message $$msg = E(msg) \oplus H(g^r)$$ Verification of the message is done by computing $r = Z_q(H(msg, id))$ and checking that $$r (Z_q(H(id)) V + P) = R \in G_2$$
 
 In this form, a new private key cannot be used to sign messages in the same manner as for BLS signatures with the master private key. But it does furnish a way to encrypt and decrypt messages by using the hash of the pairing result. This technique has been dubbed SAKKE by its authors Sakai-Kasahara\cite{sakke}. We have extended SAKKE encryption to indefinite length by using successive SHA3 hashes on the pairing field result and an increasing index value.
 
@@ -200,7 +220,9 @@ In this form, a new private key cannot be used to sign messages in the same mann
 \bibitem{thesis} Ben Lynn, PhD Thesis, {\em{On the Implementation of Pairing-Based Cryptosystems}}, June 2007
 \bibitem{lib} Ben Lynn, PBC Library, https://crypto.stanford.edu/pbc/download.html
 \bibitem{bls} Ben Lynn, {\em{BLS Signatures}}, https://crypto.stanford.edu/pbc/manual/ch02s01.html
+\bibitem{vrf2}Silvio Micali, Michael Rabin, Salil Vadhan, {\em{Verifiable Random Functions}}
 \bibitem{sakke}Sakai-Kasahara, {\em{IETF RFC 6508 Sakai-Kasahara Key Encryption (SAKKE)}} 
+\bibitem{cosi}Ewa Syta, Iulia Tamas, Dylan Visher, David Isaac Wolinsky, Philipp Jovanovic, Linus Gasser, Nicolas Gailly, Ismail Khoffi, Bryan Ford, {\em{Keeping Authorities ``Honest or Bust'' with Decentralized Witness Cosigning}}
 \bibitem{randhound} Ewa Syta, Philipp Jovanovic, Eleftherios Kokoris Kogias, Nocals Gailly, Linus Gasser, Ismail Khoffi, Michael J. Fisher, Bryan Ford, {\em{Scalable Bias-Resistant Distributed Randomness}}
 \bibitem{tpm} Youlian Tian, Changgen Peng, Jianfeng Ma, {\em{Publicly Verifiable Secret Sharing Scheme Using Bilinear Pairings}} 
 \end{thebibliography} 
