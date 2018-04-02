@@ -1,6 +1,6 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
-(defsystem "simple-test"
+(defsystem "startup"
   :version "0.0.2"
   :description "Emotiq"
   :author "Copyright (c) 2018 Emotiq AG"

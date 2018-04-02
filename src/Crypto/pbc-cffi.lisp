@@ -124,17 +124,45 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-(cffi:define-foreign-library libpbc
- (:darwin #.(concatenate 'string 
-		       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		       "/libLispPBCIntf.dylib"))
- (:linux #.(concatenate 'string 
-		     (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		     "/libLispPBCIntf.so"))
- (t (:default "libLispPBCIntf"))
- )
+(defun init-libraries (production)
+  ;(format *standard-output* "before setf, LD_LIBRARY_PATH is /~A/~%" (lw:environment-variable "LD_LIBRARY_PATH"))
+  ;(setf (lw:environment-variable "LD_LIBRARY_PATH") ".")
+  ;(format *standard-output* "after setf, LD_LIBRARY_PATH is /~A/~%" (lw:environment-variable "LD_LIBRARY_PATH"))
+  (if (emotiq:production-p)
+      ;; (cffi:define-foreign-library libpbc
+      ;;   (:darwin "./libLispPBCIntf.dylib")
+      ;;   (:linux "./libLispPBCIntf.so")
+      ;;   (t (:default "libLispPBCIntf")))
+      (cffi:define-foreign-library 
+       libpbc
+       (:darwin "libLispPBCIntf")
+       (:linux "libLispPBCIntf.so")
+       (t (:default "libLispPBCIntf")))
+    (cffi:define-foreign-library 
+     libpbc
+     (:darwin #.(concatenate 
+		 'string 
+		 (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		 "/libLispPBCIntf.dylib"))
+     (:linux #.(concatenate 
+		'string 
+		(namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		"/libLispPBCIntf.so"))
+     (t (:default "libLispPBCIntf"))))
+  (cffi:use-foreign-library libpbc))
 
-(cffi:use-foreign-library libpbc)
+;; (cffi:define-foreign-library 
+;;  libpbc
+;;  (:darwin #.(concatenate 'string 
+;; 		       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+;; 		       "/libLispPBCIntf.dylib"))
+;;  (:linux #.(concatenate 'string 
+;; 		     (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+;; 		     "/libLispPBCIntf.so"))
+;;  (t (:default "libLispPBCIntf"))
+;;  )
+
+;; (cffi:use-foreign-library libpbc)
 
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
@@ -576,6 +604,7 @@ comparison.")
 
 (defun need-pairing ()
   (unless *curve*
+    (init-libraries (emotiq:production-p))
     (init-pairing)))
 
 (defun need-keying ()

@@ -12,11 +12,11 @@
 (defun production-p () *production*)
 
 (defun production-start ()
-  (set *production* t)
+  (setf *production* t)
   (start))
 
 (defun dev-start ()
-  (set *production* nil)
+  (setf *production* nil)
   (start))
 
 (defun start ()
