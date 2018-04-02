@@ -97,7 +97,7 @@ $$G_1(H(x)) \equiv Z_q(H(x)) \, U$$
 and 
 $$G_2(H(x)) \equiv Z_q(H(x)) \, V$$
 
-In the following presentation we shall try to adhere to the convention that groups $G_1$ an $G_2$ are additive groups, while $Z_q$ and $G_T$ are both additive and multiplicative. Capitalized symbols denote groups and points from Elliptic curves, while lower cased symbols denote elements of finite fields. Field arithmetic in $Z_q$ is implicitly performed $(mod\,q)$.
+In the following presentation we shall try to adhere to the convention that groups $G_1$ and $G_2$ are additive groups, while $Z_q$ and $G_T$ are both additive and multiplicative. Capitalized symbols denote groups and points from Elliptic curves, while lower cased symbols denote elements of finite fields. Field arithmetic in $Z_q$ is implicitly performed $(mod\,q)$.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Boneh-Lynn-Shacham (BLS) Signatures}
@@ -125,7 +125,7 @@ Therefore, during the computation of collective signatures, we need only a singl
 In contrast, conventional Schnorr signatures require two signature values, forming a quadruple with message and public key. For message $msg$ the Schnorr signature is the pair $(R,u)$ of an Elliptic Curve point $R$ and a field value $u$, where $R = r \, G$, for generator point $G$, and 
 $$r = H(k_{rand}, msg, P)$$ 
 is chosen as a random offset. Finally 
-$$u = r + H(R,P,msg)\, s$$. 
+$$u = r + H(R,P,msg)\, s$$ 
 The Schnorr signature is validated by checking that 
 $$u\, G = R + H(R, P, msg)\, P$$
 
@@ -133,8 +133,24 @@ For collective Schnorr signing, all participants are asked to compute their own 
 $$u_i = r_i + c_{glb} \, s$$
 and again the values are summed. Hence collective Schnorr signatures require two interactions with every signer of the message. Network traffic is approximately twice that required for BLS signatures, with a consequent window of opportunity for attackers to spoil the process during the second round.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Cosi Multisignatures}
+We use Cosi trees\cite{cosi} to provide scalable, distributed, multisignature generation. Validator nodes are selected from among a group of stakeholder nodes, using random sortition to assign $N$ of them to a position in a Cosi tree. 
+
+A Cosi tree is an n-way tree, where each node in the tree interior is a group leader over $n$ subnodes, each of which may be group leaders over their own subtrees. At any one time, there may be several Cosi trees operating for different purposes, and some nodes might belong to more than one Cosi tree.
+
+When a signature is requested from a Cosi tree, the message is distributed down through the tree to all participant nodes. Each node then attempts to validate the message and decides whether or not to add its BLS signature to the collective signature formed from the sum of all signatures of its subgroup, before passing the augmented signature back up to its parent node in the tree. Accompanying that signature is a composite public key consisting of the sum of participant node public keys, and a bitmap that represents which nodes actually signed the message.
+
+Validation of a message requires varying computation based on the type of message. For randomness generation, it means validating all publicly verifiable quantities and producing decrypted shares. For block validation it means verifying the public keys of all signers of the block, validating all transactions, and so on.
+
+At the top of the tree the bitmap is converted into a list of public keys for all participating nodes, which is used to verify the summed public key, and to gain a census count on how many nodes actually signed the message. That census count is checked against a pBFT threshold of $2 f+ 2$, where $f = \lfloor \frac{N-2}{3} \rfloor$ is the tolerance for Byzantine failures among the nodes, to decide whether the multisignature is acceptable. 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Consensus using Cosi}
+In and of itself, a single pass through a Cosi tree is insufficient to guarantee pBFT. Instead, we perform two passes. The first one sends a message to be validated by all member nodes of the Cosi network. On return the message has acquired some number of signatures. If that number exceeds the requisite pBFT threshold then we will have completed a successful {\em{prepare}} phase of pBFT.
+
+The second pass sends the, now validated, message and its multisignature to all participant nodes in the Cosi network, to ensure that each node has seen the validated multisignature. Their new signatures attest that they will remember this message for future reference in efforts to deny double spending. This corresponds to the {\em{commit}} phase of consensus. Once all Cosi nodes have signed off on the validated message, and if the count remains above the pBFT threshold, the caller of this consensus round can be confident that pBFT consensus has been achieved.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Transaction Privacy}
-Mimblewhimble is a simple technique for cloaking all transactions in a publicly verifiable manner. It does not need bilinear pairings, although an algorithm in bilinear pairings can also be developed.\footnote{For Mimblewhimble's single curve computations, we perform in field $Z_q$ and group $G_2$ since that field already has our private keys, and the $G_2$ group has our public keys. Hence the same keying can be used over a single curve algorithm and all of our pairing cryptography.}
+A simple technique for cloaking all transactions in a publicly verifiable manner does not need bilinear pairings, although an algorithm in bilinear pairings can also be developed.\footnote{For single curve computations, we perform in field $Z_q$ and group $G_2$ since that field already has our private keys, and the $G_2$ group has our public keys. Hence the same keying can be used over a single curve algorithm and for all of our pairing cryptography.}
 
 We start with recognizing that a full transaction satisfies the following simple relation:
 $$paid = cost + fees + change$$
@@ -165,7 +181,27 @@ Value $G_2(0)$ is the identity element in the curve group, and easily  recognize
 The initial purchase offer cloaks its currency values from everyone, including the seller. The final published transaction is also cloaked with the same $k_{rand}$, and so hides all monetary values, except the zero balance that results from the check equation. Nobody but the intended seller can finish the transaction, and the check equation provides undeniable proof that the buyer created the offer. A zero balance proves that enough currency was supplied to cover net cost.
 
 If a zero result is not produced, then it can only mean one or more of three things. First, the seller may be illegitimate and unable to decrypt the $R_{sell}$ value with the secret key, $s_{sell}$. Second the transaction might not have been produced by the indicated buyer, $P_{buy}$. Or finally, the currency amounts may not match the seller's expectations. In any case, such a transaction would never be permitted into the blockchain.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Privacy without Encryption}
+There may be times when the $(cost + fees)$ is publicly known, and there is no seller involved in a transaction. We can still achieve transactional privacy in that case. Simply make the substitutions
+\begin{align}
+P_{sell} &\to V \in G_2 \notag \\
+s_{sell} &\to 1 \notag
+\end{align}
 
+The buyer publishes the triple $(P_{buy}, t_{buy}, R)$, where $t_{buy}$ is as before,
+$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_q$$
+and
+$$R = k_{rand}\, V \in G_2$$
+
+Then anyone knowing the value of $(cost + fees)$ can verify the transaction using
+$$C = (cost + fees) \, R \in G_2$$
+and check that
+$$t_{buy}\, P_{buy} + C = G_2(0)$$
+
+The validation relation proves that the buyer formed the purchase offer, and that they forwarded enough money to cover net costs, while still cloaking the values involved. The cloaked values need to be accompanied by range proofs.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Bulletproofs}
 
@@ -226,7 +262,7 @@ Timing tests show that this approach scales linearly with number of group partic
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \subsubsection{The TPM Method}
-There is an alternative method for generating randomness with PVSS, which I call the TPM Method.\cite{tpm}\footnote{The paper has an error in that it specifies that encrypted shares should be formed as the product of the share value and the generator of the curve. That is incorrect, as the encryption needs to incorporate information about the target node keying. It seems likely that the error crept in by way of fractured translation to English. I found the nomenclature terribly inconsistent and confusing.} It performs the same share generation procedure as seen above, but instead of sending along a vector of proofs on each encrypted share, it sends along proofs on the sharing polynomial coefficients, $a_i, i = 0..t-1$ using $Aproof_i = a_i U$ for generator $U \in G_1$.
+There is an alternate method for generating randomness with PVSS, which I call the TPM Method.\cite{tpm}\footnote{The paper has an error wherein it specifies that encrypted shares should be formed as the product of the share value and the generator of the curve. That is incorrect, as the encryption needs to incorporate information about the target node keying. It seems likely that the error crept in by way of fractured translation to English. I found the nomenclature terribly inconsistent and confusing.} It performs the same share generation procedure as seen above, but instead of sending along a vector of proofs on each encrypted share, it sends along proofs on the sharing polynomial coefficients, $a_i, i = 0..t-1$ using $Aproof_i = a_i U$ for generator $U \in G_1$.
 
 Then, at each receiving node, the shares are verified by computing the sums
 $$ Proof_i = \sum_{j=0..t-1} i^j\, Aproof_j, i = 1..N$$
