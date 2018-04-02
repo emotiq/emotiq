@@ -262,9 +262,10 @@ THE SOFTWARE.
 
 (defun convert-int-to-vec (val &key
                                (from-end t)
-                               (nb  (ceiling (integer-length val) 8)))
+                               (nb  (max 1 (ceiling (integer-length val) 8))))
   ;; convert val to little-endian vector of UB8
-  (let ((v  (make-ub8-vector nb)))
+  (let ((v  (make-ub8-vector nb
+                             :initial-element 0)))
     (if from-end
         (do ((ix  (1- nb)  (1- ix))
              (pos 0        (+ 8 pos)))
@@ -446,7 +447,7 @@ THE SOFTWARE.
                   (tail (make-ub8-vector diff
                                     :initial-element 0)))
              (make-instance 'lev
-                            :vec (concatenate 'vector (lev-vec lev) tail))))
+                            :vec (concatenate 'ub8-vector (lev-vec lev) tail))))
           ((> nel nb)
            ;; take from the LSB side
            (make-instance 'lev
@@ -560,7 +561,7 @@ THE SOFTWARE.
                   (pref (make-ub8-vector diff
                                     :initial-element 0)))
              (make-instance 'bev
-                            :vec (concatenate 'vector pref (bev-vec bev)))))
+                            :vec (concatenate 'ub8-vector pref (bev-vec bev)))))
           ((> nel nb)
            ;; take a portion from the LSB side
            (make-instance 'bev

@@ -359,6 +359,9 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
                  :niter niter))
     (plt:plot 'plt nodes times-tpm
               :clear t
+              :logo nil
+              :cright1 nil
+              :cright2 nil
               :title "Randomness Generation vs Nbr Participants"
               :xtitle "Nbr Participant Nodes"
               :ytitle "Elapsed Time [sec]"
@@ -367,10 +370,12 @@ g(x) can have degree n-t-1, making a [n,n-t,t+1] RS code.
               :legend "TPM"
               :xlog   t
               :ylog   t)
+    #|
     (plt:fplot 'plt '(1 2000)
                (lambda (x)
                  (exp (+ ywmn (* slope (- (log x) xmn)))))
                :color :red)
+    |#
     (plt:plot 'plt nodes times-rs
               :color :blue
               :symbol :circle
