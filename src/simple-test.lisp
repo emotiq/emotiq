@@ -1,6 +1,6 @@
-(in-package "CL-USER")
+(in-package "EMOTIQ")
 
-(defun main ()
+(defun simple-test ()
   (pbc:make-key-pair :dave)
   (let ((signed (pbc:sign-message :hello)))
     (if (pbc:check-message signed)
