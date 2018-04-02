@@ -29,8 +29,8 @@ src=${var}/src
 etc=${BASE}/etc
 
 prefix=${var}/local
-gmp=${dist}/gmp-6.1.2
-pbc=${dist}/pbc-0.5.14
+gmp=${src}/gmp-6.1.2
+pbc=${src}/pbc-0.5.14
 
 lib=${prefix}/lib
 inc=${prefix}/include
