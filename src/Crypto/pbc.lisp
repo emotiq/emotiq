@@ -88,6 +88,17 @@ THE SOFTWARE.
    :signed-message-msg
    :signed-message-sig
    :signed-message-pkey
+
+   :crypto-packet
+   :crypto-packet-pkey
+   :crypto-packet-id
+   :crypto-packet-tstamp
+   :crypto-packet-rval
+   :crypto-packet-cmsg
+
+   :g1-from-hash
+   :g2-from-hash
+   :zr-from-hash
    ))
 
 (in-package :pbc-interface)

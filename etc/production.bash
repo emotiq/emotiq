@@ -22,6 +22,8 @@ BASE=${DIR}/..
 # where make install will install stuff
 var=${BASE}/var
 src=${BASE}/src
+etc=${BASE}/etc
+
 prefix=${var}/local
 gmp=${src}/gmp-6.1.2
 pbc=${src}/pbc-0.5.14
@@ -125,8 +127,9 @@ cd ${prod_dir}
 mv ${lib}/libs.tar ${prod_dir}
 tar xf libs.tar
 # now, all dll's and emotiq are in ${prod_dir}
-# cd ${lib}
-# rm *
+cp ${etc}/emotiq.bash ${prod_dir}
+cd ${lib}
+rm *
 # < /test >
 
 # cp ${VAR_DIR}/*.so* ${prod_dir}

@@ -6,4 +6,4 @@
 (ql:quickload :core-crypto)
 (ql:quickload :main)
 
-(deliver 'emotiq:start "emotiq" 0 :multiprocessing t :console t)
+(deliver 'emotiq:production-start "emotiq" 0 :multiprocessing t :console t)

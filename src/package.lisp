@@ -14,4 +14,4 @@
            #:keygen #:sign-message #:verify-signature
 
            #:production-p)
-  (:export #:production-p #:start))
+  (:export #:production-start #:start #:start-main))

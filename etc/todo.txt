@@ -37,6 +37,16 @@ test: rm .../lib/*, emotiq doesn't work
 test: mv *libg to .../lib, emotiq doesn't work
 test: mv libpbc.so.1 to .../lib, emotiq works
 
+test:
+tarvydas@ProDesk ~/work/emotiq/var/local/production-linux $ export LD_LIBRARY_PATH=.
+tarvydas@ProDesk ~/work/emotiq/var/local/production-linux $ ./emotiq
+works
+
+test: mv libpbc.so ../temp
+works
+
+test: mv libgmp.so ../temp
+works (don't need *.so)
 
 
 -- removed ../lib/*,  have ./ in pbc-cffi, emotiq dies

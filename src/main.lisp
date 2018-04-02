@@ -10,28 +10,21 @@
 	(format *standard-output* "~%NOT OK~%~%"))
       ok)))
 
-;; delete this when we have nodes
+(defparameter *production* nil)
+(defun production-p () *production*)
+
+(defun production-start ()
+  (setf *production* t)
+  (start-main))
+
 (defun start ()
-  ;; 
-  (let ((argv (or 
-	       #+CLISP *args*
-	       #+SBCL *posix-argv*  
-	       #+LISPWORKS system:*line-arguments-list*
-	       #+CMU extensions:*command-line-words*
-	       nil)))
-    (when (or 
-	   (string= "emotiq" (first argv))
-	   (string= "./emotiq" (first argv)))
-      (setq *production* t)
+  (setf *production* nil)
+  (start-main))
 
-      ;; -- start delete --
-      (format *standard-output* "~%running production~%~%")
-      (simple-test)
-      ;; -- end delete --
-
-      ;; call node startup code
-
-      )
-    (unless (production-p)
-      (format *standard-output* "~%running developer version~%~%"))))
+;; delete this when we have nodes
+(defun start-main ()
+  (if (production-p)
+      (format *standard-output* "~%running production~%")
+    (format *standard-output* "~%running developer~%"))
+  (simple-test))
 

@@ -117,19 +117,30 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 
 (defun init-libraries (production)
-  (if production
-      (cffi:define-foreign-library libpbc
-        (:darwin "./libLispPBCIntf.dylib")
-        (:linux "./libLispPBCIntf.so")
-        (t (:default "libLispPBCIntf")))
-    (cffi:define-foreign-library libpbc
-      (:darwin #.(concatenate 'string 
-                            (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-                            "/libLispPBCIntf.dylib"))
-      (:linux #.(concatenate 'string 
-                           (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-                           "/libLispPBCIntf.so"))
-      (t (:default "libLispPBCIntf"))))
+  ;(format *standard-output* "before setf, LD_LIBRARY_PATH is /~A/~%" (lw:environment-variable "LD_LIBRARY_PATH"))
+  ;(setf (lw:environment-variable "LD_LIBRARY_PATH") ".")
+  ;(format *standard-output* "after setf, LD_LIBRARY_PATH is /~A/~%" (lw:environment-variable "LD_LIBRARY_PATH"))
+  (if (emotiq:production-p)
+      ;; (cffi:define-foreign-library libpbc
+      ;;   (:darwin "./libLispPBCIntf.dylib")
+      ;;   (:linux "./libLispPBCIntf.so")
+      ;;   (t (:default "libLispPBCIntf")))
+      (cffi:define-foreign-library 
+       libpbc
+       (:darwin "libLispPBCIntf")
+       (:linux "libLispPBCIntf.so")
+       (t (:default "libLispPBCIntf")))
+    (cffi:define-foreign-library 
+     libpbc
+     (:darwin #.(concatenate 
+		 'string 
+		 (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		 "/libLispPBCIntf.dylib"))
+     (:linux #.(concatenate 
+		'string 
+		(namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		"/libLispPBCIntf.so"))
+     (t (:default "libLispPBCIntf"))))
   (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
