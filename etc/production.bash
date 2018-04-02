@@ -37,7 +37,7 @@ inc=${prefix}/include
 
 # pbc intf files are in the same place
 pbcintf=${dist}
-gmp_tar=${dist}/gmp-6.1.2.tar.bz2
+gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
 pbc_tar=${dist}/pbc-0.5.14.tar
 
 uname_s=$(uname -s)
