@@ -1,0 +1,49 @@
+x comment out rm of ../libs/
+x put ./ back into pbc-cffi.lisp
+
+obs: with ./ in pbc-cffi.lisp, build production, copy libs to .../production-linux, leave libs in .../lib, ./emotiq works
+obs: as above, but removed pbsLispPBCIntf.so, ./emotiq still works
+next test: mv libpbc.so.1 ../hold ; ./emotiq fails with error...
+```
+Error: Unable to load foreign library (LIBPBC).
+  Could not register handle for external module PBC-INTERFACE::LIBPBC (file-name ./libLispPBCIntf.so):
+ libpbc.so.1: wrong format.
+...
+```
+
+test: create lib/libpbc.so.1 as copy of lib/libpbc.so.1.0.0, emotiq works
+test: rm lib/libpbc.so.1, emotiq fails
+test: cd production-linux ; cp libpbc.so.1.0.0 lib.pbc.so.1, emotiq fails
+test:
+ 2225  pushd ../lib
+ 2227  cp libpbc.so.1.0.0 libpbc.so.1
+ 2229  mkdir ../temp
+ 2230  mv libpbc.so.1.0.0 ../temp
+ 2231  popd
+ 2232  ./emotiq
+
+test: rm *.a *.la in ../lib and ../production-linux, emotiq works (removed static libs, no problem)
+
+test: rm libpbc.so in .../production-linux and .../lib, emotiq works
+emotiq:            ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, BuildID[sha1]=a562675c944622d4714a6cfda3aff28f489df32e, not stripped
+libgmp.so:         symbolic link to libgmp.so.10.3.2
+libgmp.so.10:      symbolic link to libgmp.so.10.3.2
+libgmp.so.10.3.2:  ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=8b5f84b5c4c53b0740905080e14642673c9be9f8, not stripped
+libLispPBCIntf.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=c2b4358d03dc41a93c5cef51807cc7481667dc9d, not stripped
+libpbc.so.1:       ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=2ca538a6fd6a065bf937b35c146691337732ada6, not stripped
+libs.tar:          POSIX tar archive (GNU)
+
+test: rm .../lib/*, emotiq doesn't work
+test: mv *libg to .../lib, emotiq doesn't work
+test: mv libpbc.so.1 to .../lib, emotiq works
+
+
+
+-- removed ../lib/*,  have ./ in pbc-cffi, emotiq dies
+
+- build dev with pbc.lisp instead of pbc-cffi.lisp
+- test if working in dev mode
+- build prod
+- test if working in dev mode
+- rm ../libs
+- run delivered emotiq

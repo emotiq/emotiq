@@ -119,8 +119,8 @@ THE SOFTWARE.
 (defun init-libraries (production)
   (if production
       (cffi:define-foreign-library libpbc
-        (:darwin "libLispPBCIntf.dylib")
-        (:linux "libLispPBCIntf.so")
+        (:darwin "./libLispPBCIntf.dylib")
+        (:linux "./libLispPBCIntf.so")
         (t (:default "libLispPBCIntf")))
     (cffi:define-foreign-library libpbc
       (:darwin #.(concatenate 'string 
