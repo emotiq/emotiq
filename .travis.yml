@@ -13,10 +13,10 @@ env:
 
   matrix:
     - LISP=lispworks-bin
-    - LISP=ccl-bin
-    - LISP=sbcl-bin
 # Uncomment to enable the build farm resource to be spent on
 # implementations that might actually produce useful results.
+#    - LISP=ccl-bin
+#    - LISP=sbcl-bin
 #    - LISP=abcl-bin
 # Non-binary distributions need to be built from source, which
 # currently times out for the Travis CI builds we are currently paying

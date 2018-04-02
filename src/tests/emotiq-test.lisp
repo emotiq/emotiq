@@ -65,3 +65,85 @@
        48 59 229 153 170 135 90 241 128 63 58 252 46 190 87 241 183 165 34 103 23 186 239 194 71 13 69 116))
     (assert-eql (length digest) 64)))
 
+
+
+;;; Sample ripemd-160 hashes. Source:
+;;; https://en.wikipedia.org/wiki/RIPEMD
+
+(defparameter *quick-lazy-dog-to-test-ripemd-160*
+  "The quick brown fox jumps over the lazy dog")
+
+(defparameter *quick-lazy-dog-ripemd-160-hash*
+  "37f332f68db77bd9d7edd4969571ad671cf9dd3b")
+
+(defparameter *quick-lazy-cog-to-test-ripemd-160*
+  "The quick brown fox jumps over the lazy cog")  ; ends with cog, not dog
+
+(defparameter *quick-lazy-cog-ripemd-160-hash*
+  "132072df690933835eb8b6ad0b77e7b6f14acad7")
+
+(define-test hash-160-string
+  (let (digest)
+    (setq digest (hash-160-string *quick-lazy-dog-to-test-ripemd-160*))
+    (assert-equalp digest *quick-lazy-dog-ripemd-160-hash*)
+    (assert-eql (length digest) 40)
+    (setq digest (hash-160-string *quick-lazy-cog-to-test-ripemd-160*))
+    (assert-equalp digest *quick-lazy-cog-ripemd-160-hash*)
+    (assert-eql (length digest) 40)))
+
+
+
+;;; Here is a string of the word hello its sha-256 double hash,
+;;; followed by a test for our hash-256-string function. Source:
+;;; https://en.bitcoin.it/wiki/Protocol_documentation#Hashes
+
+(defparameter *word-hello-to-test-double-sha-256*
+  "hello")
+
+(defparameter *hello-double-sha-256-hash*
+  "9595c9df90075148eb06860365df33584b75bff782a510c6cd4883a419833d50")
+
+(define-test hash-256-string
+  (let ((digest (hash-256-string *word-hello-to-test-double-sha-256*)))
+    (assert-equalp digest *hello-double-sha-256-hash*)
+    (assert-eql (length digest) 64)))
+
+
+
+(defparameter *message-to-sign*
+  "The quick brown fox jumps over the lazy dog")
+
+(define-test test-signing
+  (multiple-value-bind (private-key public-key bitcoin-address)
+      (keygen)
+    (declare (ignore bitcoin-address))
+    (let* ((message *message-to-sign*)
+           (signature (sign-message private-key message))
+           (verification (verify-signature public-key message signature)))
+      (assert-eql (length signature) 128)
+      (assert-true verification)
+
+      (setq signature 
+            (sign-message 
+             private-key 
+             (string-upcase message)
+             :start 3 :end 20))
+      (setq verification
+            (verify-signature
+             public-key
+             (string-upcase message)
+             signature
+             :start 3 :end 20))
+      (assert-eql (length signature) 128)
+      (assert-true verification)
+
+      (setq signature (sign-message private-key "Something"))
+      (setq verification
+            (verify-signature public-key "NotTheSame" signature))
+      (assert-eql (length signature) 128)
+      (assert-false verification))))
+
+
+
+
+
