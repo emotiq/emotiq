@@ -118,6 +118,11 @@ THE SOFTWARE.
    :vrf-x
    :vrf-y
    :vrf-proof
+
+   :make-pedersen-proof
+   :validate-pedersen-proof
+   :make-cloaked-proof
+   :validate-cloaked-proof
    ))
 
 (in-package :pbc-interface)

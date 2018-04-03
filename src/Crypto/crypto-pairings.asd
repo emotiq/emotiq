@@ -29,7 +29,8 @@ THE SOFTWARE.
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
   :components  ((:file "pairing-curves")
-		(:file "pbc-cffi"))
+		(:file "pbc-cffi")
+                (:file "proofs"))
   :depends-on   ("core-crypto"
                  "cffi"
                  "crypto-pairings/libraries"))
