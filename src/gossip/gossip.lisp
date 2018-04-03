@@ -19,7 +19,7 @@
 (in-package :gossip)
 
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
-(defparameter *max-seconds-to-wait* 30 "Max seconds to wait for all replies to come in")
+(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *delay-intermediate-replies* t "True to delay intermediate replies.
@@ -262,9 +262,6 @@
   Usually we use this in echo mode (where destuid = srcuid),
   so an actor can send a message to itself but forcing itself to first yield and
   handle other messages before handling the one herein."
-  (unless (or (null srcuid)
-              (numberp srcuid))
-    (break "In gossip:relay-msg"))
   (unless *relay-actor*
     (setf *relay-actor* (make-gossip-actor nil)))
   (ac:send *relay-actor*
@@ -423,8 +420,6 @@
                 nil)     ; srcuid
       soluid)))
 
-;;; TODO: Need to revise these to still work if *log-filter* is nil; i.e.
-;;;   it needs to look at the actual reply message.
 (defun solicit-wait (node kind &rest args)
   "Like solicit but waits for a reply.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
@@ -433,53 +428,58 @@
   (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
                  (uid node)
                  node))
-        (node (if (typep node 'gossip-node)
-                  node
-                  (lookup-node node)))
         (response nil))
-    (flet ((response-logger (logcmd nodename msgname &rest args)
-             (when (eq :FINALREPLY logcmd)
-               (setf response (apply 'default-logging-function logcmd nodename msgname args)))))
-      ; (setf (logfn node) 'interactive-logging-function) ; use this if you want to print all replies to this node
-      (setf (logfn node) #'response-logger)
+    (flet ((final-continuation (message)
+             (setf response message)))
       (let* ((solicitation (make-solicitation
                             :kind kind
                             :args args))
              (soluid (uid solicitation)))
         (send-msg solicitation
                   uid      ; destination
-                  nil)     ; srcuid
-        (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
-                                            (lambda () response))
-        (values response soluid)))))
+                  #'final-continuation)     ; srcuid
+        (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
+                                                       (lambda () response))))
+          (values 
+           (if win
+               (first (args response))
+               :TIMEOUT)
+           soluid))))))
 
 (defun solicit-progress (node kind &rest args)
   "Like solicit-wait but prints periodic progress log messages (if any)
-   associated with this node to listener."
+  associated with this node to listener.
+  Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
-                 (uid node)
-                 node))
-        (node (if (typep node 'gossip-node)
-                  node
-                  (lookup-node node)))
-        (response nil))
-    (flet ((response-logger (logcmd nodename msgname &rest args)
-             (let ((logmsg (apply 'interactive-logging-function logcmd nodename msgname args)))
-               (when (eq :FINALREPLY logcmd)
-                 (setf response logmsg)))))
-      (setf (logfn node) #'response-logger)
+  (let* ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+                  (uid node)
+                  node))
+         (node (if (typep node 'gossip-node)
+                   node
+                   (lookup-node node)))
+         (response nil)
+         (old-logger (logfn node)))
+    (flet ((final-continuation (message)
+             (setf response message)))
       (let* ((solicitation (make-solicitation
                             :kind kind
                             :args args))
              (soluid (uid solicitation)))
-        (send-msg solicitation
-                  uid      ; destination
-                  nil)     ; srcuid
-        (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
-                                            (lambda () response))
-        (values response soluid)))))
+        (unwind-protect
+            (progn
+              (setf (logfn node) #'interactive-logging-function)
+              (send-msg solicitation
+                        uid      ; destination
+                        #'final-continuation)     ; srcuid
+              (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
+                                                             (lambda () response))))
+                (values 
+                 (if win
+                     (first (args response))
+                     :TIMEOUT)
+                 soluid)))
+          (setf (logfn node) old-logger))))))
 
 (defun interactive-logging-function (logcmd nodename msgname &rest args)
   "Use this logging function for interactive debugging. You'll probably only want to use this
@@ -538,7 +538,10 @@
                (briefname msg)
                args)))))
 
-(defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
+#+LW
+(hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
+#+CCL
+(ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
@@ -571,9 +574,6 @@
     logmsg))
   
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
-  (unless (or (null srcuid)
-              (numberp srcuid))
-    (break "In gossip:send-msg"))
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
     (ac:send destactor
@@ -728,7 +728,8 @@
                       (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
                       ; if no timer, then this is a leaf node
                       (maybe-log node :DONE-WAITING-WIN msg))
-                     (t
+                     (t ; note: Following log message doesn't necessarily mean anything is wrong.
+                      ; If node is singly-connected to the graph, it's to be expected
                       (maybe-log node :NO-TIMER-FOUND msg)))))
         (cleanup&finalreply node kind soluid)))))
 
@@ -737,7 +738,8 @@
   (let ((interim-table (kvs:make-store ':hashtable :test 'equal)))
     (dolist (replier-uid downstream)
       (kvs:relate-unique! interim-table replier-uid nil))
-    (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table)))
+    (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table)
+    interim-table))
 
 ;;;  GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
 
@@ -819,7 +821,7 @@
    wasn't present in the first place, this is a no-op.
    No reply expected."
   (let ((key (first (args msg))))
-    (setf (local-kvs thisnode) (kvs:remove-key (local-kvs thisnode) key))
+    (kvs:remove-key! (local-kvs thisnode) key)
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (remove srcuid (neighbors thisnode)))))
 
@@ -1070,21 +1072,24 @@
     ; clean up reply tables.
     (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
     (kvs:remove-key (reply-cache thisnode) soluid)
-    (kvs:remove-key! (timers thisnode) soluid)
+    (kvs:remove-key (timers thisnode) soluid)
     (kvs:remove-key (timeout-handlers thisnode) soluid)
     ; must create a new reply here; cannot reuse an old one because its content has changed
-    (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-        (let ((reply (make-final-reply :solicitation-uid soluid
-                                 :kind reply-kind
-                                 :args (list coalesced-data))))
-          (maybe-log thisnode :SEND-FINAL-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
-          (send-msg reply
-                    where-to-send-reply
-                    (uid thisnode)))
-        ; if no place left to reply to, just log the result.
-        ;   This can mean that thisnode autonomously initiated the request, or
-        ;   somebody running the sim told it to.
-        (maybe-log thisnode :FINALREPLY (briefname soluid "sol") coalesced-data))
+    (let ((reply (make-final-reply :solicitation-uid soluid
+                                   :kind reply-kind
+                                   :args (list coalesced-data))))
+      (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
+             (maybe-log thisnode :SEND-FINAL-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
+             (send-msg reply
+                       where-to-send-reply
+                       (uid thisnode)))
+            ; if no place left to reply to, just log the result.
+            ;   This can mean that thisnode autonomously initiated the request, or
+            ;   somebody running the sim told it to.
+            (t
+             (maybe-log thisnode :FINALREPLY (briefname soluid "sol") coalesced-data)
+             (when (functionp where-to-send-reply)
+               (funcall where-to-send-reply reply)))))
     coalesced-data ; mostly for debugging
     ))
 
@@ -1197,6 +1202,7 @@ gets sent back, and everything will be copacetic.
     (kvs:remove-key interim-table srcuid) ; whatever was there before should have been nil or an interim-reply, but we're not checking for that
     (when (zerop (hash-table-count interim-table))
       ; if this is the last reply, kill the whole table for this soluid and return true
+      ;; (maybe-log node :KILL-TABLE-1 nil)
       (kvs:remove-key (repliers-expected node) soluid)
       t)))
 
@@ -1237,12 +1243,12 @@ gets sent back, and everything will be copacetic.
          (interim-data (when interim-table (loop for reply being each hash-value of interim-table
                          while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    (maybe-log node :COALESCE interim-data local-data)
+    ;(maybe-log node :COALESCE interim-data local-data)
     (let ((coalesced-output
            (reduce coalescer
             interim-data
             :initial-value local-data)))
-      (maybe-log node :COALESCED-OUTPUT coalesced-output)
+      ;(maybe-log node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1274,7 +1280,6 @@ gets sent back, and everything will be copacetic.
                  (push key dead-list)))
              *nodes*)
     (sort dead-list #'<)))
-
 
 ; NOT DONE YET
 (defmethod transmit-msg (msg (node remote-gossip-node) srcuid)
@@ -1342,13 +1347,13 @@ gets sent back, and everything will be copacetic.
 ; (solicit-progress (first (listify-nodes)) :list-alive)
 ; (solicit-wait (first (listify-nodes)) :count-alive)
 ; (solicit (first (listify-nodes)) :announce :foo)
-; (solicit 340 :list-alive)
+; (solicit-wait 340 :list-alive) ; if there happens to be a node with UID 340
 ; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.) 
 
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
 ; (solicit (first (listify-nodes)) :gossip-relate :foo :baz)
-; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
+; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
 
 ;; should produce something like (:FINALREPLY "node209" "sol255" (((:BAZ :BAR) . 4))) as last *log* entry
 
