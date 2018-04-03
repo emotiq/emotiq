@@ -114,7 +114,7 @@ cd ${src} \
     && make install
 
 cd ${pbcintf} && \
-    make --makefile=${MAKETARGET} PREFIX=${prefix}
+    make --makefile=${MAKETARGET}.production PREFIX=${prefix}
 
 cd ${delivery}  # redundant?
 bash ${delivery}/${deliveryscript}
