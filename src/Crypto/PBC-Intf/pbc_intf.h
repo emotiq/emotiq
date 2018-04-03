@@ -36,10 +36,10 @@ extern "C" {
   long init_pairing(char* param_str, long nel, long* psize);
   long set_g2(unsigned char* pbuf);
   long set_g1(unsigned char* pbuf);
-  void set_secret_key (unsigned char* pbuf);
-  long set_public_key (unsigned char* pbuf);
-  void make_key_pair(unsigned char* phash, long nhash);
-  void sign_hash(unsigned char* phash, long nhash);
+  void make_key_pair(unsigned char* pskey, unsigned char* ppkey,
+		     unsigned char* phash, long nhash);
+  void sign_hash(unsigned char* psig, unsigned char* pskey,
+		 unsigned char* phash, long nhash);
   void make_public_subkey(unsigned char* abuf,
 			  unsigned char* pkey,
 			  unsigned char* phash_id, long nhash);
@@ -59,11 +59,8 @@ extern "C" {
   long sakai_kasahara_check(unsigned char* rkey, // R in G2
 			    unsigned char* pkey, // public subkey in G2
 			    unsigned char* phash, long nhash);
-  long get_secret_key(unsigned char* pbuf, long buflen);
-  long get_public_key(unsigned char* pbuf, long buflen);
   long get_g2(unsigned char* pbuf, long buflen);
   long get_g1(unsigned char* pbuf, long buflen);
-  long get_signature(unsigned char* pbuf, long buflen);
   long check_signature(unsigned char* psig,
 		       unsigned char* phash, long nhash,
 		       unsigned char *pkey);

@@ -122,26 +122,24 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------
 
-(=defun make-hmac (msg skey)
+(defun make-hmac (msg pkey skey)
   ;; Every packet sent to another node is accompanied by an HMAC that
   ;; is unforgeable. If a MITM attack occurs, the receiving node will
   ;; fail HMAC verification and just drop the incoming packet on the
   ;; floor. So MITM modifications become tantamount to a DOS attack.
-  (pbc:with-crypto (:skey skey)
-    (=values (pbc:sign-message msg))))
+  (pbc:sign-message msg pkey skey))
     
 
-(=defun verify-hmac (packet)
+(defun verify-hmac (packet)
   (let ((decoded (ignore-errors
                    ;; might not be a valid encoding
                    (loenc:decode packet))))
     (when decoded
-      (pbc:with-crypto ()
-        (when (ignore-errors
-                ;; might not be a pbc:signed-message
-                (pbc:check-message decoded))
-          ;; return the contained message
-          (=values (pbc:signed-message-msg decoded)))))
+      (when (ignore-errors
+              ;; might not be a pbc:signed-message
+              (pbc:check-message decoded))
+        ;; return the contained message
+        (pbc:signed-message-msg decoded)))
     ))
 
 ;; -----------------------------------------------------
@@ -152,24 +150,24 @@ THE SOFTWARE.
 (defparameter *shutting-down*     nil)
 
 (defun port-routing-handler (buf)
-  (=bind (packet)
+  (let ((packet (verify-hmac buf)))
+    (when packet
       ;; Every incoming packet is scrutinized for a valid HMAC. If
       ;; it checks out then the packet is dispatched to an
       ;; operation.  Otherwise it is just dropped on the floor.
-      (verify-hmac buf)
     
-    ;; we can only arrive here if the incoming buffer held a valid
-    ;; packet
-    (ignore-errors
-      ;; might not be a properly destructurable packet
-      (destructuring-bind (dest &rest msg) packet
-        (let ((true-dest (dest-ip dest)))
-          ;; for debug... -------------------
-          (when (eq true-dest (node-self *my-node*))
-            (pr (format nil "forwarding-to-me: ~A" msg)))
-          ;; ------------------
-          (apply 'send true-dest msg)))
-      )))
+      ;; we can only arrive here if the incoming buffer held a valid
+      ;; packet
+      (ignore-errors
+        ;; might not be a properly destructurable packet
+        (destructuring-bind (dest &rest msg) packet
+          (let ((true-dest (dest-ip dest)))
+            ;; for debug... -------------------
+            (when (eq true-dest (node-self *my-node*))
+              (pr (format nil "forwarding-to-me: ~A" msg)))
+            ;; ------------------
+            (apply 'send true-dest msg)))
+        ))))
     
 (defun port-router (buf)
   (let ((handler (load-time-value
@@ -182,8 +180,9 @@ THE SOFTWARE.
     (internal-send-socket *local-ip* port "ShutDown")))
 
 (defun socket-send (ip real-ip real-port msg)
-  (=bind (packet)
-      (make-hmac (list* ip msg) (node-skey *my-node*))
+  (let ((packet (make-hmac (list* ip msg)
+                           (node-pkey *my-node*)
+                           (node-skey *my-node*))))
     (internal-send-socket real-ip real-port
                           (loenc:encode packet))))
 
@@ -207,6 +206,7 @@ THE SOFTWARE.
   (defun socket-send (ip real-ip msg)
     ;; replace this with USOCKETS protocol
     (let* ((tuple    (make-hmac msg
+                                (node-pkey *my-node*)
                                 (node-skey *my-node*)))
            (agent-ip (format nil "eval@~A" real-ip)))
       ;; (format t "~%SOCKET-SEND: ~A ~A ~A" ip real-ip msg)

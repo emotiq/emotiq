@@ -84,26 +84,22 @@ THE SOFTWARE.
              (kcoffs     (1+ byz-frac))
              (q          (get-order))
              (coffs      (loop repeat kcoffs collect (random-between 1 q)))
-             (shares     (mapcar (um:curry 'poly q coffs) xvals)))
-        (=bind (proofs)
-            (with-crypto ()
-              (=values (mapcar (um:curry 'mul-pt-zr (get-g1)) shares)))
-          (=bind (enc-shares)
-              (with-crypto ()
-                (=values (mapcar 'mul-pt-zr (coerce grp 'list) shares)))
-            (let* ((msg  (list :subgroup-commit
-                               (node-assoc-pkey node)
-                               (make-subgroup-commit
-                                :thresh      kcoffs
-                                :encr-shares enc-shares
-                                :proofs      proofs))))
-              (broadcast-message msg grp)
-              (setf *rh-state* (make-rh-server-state
-                                :byz-frac    byz-frac
-                                :grp         grp
-                                :config      config
-                                :reply-to    reply-to))
-              )))))))
+             (shares     (mapcar (um:curry 'poly q coffs) xvals))
+             (proofs     (mapcar (um:curry 'mul-pt-zr (get-g1)) shares))
+             (enc-shares (mapcar 'mul-pt-zr (coerce grp 'list) shares))
+             (msg  (list :subgroup-commit
+                         (node-assoc-pkey node)
+                         (make-subgroup-commit
+                          :thresh      kcoffs
+                          :encr-shares enc-shares
+                          :proofs      proofs))))
+        (broadcast-message msg grp)
+        (setf *rh-state* (make-rh-server-state
+                          :byz-frac    byz-frac
+                          :grp         grp
+                          :config      config
+                          :reply-to    reply-to))
+        ))))
 
 (defun invwt (q n xj)
   (with-mod q
@@ -140,44 +136,37 @@ THE SOFTWARE.
 (defun rh-serve-validate-commit (node reply-to commit)
   (when (and *rh-state*
              (not (gethash (int reply-to) (rh-server-state-commits *rh-state*))))
-    (=bind (t/f)
-        (with-crypto ()
-          (=values (chk-proofs (subgroup-commit-proofs commit)
-                               (subgroup-commit-encr-shares commit)
-                               (rh-server-state-grp *rh-state*))))
-      (when t/f
-        (let* ((q       (get-order))
-               (ngrp    (length (rh-server-state-grp *rh-state*)))
-               (kcheck  (- ngrp (rh-server-state-byz-frac *rh-state*) 1))
-               (xvals   (um:range 1 (1+ ngrp)))
-               (coffs   (loop repeat kcheck collect (random-between 1 q)))
-               (chks    (mapcar (um:curry 'poly q coffs) xvals))
-               (invwts  (mapcar (um:curry 'invwt q ngrp) xvals))
-               (chkv    (with-mod q
-                          (mapcar 'm/ chks invwts))))
-          (=bind (chk)
-              (with-crypto ()
-                (=values (dotprod-g1-zr (subgroup-commit-proofs commit)
-                                        chkv)))
-            (when (zerop (int chk))
-              (setf (gethash (int reply-to) (rh-server-state-commits *rh-state*))
-                    commit)
-              (let* ((my-pkey   (node-assoc-pkey node))
-                     (my-grp    (rh-server-state-grp *rh-state*))
-                     (my-index  (position (int my-pkey) my-grp
-                                          :key 'int))
-                     (my-share   (aref (coerce (subgroup-commit-encr-shares commit) 'vector)
-                                       my-index)))
-                (=bind (decr-share)
-                    (with-crypto ()
-                      (=values (mul-pt-zr my-share
-                                          (inv-zr (node-secret-key (node-assoc-pkey node))))))
-                  (let* ((msg   (list :subgroup-decrypted-share
-                                      reply-to      ;; pkey of shares generator node
-                                      my-pkey       ;; who decrypted this share
-                                      decr-share))) ;; decrypted share (G2 point)
-                    (broadcast-message msg my-grp)
-                    ))))))))))
+    (when (chk-proofs (subgroup-commit-proofs commit)
+                      (subgroup-commit-encr-shares commit)
+                      (rh-server-state-grp *rh-state*))
+      (let* ((q       (get-order))
+             (ngrp    (length (rh-server-state-grp *rh-state*)))
+             (kcheck  (- ngrp (rh-server-state-byz-frac *rh-state*) 1))
+             (xvals   (um:range 1 (1+ ngrp)))
+             (coffs   (loop repeat kcheck collect (random-between 1 q)))
+             (chks    (mapcar (um:curry 'poly q coffs) xvals))
+             (invwts  (mapcar (um:curry 'invwt q ngrp) xvals))
+             (chkv    (with-mod q
+                                (mapcar 'm/ chks invwts)))
+             (chk     (dotprod-g1-zr (subgroup-commit-proofs commit)
+                                     chkv)))
+        (when (zerop (int chk))
+          (setf (gethash (int reply-to) (rh-server-state-commits *rh-state*))
+                commit)
+          (let* ((my-pkey   (node-assoc-pkey node))
+                 (my-grp    (rh-server-state-grp *rh-state*))
+                 (my-index  (position (int my-pkey) my-grp
+                                      :key 'int))
+                 (my-share   (aref (coerce (subgroup-commit-encr-shares commit) 'vector)
+                                   my-index))
+                 (decr-share (mul-pt-zr my-share
+                                        (inv-zr (node-secret-key (node-assoc-pkey node))))))
+            (let* ((msg   (list :subgroup-decrypted-share
+                                reply-to      ;; pkey of shares generator node
+                                my-pkey       ;; who decrypted this share
+                                decr-share))) ;; decrypted share (G2 point)
+              (broadcast-message msg my-grp)
+              )))))))
     
 (defun position-in-group (pkey grp)
   (position (int pkey) grp
@@ -241,21 +230,16 @@ THE SOFTWARE.
                                       (let ((ix (1+ (position-in-group pkey grp))))
                                         (iter (cdr shs) (cons (cons ix share) lst))))
                                     )))
-                       (q         (get-order)))
-                  (=bind (entropy)
-                      (with-crypto ()
-                        (=values (lagrange-interp q pairs)))
-                    (let* ((byz-frac  (rh-server-state-byz-frac *rh-state*))
-                           (thresh    (1+ (* 2 byz-frac))))
-                      (push entropy (rh-server-state-entropy *rh-state*))
-                      (when (>= (length (rh-server-state-entropy *rh-state*)) thresh)
-                        (=bind (total-entropy)
-                            (with-crypto ()
-                              (=values (reduce 'add-pts (rh-server-state-entropy *rh-state*))))
-                          (setf (rh-server-state-grp-entropy *rh-state*) total-entropy)
-                          (gossip-entropy total-entropy))
-                        )))
-                  ))))
-          )))))
+                       (q         (get-order))
+                       (entropy   (lagrange-interp q pairs))
+                       (byz-frac  (rh-server-state-byz-frac *rh-state*))
+                       (thresh    (1+ (* 2 byz-frac))))
+                  (push entropy (rh-server-state-entropy *rh-state*))
+                  (when (>= (length (rh-server-state-entropy *rh-state*)) thresh)
+                    (let ((total-entropy (reduce 'add-pts (rh-server-state-entropy *rh-state*))))
+                      (setf (rh-server-state-grp-entropy *rh-state*) total-entropy)
+                      (gossip-entropy total-entropy))
+                    )))
+              )))))))
                               
       

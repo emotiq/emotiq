@@ -57,14 +57,9 @@ THE SOFTWARE.
    
    :init-pairing
    :set-generator  ;; 1 each for G1, and G2 groups
-   :set-public-key
-   :set-secret-key
    
    :get-g1
    :get-g2
-   :get-signature
-   :get-public-key
-   :get-secret-key
    :get-order
    
    :make-key-pair
@@ -78,9 +73,6 @@ THE SOFTWARE.
    :sign-message       ;; BLS Sigs
    :check-message
    :combine-signatures ;; for BLS MultiSigs
-
-   :with-crypto
-   :ask-crypto
 
    :compute-pairing
    :mul-pts  ;; bent nomenclature for ECC
@@ -173,8 +165,10 @@ THE SOFTWARE.
 ;; Keying interface
 
 (cffi:defcfun ("make_key_pair" _make-key-pair) :void
-  (pbuf   :pointer :unsigned-char)
-  (nel    :long))
+  (skbuf  :pointer :unsigned-char)
+  (pkbuf  :pointer :unsigned-char)
+  (hbuf   :pointer :unsigned-char)
+  (nhash  :long))
 
 (cffi:defcfun ("make_public_subkey" _make-public-subkey) :void
   (abuf   :pointer :unsigned-char)
@@ -209,30 +203,14 @@ THE SOFTWARE.
   (hbuf   :pointer :unsigned-char)  ;; hash(ID, msg)
   (hlen   :long))
 
-(cffi:defcfun ("get_secret_key" _get-secret-key) :long
-  (pbuf        (:pointer :void))
-  (nbuf        :long))
-
-(cffi:defcfun ("get_public_key" _get-public-key) :long
-  (pbuf        (:pointer :void))
-  (nbuf        :long))
-
-(cffi:defcfun ("set_secret_key" _set-secret-key) :void
-  (sbuf  :pointer :unsigned-char))
-
-(cffi:defcfun ("set_public_key" _set-public-key) :void
-  (pbuf  :pointer :unsigned-char))
-
 ;; -------------------------------------------------
 ;; BLS Signatures
 
 (cffi:defcfun ("sign_hash" _sign-hash) :void
+  (sig    :pointer :unsigned-char)
+  (skbuf  :pointer :unsigned-char)
   (pbuf   :pointer :unsigned-char)
   (nbuf   :long))
-
-(cffi:defcfun ("get_signature" _get-signature) :long
-  (pbuf        (:pointer :void))
-  (nbuf        :long))
 
 (cffi:defcfun ("check_signature" _check-signature) :long
   (psig   :pointer :unsigned-char)
@@ -564,10 +542,7 @@ comparison.")
 
 ;; ---------------------------------------------------------------------------------------
 
-(defparameter *curve*    nil)
-
-(defparameter *g2-init*  nil) ;; t if we have done set-generator
-(defparameter *zr-init*  nil) ;; t if we have done set-secret-key
+(defparameter *curve*      nil)
 
 (define-symbol-macro *curve-order*   (curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
 (define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
@@ -583,46 +558,38 @@ comparison.")
   (unless *curve*
     (init-pairing)))
 
-(defun need-keying ()
-  (need-pairing)
-  (unless *zr-init*
-    (error "Keying not established. Use SET-SECRET-KEY.")))
-
-(defun need-generator ()
-  (need-pairing)
-  (unless *g2-init*
-    (error "Generator not established. Use SET-GENERATOR.")))
-
 ;; -------------------------------------------------
 
+(defvar *crypto-lock*  (mpcompat:make-lock)
+  "Used to protect internal startup routines from multiple access")
+
 (defun init-pairing (&optional (params *curve-fr256-params*))
-  (setf *G2-init* nil
-        *Zr-init* nil
-        *curve*   nil)
-  (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
-                                              (g1  g1)
-                                              (g2  g2)) params)
-             (ntxt   (length txt)))
-    
-    (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
-      (cffi:with-foreign-string (ctxt txt
-                                      :encoding :ASCII)
-      (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
-      (setf *curve* params
-            *g1-size*  (cffi:mem-aref ansbuf :long 0)
-            *g2-size*  (cffi:mem-aref ansbuf :long 1)
-            *gt-size*  (cffi:mem-aref ansbuf :long 2)
-            *zr-size*  (cffi:mem-aref ansbuf :long 3)
-            *curve-order* nil)
-      (if g1
-          (set-generator g1)
-        (setf *g1* (get-g1)))
-      (if g2
-          (set-generator g2)
-        (setf *g2* (get-g2)))
-      (get-order)
-      (values)
-      ))))
+  (mpcompat:with-lock (*crypto-lock*)
+    (setf *curve* nil)
+    (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
+                                                (g1  g1)
+                                                (g2  g2)) params)
+               (ntxt   (length txt)))
+      
+      (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
+        (cffi:with-foreign-string (ctxt txt
+                                        :encoding :ASCII)
+          (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
+          (setf *curve* params
+                *g1-size*  (cffi:mem-aref ansbuf :long 0)
+                *g2-size*  (cffi:mem-aref ansbuf :long 1)
+                *gt-size*  (cffi:mem-aref ansbuf :long 2)
+                *zr-size*  (cffi:mem-aref ansbuf :long 3)
+                *curve-order* nil)
+          (if g1
+              (set-generator g1)
+            (setf *g1* (get-g1)))
+          (if g2
+              (set-generator g2)
+            (setf *g2* (get-g2)))
+          (get-order)
+          (values)
+          )))))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
@@ -698,18 +665,6 @@ comparison.")
                            :pt (get-element *g2-size* '_get-g2))
             )))
 
-(defun get-signature ()
-  (make-instance 'signature
-   :val (get-element *g1-size* '_get-signature)))
-
-(defun get-public-key ()
-  (make-instance 'public-key
-   :val (get-element *g2-size* '_get-public-key)))
-
-(defun get-secret-key ()
-  (make-instance 'secret-key
-   :val (get-element *zr-size* '_get-secret-key)))
-
 (defun get-order ()
   ;; retuns an integer
   (or *curve-order*
@@ -722,6 +677,14 @@ comparison.")
             )))
 
 ;; -------------------------------------------------
+;; NOTE: Mapping hash values to Elliptic curves using the mapping
+;; first to the finite field, then multiplying by a curve generator is
+;; *COMPLETELY UNSAFE* for signature generation when the pairing is
+;; symmetric. Anyone could forge a signature on any message.
+;;
+;; Thankfully, for security reasons, we use asymmetric BN pairing
+;; curves and this insecurity is not present in our system.
+;;
 
 (defmethod mod-hash ((hash hash) nb)
   ;; the PBC library has a terrible inconsistency once the hash value
@@ -777,9 +740,10 @@ comparison.")
 (defmethod set-element ((x crypto-val) set-fn nb)
   ;; internal routine
   (need-pairing)
-  (let ((bytes (crypto-val-vec x)))
-    (with-fli-buffers ((buf nb bytes))
-      (funcall set-fn buf))))
+  (mpcompat:with-lock (*crypto-lock*)
+    (let ((bytes (crypto-val-vec x)))
+      (with-fli-buffers ((buf nb bytes))
+        (funcall set-fn buf)))))
 
 (defmethod set-generator ((g1 g1-cmpr))
   (setf *g1* g1)
@@ -787,31 +751,24 @@ comparison.")
 
 (defmethod set-generator ((g2 g2-cmpr))
   (setf *g2* g2)
-  (set-element g2 '_set-g2 *g2-size*)
-  (setf *g2-init* t))
-
-(defmethod set-public-key ((pkey public-key))
-  (set-element pkey '_set-public-key *g2-size*))
-
-(defmethod set-secret-key ((skey secret-key))
-  (need-generator)
-  (set-element skey '_set-secret-key *zr-size*)
-  (setf *zr-init* t))
+  (set-element g2 '_set-g2 *g2-size*))
 
 ;; -------------------------------------------------
 
-(defmethod sign-hash ((hash hash))
+(defmethod sign-hash ((hash hash) (skey secret-key))
   ;; hash-bytes is UB8V
-  (need-keying)
+  (need-pairing)
   (let ((nhash (hash-length hash)))
-    (with-fli-buffers ((hbuf nhash hash))
-      (_sign-hash hbuf nhash)
-      (get-signature)
+    (with-fli-buffers ((sigbuf *g1-size*)
+                       (skbuf  *zr-size* skey)
+                       (hbuf nhash hash))
+      (_sign-hash sigbuf skbuf hbuf nhash)
+      (make-instance 'signature
+                     :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
 
 (defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   ;; hash-bytes is UB8V
-  (need-generator)
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sbuf *g1-size*  sig)
                        (hbuf nhash      hash)
@@ -831,11 +788,11 @@ comparison.")
           :initarg :pkey)
    ))
 
-(defun sign-message (msg)
+(defun sign-message (msg pkey skey)
   (make-instance 'signed-message
                  :msg  msg
-                 :sig  (sign-hash (hash/256 msg))
-                 :pkey (get-public-key)))
+                 :sig  (sign-hash (hash/256 msg) skey)
+                 :pkey pkey))
 
 (defmethod check-message ((sm signed-message))
   (check-hash (hash/256 (signed-message-msg sm))
@@ -855,14 +812,17 @@ comparison.")
 
 (defun make-key-pair (seed)
   ;; seed can be literally anything at all...
-  (need-generator)
+  (need-pairing)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
-    (with-fli-buffers ((hbuf hlen (mod-hash hsh hlen)))
-      (_make-key-pair hbuf hlen)
-      (setf *zr-init* t)
-      (let* ((pkey (get-public-key)) ;; public key
-             (skey (get-secret-key)) ;; secret key
-             (sig  (sign-hash (hash/256 pkey)))) ;; signature on public key
+    (with-fli-buffers ((sbuf *zr-size*)
+                       (pbuf *g2-size*)
+                       (hbuf hlen (mod-hash hsh hlen)))
+      (_make-key-pair sbuf pbuf hbuf hlen)
+      (let* ((pkey (make-instance 'public-key
+                                  :val (xfer-foreign-to-lisp pbuf *g2-size*)))
+             (skey (make-instance 'secret-key
+                                  :val (xfer-foreign-to-lisp sbuf *zr-size*)))
+             (sig  (sign-hash (hash/256 pkey) skey))) ;; signature on public key
         ;; return 3 values: public key, signature on public key, secret key
         (make-instance 'keying-triple
                        :pkey pkey
@@ -879,7 +839,6 @@ comparison.")
 ;; Sakai-Haskara Encryption
 
 (defmethod make-public-subkey ((pkey public-key) seed)
-  (need-generator)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((hbuf hlen      (mod-hash hsh hlen))
                        (pbuf *g2-size* (public-key-val pkey))
@@ -889,7 +848,6 @@ comparison.")
                      :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
-  (need-generator)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((hbuf hlen      (mod-hash hsh hlen))
                        (sbuf *zr-size* (secret-key-val skey))
@@ -919,7 +877,6 @@ comparison.")
   ;; Asymmetric encryption is intended only for short messages, like
   ;; keying material. Use symmetric encryption for bulk message
   ;; encryption. But this will work regardless.
-  (need-generator)
   (let* ((pkid      (make-public-subkey pkey id))
          (tstamp    (construct-bev (uuid:uuid-to-byte-array
                                     (uuid:make-v1-uuid))))
@@ -955,7 +912,6 @@ comparison.")
         ))))
                              
 (defmethod ibe-decrypt ((cx crypto-packet) (skey secret-key))
-  (need-generator)
   (with-accessors ((pkey   crypto-packet-pkey)
                    (id     crypto-packet-id)
                    (tstamp crypto-packet-tstamp)
@@ -1215,61 +1171,4 @@ comparison.")
       ))))
 
 |#
-
-;; ------------------------------------------------------
-;;
-;; The PBC & GNU MP libs are possibly not thread-safe nor reentrant.
-;; The PBC interface in LibLispPBCInterface is certainly not
-;; reentrant, as it depends on C global values. And it is not
-;; thread-safe since those globals could change from activities in
-;; other threads.
-;;
-;; Hence we need a way to ensure that all use of it goes through a
-;; single thread. Actors to the resuce...
-;;
-;; Note that because of activities requested by other client code, the
-;; values of PBC elements may be arbitrary. If you need a known
-;; environment, you should reestablish it on entry. This applies
-;; in particular to the secret and public keying in effect.
-
-(defun do-with-pbc-exclusive (fn skey pkey)
-  (um:critical-section
-    (when skey
-      (set-secret-key skey))
-    (when pkey
-      (set-public-key pkey))
-    (funcall fn)))
-
-(defun ado-with-pbc-exclusive (fn skey pkey)
-  ;; support parallelism better with an Actor service
-  ;; instead of blocking-wait lock
-  (let ((handler (load-time-value
-                  (ac:make-actor 'do-with-pbc-exclusive))))
-    (ac:send handler fn skey pkey)))
-
-(defmacro with-crypto ((&key skey pkey) &body body)
-  `(ado-with-pbc-exclusive (lambda ()
-                            ,@body)
-                          ,skey ,pkey))
-
-#+:LISPWORKS
-(editor:setup-indent "with-crypto" 1)
-
-
-(defun do-ask-crypto (fn skey pkey)
-  (let ((mbox (mp:make-mailbox)))
-    (with-crypto (:skey skey
-                  :pkey pkey)
-      (mp:mailbox-send mbox
-                       (um:capture-ans-or-exn fn)))
-    (um:recover-ans-or-exn (mp:mailbox-read mbox))))
-
-(defmacro ask-crypto ((&key skey pkey) &body body)
-  `(do-ask-crypto (lambda ()
-                    ,@body)
-                  ,skey ,pkey))
-
-#+:LISPWORKS
-(editor:setup-indent "ask-crypto" 1)
-
 
