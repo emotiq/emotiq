@@ -11,15 +11,15 @@
 ;;; New mechanism: Interim replies instead of carefully-timed timeouts.
 
 ;;;; TODO:
-;;; Change gossip-lookup-key to use the new mechanism now used by count-alive.
+;;; Change gossip-lookup-key to use the new mechanism now used by list-alive.
 ;;; Reorganize code after all the recent chaos.
 
 ;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
 
 (in-package :gossip)
 
-(defparameter *max-message-age* 10 "Messages older than this number of seconds will be ignored")
-(defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
+(defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
+(defparameter *max-seconds-to-wait* 30 "Max seconds to wait for all replies to come in")
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *delay-intermediate-replies* t "True to delay intermediate replies.
@@ -32,8 +32,20 @@
    (let ((logcmdname (symbol-name logcmd)))
      (notany (lambda (x) (search x logcmdname :test #'char-equal)) strings))))
 
+(defun log-include (&rest strings)
+  "Allow log messages whose logcmd contains any of the given strings. Case-insensitive."
+ (lambda (logcmd)
+   (let ((logcmdname (symbol-name logcmd)))
+     (some (lambda (x) (search x logcmdname :test #'char-equal)) strings))))
+
 ;; Ex: Don't log any messages that contain "WAIT" or "ACCEPT"
 ;; (setf *log-filter* (log-exclude "WAIT" "ACCEPT" "IGNORE"))
+
+;; Ex: Don't log any messages that contain "COALESCE"
+;; (setf *log-filter* (log-exclude "COALESCE"))
+
+;; Ex: Include only :FINALREPLY messages
+;; (setf *log-filter* (log-include "FINALREPLY"))
 
 (defun new-uid ()
   (incf *last-uid*))
@@ -391,8 +403,7 @@
   (clrhash *nodes*)
   (load pathname))
 
-;;;; Graph saving/restoring routines
-
+;;;; End of Graph saving/restoring routines
 
 (defun solicit (node kind &rest args)
   "Send a solicitation to the network starting with given node. This is the primary interface to 
@@ -402,16 +413,86 @@
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
   (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
                  (uid node)
+                 node)))
+    (let* ((solicitation (make-solicitation
+                          :kind kind
+                          :args args))
+           (soluid (uid solicitation)))
+      (send-msg solicitation
+                uid      ; destination
+                nil)     ; srcuid
+      soluid)))
+
+;;; TODO: Need to revise these to still work if *log-filter* is nil; i.e.
+;;;   it needs to look at the actual reply message.
+(defun solicit-wait (node kind &rest args)
+  "Like solicit but waits for a reply.
+  Don't use this on messages that don't expect a reply, because it'll wait forever."
+  (unless node
+    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
+  (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+                 (uid node)
                  node))
         (node (if (typep node 'gossip-node)
                   node
-                  (lookup-node node))))
-    (setf (logfn node) 'interactive-logging-function)
-    (send-msg (make-solicitation
-               :kind kind
-               :args args)
-              uid         ; destination
-              nil)))      ; srcuid
+                  (lookup-node node)))
+        (response nil))
+    (flet ((response-logger (logcmd nodename msgname &rest args)
+             (when (eq :FINALREPLY logcmd)
+               (setf response (apply 'default-logging-function logcmd nodename msgname args)))))
+      ; (setf (logfn node) 'interactive-logging-function) ; use this if you want to print all replies to this node
+      (setf (logfn node) #'response-logger)
+      (let* ((solicitation (make-solicitation
+                            :kind kind
+                            :args args))
+             (soluid (uid solicitation)))
+        (send-msg solicitation
+                  uid      ; destination
+                  nil)     ; srcuid
+        (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
+                                            (lambda () response))
+        (values response soluid)))))
+
+(defun solicit-progress (node kind &rest args)
+  "Like solicit-wait but prints periodic progress log messages (if any)
+   associated with this node to listener."
+  (unless node
+    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
+  (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+                 (uid node)
+                 node))
+        (node (if (typep node 'gossip-node)
+                  node
+                  (lookup-node node)))
+        (response nil))
+    (flet ((response-logger (logcmd nodename msgname &rest args)
+             (let ((logmsg (apply 'interactive-logging-function logcmd nodename msgname args)))
+               (when (eq :FINALREPLY logcmd)
+                 (setf response logmsg)))))
+      (setf (logfn node) #'response-logger)
+      (let* ((solicitation (make-solicitation
+                            :kind kind
+                            :args args))
+             (soluid (uid solicitation)))
+        (send-msg solicitation
+                  uid      ; destination
+                  nil)     ; srcuid
+        (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
+                                            (lambda () response))
+        (values response soluid)))))
+
+(defun interactive-logging-function (logcmd nodename msgname &rest args)
+  "Use this logging function for interactive debugging. You'll probably only want to use this
+  in the node you called #'solicit on."
+  (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
+         (logstring (format nil "~S~%" logmsg)))
+    #+CCL
+    (if (find-package :hi)
+        (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
+        (write-string logstring *standard-output*))
+    #-CCL
+    (write-string logstring *standard-output*)))
+
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
  (format nil "~A~D" prefix (uid node)))
@@ -477,7 +558,8 @@
 
 (defun interactive-logging-function (logcmd nodename msgname &rest args)
   "Use this logging function for interactive debugging. You'll probably only want to use this
-  in the mode you called #'solicit on."
+  in the mode you called #'solicit on.
+  Returns the form that default-logging-function returned."
   (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
          (logstring (format nil "~S~%" logmsg)))
     #+CCL
@@ -485,7 +567,8 @@
         (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
         (write-string logstring *standard-output*))
     #-CCL
-    (write-string logstring *standard-output*)))
+    (write-string logstring *standard-output*)
+    logmsg))
   
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (unless (or (null srcuid)
@@ -778,14 +861,62 @@
 
 ;; REPLY-NECESSARY methods. Three methods per message
 
-;;;; Count-alive
+;;;; List-Alive
+(defmethod list-alive ((msg solicitation) (thisnode gossip-node) srcuid)
+  "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
+  (let* ((soluid (uid msg))
+         (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
+         (timer nil)
+         (cleanup (make-timeout-handler thisnode msg :list-alive)))
+    (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
+    (cond (downstream
+           (prepare-repliers thisnode soluid downstream)
+           (forward msg thisnode downstream)
+           ; wait a finite time for all replies
+           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+           (kvs:relate-unique! (timers thisnode) soluid timer)
+           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
+           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
+          (t ; this is a leaf node. Just reply upstream.
+           (funcall cleanup nil)))))
+
+(defmethod list-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
+  "Handler for interim replies of type :list-alive. These will come from children of a given node.
+  Incoming interim-replies never change the local reply-cache. Rather, they
+  coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
+  (let* ((soluid (solicitation-uid rep)))
+    ; First record the reply including its data appropriately
+    (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
+      ; coalesce all known data and send it upstream as another interim reply.
+      ; (if this reply is not later, drop it on the floor)
+      (if *delay-intermediate-replies*
+          (send-delayed-interim-reply thisnode :list-alive soluid)
+          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
+            (send-interim-reply thisnode :list-alive soluid upstream-source))))))
+
+(defmethod list-alive ((rep final-reply) (thisnode gossip-node) srcuid)
+  "Handler for final replies of type :list-alive. These will come from children of a given node.
+  Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
+  Furthermore, they remove srcuid from downstream for this soluid.
+  Furthermore, they always cause either an interim reply or a final reply to be sent upstream,
+  depending on whether no further replies are expected or not."
+  (let* ((soluid (solicitation-uid rep))
+         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
+         (coalescer (coalescer :LIST-ALIVE)))
+    ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
+    (kvs:relate-unique! (reply-cache thisnode)
+                        soluid
+                        (funcall coalescer local-data (first (args rep))))
+    (cancel-replier thisnode :list-alive soluid srcuid)))
+
+;;;; Count-Alive
 (defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
   (let* ((soluid (uid msg))
          (downstream (remove srcuid (neighbors thisnode))) ; don't forward to the source of this solicitation
          (timer nil)
          (cleanup (make-timeout-handler thisnode msg :count-alive)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
+    (kvs:relate-unique! (reply-cache thisnode) soluid 1) ; thisnode itself is 1 live node
     (cond (downstream
            (prepare-repliers thisnode soluid downstream)
            (forward msg thisnode downstream)
@@ -819,7 +950,7 @@
   depending on whether no further replies are expected or not."
   (let* ((soluid (solicitation-uid rep))
          (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
-         (coalescer (coalescer :COUNT-ALIVE)))
+         (coalescer (coalescer :count-ALIVE)))
     ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
     (kvs:relate-unique! (reply-cache thisnode)
                         soluid
@@ -1079,12 +1210,19 @@ gets sent back, and everything will be copacetic.
       (set-previous-reply node soluid srcuid new-reply)
       t)))
 
+(defmethod coalescer ((kind (eql :LIST-ALIVE)))
+  "Proper coalescer for :list-alive responses. Might
+   want to add a call to remove-duplicates here if we start
+   doing a less deterministic gossip protocol (one not guaranteed to fully cover the graph,
+   and also not guaranteed not to contain redundancies)."
+  'append)
+
 (defmethod coalescer ((kind (eql :COUNT-ALIVE)))
   "Proper coalescer for :count-alive responses. Might
    want to add a call to remove-duplicates here if we start
    doing a less deterministic gossip protocol (one not guaranteed to fully cover the graph,
    and also not guaranteed not to contain redundancies)."
-  'append)
+  '+)
 
 (defmethod coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
   "Proper coalescer for :GOSSIP-LOOKUP-KEY responses."
@@ -1099,12 +1237,12 @@ gets sent back, and everything will be copacetic.
          (interim-data (when interim-table (loop for reply being each hash-value of interim-table
                          while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    ;;(maybe-log node :COALESCE interim-data local-data)
+    (maybe-log node :COALESCE interim-data local-data)
     (let ((coalesced-output
            (reduce coalescer
             interim-data
             :initial-value local-data)))
-      ;;(maybe-log node :COALESCED-OUTPUT coalesced-output)
+      (maybe-log node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1126,9 +1264,9 @@ gets sent back, and everything will be copacetic.
 
 ;;;; END OF REPLY SUPPORT ROUTINES
 
-; For debugging count-alive
+; For debugging list-alive
 (defun missing? (alive-list)
-  "Returns a list of node UIDs that are missing from a list returned by count-alive"
+  "Returns a list of node UIDs that are missing from a list returned by list-alive"
   (let ((dead-list nil))
     (maphash (lambda (key value)
                (declare (ignore value))
@@ -1136,7 +1274,6 @@ gets sent back, and everything will be copacetic.
                  (push key dead-list)))
              *nodes*)
     (sort dead-list #'<)))
-
 
 
 ; NOT DONE YET
@@ -1201,13 +1338,15 @@ gets sent back, and everything will be copacetic.
 ; (visualize-nodes *nodes*)  ; probably not a great idea for >100 nodes
 
 ; (run-gossip-sim)
-; (solicit (first (listify-nodes)) :count-alive)
+; (solicit-wait (first (listify-nodes)) :list-alive)
+; (solicit-progress (first (listify-nodes)) :list-alive)
+; (solicit-wait (first (listify-nodes)) :count-alive)
 ; (solicit (first (listify-nodes)) :announce :foo)
-; (solicit 340 :count-alive)
+; (solicit 340 :list-alive)
 ; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.) 
 
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
-; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
+; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
 ; (solicit (first (listify-nodes)) :gossip-relate :foo :baz)
 ; (solicit (first (listify-nodes)) :gossip-lookup-key :foo)
 
@@ -1244,6 +1383,6 @@ gets sent back, and everything will be copacetic.
 (save-node node *standard-output*)
 
 #+IGNORE
-(setf msg (make-solicitation :kind :count-alive))
+(setf msg (make-solicitation :kind :list-alive))
 #+IGNORE
 (copy-message msg)
