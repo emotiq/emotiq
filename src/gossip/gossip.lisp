@@ -26,6 +26,15 @@
   Should be true, especially on larger networks. Reduces unnecessary intermediate-replies while still ensuring
   some partial information is propagating in case of node failures.")
 
+(defun make-uid-mapper ()
+  "Returns a table that maps UIDs to objects"
+  (kvs:make-store ':hashtable :test 'equal))
+
+#+LISPWORKS
+(hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
+#+CCL
+(ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
+
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
  (lambda (logcmd)
@@ -53,9 +62,7 @@
 (defun uid? (thing)
   (integerp thing))
 
-(defun make-uid-mapper ()
-  "Returns a table that maps UIDs to objects"
-  (kvs:make-store ':hashtable :test 'equal))
+
 
 (defclass uid-mixin ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
@@ -538,11 +545,6 @@
                (briefname msg)
                args)))))
 
-#+LW
-(hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
-#+CCL
-(ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
-
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
 
@@ -715,7 +717,7 @@
       (ac::schedule-timer-relative timer (ceiling delta)) ; delta MUST be an integer number of seconds here
       timer)))
 
-(defmethod make-timeout-handler ((node gossip-node) (msg solicitation) (kind keyword))
+(defmethod make-timeout-handler ((node gossip-node) (msg solicitation) #-LISPWORKS (kind keyword) #+LISPWORKS (kind symbol))
   (let ((soluid (uid msg)))
     (lambda (timed-out-p)
       "Cleanup operations if timeout happens, or all expected replies come in."

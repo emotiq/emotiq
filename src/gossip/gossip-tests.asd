@@ -1,6 +1,6 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
-(defsystem "gossip-test"
+(defsystem "gossip-tests"
   :version "0.0.1"
   :description "Gossip Tests"
   :author "Copyright (c) 2018 Emotiq AG"
@@ -16,4 +16,4 @@
                (:module tests
                         :depends-on (package)
                         :pathname "tests/"
-                        :components ((:file "gossip-test")))))
+                        :components ((:file "gossip-tests")))))

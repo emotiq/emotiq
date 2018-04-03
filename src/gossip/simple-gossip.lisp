@@ -12,6 +12,8 @@
 (defparameter *seconds-to-wait* *max-seconds-to-wait* "Seconds to wait for a particular reply")
 (defparameter *hop-factor* 0.9 "Decrease *seconds-to-wait* by this factor for every added hop. Must be less than 1.0.")
 
+(defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
+
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 
 (defun new-uid ()
@@ -326,6 +328,9 @@
 (defun make-queue ()
   (cons nil nil))
 
+(defvar *message-space* (make-queue) "Queue of outgoing messages from local machine.")
+(defvar *message-space-lock* (mpcompat:make-lock) "Just a lock to manage access to the message space")
+
 (defun enq (obj q)
   (if (null (car q))
     (setf (cdr q) (setf (car q) (list obj)))
@@ -335,10 +340,6 @@
 
 (defun deq (q)
   (pop (car q)))
-
-(defvar *message-space* (make-queue) "Queue of outgoing messages from local machine.")
-(defvar *message-space-lock* (mpcompat:make-lock) "Just a lock to manage access to the message space")
-(defvar *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))

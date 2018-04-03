@@ -1,6 +1,6 @@
 ;;; gossip-tests.lisp
 
-(in-package :gossip-test)
+(in-package :gossip-tests)
 
 (REMOVE-TESTS :ALL)
 
