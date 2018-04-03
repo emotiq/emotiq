@@ -128,7 +128,7 @@ THE SOFTWARE.
   ;(format *standard-output* "before setf, LD_LIBRARY_PATH is /~A/~%" (lw:environment-variable "LD_LIBRARY_PATH"))
   ;(setf (lw:environment-variable "LD_LIBRARY_PATH") ".")
   ;(format *standard-output* "after setf, LD_LIBRARY_PATH is /~A/~%" (lw:environment-variable "LD_LIBRARY_PATH"))
-  (if (emotiq:production-p)
+  (if production
       ;; (cffi:define-foreign-library libpbc
       ;;   (:darwin "./libLispPBCIntf.dylib")
       ;;   (:linux "./libLispPBCIntf.so")
@@ -604,8 +604,15 @@ comparison.")
 
 (defun need-pairing ()
   (unless *curve*
+    (format *standard-output* "2a: alloc=~a~%" (hcl:total-allocation))
+    ;(cl:room)
     (init-libraries (emotiq:production-p))
-    (init-pairing)))
+    (format *standard-output* "2b: alloc=~a~%" (hcl:total-allocation))
+    ;(cl:room)
+    (init-pairing)
+    (format *standard-output* "2c: alloc=~a~%" (hcl:total-allocation))
+    ;(cl:room)
+    ))
 
 (defun need-keying ()
   (need-pairing)

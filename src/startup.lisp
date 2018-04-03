@@ -9,7 +9,8 @@
 
 (defparameter *production* nil)
 
-(defun production-p () *production*)
+(defun production-p () 
+  *production*)
 
 (defun production-start ()
   (setf *production* t)
@@ -20,11 +21,17 @@
   (start))
 
 (defun start ()
+  (format *standard-output* "1: alloc=%a~%" (hcl:total-allocation))
+  ;(cl:room)
   (if (production-p)
       (format *standard-output* "~%running production")
     (format *standard-output* "~%running development"))
-  (simple-test))
-
+  (format *standard-output* "2: alloc=%a~%" (hcl:total-allocation))
+  ;(cl:room)
+  (simple-test)
+  (format *standard-output* "3: alloc=~a~%" (hcl:total-allocation))
+  ;(cl:room)
+  )
     
 
 
