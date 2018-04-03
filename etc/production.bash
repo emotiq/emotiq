@@ -48,12 +48,14 @@ case ${uname_s} in
         MAKETARGET=makefile.linux
 	deliveryscript=deliv-linux.bash
 	prod_dir=${prefix}/production-linux
+	kind=linux
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
 	deliveryscript=deliv-macos.bash
 	prod_dir=${prefix}/production-macos
+	kind=mac
         echo Using ${MAKETARGET}
         ;;
     *)
@@ -129,7 +131,7 @@ cd ${prod_dir}
 mv ${lib}/libs.tar ${prod_dir}
 tar xf libs.tar
 # now, all dll's and emotiq are in ${prod_dir}
-cp ${etc}/emotiq.bash ${prod_dir}
+cp ${etc}/emotiq.bash.${kind} ${prod_dir}/emotiq.bash
 cd ${lib}
 rm *
 # < /test >
