@@ -135,7 +135,7 @@ THE SOFTWARE.
       ;;   (t (:default "libLispPBCIntf")))
       (cffi:define-foreign-library 
        libpbc
-       (:darwin "libLispPBCIntf")
+       (:darwin "libLispPBCIntf.dylib")
        (:linux "libLispPBCIntf.so")
        (t (:default "libLispPBCIntf")))
     (cffi:define-foreign-library 
