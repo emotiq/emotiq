@@ -19,6 +19,3 @@
                         :pathname "tests/"
                         :components ((:file "emotiq-test")
                                      (:file "blockchain-test")))))
-
-
-
