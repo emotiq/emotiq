@@ -584,6 +584,7 @@ comparison.")
 
 (defun need-pairing ()
   (unless *curve*
+    (format *standard-output* "~%initializing C code~%")
     (format *standard-output* "2a: alloc=~a~%" (hcl:total-allocation))
     ;(cl:room)
     (init-libraries (emotiq:production-p))
@@ -591,7 +592,7 @@ comparison.")
     (cl:room)
     (init-pairing)
     (format *standard-output* "2c: alloc=~a~%" (hcl:total-allocation))
-    ;(cl:room)
+    (cl:room)
     ))
 
 ;; -------------------------------------------------
