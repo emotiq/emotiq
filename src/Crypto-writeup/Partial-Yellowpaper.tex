@@ -95,7 +95,7 @@ Private keys belong to the finite field $Z_r$ with the same prime order. Public 
 
 The complete specification of the Emotiq cryptosystem requires knowledge of all curve pairing parameters, plus two chosen generators $U \in G_1$, and $V \in G_2$. 
 
-Hash values are mapped into fields and groups in a secure manner,\footnote{Specifically, for $z = H(x) \in Z$, the value $z$ is mapped into $Z_n$ fields by first absorbing its entire value, with its byte vector seen as denoting a big-endian representation. Then, if the value exceeds the order, $n$, of the field, it is successively truncated by 2 until it has value below the field order. 
+Hash values are mapped into fields and groups in a secure manner,\footnote{Specifically, for $z = H(x) \in Z$, the value $z$ is mapped into $Z_n$ fields by first absorbing its entire value, with its byte vector seen as denoting a big-endian representation. Then, if the value equals or exceeds the order of the field, $n$, it is successively truncated by 2 until it has value below the field order. 
 
 For Elliptic Curve groups, the value of the field is treated as an $X \in Z_q$ coordinate for a point on the curve. If that $X$ is a valid abscissa, then its positive $Y$ counterpart is chosen. If the $X$ coordinate is not valid, then the curve is re-probed using $X^2+1$ as a new trial abscissa.} allowing proofs of security with hashing as random oracles. We denote the hash mapping as $G(H(x)) \in G$ for mapping an item $x$ being first hashed, $H(x)$, then mapped into the field or group, $G$. Hash $H(x)$ is generally SHA3/256 operating on $x$  after its conversion to a vector of bytes.
 
@@ -207,11 +207,11 @@ The validation relation proves that the buyer formed the purchase offer, and tha
 \subsection{Cryptographic Proofs}
 Cryptographic proofs can be written for almost any claim. Value range proofs can be developed to prove that a hidden quantity lies within a specific range. That will be the topic of Bulletproofs. 
 
-But in preparation for more advanced forms of cryptographic proofs, let's first just examine a method for making a claim that some value is known, and can be proven as known to anyone, without  revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
+But in preparation for more advanced forms of cryptographic proofs, let's first just examine a method for making a claim that some value is known, and can be proven to anyone as known, without  revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
 
 ZKP's require interaction. A claim is made cryptographically. A verifier challenges the claimant for proof, and the claimant provides another one or more values that can be used by the challenger to verify the claim using a simple calculation. Everything about all math relations is known to all, so everyone can agree that the computations prove a claim.
 
-ZKP's can be converted into Non-Interactive ZKP's (NIZKP)
+We can convert ZKP's  into Non-Interactive ZKP's (NIZKP)
  by using the Shamir construction, where, instead of an interactive challenge, we simply provide a hash of the transcript used in making the commitments to the value. It would be extraordinarily difficult for a claimant to produce a hash with a cunningly chosen value, and so a hash stands in for random challenges offered by validators.
 
 There are two parts to any cryptographic proof. First is making a binding claim, so that the claimant cannot change his mind and offer phony values later, just chosen to satisfy every query by the validators. We do that with Pedersen Commitments. 
@@ -250,7 +250,7 @@ $$C_\xi = \gamma_\xi \, A + \xi \, B$$
 $$C_{(x-\xi)} = \gamma_{(x-\xi)} \, A + (x - \xi)\, B$$
 $$C_x = \gamma_x \, A + x \, B$$
 
-Proof of $C_\xi$ and $C_{(x-\xi)}$ is by way of the same kind of proof we just showed above for Pedersen commitments. There is no danger to $\xi$ and $(x - \xi)$ since they come from the entire range of field $Z_r$. 
+Proof of $C_\xi$ and $C_{(x-\xi)}$ is by way of the same kind of proof we showed above for Pedersen commitments. There is no danger to $\xi$ and $(x - \xi)$ since they come from the entire range of field $Z_r$. 
 
 But to prove the $C_x$ commitment, we publish an adjustment term, $\gamma_{adj}$ in the $A$ curve, which only someone who knows all of the $\gamma$ hiding factors could have created,
 $$\gamma_{adj} = \gamma_x - (\gamma_\xi + \gamma_{(x-\xi)}) \in Z_r$$
@@ -258,10 +258,19 @@ Then the validator sees that
 $$C_x = C_\xi + C_{(x-\xi)} + \gamma_{adj} \, A$$
 This proves our knowledge since, while the commitment point addition with the $B$ term is obvious, the point addition in $A$ has no known relationship to $\xi$, $x$, or $B$. 
 
-All three commitments are computationally binding and hiding. Committing to cloaking factor $\xi$ assures the validator that we aren't just making it up as we go. And committing to $(x - \xi)$ locks in the relationship between $\xi$ and $x$ in these coupled Pedersen commitments. The final proof between committments shows that we know the relationship between $\gamma_x$ and the already proven $\gamma_\xi$ and $\gamma_{(x-\xi)}$. 
+All three commitments are computationally binding and hiding. Committing to cloaking factor $\xi$ assures the validator that we aren't just making it up as we go. And committing to $(x - \xi)$ locks in the relationship between $\xi$ and $x$ in these coupled Pedersen commitments. The final proof between commitments shows that we know the relationship between $\gamma_x$ and the already proven $\gamma_\xi$ and $\gamma_{(x-\xi)}$. 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Bulletproofs}
+Bulletproofs are used to provide range proofs on numeric values. Non-cryptographic useful values generally come from restricted domains. We could provide range proofs on such values by providing Pedersen commitments and proofs to show that the value is equal to one of the possible values from the range. If there were only a small number of possibilities, this might seem reasonable.
+
+But consider a value from the domain of 64-bit numbers. There are $2^{64}$ possible values, and it would be impractical to provide a proof over each possibility. Instead, we could provide proofs over each bit of the value, to show that each one is either 0 or 1, and to prove that we know which it is. But that is still 64 or more commitments and proofs just for a single value.
+
+Going back to the Pedersen commitment proof, notice that our proofs show that we actually know two quantities, $x$ and hiding factor $\gamma$, and all we had to do to prove that duo was to furnish one additional field value, $\alpha$. That 2-to-1 reduction is the reason for the moniker {\em{BulletProofs}}, and is reminiscent of the very reason to use proofs over binary encodings of values. 
+
+By augmenting Pedersen commitment proofs to show that, not only do we know both $\gamma$ and $x$, but that their product has a particular value, $p = \gamma \, x$, we can then develop a recursive form of Pedersen commitment proof, of size $log_2(log_2 N))$ for values in the range $0 \le x < N$, based on dot-products of vectors encoding the bits of the value, $x$. Each stage of the recursion shrinks the bit encoding vectors by half, effectively making a binary encoding of a binary encoding. Now it becomes feasible and economical to prove value ranges of 64-bit values.
+
+Of course, we must also use cloaking at every step, since the domains are so restricted that it would be trivial to uncover the hidden values. That complicates matters a bit, but the idea remains feasible and more economical that any other approach.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Randomness}
