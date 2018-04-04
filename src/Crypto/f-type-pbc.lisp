@@ -79,13 +79,14 @@
   (labels ((poly (x)
              (horner '(36 36 24 6 1) x)))
     (let* ((nb  (truncate mbits 4))
+           (limit (ash 1 mbits))
            (x   (um:nlet-tail iter ((x    0)
                                     (pos  nb))
                   (setf x (dpb 1 (byte 1 pos) x))
                   (when (< mbits (integer-length (poly (- x))))
                     (setf x (dpb 0 (byte 1 pos) x)))
                   (decf pos)
-                  (if (< pos 18) ;; found by trial and error for mbits from 80 to 256
+                  (if (minusp pos)
                       x
                     (iter x pos))))
            (tt nil)
@@ -138,36 +139,36 @@
       (um:nlet-tail outer ()
         (um:nlet-tail iter ()
           (setf tt (1+ (* 6 x x))
-                p (poly (- x))
+                p (poly x)
                 n (- (1+ p) tt))
-          (unless (and (primes:is-prime? p)
+          (unless (and (< p limit)
+                       (primes:is-prime? p)
                        (primes:is-prime? n)
                        (= 3 (mod p 4))
                        (= 4 (mod p 9)))
-            (setf p (poly x)
+            (setf p (poly (- x))
                   n (- (1+ p) tt))
             (unless (and (primes:is-prime? p)
                          (primes:is-prime? n)
                          (= 3 (mod p 4))
                          (= 4 (mod p 9)))
-              (incf x)
+              (decf x)
               (iter))))
         (with-mod p
           (let ((pt  (make-ecc-pt
                       :x 1
                       :y 2)))
-            (when (ecc-infinite-p (ecc-mul pt n))
-              (print "==================================")
-              (pprint (list :n   n
-                            :p   p
-                            :b   3
-                            :y   2
-                            :xgen x
-                            :tt   tt)))
-            (progn
-              (incf x)
-              (outer))
-            )))
-      )))
+            (if (ecc-infinite-p (ecc-mul pt n))
+                (pprint (list :n   n
+                              :p   p
+                              :b   3
+                              :y   2
+                              :xgen x
+                              :tt   tt))
+              (progn
+                (decf x)
+                (outer))
+              )))
+        ))))
       
     

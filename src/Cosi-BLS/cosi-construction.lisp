@@ -217,8 +217,7 @@ THE SOFTWARE.
     (with-accessors ((pkey  pbc:keying-triple-pkey)
                      (psig  pbc:keying-triple-sig)
                      (skey  pbc:keying-triple-skey))
-        (pbc:with-crypto ()
-          (pbc:make-key-pair ip))
+        (pbc:make-key-pair ip)
       (setf (gethash (keyval pkey) *pkey-skey-tbl*) skey)
       (values ip
               (list pkey psig))

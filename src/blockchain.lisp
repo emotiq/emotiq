@@ -37,17 +37,29 @@
   hash-pointer-of-previous-block  ; nil for genesis block, otherwise a
                                   ;   hash pointer for previous block
 
-  hash-pointer-of-transaction)
+  hash-pointer-of-transaction
+
+  (epoch-of-block 0))     ; initially 0, increments by 1 each new block
 
 
+
+(defparameter *hash-abbrev-length* 5)
+(defparameter *hash-abbrev-ending* ".:")
 
 (defun abbrev-hash (hex-string outstream)
-  (let ((end (length hex-string)))
-    ;; (write-string hex-string outstream :end 6)
-    (write-string hex-string outstream :end 6)
-    (write-string ".:" outstream)
-    ;; (write-string hex-string outstream :start (- end 3))
-    ))
+  "By default abbreviate HEX-STRING by writing just its first 5 (controlled by
+parameter *hash-abbrev-length*) characters of hex-string and then ending with
+the 2-character sequence
+
+  .:
+
+controlled by parameter *hash-abbrev-ending*, a string.
+
+The idea of this ending that it's quite distinct; it's like the 3 dots of an
+ellipsis (...); and it only uses 2 character cells for a bit of compactness."
+  (let ((length (length hex-string)))
+    (write-string hex-string outstream :start 0 :end (min length *hash-abbrev-length*))
+    (write-string *hash-abbrev-ending* outstream)))
 
 
 
@@ -173,10 +185,11 @@
   tx-in-unlock-script                   ; what Bitcoin calls scriptSig
   ;; ^-- we create a list of args to pass to the lock script
   
-  ;; direct pointers: in memory only
+  ;; direct pointers: in memory only: a local cache, basically
   %tx-in-utxo
   %tx-in-public-key
-  %tx-in-signature)
+  %tx-in-signature
+  (%tx-in-epoch 0))
   
 
 
@@ -308,7 +321,7 @@
                (if (eval-x (second expr) bindings) 
                    (eval-x (third expr) bindings)
                    (and (eql length 4) (eval-x (fourth expr) bindings)))))
-       ((+ - * = /=)
+       ((+ - * = /= > >= < <=)
         (apply (first expr) 
                (loop for e in (rest expr) 
                      as v = (eval-x e bindings)
@@ -398,10 +411,13 @@
 ;;;       tx-in-unlock-script:
 ;;;         (^tx-public-key ^tx-signature)
 
-(def-script-var ^tx-public-key-hash get-current-tx-public-key-hash)
-
-(def-script-var ^tx-public-key get-current-tx-public-key)
-(def-script-var ^tx-signature get-current-tx-signature)
+;; These need better logic for set up; 2nd args ignored!!
+(def-script-var ^tx-public-key-hash ignore)
+(def-script-var ^tx-public-key ignore)
+(def-script-var ^tx-signature ignore)
+(def-script-var ^current-epoch ignore)
+(def-script-var ^initial-epoch-of-stake ignore)
+(def-script-var ^n-epochs-until-unstake ignore)
 
 
 (defvar *transaction-script-catch-tag* (list nil)
@@ -482,8 +498,15 @@
 
 
 (defun eval-transaction (transaction)
+  (when (> (length (transaction-inputs transaction)) 1)
+    (cerror "Continue regardless"
+            "Only single-input transactions handled in current implementation"))
+
   ;; simplified: for now: assume 1 input, n outputs; will generalize next
-  (loop with tx-in = (first (transaction-inputs transaction))
+
+  (loop with current-epoch     ; for staking; see below
+          = (get-current-epoch)
+        with tx-in = (first (transaction-inputs transaction))
         with id = (tx-in-id tx-in)
         with index = (tx-in-index tx-in)
         with utxo = (%tx-in-utxo tx-in)
@@ -526,7 +549,15 @@
                     ;; automate soon.
 
                     `((^tx-public-key-hash
-                       . ,public-key-hash)))))))))
+                       . ,public-key-hash)
+
+                      ;; vars involved in staking transactions:
+                      (^current-epoch
+                       . ,current-epoch)
+                      (^initial-epoch-of-stake
+                       . ,(%tx-in-epoch tx-in))
+                      (^n-epochs-until-unstake
+                       . 3)))))))))
 
 
 
@@ -586,8 +617,11 @@
     ;; For debugging/diagnostics:
     (unless (= (length pkh-for-public-key) (length public-key-hash))
       (warn 
-       "Unequal-length public key hashes ~d vs. ~d. Programming error likely!"
-       (length pkh-for-public-key) (length public-key-hash)))
+       "Unequal-length public key hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
+       pkh-for-public-key
+       (length pkh-for-public-key)
+       public-key-hash
+       (length public-key-hash)))
     (cond
       ((hash-string= pkh-for-public-key public-key-hash)
        t)
@@ -607,6 +641,37 @@
 
 (def-unlocking-script script-sig ()
   (list ^public-key ^signature))
+
+
+
+
+
+;;; Epoch number is part of the block header and increases by 1 for each
+;;; block.
+
+;;; Escrow: we cannot ultimately allow there to be "escrow for N blocks": it’s
+;;; "escrow until the retire stake transaction is posted".
+
+;;; But implementing retire-stake-transaction-posted-p is hard: all full nodes
+;;; are supposed to maintain this info as part of the state of the world.  To be
+;;; more precise, nodes should build a list of validators (with stakes) when
+;;; bootstrapping. They do this by processing the blockchain from genesis and
+;;; calculating the stake for each validators by processing the stake and
+;;; unstake transactions. Afterwards, they update this info based on blocks
+;;; added to the blockchain.
+
+;;; However, we do not need to implement the unstake transaction for the MVP,
+;;; and we have also agreed that we may use fixed (in genesis block) stakes for
+;;; MVP, if we don't end up having enough time to implement staking.
+
+(def-locking-script stake (public-key signature)
+  (and 
+   (> ^current-epoch
+      (+ ^initial-epoch-of-stake
+         ^n-epochs-until-unstake))
+   (public-key-equal-verify public-key ^tx-public-key-hash)
+   (check-signature public-key signature)))
+          
    
 
         
@@ -635,9 +700,7 @@
               do (format outstream ", ")
             do (abbrev-hash tx-in-id outstream)
                (format outstream "[~d]" index))
-      (if (null transaction-inputs)
-          (format outstream "[] ")      ; COINBASE (no inputs)
-          (format outstream " "))
+      (format outstream " ")            ; (normal tx has 1+ inputs)
       (format outstream "=> ")
       (loop for tx-out in transaction-outputs
             as public-key-hash = (tx-out-public-key-hash tx-out)
@@ -664,17 +727,6 @@
 
 
 
-(defparameter *current-coinbase-amount* 50000)
-(defparameter *current-transaction-fee* 1000)
-
-
-
-(defun get-coinbase-amount ()
-  (+ *current-coinbase-amount*
-     *current-transaction-fee*))
-
-
-
 
 (defun get-timestamp ()
   (get-universal-time))
@@ -682,35 +734,176 @@
 
 
 (defun hash-transaction (transaction)
-  (hash-serialized-transaction (serialize-transaction transaction)))
+  (hash-160-string (serialize-transaction transaction)))
 
-(defun hash-serialized-transaction (serialized-transaction)
-  (hash-256-string serialized-transaction))
-  
+;; Is this really needed? (once "baby blockchain" is gone?). Review. -mhd, 4/3/18
 
 
-(defparameter *alice-pkey-hash* "3bab17cf1c0d97d88e28ef7af96dbe60b8daef26")
-(defparameter *alice-pkey* "7ac0728d574b2269628e2ec57d9520a74f7f03877d5b38c9c94221556679c7fa")
-(defparameter *alice-skey* "0e765439d985ff2c70bbe42f1f84b6418afc3fc56dc85872a028025503b49516")
 
-(defun make-genesis-transaction ()
-  (let* ((transaction
-           (make-transaction
-            :transaction-inputs '()
-            ;; A coinbase transaction that mints new coins simply issues the
-            ;; coin to Alice's account in this simple blockchain.
-            :transaction-outputs 
-              (list
-               (make-transaction-output
-                :tx-out-public-key-hash *alice-pkey-hash*
-                :tx-out-amount (get-coinbase-amount)
-                :tx-out-lock-script (get-locking-script 'script-pub-key))))))
-    (setf (transaction-id transaction) (hash-transaction transaction))
-    transaction))
+
+
+;;;; Genesis Block Creation
+
+;;; In Bitcoin the first transaction of a block is created by a miner, and it's
+;;; a special transaction with one input that's very wacky called a coinbase
+;;; transaction with a so-called coinbase input. While every other transaction
+;;; on the blockchain has as input a reference to a previous transaction, a
+;;; coinbase transaction refers to a "null" transaction.
+
+;;; Coinbase transaction are the main way coin gets into the system in
+;;; Bitcoin. The other way is through transaction fees. In Bitcoin the miner who
+;;; creates the block creates the coinbase transaction and is awarded the mining
+;;; fee. The coinbase transaction issues one output to one address and that is
+;;; to the miner's "wallet", i.e, their account (i.e., designated by their
+;;; public key hash), and that is in the amount of the current block reward,
+;;; which famously know gets halved every four years (currently [2018] 12.5
+;;; BTC). So that's mining, and Emotiq does not feature mining.
+
+;;; In addition to the mining reward, the coinbase transaction includes fees for
+;;; the miner. That's a way for Bitcoin to pay a little more besides mining
+;;; fees, and will be the only way miners get paid after miner awards approach
+;;; and eventually reach zero.
+
+;;; Now, since we, Emotiq, do not feature mining, what do we do at block
+;;; creation time with the first transaction. I.e., how does the main amount of
+;;; coin get into the system? Here is the answer.
+
+;;; The Emotiq Whitepaper states that an initial supply of 10^9 coins will be
+;;; created when EMTQ mainnet is launched. So, the genesis block would contain
+;;; transactions paying 10^9 to one address (TBD), and from there onto others as
+;;; desired.
+
+
+;;;; Coin and Token Units
+
+;;; NB: while the Emotiq Whitepaper talks of EMTQ tokens and EMTQ child tokens,
+;;; this is probably simpler than what's there and probably does not match the
+;;; level of sophistication implied there.
+
+;;; At a later point we might switch to the term "token", but for now we're
+;;; using coin", as follows.  
+
+;;; A `coin unit' or more simply `unit' or `coin' (and plural versions with
+;;; `units' or `coins') all refer the fully valued coin in the cyrpto currency
+;;; here implemented.
+
+;;; A `coin subunit' or `subunit' (plural `subunits') all refer to the smallest
+;;; fraction of a coin unit.
+
+;;; A `coin amount' or `amount' is a number of coin subunits.
+
+;;; When expressing a number of units messages with users, it is fine to use
+;;; floats or ratios, but as a coding convention internally we use integer math
+;;; only, via the following constants.
+
+(defmacro initial-coin-units ()
+  '#.(expt 10 9)) ; 1,000,000,000
+
+(defmacro subunits-per-coin ()
+  '#.(expt 10 8)) ; 100,000,000 (same as Satoshi)
+
+;; Review: consider an increase -- significantly higher in, e.g., Ethereum.
+
+
+;;; COIN-AMOUNT: (macro) given a number UNITS of units of any kind (integer,
+;;; float, ratio, integer), convert it to the closest integer number of
+;;; subunits. This can only be used in cases where the remainder, if nonzero,
+;;; would be a fraction of a subunit, would therefore typically be considered
+;;; too insignificant to worry about.
+
+(defmacro coin-amount (units)
+  (if (integerp units)           ; optimization of literal constant integer case
+      `(* ,units (subunits-per-coin))
+      `(round (* ,units (subunits-per-coin)))))
+
+
+
+;;; INITIAL-TOTAL-COIN-AMOUNT: with no args gives the total number of subunits
+;;; of coin to be initially allocated in the genesis block.
+
+(defmacro initial-total-coin-amount ()
+  `(* (initial-coin-units) (subunits-per-coin)))
+
+
+
+(defparameter *coinbase-fee-in-coin-units* (/ 5 8)
+  "The default coinbase fee. This is the amount awarded to the creator of each
+  new ledger block.  This can be set to either an integer, float, or ratio. Use
+  function get-coinbase-transaction-fee-amount to scale and round this to get it
+  as a coin amount.")
+
+(defun get-coinbase-transaction-fee-amount ()
+  (coin-amount *coinbase-fee-in-coin-units*))
+
+
+(defun make-coinbase-transaction-input ()
+  (make-transaction-input
+   ;; The next two value settings are imitative of Bitcoin, which similarly has
+   ;; all 0 bits for Tx ID, all 1 bits for Tx index. These slots do not serve
+   ;; their normal function, so these values are arbitrary. These two ARE part
+   ;; of the hash of the transaction.
+   :tx-in-id "0000000000000000000000000000000000000000000000000000000000000000"
+   :tx-in-index "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+
+   ;; These are also not going to be used as for a normal transaction.  The rest
+   ;; are NOT part of the hash of the transaction.
+   :tx-in-unlock-script nil
+   :%tx-in-utxo nil
+
+   :%tx-in-public-key nil
+   :%tx-in-signature nil))
+
+(defun make-coinbase-transaction-output (public-key-hash amount)
+  (make-transaction-output
+   :tx-out-public-key-hash public-key-hash
+   :tx-out-amount amount
+   :tx-out-lock-script (get-locking-script 'script-pub-key)))
+
+;; (get-locking-script 'script-pub-key) under consideration. Needs work.
+
+
+
+(defun make-genesis-transaction (public-key-hash)
+  (make-hash-and-maybe-sign-transaction
+   (list (make-coinbase-transaction-input))
+   (list (make-coinbase-transaction-output
+          public-key-hash 
+          (initial-total-coin-amount)))))
+
+
+
+(defun make-coinbase-transaction (public-key-hash)
+  (make-hash-and-maybe-sign-transaction
+   (list (make-coinbase-transaction-input))
+   (list (make-coinbase-transaction-output
+          public-key-hash
+          (get-coinbase-transaction-fee-amount)))))
+
+
+
+
+
+;;; Here we generate the keys for MINTER-0. During early testnet, with
+;;; memory-only frequent-recreation of the Genesis block, we here create the
+;;; keys for "minter 0", whose public key hash, *minter-0-pkey-hash*, is the
+;;; recipient of the initial total coin amount as the first transaction of the
+;;; genesis block.
+
+(eval-when (:compile-toplevel :execute :load-toplevel)
+
+(defvar *minter-0-pkey-hash*)
+(defvar *minter-0-pkey*)
+(defvar *minter-0-skey*)
+
+)
+
+(multiple-value-setq (*minter-0-skey* *minter-0-pkey* *minter-0-pkey-hash*)
+  (keygen))
+
 
 (defun make-genesis-block ()
   (let* ((b (make-blockchain-block))
-         (transaction (make-genesis-transaction)))
+         (transaction (make-genesis-transaction *minter-0-pkey-hash*)))
     (setf (timestamp b) (get-timestamp))
     (setf (hash-pointer-of-previous-block b) nil)
     (setf (hash-pointer-of-transaction b)
@@ -718,26 +911,79 @@
     (values transaction b)))
 
 
-(defvar *genesis-block* nil)
 
-(defvar *last-block* nil)
-(defvar *last-transaction* nil)
 
-(defun start-blockchain ()
+
+;;;; Blockchain Context
+
+;;; A blockchain context encapsulates a few specials for running one
+;;; or more blockchains.  To create and run a blockchain, create a
+;;; blockchain context by calling START-BLOCKCHAIN-CONTEXT and binding
+;;; the result.  Then, wrap WITH-BLOCKCHAIN-CONTEXT, invoking it with
+;;; the context, around any code that does operations, whether
+;;; directly or indirectly, on the blockchain, such as
+;;; NEXT-TRANSACTION.  Repeated invocations of with-blockchain-context
+;;; may be made without limit. There can also be any number of
+;;; parallel invocations of with-blockchain-context. However, it is
+;;; not reentrant.
+
+;;; The variable 
+;;;
+;;;   *current-blockchain-context*
+;;;
+;;; and the setf'able accessor macro
+;;;
+;;;   (last-transaction)
+;;;   (last-block)
+;;;   (genesis-block)
+;;;
+;;; should only be accessed in the scope of
+;;; with-blockchain-context. They are established via the the
+;;; above-described mechanism. At top level they are effectively
+;;; unbound.
+
+(defstruct (blockchain-context (:conc-name ""))
+  (blockchain-last-transaction nil)
+  (blockchain-last-block nil)
+  (blockchain-genesis-block nil))
+
+
+(defvar *current-blockchain-context*)
+
+
+;;; The macros last-transaction, last-block, and genesis-block
+;;; function to some degree as setf'able global variables, except that
+;;; they must be called in a current blockchain context.  They set and
+;;; get the slots of that structure.
+
+(defmacro last-transaction ()
+  `(blockchain-last-transaction *current-blockchain-context*))
+
+(defmacro last-block ()
+  `(blockchain-last-block *current-blockchain-context*))
+
+(defmacro genesis-block ()
+  `(blockchain-genesis-block *current-blockchain-context*))
+
+
+(defun start-blockchain-context ()
   (multiple-value-bind (tx b)
       (make-genesis-block)
-    (setq *genesis-block* b)
-    (setq *last-transaction* tx)
-    (setq *last-block* b)
-    (values tx b)))
+    (make-blockchain-context
+     :blockchain-last-transaction tx
+     :blockchain-last-block b
+     :blockchain-genesis-block b)))
 
-(defun restart-blockchain ()
-  (start-blockchain))
 
-(defun reset-blockchain ()
-  (setq *genesis-block* nil)
-  (setq *last-block* nil)
-  (setq *last-transaction* nil))
+(defmacro with-blockchain-context ((context &optional options) &body body)
+  (declare (ignore options))            ; reserved for later
+  `(let* ((*current-blockchain-context* ,context))
+     ,@body))
+
+;; Should an attempt be made to detect reentrant usage and signal an
+;; error?
+
+
 
 
 (defun tx-ids= (id-1 id-2)
@@ -760,7 +1006,7 @@
 BODY can returned early, and particular values can be returned using
 RETURN or RETURN-FROM. Otherwise, this returns nil after all blocks
 have been visited."
-  `(loop with ,block-var = *last-block*
+  `(loop with ,block-var = (last-block)
          while ,block-var
          do (progn ,@body)
             (setq ,block-var (previous-block ,block-var))))
@@ -818,6 +1064,7 @@ have been visited."
                   problem-found? found-tx? found-block?))
           nil)))
       (t (values found-tx? found-block?)))))
+    
 
 
 
@@ -859,9 +1106,18 @@ have been visited."
 ;;;
 ;;;   http://fc15.ifca.ai/preproceedings/paper_101.pdf
 
+
+
+
+(defun require-blockchain ()
+  "Check for at the genesis block, otherwise signal an error."
+  (when (null (last-block))
+    (error "Blockchain requires at least 1 block.")))
+
+
+
 (defun next-transaction (input-specs output-specs)
-  (when (null *last-block*)
-    (start-blockchain))
+  (require-blockchain)                  ; error checking
   (loop with utxo
         with utxo-transaction-outputs
         with n-outputs
@@ -886,7 +1142,6 @@ have been visited."
                  :tx-in-id id
                  :tx-in-index index
                  :tx-in-unlock-script (get-unlocking-script 'script-sig)
-                 ;; :tx-in-unlock-args (list public-key ':signature-needed-here)
                  :%tx-in-utxo utxo
                  :%tx-in-public-key public-key)
           into tx-inputs
@@ -926,38 +1181,96 @@ have been visited."
                    total-output-amount)
              (warn "Transaction failure.")
              (return nil))
-           (let* ((transaction
-                    (make-transaction
-                     :transaction-inputs tx-inputs
-                     :transaction-outputs tx-outputs))
-                  (message (serialize-transaction transaction)))
-             (setf (transaction-id transaction) (hash-serialized-transaction message))
-             ;; Sign transaction:
-             (loop for tx-input in tx-inputs
-                   as private-key in private-keys-for-inputs
-                   as signature = (sign-message private-key message)
-                   do (setf (%tx-in-signature tx-input) signature))
+           (let ((signed-transaction
+                   (make-hash-and-maybe-sign-transaction
+                    tx-inputs tx-outputs :keys private-keys-for-inputs)))
              (cond
-               ((not (eval-transaction transaction))
+               ((not (eval-transaction signed-transaction))
                 ;; Transaction failed.
                 (warn "Transaction failed in script evaluation.")
                 (return nil))
                (t
-                ;; Transaction succeeded.
-                (let* ((hash-pointer-of-transaction
-                         (make-hash-pointer-for-transaction transaction))
-                       (hash-pointer-of-previous-block
-                         (make-hash-pointer-for-block *last-block*))
-                       (timestamp (get-timestamp))
-                       (b (make-blockchain-block
-                           :timestamp timestamp
-                           :hash-pointer-of-previous-block 
-                           hash-pointer-of-previous-block
-                           :hash-pointer-of-transaction
-                           hash-pointer-of-transaction)))
-                  (setq *last-block* b)
-                  (setq *last-transaction* transaction)
-                  (return (values transaction b))))))))
+                ;; Transaction succeeded. Add it to the blockchain.
+                (return (add-transaction-to-blockchain signed-transaction)))))))
+
+
+
+(defun make-hash-and-maybe-sign-transaction (tx-inputs tx-outputs &key keys)
+  "Create a transaction and hash it (creating its transaction ID). Then, if
+keyword keys is provided non-nil, the transaction is signed. In the signing
+case, keys should supply one private key for each input, either as a single
+private atomic private key or singleton list in the case of a single input or as
+a list of keys in the case of two or more inputs. Normally, all transactions
+should be signed, and only coinbase transactions are not signed."
+  (let* ((transaction
+           (make-transaction
+            :transaction-inputs tx-inputs
+            :transaction-outputs tx-outputs))
+         (message (serialize-transaction transaction)))
+    (setf (transaction-id transaction) (hash-160-string message))
+    ;; Got keys? Sign transaction if so:
+    (when keys
+      (let ((private-keys (if (and keys (atom keys)) (list keys) keys)))
+        (unless (= (length private-keys) (length tx-inputs))
+          (warn 
+           "Unequal-length private-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
+           private-keys
+           (length private-keys)
+           tx-inputs
+           (length tx-inputs)))
+        (loop for tx-input in tx-inputs
+              as private-key in private-keys
+              as signature = (sign-message private-key message)
+              do (setf (%tx-in-signature tx-input) signature))))
+    transaction))
+
+
+
+(defun next-coinbase-transaction (public-key-hash)
+  (let ((transaction (make-coinbase-transaction public-key-hash)))
+    (add-transaction-to-blockchain transaction)))
+    
+  
+  
+
+(defun add-transaction-to-blockchain (transaction)
+  (require-blockchain)                  ; error checking
+  (let* ((hash-pointer-of-transaction
+           (make-hash-pointer-for-transaction transaction))
+         (previous-block (last-block))
+         (hash-pointer-of-previous-block
+           (make-hash-pointer-for-block previous-block))
+         (epoch (1+ (epoch-of-block previous-block)))
+         (timestamp (get-timestamp))
+         (b (make-blockchain-block
+             :timestamp timestamp
+             :hash-pointer-of-previous-block 
+             hash-pointer-of-previous-block
+             :hash-pointer-of-transaction
+             hash-pointer-of-transaction
+             :epoch-of-block epoch)))
+    (loop for tx-in in (transaction-inputs transaction)
+          do (setf (%tx-in-epoch tx-in) epoch))
+    (setf (last-block) b)
+    (setf (last-transaction) transaction)
+    (values transaction b)))
+
+
+
+
+
+;;;; Operations to Support Epochs
+
+
+
+;;; GET-CURRENT-EPOCH: (hands are waved temporarily)
+
+(defun get-current-epoch ()
+  (+                           ; 1+, since it's for the pending block,
+   (epoch-of-block             ; 1 greater than last block
+    (last-block))
+   1))
+
 
 
 
@@ -1032,7 +1345,7 @@ have been visited."
 
 
 
-;;;; Demo/Test
+;;;; Printing Utilities
 
 
 
@@ -1051,191 +1364,4 @@ have been visited."
     (format t "TX: ~a~%" transaction)))
 
 
-;; To generate keys for these tests, for now, use:
-;;
-;;   (multiple-value-setq (skey pkey pkey-hash) (keygen))
 
-(progn 
-  (defparameter *bob-pkey-hash* "220a3dd905912f74d004bf83989f2b76f41b7d85")
-  (defparameter *bob-pkey* "0762e9167c4f22c7e537a95128ca5eedc3a0b4a7e9fdaf300647ac8fa2555113")
-  (defparameter *bob-skey* "95b5fce84d948dcc2120ca9e93028e21e806a4ed2edb55a006492479c77cc67a")
-
-  (defparameter *cindy-pkey-hash* "2a8ef419267c2700e32f9941ca8f37a62b80faf5")
-  (defparameter *cindy-pkey* "de942256ecd8c7b717b06322d233a0782c520987214f7dcb6e826d1f41a9741d")
-  (defparameter *cindy-skey* "1c46a159d771c5a1f89451fea875742424811447296268745386869758843aeb")
-
-  (defparameter *david-pkey-hash* "8a5aa89686f7e546fdb4dd0b8f2bf119f72528bb")
-  (defparameter *david-pkey* "0e27079c886b963a946878696f3682070609e504753a53360fe6137c5bd78d20")
-  (defparameter *david-skey* "0f48e3479e134278ccd55a841cfe952a4c54d9dc87482ad98a1836952469b694")
-  )
-
-
-
-(defun tx-input-sequence (previous-tx index public-key private-key
-                          &rest additional)
-  (list* (list (transaction-id previous-tx) index public-key private-key)
-         (when additional
-           (loop for (tx idx pk sk) on additional by #'cddr
-                 collect `(list ,(transaction-id tx) ,idx ,pk ,sk)))))
-  
-
-
-(defvar *tx-test-attempt-counter* 0)
-(defvar *tx-test-success-counter* 0)
-(defvar *tx-test-prev-result* nil)
-(defvar *tx-test-prev-tx* nil)          ; once it's good, it stays good
-
-(defun next-tx-test (input-specs output-specs &key restart)
-  (when restart
-    (setq *tx-test-attempt-counter* 0)
-    (setq *tx-test-success-counter* 0)
-    (setq *tx-test-prev-result* nil)
-    (setq *tx-test-prev-tx* nil))
-  (let ((tx 
-          (if restart
-              (restart-blockchain)
-              (next-transaction input-specs output-specs))))
-    (setq *tx-test-prev-result* tx)
-    (incf *tx-test-attempt-counter*)
-    (cond
-      (tx
-       (setq *tx-test-prev-tx* tx)
-       (incf *tx-test-success-counter*)
-       (if restart
-           (format t "~%(GENESIS)~%  Tx-~d: ~A~%" *tx-test-success-counter* tx)
-           (format t "~%  Tx-~d: ~A~%" *tx-test-success-counter* tx))))))
-
-
-
-
-;;; The following sets of args are order-dependent. I.e., first set are
-;;; fine. The second are double-spends coming after this first set.  The third
-;;; refer to transactions never were known.
-
-(defun blockchain-test-1 ()
-  "Test by resetting the blockchain, which issues 51000 to Alice,
-who sends 40000 to Bob, who sends 20000 to David, 5000 back to Alice, and 1000
-to David."
-
-  (next-tx-test nil nil :restart t)
-  ;; Genesis Block Coinbase Tx gives 510000 to Alice initially.
-
-  (next-tx-test
-   (tx-input-sequence *tx-test-prev-tx* 0 *alice-pkey* *alice-skey*)
-   `((,*bob-pkey-hash* 40000)                ; Alice pays 40,000 to Bob
-     (,*alice-pkey-hash* ,(- 51000 40000)))) ; change back: 11,000 
-
-  (next-tx-test
-   (tx-input-sequence *tx-test-prev-tx* 0 *bob-pkey* *bob-skey*)
-   `((,*david-pkey-hash* 20000)            ; Bob pays 20,000 to David
-     (,*bob-pkey-hash* ,(- 40000 20000)))) ; change back: 20,000
-
-  (next-tx-test
-   (tx-input-sequence *tx-test-prev-tx* 1 *bob-pkey* *bob-skey*)
-   `((,*alice-pkey-hash* 5000)            ; Bob pays 5,000 to Alice
-     (,*bob-pkey-hash* ,(- 20000 5000)))) ; change back: 15,000
-
-  (next-tx-test
-   (tx-input-sequence *tx-test-prev-tx* 1 *bob-pkey* *bob-skey*)
-   `((,*david-pkey-hash* 1000)            ; Bob pays 1,000 to David
-     (,*bob-pkey-hash* ,(- 15000 1000)))) ; change back: 14,000
-  )
-
-(defun blockchain-test-2 ()
-  "Test by first invoking function blockchain-test-1, q.v., and then attempting
-two double-spends: trying to send 40000 again from Alice to Bob (spending the
-output of the first transaction, which had already been spent), and then trying
-to send 1000 again from Bob to Alice, from the second-to-last transaction, which
-had just been used in the last transaction."
-  (blockchain-test-1)
-  (flet ((genesis-tx ()
-           (hash-pointer-item
-            (hash-pointer-of-transaction
-             *genesis-block*)))
-         (penultimate-tx ()
-           (hash-pointer-item
-            (hash-pointer-of-transaction
-             (hash-pointer-item
-              (hash-pointer-of-previous-block *last-block*))))))    
-    (next-tx-test
-     (tx-input-sequence (genesis-tx) 0  ; <= bad - already used Tx!
-                        *alice-pkey* *alice-skey*)
-     `((,*bob-pkey-hash* 40000)
-       (,*alice-pkey-hash* ,(- 51000 40000))))
-    (next-tx-test
-     (tx-input-sequence (penultimate-tx) 1 ; <= bad - already used Tx!
-                        *david-pkey* *david-skey*)
-     `((,*david-pkey-hash* 1000) (,*bob-pkey-hash* 14000)))))
-
-(defun blockchain-test-3 ()
-  "Test by first invoking function blockchain-test-2, q.v., and then attempting
-.... [See inline comments in code for full details.]"
-  (blockchain-test-2)
-
-  ;; Now the last transaction (stored in variable *last-transaction*) sent
-  ;; 14,000 to Bob as the 2nd output (as change). Try to spend 15,000 from
-  ;; *last-transaction*'s, sending it to Alice, but it should fail, since
-  ;; there's only 14,000 available:
-  (next-tx-test
-   (tx-input-sequence *last-transaction* 1 ; <= bad - overspend!
-                      *bob-pkey* *bob-skey*)
-   `((,*alice-pkey-hash*
-      15000)))                          ; <= too many units
-  ;; Now try to have Bob send 14,000 to Alice. Since that's exactly what was
-  ;; there, this will leave zero (0) extra, meaning zero as a transaction fee
-  ;; (!). This will be allowed (for now).  Maybe zero transaction fees are
-  ;; kind of iffy, but review that issue later!
-  (next-tx-test
-   (tx-input-sequence *last-transaction* 1 ; <= GOOD TRANSACTION HERE
-                      *bob-pkey* *bob-skey*)
-   `((,*alice-pkey-hash* 
-      14000)))                       ; <= leaves 0 change, 0 for transaction fee
-  ;; Now try spending zero (0) from Alice back to Bob. Should be rejected:
-  ;; zero or negative amounts cannot be transferred.
-
-  (next-tx-test
-   (tx-input-sequence *tx-test-prev-tx* 0
-                      *alice-pkey* *alice-skey*)
-   `((,*bob-pkey-hash* 0)))           ; <= bad (attempt to transfer zero amount)
-  ;; Now try spending negative (-1) million from Alice back to Bob. Should
-  ;; be rejected: zero or negative amounts cannot be transferred.
-
-  (next-tx-test
-   (tx-input-sequence *tx-test-prev-tx* 0
-                      *alice-pkey* *alice-skey*)
-   `((,*bob-pkey-hash* -1000000))) ; <= bad (attempt to transfer negative amount)
-  )
-
-
-
-(defvar *nonexistent-test-transaction-id*
-  (hash-256-string "arbitrary-hash-doesnotexist")
-  "A piece of 'fixture data' just be to be used in the next test
-   as a dummy transaction ID, i.e., for a dummy reference to
-   a transaction that does not exist, i.e., for testing a bad
-   reference in a transaction.")
-
-(defun blockchain-test-4 ()
-  "Test by first invoking function blockchain-test-3, q.v., and then attempting
-   a couple more bad transactions: one with an index out of range, and one that
-   tries to use as input a nonexistent transaction."
-  (blockchain-test-3)
-  (next-tx-test
-   (tx-input-sequence *last-transaction* 13 ; <= bad - index out of range!
-                      *alice-pkey* *alice-skey*)
-   `((,*bob-pkey-hash* 4000)
-     (,*alice-pkey-hash* (- 51000 4000))))
-    
-    
-  (next-tx-test
-   (list (list *nonexistent-test-transaction-id* ; <= bad: nonexistent TX ID
-               0 *bob-pkey* *bob-skey*))
-   `((,*alice-pkey-hash* 5000) 
-     (,*bob-pkey-hash* ,(- 20000 5000)))))
-
-
-(defun test-blockchain ()
-  (blockchain-test-4)
-  (format t "~%---~%Transactions tests finished. Now printing blockchain...~%")
-  (print-blockchain-info)
-  (format t "~%DONE.~%"))

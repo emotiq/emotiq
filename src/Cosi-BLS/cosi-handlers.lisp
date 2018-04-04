@@ -298,32 +298,27 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defun node-validate-cosi (reply-to sig bits)
   ;; toplevel entry for Cosi signature validation checking
   ;; first check for valid signature...
-  (=bind (t/f)
-      (pbc:with-crypto ()
-        (=values (pbc:check-message sig)))
-    (if t/f
-        ;; we passed signature validation on composite signature
-        ;; now verify the public keys making up that signature
-        (let ((pkeys (reduce (lambda (lst node)
-                               ;; collect keys from bitmap indication
-                               (if (and node
-                                        (logbitp (node-bit node) bits))
-                                   (cons (node-pkey node) lst)
-                                 lst))
-                             *node-bit-tbl*
-                             :initial-value nil)))
-          (=bind (tkey)
-              ;; compute composite public key
-              (pbc:with-crypto ()
-                (=values (reduce 'pbc:mul-pts pkeys)))
-            (reply reply-to :validation
-                   ;; see that our computed composite key matches the
-                   ;; key used in the signature
-                   (= (vec-repr:int (pbc:signed-message-pkey sig))
-                      (vec-repr:int tkey)))
-            ))
-      ;; else - we failed initial signature validation
-      (reply reply-to :validation nil))))
+  (if (pbc:check-message sig)
+      ;; we passed signature validation on composite signature
+      ;; now verify the public keys making up that signature
+      (let* ((pkeys (reduce (lambda (lst node)
+                              ;; collect keys from bitmap indication
+                              (if (and node
+                                       (logbitp (node-bit node) bits))
+                                  (cons (node-pkey node) lst)
+                                lst))
+                            *node-bit-tbl*
+                            :initial-value nil))
+             ;; compute composite public key
+             (tkey  (reduce 'pbc:mul-pts pkeys)))
+        (reply reply-to :validation
+               ;; see that our computed composite key matches the
+               ;; key used in the signature
+               (= (vec-repr:int (pbc:signed-message-pkey sig))
+                  (vec-repr:int tkey))))
+    
+    ;; else - we failed initial signature validation
+    (reply reply-to :validation nil)))
 
 ;; -----------------------------------------------------------------------
 
@@ -458,18 +453,17 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
-    (=bind (sig bits)
+    (multiple-value-bind (sig bits)
         ;; Here is where we decide whether to lend our signature. But
         ;; even if we don't, we stil give others in the group a chance
         ;; to decide for themselves
         (if (validate-cosi-message node msg)
-            (pbc:with-crypto (:skey (node-skey node))
-              (=values (pbc:sign-message msg)
-                       (node-bitmap node)))
-          (=values nil 0))
+            (values (pbc:sign-message msg (node-pkey node) (node-skey node))
+                    (node-bitmap node))
+          (values nil 0))
       (=bind (r-lst)
-          (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
-        (=bind ()
+             (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
+         (=bind ()
             (let ((=fold-answer
                    (=lambda (sub resp)
                      (cond
@@ -481,16 +475,14 @@ Connecting to #$(NODE "10.0.1.6" 65000)
                       
                       (t
                        (destructuring-bind (sub-sig sub-bits) resp
-                         (pbc:with-crypto ()
-                           (if (pbc:check-message sub-sig)
-                               (setf sig  (if sig
-                                              (pbc:combine-signatures sig sub-sig)
-                                            sub-sig)
-                                     bits (logior bits sub-bits))
-                             ;; else
-                             (mark-node-corrupted node sub))
-                           (=values))
-                         ))
+                         (if (pbc:check-message sub-sig)
+                             (setf sig  (if sig
+                                            (pbc:combine-signatures sig sub-sig)
+                                          sub-sig)
+                                   bits (logior bits sub-bits))
+                           ;; else
+                           (mark-node-corrupted node sub))
+                         (=values)))
                       ))))
               (smapc =fold-answer subs r-lst))
           (send reply-to :signed seq-id sig bits))
@@ -514,16 +506,13 @@ Connecting to #$(NODE "10.0.1.6" 65000)
              ((list :signed seq sig bits)
               (cond
                ((eql seq sess)
-                (=bind (t/f)
-                    (pbc:with-crypto ()
-                      (=values (pbc:check-message sig)))
-                  (if t/f
-                      ;; we completed successfully
-                      (reply reply-to
-                             (list :signature sig bits))
-                    ;; bad signature
-                    (reply reply-to :corrupt-cosi-network)
-                    )))
+                (if (pbc:check-message sig)
+                    ;; we completed successfully
+                    (reply reply-to
+                           (list :signature sig bits))
+                  ;; bad signature
+                  (reply reply-to :corrupt-cosi-network)
+                  ))
                ;; ------------------------------------
                (t ;; seq mismatch
                   ;; must have been a late arrival
