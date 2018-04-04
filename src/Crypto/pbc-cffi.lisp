@@ -585,12 +585,10 @@ comparison.")
                   *gt-size*  (cffi:mem-aref ansbuf :long 2)
                   *zr-size*  (cffi:mem-aref ansbuf :long 3)
                   *curve-order* nil)
-            (if g1
-                (set-generator g1)
-              (setf *g1* (get-g1)))
-            (if g2
-                (set-generator g2)
-              (setf *g2* (get-g2)))
+            (when g1
+              (set-generator g1))
+            (when g2
+              (set-generator g2))
             (get-order)
             (values)
             ))))))
