@@ -20,12 +20,42 @@
 
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-(defparameter *use-all-neighbors* t "True to broadcast to all neighbors; nil to randomly pick just one")
+(defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one")
+(defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
+
+; Typical cases:
+; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage case.
+; Case 2: *use-all-neighbors* = false and *active-ignores* = true. The more common gossip case.
+; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary.
+; Case 4: *use-all-neighbors* = false and *active-ignores* = false. Lots of timeouts. Poor results.
+
+(defun set-protocol-style (kind)
+  "Set style of protocol.
+   :gossip style to pick one neighbor at random to send solicitations to.
+      There's no guarantee this will reach all nodes. But it's quicker and more realistic.
+   :full   style to send solicitations to all neighbors. More likely to reach all nodes but replies may be slower.
+   Neither style should result in timeouts of a node waiting forever for a response from a neighbor."
+  (case kind
+    (:gossip (setf *use-all-neighbors* nil
+                   *active-ignores* t))  ; must be true when *use-all-neighbors* is nil. Otherwise there will be timeouts.
+    (:full   (setf *use-all-neighbors* t
+                   *active-ignores* nil)))
+  kind)
+             
+; (set-protocol-style :full)
+; (set-protocol-style :gossip)
+
+#|
+Discussion: :gossip style is more realistic for "loose" networks where nodes don't know much about their neighbors.
+:full style is better after :gossip style has been used to discover the graph topology and agreements about collaboration
+are in place between nodes.
+|#
+
 (defparameter *gossip-absorb-errors* t "True for normal use; nil for debugging")
 (defvar *last-uid* 0 "Simple counter for making UIDs")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
-(defparameter *delay-intermediate-replies* t "True to delay intermediate replies.
-  Should be true, especially on larger networks. Reduces unnecessary intermediate-replies while still ensuring
+(defparameter *delay-interim-replies* t "True to delay interim replies.
+  Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
   some partial information is propagating in case of node failures.")
 
 (defun make-uid-mapper ()
@@ -609,18 +639,20 @@
                              (values nil :no-kind)))))))))))
 
 (defmethod accept-msg? ((msg reply) (thisnode gossip-node) srcuid)
-  (multiple-value-bind (kindsym failure-reason) (call-next-method) ; the one on gossip-message-mixin
-    ; Also ensure this reply is actually expected
-    (cond (kindsym
-           (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
-             (cond (interim-table
-                    (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
-                      (declare (ignore val))
-                      (if present-p
-                          kindsym
-                          (values nil :unexpected-1))))
-                    (t (values nil :unexpected-2)))))
-          (t (values nil failure-reason)))))
+  (if (eq :active-ignore (kind msg))
+      (values nil :active-ignore)
+      (multiple-value-bind (kindsym failure-reason) (call-next-method) ; the one on gossip-message-mixin
+        ; Also ensure this reply is actually expected
+        (cond (kindsym
+               (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
+                 (cond (interim-table
+                        (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+                          (declare (ignore val))
+                          (if present-p
+                              kindsym
+                              (values nil :unexpected-1))))
+                       (t (values nil :unexpected-2)))))
+              (t (values nil failure-reason))))))
 
 (defmethod accept-msg? ((msg timeout) (thisnode gossip-node) srcuid)
   (declare (ignore srcuid))
@@ -648,6 +680,16 @@
       all-neighbors
       (list (nth (random (length all-neighbors)) all-neighbors)))))
 
+(defun send-active-ignore (to from kind soluid failure-reason)
+  "Actively send a reply message to srcuid telling it we're ignoring it."
+  (let ((msg (make-interim-reply
+              :solicitation-uid soluid
+              :kind :active-ignore
+              :args (list kind failure-reason))))
+    (send-msg msg
+              to
+              from)))
+
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
   First checks to see whether this message should be accepted by the node at all, and if so,
@@ -670,12 +712,32 @@
                    (funcall kindsym msg node srcuid))))
             (t ; not accepted
              (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)
-             (when (and (eq :already-seen failure-reason) ; this is extremely important. See note A below.
-                        (typep msg 'solicitation))
-               (let ((was-present? (cancel-replier node (kind msg) soluid srcuid)))
-                 (when was-present?
-                   ; Don't log a :STOP-WAITING message if we were never waiting for a reply in the first place
-                   (maybe-log node :STOP-WAITING msg srcuid)))))))))
+             (case failure-reason
+               (:active-ignore ; RECEIVE an active-ignore. Whomever sent it is telling us they're ignoring us.
+                ; Which means we need to ensure we're not waiting on them to reply.
+                (if (typep msg 'interim-reply) ; should never be any other type
+                    (destructuring-bind (kind failure-reason) (args msg)
+                      (declare (ignore failure-reason)) ; should always be :already-seen, but we're not checking for now
+                      (let ((was-present? (cancel-replier node kind (solicitation-uid msg) srcuid)))
+                        (when was-present?
+                          ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
+                          (maybe-log node :STOP-WAITING msg srcuid))))
+                    ; weird. Shouldn't ever happen.
+                    (maybe-log node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
+               (:already-seen ; potentially SEND an active ignore
+                (when (typep msg 'solicitation) ; following is extremely important. See note A below.
+                  ; If we're ignoring a message from node X, make sure that we are not in fact
+                  ;   waiting on X either. This is essential in the case where
+                  ;   *use-all-neighbors* = true and
+                  ;   *active-ignores* = false
+                  ;   but it doesn't hurt anything in other cases.
+                  (let ((was-present? (cancel-replier node (kind msg) soluid srcuid)))
+                    (when was-present?
+                      ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
+                      (maybe-log node :STOP-WAITING msg srcuid))
+                    (when *active-ignores* ; now actively tell X we're ignoring it
+                      (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
+               (t nil)))))))
 
 ; NOTE A:
 ; If node X is ignoring a solicitation* from node Y because it already
@@ -902,7 +964,7 @@
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it upstream as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (if *delay-intermediate-replies*
+      (if *delay-interim-replies*
           (send-delayed-interim-reply thisnode :list-alive soluid)
           (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
             (send-interim-reply thisnode :list-alive soluid upstream-source))))))
@@ -950,7 +1012,7 @@
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it upstream as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (if *delay-intermediate-replies*
+      (if *delay-interim-replies*
           (send-delayed-interim-reply thisnode :count-alive soluid)
           (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
             (send-interim-reply thisnode :count-alive soluid upstream-source))))))
@@ -1005,7 +1067,7 @@
     (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
       ; coalesce all known data and send it upstream as another interim reply.
       ; (if this reply is not later, drop it on the floor)
-      (if *delay-intermediate-replies*
+      (if *delay-interim-replies*
           (send-delayed-interim-reply thisnode :gossip-lookup-key soluid)
           (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
             (send-interim-reply thisnode :gossip-lookup-key soluid upstream-source))))))
@@ -1269,7 +1331,8 @@ gets sent back, and everything will be copacetic.
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
   "Actions to take when a replier should be canceled.
-  Must reply upstream with either an interim or final reply."
+  If no more repliers, must reply upstream with final reply.
+  If more repliers, reply upstream either immediately or after a yield period with an interim-reply."
   (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
     (cond (no-more-repliers
            (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
@@ -1277,7 +1340,7 @@ gets sent back, and everything will be copacetic.
                (funcall timeout-handler nil))))
           (t ; more repliers are expected
            ; functionally coalesce all known data and send it upstream as another interim reply
-           (if *delay-intermediate-replies*
+           (if *delay-interim-replies*
                (send-delayed-interim-reply thisnode reply-kind soluid)
                (let ((upstream-source (get-upstream-source thisnode soluid)))
                  (send-interim-reply thisnode reply-kind soluid upstream-source)))))
