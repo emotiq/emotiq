@@ -207,33 +207,56 @@ The validation relation proves that the buyer formed the purchase offer, and tha
 \subsection{Cryptographic Proofs}
 Cryptographic proofs can be written for almost any claim. Value range proofs can be developed to prove that a hidden quantity lies within a specific range. That will be the topic of Bulletproofs. 
 
-But in preparation for more advanced forms of cryptographic proofs, let's first just examine a method for making a claim that some value is known, and can be proven as known to anyone, without first revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
+But in preparation for more advanced forms of cryptographic proofs, let's first just examine a method for making a claim that some value is known, and can be proven as known to anyone, without  revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
 
-ZKP's require interaction. A claim is made cryptographically. A verifier challenges the claimant for proof, and the claimant provides another one or more values that can be used by the challenger to verify the claim using a simple calculation. 
+ZKP's require interaction. A claim is made cryptographically. A verifier challenges the claimant for proof, and the claimant provides another one or more values that can be used by the challenger to verify the claim using a simple calculation. Everything about all math relations is known to all, so everyone can agree that the computations prove a claim.
 
-ZKP's can be converted into Non-Interactive ZKP's (NIZKP) by using the Shamir construction, where, instead of an interactive challenge, we simply provide a hash of the transcript used in making the commitments to the value. It would be extraordinarily difficult for a claimant to produce a hash with a cunningly chosen value, and so a hash stands in for random challenges offered by validators.
+ZKP's can be converted into Non-Interactive ZKP's (NIZKP)
+ by using the Shamir construction, where, instead of an interactive challenge, we simply provide a hash of the transcript used in making the commitments to the value. It would be extraordinarily difficult for a claimant to produce a hash with a cunningly chosen value, and so a hash stands in for random challenges offered by validators.
 
 There are two parts to any cryptographic proof. First is making a binding claim, so that the claimant cannot change his mind and offer phony values later, just chosen to satisfy every query by the validators. We do that with Pedersen Commitments. 
 
-For value $x \in Z_r$ that we claim to know, we choose two random generators over an Elliptic Curve, $A \in G_1$ and $B \in G_1$, with no known ECDL relationship between them. We also chose a hiding value $\gamma \in Z_r$ so that we can present the commitment without also revealing the value we claim to know.
+For value $x \in Z_r$ that we claim to know, we choose two random generators over an Elliptic Curve, $A \in G_1$ and $B \in G_1$, with no known ECDL relationship between them. We also chose a hiding value $\gamma \in Z_r$ so that we can present the commitment without also revealing anything about the value we claim to know.
  
-We publish our commitment and the two random generators as a triple $(A, B, C)$, keeping the hiding factor $\gamma$ secret, and where commitment $C$ is given as:
+We publish our commitment and the two random generators as a triple $(A, B, C)$, keeping $x$ and the hiding factor $\gamma$ secret, and where commitment $C$ is given as:
 $$C = \gamma A + x B \in G_1$$
 
-We can prove knowlege of $x$, for any random challenge value $z \in Z_r$, by computing and offering three values $(\alpha, L, R)$ where
+This is computationally binding on our choices of $x$ and $\gamma$ because they are applied to two independent curve generators $A$ and $B$. It is hiding because, even if you could perform ECDL, you still wouldn't be able to find them separately. All you would know is something about their sum, and that ranges over the entire field $Z_r$.
+
+We can prove knowledge of both $x$ and $\gamma$, for any random challenge value $z \in Z_r$, by computing and offering three values $(\alpha, L, R)$ where
 $$\alpha = z \, \gamma + \frac{x}{z} \in Z_r$$
 $$L = x \, A \in G_1$$
 $$R = \gamma \, B \in G_1$$
 
 The challenger then takes those values, and forms a new generator $G' \in G_1$
 $$G' = \frac{1}{z}\, A + z \, B$$
+and computes a modified commitment $C'$ as
+$$C' =  \frac{1}{z^2}\, L + C + z^2 \, R$$
 and then sees that
-$$ \alpha \, G' = \frac{1}{z^2}\, L + C + z^2 \, R$$
+$$ \alpha \, G' = C'$$
 
-For an NIZKP version of this, simply substitute $Z_r(H(A, B, C))$ for $z$, as a {\em{nothing up my sleeve}} challenge value.
+For an NIZKP version of this, simply substitute 
+$$z = Z_r(H(A, B, C))$$ 
+as a {\em{nothing up my sleeve}} challenge value. It proves knowledge of both $x$ and hiding factor $\gamma$. This kind of proof forms the whole basis for Bulletproofs. 
 
-The only problem with this kind of NIZKP is that we must reveal item $L =x \, A \in G_1$, which, if the challenger has the ability to perform discrete logs in $G_1$, means we have lost our secrecy surrounding $x$. Or worse, if $x$ is known to have come from some restricted domain, then a simple brute-force search, already knowing $A$, is all that is needed to reveal $x$.
+The only problem with this kind of ZKP is that we must reveal item $L =x \, A \in G_1$. If $x$ is known to have come from some restricted domain, then a simple brute force search, already knowing $A$, is all that is needed to reveal $x$. There is no danger facing $\gamma$ because it comes from a large field where brute force search is impractical.
 
+So to really protect knowledge of $x$, we do additional cloaking, as do Bulletproofs, using a random cloaking factor $\xi \in Z_r$. Instead of committing only to $x$, we now form three Pedersen commitments, one for each of $\xi$, $(x - \xi)$, and $x$. We furnish Pedersen commitment proofs on $\xi$ and $(x-\xi)$, and an additional proof relating the three commitments. 
+
+The three commitments are
+$$C_\xi = \gamma_\xi \, A + \xi \, B$$
+$$C_{(x-\xi)} = \gamma_{(x-\xi)} \, A + (x - \xi)\, B$$
+$$C_x = \gamma_x \, A + x \, B$$
+
+Proof of $C_\xi$ and $C_{(x-\xi)}$ is by way of the same kind of proof we just showed above for Pedersen commitments. There is no danger to $\xi$ and $(x - \xi)$ since they come from the entire range of field $Z_r$. 
+
+But to prove the $C_x$ commitment, we publish an adjustment term, $\gamma_{adj}$ in the $A$ curve, which only someone who knows all of the $\gamma$ hiding factors could have created,
+$$\gamma_{adj} = \gamma_x - (\gamma_\xi + \gamma_{(x-\xi)}) \in Z_r$$
+Then the validator sees that
+$$C_x = C_\xi + C_{(x-\xi)} + \gamma_{adj} \, A$$
+This proves our knowledge since, while the commitment point addition with the $B$ term is obvious, the point addition in $A$ has no known relationship to $\xi$, $x$, or $B$. 
+
+All three commitments are computationally binding and hiding. Committing to cloaking factor $\xi$ assures the validator that we aren't just making it up as we go. And committing to $(x - \xi)$ locks in the relationship between $\xi$ and $x$ in these coupled Pedersen commitments. The final proof between committments shows that we know the relationship between $\gamma_x$ and the already proven $\gamma_\xi$ and $\gamma_{(x-\xi)}$. 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Bulletproofs}
