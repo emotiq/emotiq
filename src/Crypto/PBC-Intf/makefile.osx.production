@@ -1,4 +1,4 @@
-GCC=g++ -dynamiclib -I$(PREFIX)/include  -O2 -msse3 -mfpmath=sse -m64 -L.
+GCC=g++ -dynamiclib -I$(PREFIX)/include  -O2 -msse3 -mfpmath=sse -m64 -L. -L$(PREFIX)/lib
 
 TARGET=$(PREFIX)/lib/libLispPBCIntf.dylib
 
