@@ -302,6 +302,8 @@ The background version
   `(ccl::atomic-decf ,place))
 
 (defmacro compare-and-swap (place before after)
+  "If place contained before, change it to after and return true.
+   Otherwise return false. Never blocks."
   (if (and (consp place)
            (or (eq 'car (car place))
                (eq 'cdr (car place))))
