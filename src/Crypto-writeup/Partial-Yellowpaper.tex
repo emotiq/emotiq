@@ -1,6 +1,9 @@
 \documentclass{yellowpaper}
 \usepackage{graphicx}
 \usepackage{balance}  % for  \balance command ON LAST PAGE  (only there!)
+\usepackage{pgf-pie}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shadows,arrows}
 
 \begin{document}
 
@@ -82,27 +85,26 @@ Blocks consist of a header and a list of transactions. The block header contains
 \subsection{Pairing-based Cryptography}
 Emotiq utilizes advanced bilinear pairing-based cryptography\cite{thesis}\cite{lib} (PBC) for user keying, Boneh-Lynn-Shacham (BLS) Signatures\cite{bls}, fast multi-party signatures, and for Randomness Generation. The advantages of PBC are numerous and include short signatures, fast signature generation, safe deterministic hierarchical wallet keying, and fast multiparty randomness generation.
 
-A bilinear pairing uses pairs of Elliptic Curves, defined over two separate groups, such that their bilinear mappings produce homomorphic encryption in a resulting composite field. If we denote the two curve groups as $G_1$ and $G_2$,  their Tate pairing field $G_T$, and prime order finite field $Z_q$, then their pairing $e(G_1,G_2) \in G_T$ is such that $$e(a \, U, V) = e(U, a \, V)= g^a$$ where $U \in G_1$, $V \in G_2$, $a \in Z_q$, and $g \in G_T$.
+A bilinear pairing uses pairs of Elliptic Curves, defined over two separate groups, such that their bilinear mappings produce homomorphic encryption in a resulting composite field. If we denote the two curve groups as $G_1$ and $G_2$,  their Tate pairing field $G_T$, and prime order finite field $Z_r$, then their pairing $e(G_1,G_2) \in G_T$ is such that $$e(a \, U, V) = e(U, a \, V)= g^a$$ where $U \in G_1$, $V \in G_2$, $a \in Z_r$, and $g \in G_T$.
 
 In our system, pairings are asymmetric. Group $G_1$ is always the smaller group, with the shortest representation. Pairings are ordered, and must be performed with a $G_1$ element as the first argument, and a $G_2$ element as second. 
 
-Specifically, our $Z_q$ uses 256 bits, $G_1$ was chosen to have a 264-bit representation, $G_2$ has a 520-bit representation, $G_T$ has a 3072-bit representation, and the prime order of the groups is $q \approx  2^{254}$, which gives us roughly $2^{127}$ security.
+Specifically, our $Z_r$ uses 256 bits, $G_1$ was chosen to have a 264-bit representation, $G_2$ has a 520-bit representation, $G_T$ has a 3072-bit representation, and the prime order of the groups is $r \approx  2^{256}$, which gives us roughly $2^{128}$ security.
 
-Private keys belong to the finite field $Z_q$ with the same prime group order. Public keys are generated in $G_2$, and signatures are generated in $G_1$. The embedding degree of our curves is 12, and correspond to {\emph{Type f}} asymmetric pairing curves in Lynn's Thesis\cite{thesis}. Wherever they occur, we use  compressed point representation for group elements from $G_1$ and $G_2$.
+Private keys belong to the finite field $Z_r$ with the same prime order. Public keys are generated in $G_2$, and signatures are generated in $G_1$. The embedding degree of our curves is 12, and correspond to {\emph{Type F}} asymmetric pairing curves\footnote{These curves are also known as BN Pairing Curves, for the discoveries by Barreto and Naehrig.\cite{bn}} in Lynn's Thesis\cite{thesis}. Wherever they occur, we use  compressed point representation for group elements from $G_1$ and $G_2$.
 
 The complete specification of the Emotiq cryptosystem requires knowledge of all curve pairing parameters, plus two chosen generators $U \in G_1$, and $V \in G_2$. 
 
-Hash values are first mapped to an element of $Z_q$ before creating points in $G_1$ and $G_2$ as 
-$$G_1(H(x)) \equiv Z_q(H(x)) \, U$$ 
-and 
-$$G_2(H(x)) \equiv Z_q(H(x)) \, V$$
+Hash values are mapped into fields and groups in a secure manner,\footnote{Specifically, for $z = H(x) \in Z$, the value $z$ is mapped into $Z_n$ fields by first absorbing its entire value, with its byte vector seen as denoting a big-endian representation. Then, if the value exceeds the order, $n$, of the field, it is successively truncated by 2 until it has value below the field order. 
 
-In the following presentation we shall try to adhere to the convention that groups $G_1$ and $G_2$ are additive groups, while $Z_q$ and $G_T$ are both additive and multiplicative. Capitalized symbols denote groups and points from Elliptic curves, while lower cased symbols denote elements of finite fields. Field arithmetic in $Z_q$ is implicitly performed $(mod\,q)$.
+For Elliptic Curve groups, the value of the field is treated as an $X \in Z_q$ coordinate for a point on the curve. If that $X$ is a valid abscissa, then its positive $Y$ counterpart is chosen. If the $X$ coordinate is not valid, then the curve is re-probed using $X^2+1$ as a new trial abscissa.} allowing proofs of security with hashing as random oracles. We denote the hash mapping as $G(H(x)) \in G$ for mapping an item $x$ being first hashed, $H(x)$, then mapped into the field or group, $G$. Hash $H(x)$ is generally SHA3/256 operating on $x$  after its conversion to a vector of bytes.
+
+In the following presentation we shall try to adhere to the convention that groups $G_1$ and $G_2$ are additive groups, while $Z_r$ and $G_T$ are both additive and multiplicative. Capitalized symbols denote fields, groups, and points from Elliptic Curves, while lower cased symbols denote elements of finite fields. Field arithmetic in $Z_r$ is implicitly performed $(mod\,r)$.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Boneh-Lynn-Shacham (BLS) Signatures}
 
-BLS signatures are the shortest possible, and enable multisignature generation in just one pass. A BLS signature on message $msg$ is computed as $$Sig = s \, G_1(H(msg))$$ where $H(x)$ is the SHA3/256 hash of its argument, $s \in Z_q$ is the user's secret key value, and $G_1(H(x)) \in G_1$ is the group member that corresponds to that hash value. A signature is always accompanied by the public key of the signer, $P = s \, V$, for generator $V \in G_2$,  producing a signed message as a triple $$(msg, Sig, P)$$
+BLS signatures are the shortest possible, and enable multisignature generation in just one pass. A BLS signature on message $msg$ is computed as $$Sig = s \, G_1(H(msg))$$ where $H(x)$ is the SHA3/256 hash of its argument, $s \in Z_r$ is the user's secret key value, and $G_1(H(x)) \in G_1$ is the group member that corresponds to that hash value. A signature is always accompanied by the public key of the signer, $P = s \, V$, for generator $V \in G_2$,  producing a signed message as a triple $$(msg, Sig, P)$$
 
 Because of homomorphism we can verify a signature by noting that a valid signature exhibits the pairing relationship 
 $$
@@ -150,7 +152,7 @@ In and of itself, a single pass through a Cosi tree is insufficient to guarantee
 The second pass sends the, now validated, message and its multisignature to all participant nodes in the Cosi network, to ensure that each node has seen the validated multisignature. Their new signatures attest that they will remember this message for future reference in efforts to deny double spending. This corresponds to the {\em{commit}} phase of consensus. Once all Cosi nodes have signed off on the validated message, and if the count remains above the pBFT threshold, the caller of this consensus round can be confident that pBFT consensus has been achieved.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Transaction Privacy}
-A simple technique for cloaking all transactions in a publicly verifiable manner does not need bilinear pairings, although an algorithm in bilinear pairings can also be developed.\footnote{For single curve computations, we perform in field $Z_q$ and group $G_2$ since that field already has our private keys, and the $G_2$ group has our public keys. Hence the same keying can be used over a single curve algorithm and for all of our pairing cryptography.}
+A simple technique for cloaking all transactions in a publicly verifiable manner does not need bilinear pairings, although an algorithm in bilinear pairings can also be developed.\footnote{For single curve computations, we perform in field $Z_r$ and group $G_2$ since that field already has our private keys, and the $G_2$ group has our public keys. Hence the same keying can be used over a single curve algorithm and for all of our pairing cryptography.}
 
 We start with recognizing that a full transaction satisfies the following simple relation:
 $$paid = cost + fees + change$$
@@ -164,17 +166,17 @@ To provide privacy for the transaction, the numeric value of $(change - paid)$ i
 
 At the same time, we must also provide cryptographic proofs that the values of $change$ and $paid$ both lie within legitimate range, and that $change < paid$. That is the purpose of Bulletproofs, discussed in the next section.
 
-A buyer cloaks his or her purchase offer by forming a quadruple $(P_{buy}, P_{sell}, t_{buy}, R_{sell})$, for public keys $P_{buy} = s_{buy} \, V \in G_2$, $P_{sell} = s_{sell} \, V \in G_2$, $s_{buy}, t_{buy}, s_{sell} \in Z_q$, and a point on an Elliptic Curve, $R_{sell} \in G_2$, for generator $V \in G_2$ on the curve, given as
-$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_q$$
+A buyer cloaks his or her purchase offer by forming a quadruple $(P_{buy}, P_{sell}, t_{buy}, R_{sell})$, for public keys $P_{buy} = s_{buy} \, V \in G_2$, $P_{sell} = s_{sell} \, V \in G_2$, $s_{buy}, t_{buy}, s_{sell} \in Z_r$, and a point on an Elliptic Curve, $R_{sell} \in G_2$, for generator $V \in G_2$ on the curve, given as
+$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_r$$
 and
 $$R_{sell} = k_{rand}\, P_{sell} \in G_2$$
-for $k_{rand}$ a random cloaking factor, and buyer's secret key $s_{buy} \in Z_q$.
+for $k_{rand}$ a random cloaking factor, and buyer's secret key $s_{buy} \in Z_r$.
 
 The random cloaking factor, $k_{rand}$, provides privacy by making each transaction appear different, even when the same currency values are involved. It also protects the secret keys, since the only other relation anyone knows about them comes from the public keys, and there is the ECDLP barrier of difficulty between them.
 
 At the seller's end, we compute
 $$C_{sell} = \frac{cost + fees}{s_{sell}} \, R_{sell} \in G_2$$
-for seller's secret key $s_{sell} \in Z_q$, and check that
+for seller's secret key $s_{sell} \in Z_r$, and check that
 $$t_{buy}\, P_{buy} + C_{sell} = G_2(0)$$
 Value $G_2(0)$ is the identity element in the curve group, and easily  recognized by everyone. To accept the transaction, seller publishes the quadruple $(P_{buy}, P_{sell}, t_{buy}, C_{sell})$ so that everyone can verify the same $G_2(0)$ that represents a valid transaction.
 
@@ -190,7 +192,7 @@ s_{sell} &\to 1 \notag
 \end{align}
 
 The buyer publishes the triple $(P_{buy}, t_{buy}, R)$, where $t_{buy}$ is as before,
-$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_q$$
+$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_r$$
 and
 $$R = k_{rand}\, V \in G_2$$
 
@@ -202,6 +204,37 @@ $$t_{buy}\, P_{buy} + C = G_2(0)$$
 The validation relation proves that the buyer formed the purchase offer, and that they forwarded enough money to cover net costs, while still cloaking the values involved. The cloaked values need to be accompanied by range proofs.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Cryptographic Proofs}
+Cryptographic proofs can be written for almost any claim. Value range proofs can be developed to prove that a hidden quantity lies within a specific range. That will be the topic of Bulletproofs. 
+
+But in preparation for more advanced forms of cryptographic proofs, let's first just examine a method for making a claim that some value is known, and can be proven as known to anyone, without first revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
+
+ZKP's require interaction. A claim is made cryptographically. A verifier challenges the claimant for proof, and the claimant provides another one or more values that can be used by the challenger to verify the claim using a simple calculation. 
+
+ZKP's can be converted into Non-Interactive ZKP's (NIZKP) by using the Shamir construction, where, instead of an interactive challenge, we simply provide a hash of the transcript used in making the commitments to the value. It would be extraordinarily difficult for a claimant to produce a hash with a cunningly chosen value, and so a hash stands in for random challenges offered by validators.
+
+There are two parts to any cryptographic proof. First is making a binding claim, so that the claimant cannot change his mind and offer phony values later, just chosen to satisfy every query by the validators. We do that with Pedersen Commitments. 
+
+For value $x \in Z_r$ that we claim to know, we choose two random generators over an Elliptic Curve, $A \in G_1$ and $B \in G_1$, with no known ECDL relationship between them. We also chose a hiding value $\gamma \in Z_r$ so that we can present the commitment without also revealing the value we claim to know.
+ 
+We publish our commitment and the two random generators as a triple $(A, B, C)$, keeping the hiding factor $\gamma$ secret, and where commitment $C$ is given as:
+$$C = \gamma A + x B \in G_1$$
+
+We can prove knowlege of $x$, for any random challenge value $z \in Z_r$, by computing and offering three values $(\alpha, L, R)$ where
+$$\alpha = z \, \gamma + \frac{x}{z} \in Z_r$$
+$$L = x \, A \in G_1$$
+$$R = \gamma \, B \in G_1$$
+
+The challenger then takes those values, and forms a new generator $G' \in G_1$
+$$G' = \frac{1}{z}\, A + z \, B$$
+and then sees that
+$$ \alpha \, G' = \frac{1}{z^2}\, L + C + z^2 \, R$$
+
+For an NIZKP version of this, simply substitute $Z_r(H(A, B, C))$ for $z$, as a {\em{nothing up my sleeve}} challenge value.
+
+The only problem with this kind of NIZKP is that we must reveal item $L =x \, A \in G_1$, which, if the challenger has the ability to perform discrete logs in $G_1$, means we have lost our secrecy surrounding $x$. Or worse, if $x$ is known to have come from some restricted domain, then a simple brute-force search, already knowing $A$, is all that is needed to reveal $x$.
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Bulletproofs}
 
@@ -216,7 +249,7 @@ The use of BLS Signatures allows an abbreviated form of PVSS randomness generati
 
 Within each group, a sharing threshold is set at $t = \lfloor \frac{N}{3} \rfloor + 1$ for group size $N$. Secret random seeds are generated by each participant, then encrypted shares are formed over that secret and distributed to other group members, along with cryptographic proofs on the shares.
 
-For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $p(i)$, are then encrypted by multiplying the share value by the public key of each member, $E(share_i) = Z_q(p(i))\, P_i \in G_2$, and proofs are generated by forming a point, $Proof_i = Z_q(p(i)) \,U \in G_1$, for generator $U \in G_1$. 
+For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $p(i)$, are then encrypted by multiplying the share value by the public key of each member, $E(share_i) = Z_r(p(i))\, P_i \in G_2$, and proofs are generated by forming a point, $Proof_i = Z_r(p(i)) \,U \in G_1$, for generator $U \in G_1$. 
 
 A vector of shares and a vector of proofs is generated, one element for each member of the group, and these vectors are then transmitted to each group member.
 $$(E(share_1), E(share_2), ..., E(share_N))$$
@@ -234,7 +267,7 @@ $$\sum_i {c_{\perp}}_i \, Proof_i = G_1(0)$$
 
 This consistency check is absolutely certain for valid sharing vectors, and has an inconsequential probability of failing to detect an improper sharing set given as $\approx 1/q$, or about 1 chance in $2^{254}$. There is a greater likelihood of finding a hash collision in SHA3/256 than in seeing a failure to detect an inconsistent sharing vector.
 
-After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, $$G_2(share_i) = \frac{1}{s_i}E(share_i) \in G_2$$ for secret key $s_i \in Z_q$.
+After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, $$G_2(share_i) = \frac{1}{s_i}E(share_i) \in G_2$$ for secret key $s_i \in Z_r$.
 
 This decrypted share is then broadcast to all group members. Decrypted shares can be verified from the pairing relation:
 $$ e(Proof_i, V) = e(U, G_2(share_i))$$
@@ -276,46 +309,101 @@ However, we now also need to supply these proof sums along with any decrypted sh
 \subsection{Verifiable Random Functions}
 A verifiable random function (VRF)\cite{vrf2} uses a pseudo-random function (PRF) in such a way as to furnish proof that the resulting pseudo-random value came from a specific seed value mixed with the creator's secret key. And even though a secret key was involved in the generation of randomness, anyone can duplicate the calculation by knowing only the seed value and creator's public key. We follow the work of Dodis and Yampolskiy\cite{vrf}, to provide a PRF as follows:
 
-For arbitrary input seeding values, form the hash $H(seed)$ using SHA3/256. This converts arbitrary objects of any length into a 256-bit random-like, but reproducible, pattern. Then map that hash value into our $Z_q$ field, which has dimension $q = |Z_q| \approx 2^{254}$, to produce $x = Z_q(H(seed))$.
+For arbitrary input seeding values, form the hash $H(seed)$ using SHA3/256. This converts arbitrary objects of any length into a 256-bit random-like, but reproducible, pattern. Then map that hash value into our $Z_r$ field, which has dimension $r = |Z_r| \approx 2^{256}$, to produce $x = Z_r(H(seed))$.
 
 Output of the VRF is a pseudo-random value in the pairing field (3072 bits) 
 $$y = VRF(x, s) = e(U,V)^{1/(x + s)} \in G_T$$ 
-for secret key $s \in Z_q$,  generators $U \in G_1$, $V \in G_2$, and with proof 
+for secret key $s \in Z_r$,  generators $U \in G_1$, $V \in G_2$, and with proof 
 $$R = \frac{1}{x+s}\,U \in G_1$$ 
 
-Output of the VRF is the quadruple $(seed, x, y, R)$, i.e., the original seed, the seed deterministically reduced to an element of $Z_q$, the output of the VRF computation, and the point in $G_1$ that represents the proof.
+Output of the VRF is the quadruple $(seed, x, y, R)$, i.e., the original seed, the seed deterministically reduced to an element of $Z_r$, the output of the VRF computation, and the point in $G_1$ that represents the proof.
 
-Verification of proof checks the pairing $$e(R, x \, V + P) = e(U,V)  \in G_T$$ for public key $P = s \, V \in G_2$, and to verify that $$y = e(R,V)$$ and that $$x = Z_q(H(seed))$$
+Verification of proof checks the pairing $$e(R, x \, V + P) = e(U,V)  \in G_T$$ for public key $P = s \, V \in G_2$, and to verify that $$y = e(R,V)$$ and that $$x = Z_r(H(seed))$$
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Blockchain Leader Election}
 Publicly verifiable randomness generation is used to perform leader elections for blockchain production. All public key holders can choose to participate in elections by depositing an amount of currency into escrow as their stake. Stakeholders also participate as members of Cosi and Randherd protocols.
 
-The amount at stake is a hedge against misbehavior to thwart attacks.  Requiring a stake helps prevent Sybil attacks. If a participant has staked some currency and is found to be misbehaving, that stake will be forfeited and the participant will be barred from future participation for some period of time. Conversely, members in good standing are rewarded for their services by sharing transaction fees with them in proportion to their stake.
+The amount at stake is a hedge against misbehavior.  Requiring a stake helps prevent Sybil attacks due to its expense. If a participant has staked some currency and is found to be misbehaving, that stake will be forfeited and shared among its peers, and the participant will be barred from future participation for some period of time. Conversely, members in good standing are rewarded for their services by sharing transaction fees with them in proportion to their stake.
 
 Elections are stake-weighted lotteries. The larger your stake, the greater your chances of winning a round. After serving one round, the leader relinquishes his right to be re-elected until some number of rounds later. But former leaders can still serve as participants in other blockchain activities and receive rewards. The leader block is awarded a fixed fraction of the fee bounty, while the remainder is distributed to other participants in proportion to their stakes.
+$$
+$$
+{\em{Q: Aren't there administrative expenses to be paid as well? Cost of operating the network?}}
+$$
+$$
 
-In order to produce a stake-weighted lottery, we could imagine dividing a circle into angular sections proportional to individual stakes, with the full circumference of the circle representing the sum of all stakes. A uniform random number over a finite interval acts as a spinner in a dial readout, and wherever it points after a spin, that member is selected as the next leader. Larger stakeholders occupy a larger portion of the circumference, and so have a more likely chance of winning.
+In order to produce a stake-weighted lottery, we could imagine dividing a circle into angular sections proportional to individual stakes, with the full circumference of the circle representing the sum of all stakes. A uniformly generated random number over a finite interval acts as a spinner in a dial readout, and wherever it points after a spin, that member is selected as the next leader. Larger stakeholders occupy a larger portion of the circumference, and so have a more likely chance of winning.
 
-In practice a binary tree of participants is formed, in arbitrary order, where each interior node represents the sum of all its sub-node stakes. The topmost node of the tree shows the full sum of all stakes represented in the tree, with all participants located in leafs. Branching decisions begin at the top node of the tree and descend toward leafs using the random value as a probe of the interval described by the partial sum at each node, with the division between left and right based on the relative weights of its two subtrees. Descent continues until meeting a leaf node, and declaring that node the winner of the election. 
+\begin{figure}[h!]
+\centering
+
+\begin{tikzpicture}
+\pie [text=pin, rotate = 90, before number =, after number =,]
+    {40/Stake 1, 20/Stake 2, 30/Stake 3, 10/Stake 4}
+\end{tikzpicture}
+
+\bigskip
+
+\begin{tikzpicture}[sibling distance=4cm,
+  every node/.style = { shape=rectangle, rounded corners,
+    draw, align=center, top color=white, bottom color=blue!20}]
+
+\node{\ \ 100 (40 + 30 + 20 + 10)\ \ }[->]
+  child[->]{ node {\ \ \ 60 (40 + 20)\ \ \ }
+    child[sibling distance=2cm]{ node[bottom color=blue] {40}}
+    child[sibling distance=2cm]{ node[bottom color=cyan] {20}}
+  }
+  child[->]{ node {40 (30 + 10)}
+    child[sibling distance=2cm]{ node[bottom color=yellow] {30}}
+    child[sibling distance=2cm]{ node[bottom color=orange] {10}}
+  };
+\end{tikzpicture}
+
+\caption{Imagining a spin dial as a tree. Segments
+are sized in proportion to escrow stakes.}
+  \label{fig:spinner}
+\end{figure}
+
+
+In practice a binary tree of participants is formed, in some consistent order, where each interior node represents the sum of all its sub-node stakes. The topmost node of the tree shows the full sum of all stakes represented in the tree, with all participants located in leafs. Branching decisions begin at the top node of the tree and descend toward leafs using the random value as a probe of the interval described by the partial sum at each node, with the division between left and right based on the relative weights of its two subtrees. Descent continues until meeting a leaf node, and declaring that node the winner of the election. 
 
 If the random probe value is converted into a fractional value of its range, and each interior node is relabeled with its division fractional value, then it is simple to choose left or right subnodes based on a single comparison between the two fractional values.
 
-Once elected, the leader forms the necessary Cosi trees and Randherd groups, and begins assembling a new block for the duration of the epoch until the next election round. There must be a balancing between the period between elections and the length of time it takes to assemble and validate blocks. The larger the block, in number of transactions to be verified, the longer it must take. At some size, that administrative duration will exceed the interval between Randherd beacon outputs.
+That this works can be seen by noting that every interior node of the tree serves both as denominator to nodes below, and as numerator to connections above, hence cancelling out. The final probability for any participant winning becomes the same as their escrow stake divided by the sum of all participant escrow stakes.
+
+\subsubsection{Self-Healing Protocol}
+Once elected, the new leader forms the necessary Cosi trees and Randherd groups, and begins assembling a new block for the duration of the epoch until the next election round. There is implicit consensus on the election result as Cosi requests become satisfied using newly formed groups.
+
+We try to construct a protocol that is self-healing in the event that failures arise. In normal circumstances, elections are held on a schedule, and all stakeholders recognize the signal to hold a new election. 
+
+There must be a balancing of the period between elections and the length of time it takes to assemble and validate blocks. The larger the block, in number of transactions to be verified, the longer it will take. Beyond some size, that administrative duration would exceed the interval between Randherd beacon outputs.
+
+Each stakeholder knows all the other participants in the escrow system, and can run the election for themselves upon seeing the random value of the election signal. Election signals arrive by way of authenticated randomness, and all stakeholders should know which other participants can sign the randomness. Outsider trolls will be ignored.
+
+All nodes should be able to agree on election outcome, but if not, then one of two things could happen. First, if a stakeholder thinks it won the election but was mistaken, then any attempts at forming new Cosi networks by the faux leader would be silently rejected by others, and it would fail to obtain a consensus on any new requests. If that happens, the rejected leader should resynchronize its list of participants, rerun its own election, and join back in after agreeing on the outcome. 
+
+Second, a stakeholder might think that someone else had won the election. In that case, it would silently reject Cosi formation requests by whomever had actually won, and never see any requests from whom it thought it should. After some reasonable timeout period, it should resynchronize its list of participants, and then join back in as most recently directed, after agreeing on the election outcome.
+
+If new election signals arrive during an interval between two consensus Cosi rounds, then participants should ignore the signals until either the second round completes, or some reasonable timeout expires. At that point they can run the election on the most recent signal received. 
+
+If a stakeholder wins an election but is absent or comes under attack, it may not respond to its own election as leader, or block assembly activities will cease in that epoch. Any stakeholder can call for a new early election, and after $(2 f+1)$ such calls have been seen, a new election cycle ensues. (Byzantine attacks may try this as well, hence the threshold.)
+
+Honest stakeholder nodes will typically register a complaint after seeing no activity for longer than an adaptive threshold based on recent past rates. An exponential average could be used for this purpose. Early elections will use the last random election probe against a decision tree that excludes the previously elected leader.
+
+It might seem possible to confuse two situations. On the one hand, if a stakeholder gets out of sync on participants, and mistakenly concludes a different leader election outcome from the rest of its peers, it will eventually timeout waiting for activity from the expected leader. That is easy to differentiate from the case of a newly appointed leader being absent, since in the first case there ought to be activity from some other claimed leader. In the second case there is a total absence of activity. Only for the second case should we register a call for new early election.
+
+But it is still possible that both conditions are present. A new leader is elected, it is absent and does not respond, and our misinformed stakeholder is also out of sync. This won't be corrected until an early election is held and the errant stakeholder finally realizes its confusion.
 $$
 $$
-{\em{(What happens if another Randherd random value arrives while everyone is busy validating blocks? Holding a new election right then could spoil the ongoing consensus, marking that block as a failure. And the same thing would happen again, or worse, during the next epoch, as it plays catch-up in block assembly. 
+{\em{This looks like a situation with potential instability. 
+Oscillations could arise. 
+We really ought to simulate some of this before committing to a design...
 
-Do we need consensus to hold a new election? Then consensus again to validate the election outcome? And so should nodes involved in consensus rounds be stateful so they know not to respond to elections until consensus has completed?
-
-Is consensus nested? Can there be consensus rounds ongoing, inside of an outer consensus round?)}}
+It is also looking like a finite state machine could be written to cover the protocol... next on the agenda
+}}
 $$
 $$
 
-If a stakeholder wins an election but is absent or comes under attack, it may not respond to its election as leader, or block assembly activities will cease in that epoch. Any stakeholder can call for a new forced election, and after $(2 f+1)$ such calls have been seen, a new election cycle ensues. All other honest stakeholder nodes that have also seen the threshold number of calls for new election will eagerly grant consensus to newly elected leaders. Stakeholder nodes will typically register a complaint after seeing no activity for longer than an adaptive threshold based on recent past rates. An exponential average could be used for this purpose. 
-
-Calls for election are by gossip protocol, and the election protocol is performed in each stakeholder node. Whichever node notices its election as leader must gain the consensus of all other nodes in forming its own Cosi trees. Hence it must use the extant Cosi networks from the current epoch. Failed consensus constitutes a failed election cycle from the perspective of that node. The node can register a call for new election, or else respond to new gossip messages to participate in an epoch managed by some other node that also sees itself as winning the lottery. 
-
-If this happens, then it may be time to resynchronize its notion of stakeholder participants against the blockchain record. A stakeholder node so distracted in this manner constitutes just another example from the spectrum of Byzantine failures, and while distracted the node may fail to perform other duties it should have been doing. But the consensus protocol is adaptable to Byzantine failures and will proceed without the node.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Cryptographic Sortition}
@@ -334,26 +422,26 @@ Anyone can generate new public keys at any time, based on previously known publi
 But in order to obtain a decryption key for the new public keys, you must ask the primary secret key holder for a decryption key. Doing so puts the primary key holder at no risk for exposing his or her private key.
 
 A new public key can be generated by asking for a subkey of a given public key, using an arbitrary identity value to identify that subkey. The new public key is computed as 
-$$ P_{id} = Z_q(H(id)) \, V + P$$ 
-for identity $id$, generator $V \in G_2$, public key $P \in G_2$, and where $Z_q(H(id)) \in Z_q$ is the element of the field that corresponds to the hash of the supplied identity. 
+$$ P_{id} = Z_r(H(id)) \, V + P$$ 
+for identity $id$, generator $V \in G_2$, public key $P \in G_2$, and where $Z_r(H(id)) \in Z_r$ is the element of the field that corresponds to the hash of the supplied identity. 
 
-You can use this public key to encrypt a message by making use of the hash of a pairing value as an XOR mask against a message $$E(msg) = msg \oplus H(g^r)$$ where $r = Z_q(H(msg, id)) \in Z_q$, and pairing element 
-$$g^r = e(U, r \, V)$$
-for generator $U \in G_1$, generator $V \in G_2$. The message is transmitted as the triple $(E(msg), R, id)$, with $R = r \, P_{id} \in G_2$.
+You can use this public key to encrypt a message by making use of the hash of a pairing value as an XOR mask against a message $$E(msg) = msg \oplus H(g^x)$$ where $x = Z_r(H(msg, id)) \in Z_r$, and pairing element 
+$$g^x = e(U, x \, V)$$
+for generator $U \in G_1$, generator $V \in G_2$. The message is transmitted as the triple $(E(msg), X, id)$, with $X = x \, P_{id} \in G_2$.
 
-In order to produce a decryption key for that new public key, the primary key holder computes $$S_{id} = \frac{1}{s + Z_q(H(id))} \, U \in G_1$$ for secret key $s \in Z_q$. Producing a decryption key in $G_1$ ensures, by difficulty of ECDLP, that our master private key remains safe against exposure.
+In order to produce a decryption key for that new public key, the primary key holder computes $$S_{id} = \frac{1}{s + Z_r(H(id))} \, U \in G_1$$ for secret key $s \in Z_r$. Producing a decryption key in $G_1$ ensures, by difficulty of ECDLP, that our master private key remains safe against exposure.
 
 Homomorphism allows us to see that the pairings 
 $$
 \begin{align}
-    e(S_{id}, R) &= e(\frac{1}{s + Z_q(H(id))}\, U, r\,(Z_q(H(id)) \, V + P)) \\
-    &= e(U, r\, V) = g^r
+    e(S_{id}, X) &= e(\frac{1}{s + Z_r(H(id))}\, U, x\,(Z_r(H(id)) \, V + P)) \\
+    &= e(U, x\, V) = g^x
 \end{align}$$ 
 which allows us to recreate the XOR mask and decrypt to the original message 
-$$msg = E(msg) \oplus H(g^r)$$ 
+$$msg = E(msg) \oplus H(g^x)$$ 
 
-Verification of the message is done by computing $r = Z_q(H(msg, id))$ and checking that 
-$$r\, (Z_q(H(id))\, V + P) = R \in G_2$$
+Verification of the message is done by computing $x = Z_r(H(msg, id))$ and checking that 
+$$x\, (Z_r(H(id))\, V + P) = X \in G_2$$
 
 In this form, a new private key cannot be used to sign messages in the usual manner as for BLS signatures with the master private key, because we have $P_{id} \neq s_{id} \, V$. But it does furnish a way to encrypt and decrypt messages by using the hash of the pairing result. This technique has been dubbed SAKKE by its authors Sakai-Kasahara\cite{sakke}. We have extended SAKKE encryption to indefinite length by using successive SHA3 hashes on the pairing field result and an increasing index value.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -368,6 +456,9 @@ In this form, a new private key cannot be used to sign messages in the usual man
 % \bibliography{yellowpaper}  
 
 \begin{thebibliography}{99}
+
+\bibitem{bn}Paulo S. L. M. Barreto and Michael Naehrig
+{\em{Pairing-Friendly Elliptic Curves of Prime Order}}
 
 \bibitem{scrape}Ignacio Casudo and Bernardo David, 
 {\em{ SCRAPE: Scalable Randomness Attested by Public Entities}} 
