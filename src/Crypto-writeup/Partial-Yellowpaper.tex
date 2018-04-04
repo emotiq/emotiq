@@ -264,7 +264,7 @@ All three commitments are computationally binding and hiding. Committing to cloa
 \subsection{Bulletproofs}
 Bulletproofs are used to provide range proofs on numeric values. Non-cryptographic useful values generally come from restricted domains. We could provide range proofs on such values by providing Pedersen commitments and proofs to show that the value is equal to one of the possible values from the range. If there were only a small number of possibilities, this might seem reasonable.
 
-But consider a value from the domain of 64-bit numbers. There are $2^{64}$ possible values, and it would be impractical to provide a proof over each possibility. Instead, we could provide proofs over each bit of the value, to show that each one is either 0 or 1, and to prove that we know which it is. But that is still 64 or more commitments and proofs just for a single value.
+But consider a value from the domain of 64-bit numbers. There are $2^{64}$ possible values, and it would be impractical to provide a proof over each possibility. Instead, we could provide proofs over each bit of the binary encoding of the value, to show that each one is either 0 or 1, and to prove that we know which it is. But that is still 64 or more commitments and proofs just for a single value.
 
 Going back to the Pedersen commitment proof, notice that our proofs show that we actually know two quantities, $x$ and hiding factor $\gamma$, and all we had to do to prove that duo was to furnish one additional field value, $\alpha$. That 2-to-1 reduction is the reason for the moniker {\em{BulletProofs}}, and is reminiscent of the very reason to use proofs over binary encodings of values. 
 
@@ -317,7 +317,7 @@ Final randomness results from a supermajority sum of randomness obtained from ea
 
 So the use of pairing-based cryptography shows great benefits, not only in minimizing network traffic, and by making immediate commitments to portions along the way, and also from the fact that proofs are so easily generated as simple sums of existing proofs.
 
-Timing tests show that this approach scales linearly with number of group participants, ranging from about 5 seconds for 32 group members, to about 7 minutes for 1024 group members, on an ordinary iMac with an Intel i7 processor. The timings are dominated by compute load, not network communications.
+Timing tests show that this approach scales linearly with number of group participants, ranging from about 5 seconds for 32 group members, to about 3 minutes for 1024 group members, on an ordinary iMac with an Intel i7 processor. The timings are dominated by compute load, not network communications.
 
 \begin{figure}[h!]
   \centering
@@ -338,7 +338,7 @@ $$e(Proof_i, P_i) = e(U,E(share_i))$$
 
 These proof sums correspond directly to the proofs presented in the previous section. And they also directly verify that every encrypted share came from the same polynomial. One advantage of this method is that instead of transmitting $2 N$ vector elements, we now only need to transmit $N+t$ elements.
 
-However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about half as fast when $N=1024$. But the method is equivalent in its information content, and every bit as secure.
+However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about three times slower when $N=1024$. But the method is equivalent in its information content, and every bit as secure.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Verifiable Random Functions}
 A verifiable random function (VRF)\cite{vrf2} uses a pseudo-random function (PRF) in such a way as to furnish proof that the resulting pseudo-random value came from a specific seed value mixed with the creator's secret key. And even though a secret key was involved in the generation of randomness, anyone can duplicate the calculation by knowing only the seed value and creator's public key. We follow the work of Dodis and Yampolskiy\cite{vrf}, to provide a PRF as follows:
