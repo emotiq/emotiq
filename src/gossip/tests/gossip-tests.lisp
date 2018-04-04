@@ -2,7 +2,9 @@
 
 (in-package :gossip-tests)
 
-(REMOVE-TESTS :ALL)
+(eval-when (:load-toplevel :execute)
+  (set-protocol-style :full)
+  (REMOVE-TESTS :ALL))
 
 (defun %aliveness (uid)
   "Runs test sending initial message to node with given uid"

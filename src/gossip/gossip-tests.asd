@@ -9,7 +9,7 @@
   :serial t
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
-                          :all :gossip-test))
+                          :all :gossip-tests))
   :components ((:module package
                         :pathname "tests/"
                         :components ((:file "package")))

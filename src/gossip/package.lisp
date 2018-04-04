@@ -13,4 +13,5 @@
    #:run-gossip-sim
    #:as-hash-table
    #:make-node
-   #:listify-nodes))
+   #:listify-nodes
+   #:set-protocol-style))
