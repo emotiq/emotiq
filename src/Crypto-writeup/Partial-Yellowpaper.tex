@@ -216,6 +216,7 @@ ZKP's can be converted into Non-Interactive ZKP's (NIZKP)
 
 There are two parts to any cryptographic proof. First is making a binding claim, so that the claimant cannot change his mind and offer phony values later, just chosen to satisfy every query by the validators. We do that with Pedersen Commitments. 
 
+\subsubsection{Pedersen Commitments}
 For value $x \in Z_r$ that we claim to know, we choose two random generators over an Elliptic Curve, $A \in G_1$ and $B \in G_1$, with no known ECDL relationship between them. We also chose a hiding value $\gamma \in Z_r$ so that we can present the commitment without also revealing anything about the value we claim to know.
  
 We publish our commitment and the two random generators as a triple $(A, B, C)$, keeping $x$ and the hiding factor $\gamma$ secret, and where commitment $C$ is given as:
@@ -239,6 +240,7 @@ For an NIZKP version of this, simply substitute
 $$z = Z_r(H(A, B, C))$$ 
 as a {\em{nothing up my sleeve}} challenge value. It proves knowledge of both $x$ and hiding factor $\gamma$. This kind of proof forms the whole basis for Bulletproofs. 
 
+\subsubsection{Pedersen Commitments with Cloaking}
 The only problem with this kind of ZKP is that we must reveal item $L =x \, A \in G_1$. If $x$ is known to have come from some restricted domain, then a simple brute force search, already knowing $A$, is all that is needed to reveal $x$. There is no danger facing $\gamma$ because it comes from a large field where brute force search is impractical.
 
 So to really protect knowledge of $x$, we do additional cloaking, as do Bulletproofs, using a random cloaking factor $\xi \in Z_r$. Instead of committing only to $x$, we now form three Pedersen commitments, one for each of $\xi$, $(x - \xi)$, and $x$. We furnish Pedersen commitment proofs on $\xi$ and $(x-\xi)$, and an additional proof relating the three commitments. 
