@@ -563,33 +563,37 @@ comparison.")
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
 
-(defun init-pairing (&optional (params *curve-fr256-params*))
+(defun init-pairing (&key (params *curve-fr256-params* params-supplied-p)
+                          force)
   (mpcompat:with-lock (*crypto-lock*)
-    (setf *curve* nil)
-    (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
-                                                (g1  g1)
-                                                (g2  g2)) params)
-               (ntxt   (length txt)))
-      
-      (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
-        (cffi:with-foreign-string (ctxt txt
-                                        :encoding :ASCII)
-          (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
-          (setf *curve* params
-                *g1-size*  (cffi:mem-aref ansbuf :long 0)
-                *g2-size*  (cffi:mem-aref ansbuf :long 1)
-                *gt-size*  (cffi:mem-aref ansbuf :long 2)
-                *zr-size*  (cffi:mem-aref ansbuf :long 3)
-                *curve-order* nil)
-          (if g1
-              (set-generator g1)
-            (setf *g1* (get-g1)))
-          (if g2
-              (set-generator g2)
-            (setf *g2* (get-g2)))
-          (get-order)
-          (values)
-          )))))
+    (when (or force
+              params-supplied-p
+              (null *curve*))
+      (setf *curve* nil)
+      (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
+                                                  (g1  g1)
+                                                  (g2  g2)) params)
+                 (ntxt   (length txt)))
+        
+        (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
+          (cffi:with-foreign-string (ctxt txt
+                                          :encoding :ASCII)
+            (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
+            (setf *curve* params
+                  *g1-size*  (cffi:mem-aref ansbuf :long 0)
+                  *g2-size*  (cffi:mem-aref ansbuf :long 1)
+                  *gt-size*  (cffi:mem-aref ansbuf :long 2)
+                  *zr-size*  (cffi:mem-aref ansbuf :long 3)
+                  *curve-order* nil)
+            (if g1
+                (set-generator g1)
+              (setf *g1* (get-g1)))
+            (if g2
+                (set-generator g2)
+              (setf *g2* (get-g2)))
+            (get-order)
+            (values)
+            ))))))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
@@ -1171,4 +1175,26 @@ comparison.")
       ))))
 
 |#
-
+#|
+(defun tst (&optional (n 100))
+  "test reentrancy of PBC lib. If the lib isn't reentrant, we should
+likely see an assertion failure"
+  (labels ((doit (name msg)
+             (let ((k (make-key-pair name)))
+               (dotimes (ix n)
+                 (let ((sig (sign-message msg
+                                          (keying-triple-pkey k)
+                                          (keying-triple-skey k))))
+                   (assert (check-message sig)))))))
+    (ac:=bind (ans)
+        (ac:par
+          (doit :one   :okay#1)
+          (doit :two   :okay#2)
+          (doit :three :okay#3)
+          (doit :four  :okay#4)
+          (doit :five  :okay#5)
+          (doit :six   :okay#6)
+          (doit :seven :okay#7)
+          (doit :eight :okay#8))
+      (ac:pr :done ans))))
+|#
