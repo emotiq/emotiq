@@ -984,12 +984,12 @@ sign0 1
 
 
 (defun do-ask-crypto (fn skey pkey)
-  (let ((mbox (mp:make-mailbox)))
+  (let ((mbox (mpcompat:make-mailbox)))
     (with-crypto (:skey skey
                   :pkey pkey)
-      (mp:mailbox-send mbox
+      (mpcompat:mailbox-send mbox
                        (um:capture-ans-or-exn fn)))
-    (um:recover-ans-or-exn (mp:mailbox-read mbox))))
+    (um:recover-ans-or-exn (mpcompat:mailbox-read mbox))))
 
 (defmacro ask-crypto ((&key skey pkey) &body body)
   `(do-ask-crypto (lambda ()
