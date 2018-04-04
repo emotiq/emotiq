@@ -29,7 +29,11 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "blockchain")))))
-                                       
 
-
+(defsystem "emotiq/chain"
+  :depends-on (emotiq
+               ads-clos)
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "chain")))))
 
