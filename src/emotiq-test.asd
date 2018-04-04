@@ -6,7 +6,8 @@
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
   :depends-on (lisp-unit
-               emotiq/utilities)
+               emotiq/utilities
+               emotiq/blockchain)
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
                           :all :emotiq-test))
@@ -16,7 +17,8 @@
                (:module tests
                         :depends-on (package)
                         :pathname "tests/"
-                        :components ((:file "emotiq-test")))))
+                        :components ((:file "emotiq-test")
+                                     (:file "blockchain-test")))))
 
 
 
