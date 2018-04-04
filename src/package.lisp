@@ -35,8 +35,13 @@
    #:initial-total-coin-amount
    #:*minter-0-pkey-hash* #:*minter-0-pkey* #:*minter-0-skey*))
 
-(defpackage #:emotiq/chains
+(defpackage #:emotiq/chain
   (:use #:cl)
   (:export
-   #:block/identity
-   #:block/transaction))
+   #:chain/block
+   #:version #:epoch #:block-hash #:previous-block #:genesis-block
+   #:transaction-blocks
+   #:validator-keys-joining #:validator-keys-leaving
+
+   #:make-genesis-block))
+
