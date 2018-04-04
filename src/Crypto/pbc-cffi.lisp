@@ -219,6 +219,7 @@ THE SOFTWARE.
   (pkey   :pointer :unsigned-char))
 
 ;; -------------------------------------------------
+;; Curve math ops
 
 (cffi:defcfun ("mul_G1_pts" _mul-g1-pts) :void
   (p1    :pointer :unsigned-char)
@@ -554,44 +555,63 @@ comparison.")
 
 ;; -------------------------------------------------
 
-(defun need-pairing ()
-  (unless *curve*
-    (init-pairing)))
-
-;; -------------------------------------------------
-
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
 
-(defun init-pairing (&key (params *curve-fr256-params* params-supplied-p)
-                          force)
+(defun init-pairing (&optional (params nil params-supplied-p))
+  "Initialize the pairings lib.
+
+  If params not specified and we haven't been called yet, or specified
+as nil, then use default parameters for 256-bit G1 BN-curve. If params
+not specified and we have already been called, just skip doing
+anything. Specified params forces a cryptosystem state change.
+
+  Returns previous parameters in case you need to call again to reset
+state to prior cryptosystem.
+
+  We protect with a lock because this mutates the state of the
+library, and we don't want inconsistent state. Calls to SET-GENERATOR
+also mutate the state of the lib, and so are similarly protected from
+SMP access. Everything else should be SMP-safe."
   (mpcompat:with-lock (*crypto-lock*)
-    (when (or force
-              params-supplied-p
-              (null *curve*))
-      (setf *curve* nil)
-      (um:bind* ((:struct-accessors curve-params ((txt pairing-text)
-                                                  (g1  g1)
-                                                  (g2  g2)) params)
-                 (ntxt   (length txt)))
-        
-        (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
-          (cffi:with-foreign-string (ctxt txt
-                                          :encoding :ASCII)
-            (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
-            (setf *curve* params
-                  *g1-size*  (cffi:mem-aref ansbuf :long 0)
-                  *g2-size*  (cffi:mem-aref ansbuf :long 1)
-                  *gt-size*  (cffi:mem-aref ansbuf :long 2)
-                  *zr-size*  (cffi:mem-aref ansbuf :long 3)
-                  *curve-order* nil)
-            (when g1
-              (set-generator g1))
-            (when g2
-              (set-generator g2))
-            (get-order)
-            (values)
-            ))))))
+    (let ((prev   *curve*)
+          (params (or params
+                      *curve-fr256-params*)))
+      ;; If params not specified, and we have already been called,
+      ;; just skip doing anything.
+      (when (or params-supplied-p
+                (null *curve*))
+        (setf *curve* nil) ;; in case we fail
+        (with-accessors ((txt  curve-params-pairing-text)
+                         (g1   curve-params-g1)
+                         (g2   curve-params-g2)) params
+          (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
+            (cffi:with-foreign-string ((ctxt ntxt) txt
+                                       :encoding :ASCII)
+              (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
+              (setf *curve* params
+                    *g1-size*  (cffi:mem-aref ansbuf :long 0)
+                    *g2-size*  (cffi:mem-aref ansbuf :long 1)
+                    *gt-size*  (cffi:mem-aref ansbuf :long 2)
+                    *zr-size*  (cffi:mem-aref ansbuf :long 3)
+                    *curve-order* nil)
+              (get-order) ;; fills in *curve-order* cached value
+              ;; A cryptosystem is specified by curve params and
+              ;; specific values for the G1 and G2 generators.
+              ;; By default these are randomly generated in the above call
+              (if g1
+                  (set-generator g1)
+                (get-g1)) ;; fill in cached value
+              (if g2
+                  (set-generator g2)
+                (get-g1)) ;; fill in cached value
+              ))))
+      prev))) ;; return previous *curve*
+
+(defun need-pairing ()
+  "If pairing lib not already init, then do so."
+  (unless *curve*
+    (init-pairing)))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
@@ -639,13 +659,10 @@ comparison.")
 (editor:setup-indent "with-fli-buffers" 1)
 
 ;; -------------------------------------------------
-;; GET-ELEMENT -- read a (possibly compressed) element from the C
-;; layer.  On first attempt, we generally don't know the size
-;; involved, so a first call is made with a null buffer pointer. The C
-;; world returns the actual neededd lenght to us, and stores that into
-;; the :LONG count buffer. Then we proceed as normal.
 
 (defun get-element (nb get-fn)
+  "Internal routine to read a (possibly compressed) element from the C
+library."
   (need-pairing)
   (with-fli-buffers ((buf nb))
     (assert (eql nb (funcall get-fn buf nb)))
@@ -654,6 +671,7 @@ comparison.")
 ;; -------------------------------------------------
 
 (defun get-g1 ()
+  "Return the G1 generator for the cryptosystem"
   (or *g1*
       (setf *g1*
             (make-instance 'g1-cmpr
@@ -661,6 +679,7 @@ comparison.")
             )))
 
 (defun get-g2 ()
+  "Return the G2 generator for the cryptosystem"
   (or *g2*
       (setf *g2*
             (make-instance 'g2-cmpr
@@ -668,7 +687,7 @@ comparison.")
             )))
 
 (defun get-order ()
-  ;; retuns an integer
+  "Return the integer value that represents the field and group orders."
   (or *curve-order*
       (setf *curve-order*
             (let ((txt (curve-params-pairing-text *curve*)))
@@ -679,59 +698,40 @@ comparison.")
             )))
 
 ;; -------------------------------------------------
-;; NOTE: Mapping hash values to Elliptic curves using the mapping
-;; first to the finite field, then multiplying by a curve generator is
+;; NOTE: Mapping hash values to Elliptic curves by first mapping
+;; to the finite field, then multiplying by a curve generator is
 ;; *COMPLETELY UNSAFE* for signature generation when the pairing is
 ;; symmetric. Anyone could forge a signature on any message.
 ;;
-;; Thankfully, for security reasons, we use asymmetric BN pairing
-;; curves and this insecurity is not present in our system.
-;;
-
-(defmethod mod-hash ((hash hash) nb)
-  ;; the PBC library has a terrible inconsistency once the hash value
-  ;; exceeds the order of the fields. At that point, instead of
-  ;; wrapping, it appears to shift right by one or more bits before
-  ;; being consumed into the field element. Collisions occur for
-  ;; adjacent values thereafter.
-  ;;
-  ;; PBC also ignores any bits beyond the field size for large hashes,
-  ;; effectively making it take only the MSB portion of the hash.
-  ;;
-  ;; We correct that by taking the hash value modulo the field size
-  ;; before submitting to the PBC libraary. 
-  ;;
-  (let ((v  (int hash))
-        (r  (get-order)))
-    (if (> v r)
-        (bevn (mod v r) nb)
-      hash)))
 
 (defmethod g1-from-hash ((hash hash))
+  "Return the hash value mapped into G1"
   (need-pairing)
   (let ((nb  (hash-length hash)))
     (with-fli-buffers ((ptbuf  *g1-size*)
-                       (hbuf   nb (mod-hash hash nb)))
+                       (hbuf   nb  hash))
       (_get-g1-from-hash ptbuf hbuf nb)
       (make-instance 'g1-cmpr
                      :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
       )))
                        
 (defmethod g2-from-hash ((hash hash))
+  "Return the hash value mapped into G2"
   (need-pairing)
   (let ((nb (hash-length hash)))
   (with-fli-buffers ((ptbuf  *g2-size*)
-                     (hbuf   nb  (mod-hash hash nb)))
+                     (hbuf   nb  hash))
     (_get-g2-from-hash ptbuf hbuf nb)
     (make-instance 'g2-cmpr
                    :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
     )))
                        
 (defmethod zr-from-hash ((hash hash))
+  "Return the hash value mapped into Zr"
   (need-pairing)
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
-                       (hbuf   nb  (mod-hash hash nb)))
+                       (hbuf   nb  hash))
       (_get-zr-from-hash zbuf hbuf nb)
       (make-instance 'zr
                      :val  (xfer-foreign-to-lisp zbuf *zr-size*))
@@ -748,17 +748,19 @@ comparison.")
         (funcall set-fn buf)))))
 
 (defmethod set-generator ((g1 g1-cmpr))
+  "Set the cryptosystem G1 generator"
   (setf *g1* g1)
   (set-element g1 '_set-g1 *g1-size*))
 
 (defmethod set-generator ((g2 g2-cmpr))
+  "Set the cryptosystem G2 generator"
   (setf *g2* g2)
   (set-element g2 '_set-g2 *g2-size*))
 
 ;; -------------------------------------------------
 
 (defmethod sign-hash ((hash hash) (skey secret-key))
-  ;; hash-bytes is UB8V
+  "Bare-bones BLS Signature"
   (need-pairing)
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sigbuf *g1-size*)
@@ -770,7 +772,7 @@ comparison.")
       )))
 
 (defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
-  ;; hash-bytes is UB8V
+  "Check bare-bones BLS Signature"
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sbuf *g1-size*  sig)
                        (hbuf nhash      hash)
@@ -791,12 +793,14 @@ comparison.")
    ))
 
 (defun sign-message (msg pkey skey)
+  "BLS Signature packet"
   (make-instance 'signed-message
                  :msg  msg
                  :sig  (sign-hash (hash/256 msg) skey)
                  :pkey pkey))
 
 (defmethod check-message ((sm signed-message))
+  "Check BLS Signature"
   (check-hash (hash/256 (signed-message-msg sm))
               (signed-message-sig       sm)
               (signed-message-pkey      sm)))
@@ -813,12 +817,13 @@ comparison.")
           :initarg :skey)))
 
 (defun make-key-pair (seed)
-  ;; seed can be literally anything at all...
+  "Return a certified keying pair. Seed can be literally anything.
+Certification includes a BLS Signature on the public key."
   (need-pairing)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((sbuf *zr-size*)
                        (pbuf *g2-size*)
-                       (hbuf hlen (mod-hash hsh hlen)))
+                       (hbuf hlen hsh))
       (_make-key-pair sbuf pbuf hbuf hlen)
       (let* ((pkey (make-instance 'public-key
                                   :val (xfer-foreign-to-lisp pbuf *g2-size*)))
@@ -833,6 +838,7 @@ comparison.")
         ))))
 
 (defmethod check-public-key ((pkey public-key) (psig signature))
+  "Validate a public key from its BLS Signature"
   (check-hash (hash/256 pkey)
               psig
               pkey))
@@ -842,7 +848,7 @@ comparison.")
 
 (defmethod make-public-subkey ((pkey public-key) seed)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
-    (with-fli-buffers ((hbuf hlen      (mod-hash hsh hlen))
+    (with-fli-buffers ((hbuf hlen      hsh)
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
       (_make-public-subkey abuf pbuf hbuf hlen)
@@ -851,7 +857,7 @@ comparison.")
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
-    (with-fli-buffers ((hbuf hlen      (mod-hash hsh hlen))
+    (with-fli-buffers ((hbuf hlen      hsh)
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
       (_make-secret-subkey abuf sbuf hbuf hlen)
@@ -894,7 +900,7 @@ comparison.")
                       msg-bytes))
          (xmsg      (construct-bev xbytes))
          (rhsh      (hash/256 id tstamp xmsg)))
-    (with-fli-buffers ((hbuf  32         (mod-hash rhsh 32))   ;; hash value
+    (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
