@@ -288,7 +288,7 @@ THE SOFTWARE.
   ;; setup a new RECV control block in the current Actor, hence
   ;; activating RECV behavior until we find a message we want, or
   ;; else timeout waiting for one.
-  (let ((this-id (gensym))) ;; make a unique object
+  (let ((this-id (gensym))) ;; make a unique id for recv-info
     (setf (actor-recv-info self)
           (make-instance 'recv-info
                          :id          this-id
@@ -306,6 +306,7 @@ THE SOFTWARE.
         this-id))
 
 (defun make-timeout-timer (delta self this-id)
+  "Delta in seconds"
   (when delta
     (let ((timer (make-timer
                   'send-timeout-message self this-id)))
@@ -524,8 +525,8 @@ THE SOFTWARE.
 
 (defun ensure-mbox-empty (mbox)
   (um:nlet-tail iter ()
-    (when (mp:mailbox-peek mbox)
-      (mp:mailbox-read mbox)
+    (when (mailbox-not-empty-p mbox)
+      (mpcompat:mailbox-read mbox)
       (iter))))
 
 (defun do-with-borrowed-mailbox (fn)
@@ -797,7 +798,7 @@ THE SOFTWARE.
     ;; ooftah...
     `(progn
        (defmacro ,name ,parms
-         `(,',f %sk ,,@prefix-parms ,@,@tail-parm))
+         `(,',f %sk ,,@prefix-parms ,,@tail-parm))
        (defun ,f (%sk ,@parms) ,@body))))
 
 (defmacro =bind (parms expr &body body)
