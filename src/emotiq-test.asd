@@ -19,10 +19,3 @@
                         :pathname "tests/"
                         :components ((:file "emotiq-test")
                                      (:file "blockchain-test")))))
-
-(defsystem emotiq-test/chains
-  :depends-on (prove
-               emotiq/chains)
-  :components ((:module chain
-                :pathname "t/"
-                :components ((:test-file "chain.lisp")))))

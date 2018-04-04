@@ -36,7 +36,6 @@ install:
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
                :prompt nil)
             (uiop:quit 0)'
-  - ros install prove
 
 # Add/remove test converage here
 # 
