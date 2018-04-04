@@ -41,14 +41,12 @@ THE SOFTWARE.
 ;; ---------------------------------------------------
 ;; BLS Signatures
 
-(defmethod cosi-sign (msg (skey pbc:secret-key))
-  (pbc:ask-crypto (:skey skey)
-    (pbc:sign-message msg)))
+(defmethod cosi-sign (msg (pkey pbc:public-key) (skey pbc:secret-key))
+  (pbc:sign-message msg pkey skey))
 
 (defmethod cosi-validate-signed-message ((sm pbc:signed-message))
-  (pbc:ask-crypto ()
-    (values (pbc:signed-message-msg sm)
-            (pbc:check-message sm))))
+  (values (pbc:signed-message-msg sm)
+          (pbc:check-message sm)))
 
 ;; --------------------------------------------
 ;; Keying for attribution. User keys, and signatures. You really don't
@@ -60,8 +58,7 @@ THE SOFTWARE.
   ;; WARNING!! This version is for testing only. Two different users
   ;; who type in the same seed will end up with the same keying. We
   ;; can't allow that in the released system.
-  (pbc:ask-crypto ()
-    (pbc:make-key-pair seed)))
+  (pbc:make-key-pair seed))
 
 ;; --------------------------------------------------------------
 
@@ -101,18 +98,15 @@ THE SOFTWARE.
   ;; value, and you can't retrace the path without that index value.
   ;; That is to say, you really do need to keep a record of all the
   ;; private keys along the way...
-  (pbc:ask-crypto ()
-    (pbc:make-public-subkey pkey sub-seed)))
+  (pbc:make-public-subkey pkey sub-seed))
 
 (defmethod make-secret-subkey ((skey pbc:secret-key) sub-seed)
-  (pbc:ask-crypto ()
-    (pbc:make-secret-subkey skey sub-seed)))
+  (pbc:make-secret-subkey skey sub-seed))
   
 (defmethod validate-pkey ((pkey pbc:public-key) (psig pbc:signature))
   ;; only works on primary keys. Can't validate subkeys because
   ;; signatures require secret key.
-  (pbc:ask-crypto ()
-    (pbc:check-public-key pkey psig)))
+  (pbc:check-public-key pkey psig))
         
 ;; ------------------------------------------------------
 
