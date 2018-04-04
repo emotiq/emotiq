@@ -48,7 +48,18 @@ extern "C"
 long init_pairing(char* param_str, long nel, long* psize)
 {
   long ans;
-  
+  int i;
+
+  printf ("nel=%ld\n", nel);
+  printf ("psize=%lx\n", psize);
+  printf ("in init_pairing 1a\n");
+  for (i = 0; i < nel; i++ ){
+    printf ("param_str[%3d] = 0x%2x %c\n", i, param_str[i], (param_str[i] >= 0x20 && param_str[i] < 0x7f) ? (char)param_str[i] : '?');
+  }
+  printf ("param_str[%3d] = 0x%2x %c\n", nel, param_str[nel], (param_str[i] >- 0x20 && param_str[nel] < 0x7f) ? (char)param_str[nel] : '?');
+  printf ("\nin init_pairing 1b\n");
+  printf ("\nparam_str as string /%s/\n", param_str);
+
   if(init_flag)
     {
       pairing_pp_clear(pp);
@@ -62,7 +73,9 @@ long init_pairing(char* param_str, long nel, long* psize)
       pairing_clear(gPairing);
       init_flag = false;
     }
+  printf ("in init_pairing, 2\n");
   ans = pairing_init_set_buf(gPairing, param_str, nel);
+  printf ("in init_pairing, 3\n");
   if(0 == ans)
     {
       element_init_G2(gG2_gen, gPairing);
