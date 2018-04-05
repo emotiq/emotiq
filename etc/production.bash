@@ -22,6 +22,10 @@ BASE=${DIR}/..
 # where the tarballs should be
 CRYPTO=${BASE}/src/Crypto
 dist=${CRYPTO}/PBC-Intf
+# here
+etc=${BASE}/etc
+etcdeliver=${etc}/deliver
+
 # pbc intf files are in the same place
 pbcintf=${dist}
 gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
@@ -42,14 +46,14 @@ case ${uname_s} in
     Linux*)
         MAKETARGET=makefile.linux
 	deliveryscript=deliv-linux.bash
-	prod_dir=${prefix}/production-linux
+	production_dir=${prefix}/production-linux
 	kind=linux
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
 	deliveryscript=deliv-macos.bash
-	prod_dir=${prefix}/production-macos
+	production_dir=${prefix}/production-macos
 	kind=mac
         echo Using ${MAKETARGET}
         ;;
@@ -60,6 +64,9 @@ case ${uname_s} in
         ;;
 esac
 
+# directory for final binary
+delivery=${prefix}/production-${kind}
+mkdir -p ${delivery}
 
 if [ ! -f ${gmp_tbz} ]
 then
@@ -114,22 +121,22 @@ cd ${src} \
 cd ${pbcintf} && \
     make --makefile=${MAKETARGET}.production PREFIX=${prefix}
 
-cd ${delivery}  # redundant?
-bash ${delivery}/${deliveryscript}
+cd ${etcdeliver}  # redundant?
+bash ${etcdeliver}/${deliveryscript}
 
-mkdir -p ${prod_dir}
-mv emotiq ${prod_dir}
+mkdir -p ${production_dir}
+mv emotiq ${production_dir}
 # < test >
 # for testing - we must use tar to preserve hard links
 cd ${lib}
 tar cf libs.tar *
-cd ${prod_dir}
-mv ${lib}/libs.tar ${prod_dir}
+cd ${production_dir}
+mv ${lib}/libs.tar ${production_dir}
 tar xf libs.tar
-# now, all dll's and emotiq are in ${prod_dir}
-cp ${etc}/emotiq.bash.${kind} ${prod_dir}/emotiq.bash
+# now, all dll's and emotiq are in ${production_dir}
+cp ${etc}/emotiq.bash.${kind} ${production_dir}/emotiq.bash
 cd ${lib}
 rm *
 # < /test >
 
-# cp ${VAR_DIR}/*.so* ${prod_dir}
+# cp ${???}/*.so* ${production_dir}
