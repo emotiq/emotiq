@@ -1,24 +1,19 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
-(defsystem "emotiq-test"
-  :version "0.0.2"
-  :description "Emotiq Tests"
+(defsystem "gossip-tests"
+  :version "0.0.1"
+  :description "Gossip Tests"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
-  :depends-on (lisp-unit
-               emotiq/utilities
-               emotiq/blockchain)
+  :depends-on (gossip lisp-unit)
+  :serial t
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
-                          :all :emotiq-test))
+                          :all :gossip-tests))
   :components ((:module package
                         :pathname "tests/"
                         :components ((:file "package")))
                (:module tests
                         :depends-on (package)
                         :pathname "tests/"
-                        :components ((:file "emotiq-test")
-                                     (:file "blockchain-test")))))
-
-
-
+                        :components ((:file "gossip-tests")))))

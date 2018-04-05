@@ -76,7 +76,34 @@
 (defmethod visualize-nodes ((nodes hash-table))
   (visualize-nodes (listify-nodes nodes)))
 
-(defmethod visualize-nodes ((nodelist list))
+(defparameter *html-header*
+  "<!DOCTYPE html>
+  <html>
+  <body style=\" margin:0; padding:0; overflow:hidden;\">")
+
+(defparameter *html-footer*
+  "</body>
+  </html>")
+
+(defun massage-graphviz-svg-file (infile outfile)
+  "Hackliy massages a graphviz svg output file into an html file that will automatically
+  resize to match the size of your browser window.
+  Would be nice if there were options to graphviz for this, but alas, no."
+  (with-open-file (in infile :direction :input)
+    (let ((line ""))
+      (loop until (equal 0 (search "<svg width=" line)) do
+        (setf line (read-line in nil nil nil)))
+      ;(print line)
+      (with-open-file (out outfile :direction :output :if-exists :supersede)
+        (write-string *html-header* out)
+        (write-string "<svg style=\"position:fixed; top:0; left:0; height:100%; width:100%;\"" out)
+        (loop until (null line) do
+          (setf line (read-line in nil nil nil))
+          (when line
+            (write-string line out)))
+        (write-string *html-footer* out)))))
+
+(defmethod visualize-nodes-svg ((nodelist list))
   "Makes a graphviz .dot file from nodelist, then converts that to an .svg file, and returns that pathname.
   Opens svg file in browser."
   (let* ((dotpath (make-temp-dotfile))
@@ -85,11 +112,27 @@
                                  :type "svg")))
     (write-dotfile dotpath nodelist)
     (convert-dotfile-to-svg dotpath svgpath)
-    (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring svgpath))))
-      #+LISPWORKS (sys:open-url urlstring)
-      #+CLOZURE
-      (let* ((url (NEXTSTEP-FUNCTIONS::|absoluteURL|
-                                       (make-instance 'ns:ns-url
-                                         :with-string (ccl::%make-nsstring urlstring)))))
-        (ccl::%open-url-in-browser url))
-      (values dotpath svgpath))))
+    (values dotpath svgpath)))
+
+(defmethod visualize-nodes ((nodelist list))
+  "Calls visualize-nodes-svg, then converts that file into an html file that automatically
+  resizes the svg image as you resize your browser window. Opens html file in browser."
+  (let ((len (length nodelist)))
+    (when (> len 5000)
+      (cerror "Do it anyway." "There are ~D nodes. It will take a long time to visualize that many." len))
+    (multiple-value-bind (dotpath svgpath)
+                         (visualize-nodes-svg nodelist)
+      (let ((htmlpath (make-pathname :host (pathname-host svgpath)
+                                     :directory (pathname-directory svgpath)
+                                     :name (pathname-name svgpath)
+                                     :type "html")))
+        (massage-graphviz-svg-file svgpath htmlpath)
+        (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring htmlpath))))
+          #+LISPWORKS (sys:open-url urlstring)
+          #+CLOZURE
+          (let* ((url (NEXTSTEP-FUNCTIONS::|absoluteURL|
+                                           (make-instance 'ns:ns-url
+                                             :with-string (ccl::%make-nsstring urlstring)))))
+            (ccl::%open-url-in-browser url))
+          (values dotpath htmlpath))))))
+    

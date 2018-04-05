@@ -446,6 +446,43 @@ Sortition\cite{algorand} is the process of randomly selecting members for Cosi n
 As the outcome of selections becomes known, those stakeholders must be removed from the selection tree before holding additional rounds. The purpose of sortition rounds specifies roles, each of which may have different threshold requirements in number of selected participants. Roles specify the purpose of selection, such as for Cosi networks, Randherd groups, and so forth.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Blockchain Leader Election}
+Publicly verifiable randomness generation is used to perform leader elections for blockchain production. All public key holders can choose to participate in elections by depositing an amount of currency into escrow as their stake. Stakeholders also participate as members of Cosi and Randherd protocols.
+
+The amount at stake is a hedge against misbehavior to thwart attacks.  Requiring a stake helps prevent Sybil attacks. If a participant has staked some currency and is found to be misbehaving, that stake will be forfeited and the participant will be barred from future participation for some period of time. Conversely, members in good standing are rewarded for their services by sharing transaction fees with them in proportion to their stake.
+
+Elections are stake-weighted lotteries. The larger your stake, the greater your chances of winning a round. After serving one round, the leader relinquishes his right to be re-elected until some number of rounds later. But former leaders can still serve as participants in other blockchain activities and receive rewards. The leader block is awarded a fixed fraction of the fee bounty, while the remainder is distributed to other participants in proportion to their stakes.
+
+In order to produce a stake-weighted lottery, we could imagine dividing a circle into angular sections proportional to individual stakes, with the full circumference of the circle representing the sum of all stakes. A uniform random number over a finite interval acts as a spinner in a dial readout, and wherever it points after a spin, that member is selected as the next leader. Larger stakeholders occupy a larger portion of the circumference, and so have a more likely chance of winning.
+
+In practice a binary tree of participants is formed, in arbitrary order, where each interior node represents the sum of all its sub-node stakes. The topmost node of the tree shows the full sum of all stakes represented in the tree, with all participants located in leafs. Branching decisions begin at the top node of the tree and descend toward leafs using the random value as a probe of the interval described by the partial sum at each node, with the division between left and right based on the relative weights of its two subtrees. Descent continues until meeting a leaf node, and declaring that node the winner of the election. 
+
+If the random probe value is converted into a fractional value of its range, and each interior node is relabeled with its division fractional value, then it is simple to choose left or right subnodes based on a single comparison between the two fractional values.
+
+Once elected, the leader forms the necessary Cosi trees and Randherd groups, and begins assembling a new block for the duration of the epoch until the next election round. There must be a balancing between the period between elections and the length of time it takes to assemble and validate blocks. The larger the block, in number of transactions to be verified, the longer it must take. At some size, that administrative duration will exceed the interval between Randherd beacon outputs.
+$$
+$$
+{\em{(What happens if another Randherd random value arrives while everyone is busy validating blocks? Holding a new election right then could spoil the ongoing consensus, marking that block as a failure. And the same thing would happen again, or worse, during the next epoch, as it plays catch-up in block assembly. 
+
+Do we need consensus to hold a new election? Then consensus again to validate the election outcome? And so should nodes involved in consensus rounds be stateful so they know not to respond to elections until consensus has completed?
+
+Is consensus nested? Can there be consensus rounds ongoing, inside of an outer consensus round?)}}
+$$
+$$
+
+If a stakeholder wins an election but is absent or comes under attack, it may not respond to its election as leader, or block assembly activities will cease in that epoch. Any stakeholder can call for a new forced election, and after $(2 f+1)$ such calls have been seen, a new election cycle ensues. All other honest stakeholder nodes that have also seen the threshold number of calls for new election will eagerly grant consensus to newly elected leaders. Stakeholder nodes will typically register a complaint after seeing no activity for longer than an adaptive threshold based on recent past rates. An exponential average could be used for this purpose. 
+
+Calls for election are by gossip protocol, and the election protocol is performed in each stakeholder node. Whichever node notices its election as leader must gain the consensus of all other nodes in forming its own Cosi trees. Hence it must use the extant Cosi networks from the current epoch. Failed consensus constitutes a failed election cycle from the perspective of that node. The node can register a call for new election, or else respond to new gossip messages to participate in an epoch managed by some other node that also sees itself as winning the lottery. 
+
+If this happens, then it may be time to resynchronize its notion of stakeholder participants against the blockchain record. A stakeholder node so distracted in this manner constitutes just another example from the spectrum of Byzantine failures, and while distracted the node may fail to perform other duties it should have been doing. But the consensus protocol is adaptable to Byzantine failures and will proceed without the node.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Cryptographic Sortition}
+Sortition\cite{algorand} is the process of randomly selecting members for Cosi networks and Randherd groups, based on stake weighting. We described one type of sortition event in the description of blockchain leader election. The process is repeated for selection of other duties. Random values for sortition probing are developed using VRF's to prove fairness in making selections.
+
+As the outcome of selections becomes known, those stakeholders must be removed from the selection tree before holding additional rounds. The purpose of sortition rounds specifies roles, each of which may have different threshold requirements in number of selected participants. Roles specify the purpose of selection, such as for Cosi networks, Randherd groups, and so forth.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Safe Hierarchical Keying}
 
 In current blockchain designs which utilize simple Elliptic Curve cryptography, the possibility of producing subkeys from a master public key is presented. But that is wholly unsafe in the event that a decryption key is also generated for a derived public key. A simple bit of finite field arithmetic is all it takes to discover the original master private key.
