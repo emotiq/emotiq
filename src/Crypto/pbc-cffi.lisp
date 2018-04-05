@@ -555,7 +555,9 @@ comparison.")
 ;; -------------------------------------------------
 
 (defun need-pairing ()
+  (format *standard-output* "~%trying init-pairing~%")
   (unless *curve*
+    (format *standard-output* "~%running init-pairing~%")
     (init-pairing)))
 
 ;; -------------------------------------------------

@@ -33,4 +33,8 @@
    #:next-coinbase-transaction
    #:genesis-block #:last-block #:last-transaction
    #:initial-total-coin-amount
-   #:*minter-0-pkey-hash* #:*minter-0-pkey* #:*minter-0-skey*))
+   #:*minter-0-pkey-hash* #:*minter-0-pkey* #:*minter-0-skey*)
+  (:export
+   #:production-p
+   #:production-start
+   #:dev-start))

@@ -30,6 +30,13 @@
                 :serial t
                 :components ((:file "blockchain")))))
                                        
+(defsystem "emotiq/startup"
+  :depends-on (emotiq/utilities crypto-pairings core-crypto)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "startup")))))
+                                       
 
 
 
