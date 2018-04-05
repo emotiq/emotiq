@@ -121,17 +121,39 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-(cffi:define-foreign-library libpbc
- (:darwin #.(concatenate 'string 
-		       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		       "/libLispPBCIntf.dylib"))
- (:linux #.(concatenate 'string 
-		     (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		     "/libLispPBCIntf.so"))
- (t (:default "libLispPBCIntf"))
- )
+;; The Lisp runtime load might help us do this differently, but explicit
+;; initialization is much easier to understand
 
-(cffi:use-foreign-library libpbc)
+(defun load-dev-dlls ()
+  "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
+  (format *standard-output* "load-dev-dlls~%")
+  (cffi:define-foreign-library
+   libpbc
+   (:darwin #.(concatenate 
+	       'string 
+	       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+	       "/libLispPBCIntf.dylib"))
+   (:linux #.(concatenate 
+	      'string 
+	      (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+	      "/libLispPBCIntf.so"))
+   (t (:default "libLispPBCIntf"))))
+
+(defun load-production-dlls ()
+  "loads the DLLs (.so and .dylib) at runtime, from the current directory"
+  (format *standard-output* "load-production-dlls~%")
+  (cffi:define-foreign-library
+   libpbc
+   (:darwin "libLispPBCIntf.dylib")
+   (:linux  "libLispPBCIntf.so")
+   (t (:default "libLispPBCIntf"))))
+
+(defun load-dlls()
+  "load the dev or production dlls at runtime"
+  (if (emotiq:production-p)
+      (load-production-dlls)
+    (load-dev-dlls))
+  (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
@@ -557,6 +579,7 @@ comparison.")
 (defun need-pairing ()
   (format *standard-output* "~%trying init-pairing~%")
   (unless *curve*
+    (load-dlls)
     (format *standard-output* "~%running init-pairing~%")
     (init-pairing)))
 

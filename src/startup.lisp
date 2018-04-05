@@ -5,6 +5,7 @@
   ;; (let ((signed (pbc:sign-message :hello)))
   ;;   (if (pbc:check-message signed)
   ;;     (format *standard-output* "~%NOT OK~%"))))
+  (pbc::need-pairing) ;; initializes init-pairing, not exported (no use for it in future systems)
   (pbc:init-pairing)
   (format *standard-output* "~%OK~%")
 )
