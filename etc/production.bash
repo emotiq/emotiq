@@ -125,6 +125,7 @@ cd ${etcdeliver}  # redundant?
 bash ${etcdeliver}/${deliveryscript}
 
 mkdir -p ${production_dir}
+cd ${etcdeliver}  # redundant?
 mv emotiq ${production_dir}
 # < test >
 # for testing - we must use tar to preserve hard links

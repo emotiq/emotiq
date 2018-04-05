@@ -11,4 +11,4 @@ LWPRO_MACOS_64=${LWPRO_MACOS_64:-/Applications/LispWorks\ 7.1\ \(64-bit\)/LispWo
 
 LWPRO=${LWPRO_MACOS_64}
 
-exec "${LWPRO}" -build "${DIR}/deliver/deliver.lisp"
+exec "${LWPRO}" -build "${DIR}/deliver.lisp"

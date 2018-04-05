@@ -145,7 +145,7 @@ THE SOFTWARE.
   (cffi:define-foreign-library
    libpbc
    (:darwin "libLispPBCIntf.dylib")
-   (:linux  "libLispPBCIntf.so")
+   (:linux  "./libLispPBCIntf.so")
    (t (:default "libLispPBCIntf"))))
 
 (defun load-dlls()
@@ -579,7 +579,6 @@ comparison.")
 (defun need-pairing ()
   (format *standard-output* "~%trying init-pairing~%")
   (unless *curve*
-    (load-dlls)
     (format *standard-output* "~%running init-pairing~%")
     (init-pairing)))
 
@@ -589,6 +588,8 @@ comparison.")
   "Used to protect internal startup routines from multiple access")
 
 (defun init-pairing (&optional (params *curve-fr256-params*))
+  (format *standard-output* "~%in init-pairing~%")
+  (load-dlls)
   (mpcompat:with-lock (*crypto-lock*)
     (setf *curve* nil)
     (um:bind* ((:struct-accessors curve-params ((txt pairing-text)

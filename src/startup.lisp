@@ -1,6 +1,7 @@
 (in-package "EMOTIQ")
 
 (defun simple-test ()
+(format *standard-output* "~%in simple-test~%")
   ;; (pbc:make-key-pair :dave)
   ;; (let ((signed (pbc:sign-message :hello)))
   ;;   (if (pbc:check-message signed)
@@ -16,10 +17,12 @@
   *production*)
 
 (defun production-start ()
+(format *standard-output* "~%in production-start~%")
   (setf *production* t)
   (start))
 
 (defun dev-start ()
+(format *standard-output* "~%in dev-start~%")
   (setf *production* nil)
   (start))
 
