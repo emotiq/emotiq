@@ -1,10 +1,6 @@
 (in-package "EMOTIQ")
 
 (defun simple-test ()
-  ;; (pbc:make-key-pair :dave)
-  ;; (let ((signed (pbc:sign-message :hello)))
-  ;;   (if (pbc:check-message signed)
-  ;;     (format *standard-output* "~%NOT OK~%"))))
   (pbc::need-pairing)
   (format *standard-output* "~%OK~%")
 )
