@@ -5,7 +5,7 @@
   ;; (let ((signed (pbc:sign-message :hello)))
   ;;   (if (pbc:check-message signed)
   ;;     (format *standard-output* "~%NOT OK~%"))))
-  (pbc:init-pairing)
+  (pbc:need-pairing)
   (format *standard-output* "~%OK~%")
 )
 
