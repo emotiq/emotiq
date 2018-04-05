@@ -120,7 +120,8 @@ So small domain values must be cloaked. See below..."
     (let* ((gamma (rand))
            (cmt   (add-pts (mul-pt-zr hpt gamma)
                            (mul-pt-zr gpt x)))
-           (z     (int (hash:hash/256 x gamma hpt gpt cmt)))
+           ;; challenge z = hash of public info
+           (z     (int (hash:hash/256 hpt gpt cmt)))
            (alpha (m+ (m* gamma z)
                       (m/ x z)))
            (lf    (mul-pt-zr hpt x))
@@ -148,15 +149,18 @@ So small domain values must be cloaked. See below..."
                     (alpha ped-proof-alpha)
                     (lf    ped-proof-lf)
                     (rt    ped-proof-rt)) proof
-    (with-mod (get-order)
-      (let* ((gzpt  (add-pts (mul-pt-zr hpt (m/ z))
-                             (mul-pt-zr gpt z)))
-             (zsq   (m* z z)))
-        (= (int (mul-pt-zr gzpt alpha))
-           (int (add-pts (mul-pt-zr lf (m/ zsq))
-                         (add-pts cmt
-                                  (mul-pt-zr rt zsq)))))
-        ))))
+    ;; verify challenge value as hash of public info
+    (when (= z (int (hash:hash/256 hpt gpt cmt)))
+      (with-mod (get-order)
+        (let* ((gzpt  (add-pts (mul-pt-zr hpt (m/ z))
+                               (mul-pt-zr gpt z)))
+               (zsq   (m* z z)))
+          ;; verify Pedersen commitment
+          (= (int (mul-pt-zr gzpt alpha))
+             (int (add-pts (mul-pt-zr lf (m/ zsq))
+                           (add-pts cmt
+                                    (mul-pt-zr rt zsq)))))
+          )))))
 
 ;; --------------------------------------------------------
 

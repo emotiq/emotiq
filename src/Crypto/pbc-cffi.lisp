@@ -272,9 +272,12 @@ THE SOFTWARE.
 
 (defclass crypto-val (ub8v-repr)
   ((val  :reader   crypto-val-vec
-         :initarg  :value)))
+         :initarg  :value))
+  (:documentation "Base class for objects used in pairing crypto"))
 
 (defmethod ub8v-repr ((x crypto-val))
+  "All crypto values are really just UB8V objects with a wrapper.
+Usually, they are in big-endian representation for PBC library."
   (crypto-val-vec x))
 
 ;; -------------------------------------------------
@@ -283,46 +286,57 @@ THE SOFTWARE.
 (defclass g1-cmpr (crypto-val)
   ((val :reader g1-cmpr-pt
        :initarg  :pt)
-   ))
+   )
+  (:documentation "Wrapper for compressed points from G1 group"))
 
 (defclass signature (g1-cmpr)
   ((val :reader signature-val
-       :initarg  :val)))
+       :initarg  :val))
+  (:documentation "Wrapper for signatures computed in G1"))
 
 (defclass g2-cmpr (crypto-val)
   ((val  :reader g2-cmpr-pt
-        :initarg  :pt)
-   ))
+        :initarg  :pt))
+  (:documentation "Wrapper for compressed points in G2 group"))
 
 (defclass public-key (g2-cmpr)
   ((val  :reader public-key-val
-        :initarg  :val)))
+        :initarg  :val))
+  (:documentation "Wrapper for public keys in G2 group"))
 
 (defclass gt (crypto-val)
   ((val  :reader  gt-val
-         :initarg   :val)))
+         :initarg   :val))
+  (:documentation "Wrapper for field values from GT"))
 
 (defclass pairing (gt)
   ((val  :reader pairing-val
-         :initarg  :val)))
+         :initarg  :val))
+  (:documentation "Wrapper for pairing field values"))
 
 (defclass zr (crypto-val)
   ((val  :reader  zr-val
-         :initarg   :val)))
+         :initarg   :val))
+  (:documentation "Wrapper for field values from Zr"))
 
 (defclass secret-key (zr)
   ((val :reader secret-key-val
-        :initarg  :val)))
+        :initarg  :val))
+  (:documentation "Wrapper for secret keys in Zr"))
 
 (defclass crypto-text (crypto-val)
   ((val  :reader  crypto-text-vec
-         :initarg :vec)))
+         :initarg :vec))
+  (:documentation "Wrapper for cryptotext values. Arbitrary sized UB8V
+not belonging to any field"))
 
 ;; -------------------------------------------------
 
 (defstruct curve-params
   pairing-text
-  g1 g2 order g1-len g2-len zr-len gt-len)
+  g1 g2
+  ;; cached values filled in at init
+  order g1-len g2-len zr-len gt-len)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
