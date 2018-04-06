@@ -35,21 +35,21 @@
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
       There's no guarantee this will reach all nodes. But it's quicker and more realistic.
-   :full   style to send solicitations to all neighbors. More likely to reach all nodes but replies may be slower.
+   :neighborcast   style to send solicitations to all neighbors. More likely to reach all nodes but replies may be slower.
    Neither style should result in timeouts of a node waiting forever for a response from a neighbor."
   (case kind
     (:gossip (setf *use-all-neighbors* nil
                    *active-ignores* t))  ; must be true when *use-all-neighbors* is nil. Otherwise there will be timeouts.
-    (:full   (setf *use-all-neighbors* t
+    (:neighborcast   (setf *use-all-neighbors* t
                    *active-ignores* nil)))
   kind)
              
-; (set-protocol-style :full)
+; (set-protocol-style :neighborcast)
 ; (set-protocol-style :gossip)
 
 #|
 Discussion: :gossip style is more realistic for "loose" networks where nodes don't know much about their neighbors.
-:full style is better after :gossip style has been used to discover the graph topology and agreements about collaboration
+:neighborcast style is better after :gossip style has been used to discover the graph topology and agreements about collaboration
 are in place between nodes.
 |#
 
