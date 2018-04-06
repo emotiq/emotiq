@@ -45,6 +45,11 @@ long init_pairing(char* param_str, long nel, long* psize)
 {
   long ans;
   
+  printf ("\ninit_pairing\n");
+  printf ("nel = %ld\n", nel);
+  printf ("psize = %p\n", (void*) psize);
+  printf ("param_str = \n%s\n", param_str);
+
   if(init_flag)
     {
       element_clear(gG1_gen);
