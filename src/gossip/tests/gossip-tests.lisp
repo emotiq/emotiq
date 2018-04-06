@@ -3,7 +3,7 @@
 (in-package :gossip-tests)
 
 (eval-when (:load-toplevel :execute)
-  (set-protocol-style :full)
+  (set-protocol-style :neighborcast)
   (REMOVE-TESTS :ALL))
 
 (defun %aliveness (uid)
