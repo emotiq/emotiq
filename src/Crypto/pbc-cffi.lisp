@@ -117,10 +117,10 @@ THE SOFTWARE.
    :validate-cloaked-proof
 
    :confidential-purchase
-   :confidential-purchase-pkey-buyer
-   :confidential-purchase-pkey-vendor
-   :confidential-purchase-tval
-   :confidential-purchase-rval
+   :confidential-purchase-pbuy
+   :confidential-purchase-psell
+   :confidential-purchase-tbuy
+   :confidential-purchase-rsell
    :check-confidential-purchase
    ))
 
