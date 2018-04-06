@@ -63,8 +63,8 @@ script:
                     (:crypto-pairings :crypto-pairings/t))
               :doing 
               (progn
-                 (uiop:run-program "rm -rf ~/.cache/")
-                 (ql:quickload dependencies)
+                 (uiop:run-program \"rm -rf ~/.cache/\")
+                 (ql:quickload dependencies))
               :unless 
                  (asdf:test-system system)
               :return 
