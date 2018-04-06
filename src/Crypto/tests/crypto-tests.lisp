@@ -65,5 +65,5 @@
     (assert-true (check-confidential-purchase purch
                                               cost fees
                                               (keying-triple-skey kv)))
-    (assert-true (check-confidential-purchase purch
+    (assert-true (check-confidential-purchase ppurch
                                               cost fees))))
