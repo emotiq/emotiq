@@ -115,6 +115,13 @@ THE SOFTWARE.
    :validate-pedersen-proof
    :make-cloaked-proof
    :validate-cloaked-proof
+
+   :confidential-purchase
+   :confidential-purchase-pkey-buyer
+   :confidential-purchase-pkey-vendor
+   :confidential-purchase-tval
+   :confidential-purchase-rval
+   :check-confidential-purchase
    ))
 
 (in-package :pbc-interface)
@@ -1127,6 +1134,89 @@ Certification includes a BLS Signature on the public key."
     (and (= (int c) (int chk))
          (= (int x) (int (vrf-x vrf)))
          (= (int y) (int (vrf-y vrf))))))
+
+;; --------------------------------------------------------
+;; Confidential Purchases - cloak a purchase by providing a
+;; crypto-proof of sufficient amount. The indifividual terms
+;; will still need accompanying range proofs.
+
+(defstruct confidential-purchase
+  pbuy psell tbuy rsell)
+
+(defmethod confidential-purchase ((paid integer) (change integer)
+                                  (pkey public-key) (skey secret-key)
+                                  &optional (pkey-vendor (get-g2)))
+  "Form a cloaked purchase by hiding (paid - change) so that vendor
+can use his (cost + fees) in a pairing relation and verify that,
+indeed the person with claimed public key actually did send the
+transaction, and that sufficient currency has been forwarded.
+
+The purchase is a binding commitment. If pkey-vendor is not specified,
+then this becomes a cloaked transaction that anyone can verify.
+Otherwise, only the vendor can verify.
+
+Purchase is represented by triple (Tbuy, Rsell, Pbuy)
+where P_buy  = public key of purchaser, in G_2
+      s_buy  = secret key of purchaser, in Z_r
+      T_buy  = G_1 value used in verification
+      R_sell = G_2 value used in verification
+      P_sell = public key of vendor, or generator V in G_2
+      s_sell = secret key of vendor, or 1, in Z_r
+      k_rand = random blinding factor, in Z_r
+      U      = generator for G_1
+      V      = generator for G_2
+
+   TBuy  = (k_rand * s_buy) / (paid - change) * U  in G_1
+   Rsell = P_sell / k_rand                         in G_2
+
+Proof is by computing:
+
+   C_sell = (cost + fees)/s_sell * Rsell;
+
+and then checking the pairing relation:
+
+   e(T_buy, C_sell) = e(U, P_buy)  in G_T
+"
+  (assert (typep pkey-vendor 'g2-cmpr))
+  (with-mod (get-order)
+    (let* ((krand  (random-between 1 (get-order)))
+           (tbuy   (mul-pt-zr (get-g1)
+                              (m/ (m* krand (int skey))
+                                  (m- paid change))))
+           (rsell  (mul-pt-zr pkey-vendor (m/ krand))))
+      (make-confidential-purchase
+       :pbuy  pkey
+       :psell pkey-vendor
+       :tbuy  tbuy
+       :rsell rsell))))
+
+(defmethod check-confidential-purchase ((purch confidential-purchase)
+                                        (cost integer)
+                                        (fees integer)
+                                        &optional (skey 1))
+  (with-accessors ((pbuy  confidential-purchase-pbuy)
+                   (tbuy  confidential-purchase-tbuy)
+                   (rsell confidential-purchase-rsell)) purch
+    (with-mod (get-order)
+      (let* ((csell (mul-pt-zr rsell (m/ (m+ cost fees) (int skey))))
+             (p1    (compute-pairing tbuy csell))
+             (p2    (compute-pairing (get-g1) pbuy)))
+        (= (int p1) (int p2))
+        ))))
+
+(let* ((kb  (make-key-pair :buyer))
+         (kv  (make-key-pair :vendor))
+         (cost  100)
+         (fees   10)
+         (paid  200)
+         (change 90)
+         (purch (confidential-purchase paid change
+                                       (keying-triple-pkey kb)
+                                       (keying-triple-skey kb)
+                                       (keying-triple-pkey kv))))
+    (assert-true (check-confidential-purchase purch
+                                              cost fees
+                                              (keying-triple-skey kv))))
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
