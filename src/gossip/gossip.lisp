@@ -287,10 +287,10 @@ are in place between nodes.
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
-(defmethod gossip-dispatcher ((node gossip-node) &rest actor-msg)
+(defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
-    (case gossip-cmd
+    (ecase gossip-cmd
       (:gossip
        (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
