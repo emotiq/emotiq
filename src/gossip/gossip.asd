@@ -8,8 +8,8 @@
   :depends-on (:uiop
                :mpcompat
                :key-value-store
-               :actors ; should be loaded by cosi-simgen
-               :cosi-simgen)
+               :actors ; should be loaded by cosi-BLS
+               :cosi-BLS)
   :serial t
   :components ((:file "package")
                (:file "gossip")
