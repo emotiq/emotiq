@@ -1204,20 +1204,6 @@ and then checking the pairing relation:
         (= (int p1) (int p2))
         ))))
 
-(let* ((kb  (make-key-pair :buyer))
-         (kv  (make-key-pair :vendor))
-         (cost  100)
-         (fees   10)
-         (paid  200)
-         (change 90)
-         (purch (confidential-purchase paid change
-                                       (keying-triple-pkey kb)
-                                       (keying-triple-skey kb)
-                                       (keying-triple-pkey kv))))
-    (assert-true (check-confidential-purchase purch
-                                              cost fees
-                                              (keying-triple-skey kv))))
-
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
 ;(init-pairing)
