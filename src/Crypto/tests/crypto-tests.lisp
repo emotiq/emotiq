@@ -46,3 +46,24 @@
   (let* ((proof (make-cloaked-proof 15)))
     (assert-true (validate-cloaked-proof proof))))
 
+(define-test confidential-purchase
+  (let* ((kb  (make-key-pair :buyer))
+         (kv  (make-key-pair :vendor))
+         (cost  100)
+         (fees   10)
+         (paid  200)
+         (change 90)
+         ;; make a private transaction between kb and kv
+         (purch (confidential-purchase paid change
+                                       (keying-triple-pkey kb)
+                                       (keying-triple-skey kb)
+                                       (keying-triple-pkey kv)))
+         ;; make a publicly verifiable transaction from kb
+         (ppurch (confidential-purchase paid change
+                                        (keying-triple-pkey kb)
+                                        (keying-triple-skey kb))))
+    (assert-true (check-confidential-purchase purch
+                                              cost fees
+                                              (keying-triple-skey kv)))
+    (assert-true (check-confidential-purchase purch
+                                              cost fees))))
