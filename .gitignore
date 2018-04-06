@@ -27,3 +27,13 @@ var/local/include/pbc/pbc_ternary_extension_field.h
 var/local/include/pbc/pbc_test.h
 var/local/include/pbc/pbc_utils.h
 var/local/include/pbc/pbc_z.h
+src/Crypto-writeup/Crypto-writeup.aux
+src/Crypto-writeup/Crypto-writeup.log
+src/Crypto-writeup/Crypto-writeup.out
+src/Crypto-writeup/Crypto-writeup.synctex.gz
+src/Crypto-writeup/Crypto-writeup.tex.orig
+src/Crypto-writeup/Crypto-writeup.toc
+src/Crypto-writeup/Partial-Yellowpaper.aux
+src/Crypto-writeup/Partial-Yellowpaper.log
+src/Crypto-writeup/Partial-Yellowpaper.pdf
+src/Crypto-writeup/Partial-Yellowpaper.synctex.gz
