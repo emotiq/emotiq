@@ -126,7 +126,6 @@ THE SOFTWARE.
 
 (defun load-dev-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
-  (format *standard-output* "load-dev-dlls~%")
   (cffi:define-foreign-library
    libpbc
    (:darwin #.(concatenate 
@@ -141,7 +140,6 @@ THE SOFTWARE.
 
 (defun load-production-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from the current directory"
-  (format *standard-output* "load-production-dlls~%")
   (cffi:define-foreign-library
    libpbc
    (:darwin "libLispPBCIntf.dylib")
@@ -577,9 +575,7 @@ comparison.")
 ;; -------------------------------------------------
 
 (defun need-pairing ()
-  (format *standard-output* "~%trying init-pairing~%")
   (unless *curve*
-    (format *standard-output* "~%running init-pairing~%")
     (init-pairing)))
 
 ;; -------------------------------------------------
@@ -588,7 +584,6 @@ comparison.")
   "Used to protect internal startup routines from multiple access")
 
 (defun init-pairing (&optional (params *curve-fr256-params*))
-  (format *standard-output* "~%in init-pairing~%")
   (load-dlls)
   (mpcompat:with-lock (*crypto-lock*)
     (setf *curve* nil)
