@@ -22,6 +22,8 @@
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one")
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
+(defparameter *gossip-port* 65002 "Gossip network port")
+(defparameter *shutting-down*     nil "True to shut down gossip-server")
 
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage case.
@@ -222,7 +224,16 @@ are in place between nodes.
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node this actor on behalf of which this actor works")))
 
-(defclass gossip-node (gossip-mixin)
+(defclass gossip-network-actor (ac:actor)
+  ((node :initarg :node :initform nil :accessor node
+         :documentation "The gossip-node this actor on behalf of which this actor works.
+         Should only be attached to remote-gossip-nodes.")))
+
+(defclass actor-mixin ()
+  ((actor :initarg :actor :initform nil :accessor actor
+          :documentation "Actor for this node")))
+
+(defclass gossip-node (gossip-mixin actor-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
                   :documentation "Cache of seen messages. Table mapping UID of message to UID of upstream sender.
                   Used to ensure identical messages are not acted on twice, and to determine where
@@ -243,8 +254,6 @@ are in place between nodes.
         :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
               :documentation "List of UIDs of direct neighbors of this node")
-   (actor :initarg :actor :initform nil :accessor actor
-          :documentation "Actor for this node")
    (timers :initarg :timers :initform nil :accessor timers
             :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
@@ -264,34 +273,66 @@ are in place between nodes.
   ; don't clear the local-kvs. That should be persistent.
   )
 
-; We'll use these for real (not simulated on one machine) protocol
-(defclass remote-gossip-node (gossip-mixin)
-  ()
-  (:documentation "A local [to this process] standin for a gossip-node located elsewhere.
+; We'll use these for real (not simulated on one machine) protocol over the network
+(defclass remote-gossip-node (gossip-mixin actor-mixin)
+  ((real-ip :initarg :real-ip :initform nil :accessor real-ip
+            :documentation "Real IP address of remote node")
+   (real-port :initarg :real-port :initform *gossip-port* :accessor real-port
+              :documentation "Real port of remote node")
+   (real-uid :initarg :real-uid :initform nil :accessor real-uid
+                  :documentation "UID of the (real) gossip node on the other end.
+               The remote object will also have its own UID just for local lookup purposes,
+               but the real-uid is used to route it to the proper node on the remote
+               machine."))
+  (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
-(defun gossip-dispatcher (gossip-node &rest actor-msg)
+(defmethod gossip-dispatcher ((node gossip-node) &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
     (case gossip-cmd
       (:gossip
-       (unless gossip-node (error "No node attached to this actor!"))
+       (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
-         (deliver-gossip-msg gossip-msg gossip-node srcuid)))
+         (deliver-gossip-msg gossip-msg node srcuid)))
       (:relay
-       ; we expect gossip-node to be nil in this case, but it's actually
+       ; we expect node to be nil in this case, but it's actually
        ;   irrelevant. We could just as well use an actor attached to a node
        ;   for relaying if we wanted to.
        (destructuring-bind (srcuid destuid gossip-msg) (cdr actor-msg)
          (send-msg gossip-msg destuid srcuid))))))
 
-(defun make-gossip-actor (gossip-node)
+(defmethod gossip-dispatcher ((node remote-gossip-node) &rest actor-msg)
+  "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
+  (let ((gossip-cmd (first actor-msg)))
+    (ecase gossip-cmd
+      (:gossip ; no other kinds can go across the net. Unless we have a use for that in future.
+       (unless node (error "No node attached to this actor!"))
+       (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
+         (transmit-msg gossip-msg node srcuid))))))
+
+(defmethod make-gossip-actor ((node gossip-node))
   (make-instance 'gossip-actor
-    :node gossip-node
+    :node node
     :fn 
     (lambda (&rest msg)
-      (apply 'gossip-dispatcher gossip-node msg))))
+      (apply 'gossip-dispatcher node msg))))
 
+(defmethod make-gossip-actor ((node null))
+  (make-instance 'gossip-actor
+    :node node
+    :fn 
+    (lambda (&rest msg)
+      (apply 'gossip-dispatcher node msg))))
+
+(defmethod make-gossip-actor ((node remote-gossip-node))
+  (make-instance 'gossip-network-actor
+    :node node
+    :fn 
+    (lambda (&rest msg)
+      (apply 'gossip-dispatcher node msg))))
+
+; TODO: Rename all this s/relay/echo.
 (defparameter *relay-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
 
 (defmethod relay-msg ((msg gossip-message-mixin) destuid srcuid)
@@ -310,6 +351,14 @@ are in place between nodes.
 (defun make-node (&rest args)
   "Makes a new node"
   (let* ((node (apply 'make-instance 'gossip-node args))
+         (actor (make-gossip-actor node)))
+    (setf (actor node) actor)
+    (kvs:relate-unique! *nodes* (uid node) node)
+    node))
+
+(defun make-remote-node (&rest args)
+  "Makes a new node"
+  (let* ((node (apply 'make-instance 'remote-gossip-node args))
          (actor (make-gossip-actor node)))
     (setf (actor node) actor)
     (kvs:relate-unique! *nodes* (uid node) node)
@@ -1360,27 +1409,88 @@ gets sent back, and everything will be copacetic.
              *nodes*)
     (sort dead-list #'<)))
 
-; NOT DONE YET
-(defmethod transmit-msg (msg (node remote-gossip-node) srcuid)
-  "Send message across network"
-  )
+;;;; Network communications
 
-; NOT DONE YET
-(defun parse-raw-message (raw-message-string)
+; TODO: Memoize these things. s/remote/proxy
+(defun ensure-proxy-node (real-ip real-port real-uid)
+  (make-remote-node :real-ip real-ip :real-port real-port :real-uid real-uid))
+
+; network messages are 3 pieces in a list:
+;   destuid of ultimate receiving node
+;   srcuid of sending node
+;   gossip-msg
+
+(defun parse-raw-message (raw-message-buffer rem-ip rem-port)
   "Deserialize a raw message string, srcuid, and destuid.
-   Error on failure."
-  ;(values msg srcuid destuid)
-  )
+   srcuid and destuid will be that of a remote-gossip-node and gossip-node on THIS machine,
+   respectively."
+  ;network message: (list (real-uid node) srcuid msg)
+  ;                    uid  --^            ^-- source uid
+  ;         on destination machine             on source machine
+  (destructuring-bind (real-uid srcuid msg)
+                      (loenc:decode raw-message-buffer)
+    (let ((proxy (ensure-proxy-node rem-ip rem-port srcuid)))
+      ;ensure a local node of type remote-gossip-node exists on this machine with
+      ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
+      (values msg (uid proxy) real-uid)
+      )))
 
-; NOT DONE YET
-(defun message-listener-daemon ()
-  "Listen for messages received from network and dispatch them locally"
-  (let ((rawmsg (listen-for-message)))
-    (multiple-value-bind (msg srcuid destuid)
-                         (parse-raw-message rawmsg)
-      (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-      (let ((destnode (lookup-node destuid)))
-        (locally-receive-msg msg destnode srcuid)))))
+(defun incoming-message-handler (buf rem-ip rem-port)
+  "Locally dispatch messages received from network"
+  (multiple-value-bind (msg srcuid destuid)
+                       ; srcuid will be that of a remote-gossip-node on receiver (this) machine
+                       ; destuid will be that of a gossip-node on receiver (this) machine
+                       (parse-raw-message buf rem-ip rem-port)
+    (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
+    (send-msg msg destuid srcuid)))
+
+(defun serve-gossip-port (socket)
+    (let ((maxbuf (make-array cosi-simgen::*max-buffer-length*
+                              :element-type '(unsigned-byte 8))))
+      (unwind-protect
+          (loop
+            (when (eql :SHUTDOWN-SERVER *shutting-down*)
+                (setf *shutting-down* nil)
+                (return-from serve-gossip-port))
+	    (multiple-value-bind (buf buf-len rem-ip rem-port)
+		(usocket:socket-receive socket maxbuf (length maxbuf))
+              (let ((saf-buf (if (eq buf maxbuf)
+                                  (subseq buf 0 buf-len)
+                                buf)))
+                (incoming-message-handler saf-buf rem-ip rem-port))))
+        (usocket:socket-close socket)
+        )))
+
+(defun start-gossip-server (&optional (port *gossip-port*))
+  (let* ((socket (usocket:socket-connect nil nil
+                                         :protocol :datagram
+                                         :local-host "127.0.0.1"
+                                         :local-port port
+                                         )))
+    (mpcompat:process-run-function "UDP Gossip Server" nil
+      'serve-gossip-port socket)
+    (usocket:get-local-port socket)))
+
+(defun shutdown-gossip-server (&optional (port *gossip-port*))
+  (setf *shutting-down* :SHUTDOWN-SERVER)
+  (internal-send-socket *local-ip* port "ShutDown"))
+
+(defmethod transmit-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
+  (declare (ignore srcuid))
+  (error "Bug: Cannot transmit to a local node!"))
+
+(defmethod transmit-msg ((msg gossip-message-mixin) (node remote-gossip-node) srcuid)
+  "Send message across network.
+   srcuid is that of the (real) local gossip-node that sent message to this node."
+  (cosi-simgen::internal-send-socket
+   (real-ip node)
+   (real-port node)
+   (loenc:encode (list (real-uid node) srcuid msg))))
+
+; network messages are 3 pieces in a list:
+;   destuid of ultimate receiving node
+;   srcuid of sending node
+;   gossip-msg
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   "Actor version. Does not launch a new thread because actor infrastructure will already have done that."
@@ -1390,9 +1500,9 @@ gets sent back, and everything will be copacetic.
   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
   (locally-receive-msg gossip-msg node srcuid))
 
-(defmethod deliver-gossip-msg (msg (node remote-gossip-node) srcuid)
+(defmethod deliver-gossip-msg (gossip-msg (node remote-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
-   (transmit-msg msg node srcuid))
+   (transmit-msg gossip-msg node srcuid))
 
 (defun run-gossip-sim ()
   "Archive the current log and clear it.
@@ -1401,6 +1511,7 @@ gets sent back, and everything will be copacetic.
    again if you change the graph or want to start with a clean log."
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
+  (start-gossip-server)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)

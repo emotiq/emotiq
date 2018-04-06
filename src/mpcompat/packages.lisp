@@ -79,6 +79,7 @@ THE SOFTWARE.
    #:without-preemption
    #:process-wait
    #:process-wait-with-timeout
+   #:process-kill
    #:make-lock
    #:lock-owner
    #:process-lock
@@ -92,6 +93,7 @@ THE SOFTWARE.
    #:make-mailbox
    #:mailbox-send
    #:mailbox-read
+   #:mailbox-empty?
    #:mailbox-empty-p
 
    ;; new in Lispworks 6
