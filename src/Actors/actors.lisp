@@ -525,7 +525,7 @@ THE SOFTWARE.
 
 (defun ensure-mbox-empty (mbox)
   (um:nlet-tail iter ()
-    (when (mailbox-not-empty-p mbox)
+    (unless (mpcompat:mailbox-empty? mbox)
       (mpcompat:mailbox-read mbox)
       (iter))))
 
@@ -768,7 +768,7 @@ THE SOFTWARE.
              #+:LISPWORKS
              (mp:process-terminate proc)
              #+(OR :ALLEGRO :CLOZURE)
-             (mp:process-kill proc)))
+             (mpcompat:process-kill proc)))
          (empty-ready-queue)
          ))))
 
