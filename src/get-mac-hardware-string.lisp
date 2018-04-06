@@ -32,11 +32,20 @@
         (line nil)
         (pos nil))
     (with-input-from-string (stream string)
+      #-:LISPWORKS
       (loop while (not (stream-eofp stream)) do
           (setf line (read-line stream nil nil nil))
         (when (setf pos (search key line))
           (return 
-           (string-trim #(#\space) (subseq line (+ (length key) pos)))))))))
+           (string-trim #(#\space) (subseq line (+ (length key) pos))))))
+      #+:LISPWORKS
+      (loop while (not (eq stream
+                           (setf line (read-line stream nil stream nil))))
+            do
+            (when (setf pos (search key line))
+              (return 
+               (string-trim #(#\space) (subseq line (+ (length key) pos))))))
+      )))
 
 (defun get-mac-uuid ()
   (get-mac-hardware-value "Hardware UUID:"))
