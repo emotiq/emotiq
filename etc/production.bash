@@ -54,7 +54,7 @@ case ${uname_s} in
         MAKETARGET=makefile.osx
 	deliveryscript=deliv-macos.bash
 	production_dir=${prefix}/production-macos
-	kind=mac
+	kind=macos
         echo Using ${MAKETARGET}
         ;;
     *)
