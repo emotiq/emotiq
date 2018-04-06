@@ -524,8 +524,8 @@ THE SOFTWARE.
 
 (defun ensure-mbox-empty (mbox)
   (um:nlet-tail iter ()
-    (when (mp:mailbox-peek mbox)
-      (mp:mailbox-read mbox)
+    (unless (mpcompat:mailbox-empty? mbox)
+      (mpcompat:mailbox-read mbox)
       (iter))))
 
 (defun do-with-borrowed-mailbox (fn)
@@ -767,7 +767,7 @@ THE SOFTWARE.
              #+:LISPWORKS
              (mp:process-terminate proc)
              #+(OR :ALLEGRO :CLOZURE)
-             (mp:process-kill proc)))
+             (mpcompat:process-kill proc)))
          (empty-ready-queue)
          ))))
 
