@@ -72,7 +72,7 @@ field. 1 <= z_rand < group order"
 
 (defstruct ped-proof
   "Public knowlege for proof of a Pedersen commitment."
-  hpt gpt cmt z alpha lf rt)
+  hpt gpt cmt alpha lf rt)
 
 (defstruct ped-secrets
   "The secrets used in the Pedersen commitment"
@@ -86,10 +86,10 @@ field. 1 <= z_rand < group order"
   "Make a Pedersen commitment to x with computational binding, and
 random hiding, gamma:
 
-    Cx = gamma * H + x * G
+    C = gamma * H + x * G
 
 for randomly selected, independent generators H, G.
-Publish Cx, H, and G.
+Publish C, H, and G.
 
 Proof is by way noting that for random challenge, z, prover supplies
 values for alpha, L, and R, where:
@@ -110,7 +110,7 @@ and sees that
 which proves knowledge of both factors, gamma and x.
 
 We invoke Shamir conversion to NIZKP by using the hash of the
-transcript as the random challenge value, z.
+transcript as the random challenge value, z = Hash/256(H, G, C).
 
 Note, that if x comes from a small domain, and by way of knowing both
 H and L = x*H, it is possible for a brute force search to determine x.
@@ -120,7 +120,8 @@ So small domain values must be cloaked. See below..."
     (let* ((gamma (rand))
            (cmt   (add-pts (mul-pt-zr hpt gamma)
                            (mul-pt-zr gpt x)))
-           (z     (int (hash:hash/256 x gamma hpt gpt cmt)))
+           ;; challenge z = hash of public info
+           (z     (int (hash:hash/256 hpt gpt cmt)))
            (alpha (m+ (m* gamma z)
                       (m/ x z)))
            (lf    (mul-pt-zr hpt x))
@@ -130,7 +131,6 @@ So small domain values must be cloaked. See below..."
         :hpt   hpt
         :gpt   gpt
         :cmt   cmt
-        :z     z
         :alpha alpha
         :lf    lf
         :rt    rt)
@@ -144,14 +144,15 @@ So small domain values must be cloaked. See below..."
   (with-accessors  ((hpt   ped-proof-hpt)
                     (gpt   ped-proof-gpt)
                     (cmt   ped-proof-cmt)
-                    (z     ped-proof-z)
                     (alpha ped-proof-alpha)
                     (lf    ped-proof-lf)
                     (rt    ped-proof-rt)) proof
     (with-mod (get-order)
-      (let* ((gzpt  (add-pts (mul-pt-zr hpt (m/ z))
+      (let* ((z     (int (hash:hash/256 hpt gpt cmt)))
+             (gzpt  (add-pts (mul-pt-zr hpt (m/ z))
                              (mul-pt-zr gpt z)))
              (zsq   (m* z z)))
+        ;; verify Pedersen commitment
         (= (int (mul-pt-zr gzpt alpha))
            (int (add-pts (mul-pt-zr lf (m/ zsq))
                          (add-pts cmt

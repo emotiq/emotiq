@@ -19,7 +19,6 @@
 		:ed-compress-pt
 		:ed-decompress-pt
 		:ed-validate-point
-		:ed-hash
 		:ed-random-pair)
   (:import-from :ecc-crypto-b571
                 :convert-bytes-to-int
@@ -105,7 +104,6 @@
    :ed-compress-pt
    :ed-decompress-pt
    :ed-validate-point
-   :ed-hash
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
    :random-between

@@ -29,7 +29,7 @@ THE SOFTWARE.
 (in-package :randhound/server)
 ;; ---------------------------------------------------------------
 
-(defun dispatch-message (node)
+(defun rh-dispatch-message (node)
   (ac:make-actor
    (um:dlambda
      (:randhound-init (reply-to config)
