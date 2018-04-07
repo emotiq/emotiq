@@ -1,7 +1,7 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
 (defsystem "emotiq-test"
-  :version "0.0.2"
+  :version "0.0.3"
   :description "Emotiq Tests"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"

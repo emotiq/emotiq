@@ -1,39 +1,31 @@
 (in-package "EMOTIQ")
 
-(defun simple-test ()
-  ;; (pbc:make-key-pair :dave)
-  ;; (let ((signed (pbc:sign-message :hello)))
-  ;;   (if (pbc:check-message signed)
-  ;;     (format *standard-output* "~%NOT OK~%"))))
+(defun simple-test (&optional how-started-message?)
+  (message-running-state how-started-message?)
+  (pbc::need-pairing) ;; initializes init-pairing, not exported (no use for it in future systems)
   (pbc:init-pairing)
-  (format *standard-output* "~%OK~%")
-)
+  (let ((context (start-blockchain-context)))
+    (with-blockchain-context (context)
+      (let ((genesis-block (make-genesis-block)))
+        (format *standard-output*
+                "~&Here is the first transaction of the genesis block:~%  ~a~%"
+                genesis-block)))))
 
-(defparameter *production* nil)
 
-(defun production-p () 
-  *production*)
+(defun message-running-state (&optional how-started-message?)
+  (format *standard-output* "~%Running ~a in ~a~%"
+          (or how-started-message? "interactively")
+          (if (production-p) "production" "development")))
 
-(defun production-start ()
-  (setf *production* t)
-  (start))
-
-(defun dev-start ()
-  (setf *production* nil)
-  (start))
 
 (defun start ()
-  (format *standard-output* "1: alloc=~a~%" (hcl:total-allocation))
-  ;(cl:room)
-  (if (production-p)
-      (format *standard-output* "~%running production~%")
-    (format *standard-output* "~%running development~%"))
-  (format *standard-output* "2: alloc=~a~%" (hcl:total-allocation))
-  ;(cl:room)
-  (simple-test)
-  (format *standard-output* "3: alloc=~a~%" (hcl:total-allocation))
-  (cl:room)
-  )
-    
 
+  ;; This is for running in command line only. For now, if we're
+  ;; starting from the command line, we assume it's for
+  ;; production. Later, we'll have other means of setting
+  ;; *production*. TEMPORARY! FIX! 4/6/18
+  (setq *production* t)
 
+  (message-running-state "from command line")
+
+  (simple-test))
