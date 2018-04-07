@@ -199,9 +199,9 @@ THE SOFTWARE.
    :ed-compress-pt
    :ed-decompress-pt
    :ed-validate-point
-   :ed-hash
    :ed-random-pair
    :ed-random-generator
+   :ed-from-hash
    
    :elligator-random-pt
    :elligator-tau-vector
@@ -218,7 +218,6 @@ THE SOFTWARE.
    :ed-schnorr-sig
    :ed-schnorr-sig-verify
    
-   :ed-hash
    :get-hash-bits
    
    :ed-convert-int-to-lev
@@ -302,6 +301,7 @@ THE SOFTWARE.
    :ed-decompress-pt
    :ed-nth-pt
    :ed-random-pair
+   :ed-from-hash
    
    :elli2-encode
    :elli2-decode
