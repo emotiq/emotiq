@@ -1,7 +1,7 @@
 ;;; -*- Mode: LISP; Syntax: COMMON-LISP -*-
 
 (defsystem "emotiq"
-  :version "0.0.3"
+  :version "0.0.5"
   :description "Emotiq"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
@@ -13,8 +13,14 @@
                 :pathname "./"
                 :components ((:file "package")))))
 
+(defsystem "emotiq/delivery"
+  :depends-on (emotiq)
+  :components ((:module delivery
+                :pathname "./"
+                :components ((:file "production")))))
+
 (defsystem "emotiq/utilities"  
-  :depends-on (emotiq
+  :depends-on (emotiq/delivery
                ironclad
                bordeaux-threads)
   :components ((:module source
@@ -31,12 +37,9 @@
                 :components ((:file "blockchain")))))
                                        
 (defsystem "emotiq/startup"
-  :depends-on (emotiq/utilities crypto-pairings core-crypto)
+  ;; add gossip here soon:
+  :depends-on (emotiq/blockchain crypto-pairings core-crypto)
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "startup")))))
-                                       
-
-
-
