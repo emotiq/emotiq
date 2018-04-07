@@ -549,21 +549,16 @@ THE SOFTWARE.
 (defmethod hashable ((x ed-proj-pt))
   (hashable (ed-affine x)))
 
-(defun ed-hash (pt)
-  (sha3-buffers (ed-compress-pt pt :lev t)))
-
 (defun get-hash-nbits (nbits seed)
-  ;; concatenated SHA3 until we collect enough bits
+  "Concatenated SHA3 until we collect enough bits"
   (get-hash-nbytes (ceiling nbits 8) seed))
 
 ;; -------------------------------------------------
 
 (defun compute-deterministic-skey (seed &optional (index 0))
-  ;;
-  ;; Return a value based on seed, to be used for generating a public
-  ;; key, (aka, a secret key), which is in the upper range of the
-  ;; *ed-r* field, and which avoids potential small-group attacks
-  ;;
+  "Return a value based on seed, to be used for generating a public
+  key, (aka, a secret key), which is in the upper range of the
+  *ed-r* field, and which avoids potential small-group attacks"
   (let* ((nbits (integer-length *ed-r*))
          (h     (int
                  (get-hash-nbits nbits
@@ -577,16 +572,45 @@ THE SOFTWARE.
     ))
 
 (defun ed-random-pair ()
-  ;; select a random private and public key from the curve, abiding by
-  ;; the precautions discussed for COMPUTE-DETERMINISTIC-SKEY
+  "Select a random private and public key from the curve, abiding by
+  the precautions discussed for COMPUTE-DETERMINISTIC-SKEY"
   (let* ((seed (ctr-drbg 256))
          (skey (compute-deterministic-skey seed))
          (pt   (ed-nth-pt skey)))
     (values skey pt)))
 
 (defun ed-random-generator ()
-  ;; every point on the curve is a generator
+  "Every point of the curve is a generator"
   (second (multiple-value-list (ed-random-pair))))
+
+;; -----------------------------------------------------
+;; Hashing onto curve
+
+(defun ed-from-hash (h)
+  "Hash onto curve. Treat h as X coord with sign indication,
+just like a compressed point. Then if Y is a quadratic residue
+we are done. Else re-probe with (X^2 + 1)."
+  (with-mod *ed-q*
+    (let* ((nbits (ed-nbits))
+           (v     (int h))
+           (sgn   (ldb (byte 1 nbits) v))
+           (x     (mmod (ldb (byte nbits 0) v))))
+      (um:nlet-tail iter ((x x))
+        (let ((yy (m/ (m* (m+ *ed-c* x)
+                          (m- *ed-c* x))
+                      (m* (m- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
+                  ))
+          (if (quadratic-residue-p yy)
+              (let* ((y  (msqrt yy))
+                     (y  (if (eql sgn (ldb (byte 1 0) y))
+                             y
+                           (m- y))))
+                (make-ecc-pt
+                 :x  x
+                 :y  y))
+            ;; else 
+            (iter (m+ 1 (m* x x)))
+            ))))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive

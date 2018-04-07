@@ -940,15 +940,6 @@ THE SOFTWARE.
         (=values)))
     ))
 
-#|
-(defun as-list (seq)
-  (coerce seq 'list))
-
-(=defun pmapc (fn &rest seqs)
-  ;; >>> I don't think this is correct...
-  (=apply '=pmapcar fn (mapcar 'as-list seqs)))
-|#
-
 (defun par-xform (pfn &rest clauses)
   ;; Internal transform function. Converts a list of clauses to a form
   ;; suitable for application by PMAPCAR or PFIRST

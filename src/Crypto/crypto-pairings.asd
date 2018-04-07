@@ -28,8 +28,7 @@ THE SOFTWARE.
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
-  :components  ((:file "pairing-curves")
-		(:file "pbc-cffi")
+  :components  ((:file "pbc-cffi")
                 (:file "proofs"))
   :depends-on   ("core-crypto"
                  "cffi"
@@ -56,6 +55,15 @@ THE SOFTWARE.
 (defsystem "crypto-pairings/t"
   :depends-on (crypto-pairings)
   :perform (test-op (o s)
-                    (symbol-call :pbc :init-pairing)))
+                    (symbol-call :lisp-unit :run-tests
+                                 :all :pbc-test))
+  :components ((:module package
+                        :pathname "tests/"
+                        :components ((:file "package")))
+               (:module tests
+                :depends-on (package)
+                :pathname "tests/"
+                :components ((:file "crypto-tests")))))
+
 
 
