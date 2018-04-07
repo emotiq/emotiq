@@ -4,4 +4,4 @@
 
 (ql:quickload :emotiq/startup)
 
-(deliver 'emotiq:production-start "emotiq" 0 :multiprocessing t :console t)
+(deliver 'emotiq:start "emotiq" 0 :multiprocessing t :console t)
