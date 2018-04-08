@@ -1,5 +1,5 @@
 ;;; ccl-darwin-special.lisp
-;;; Just enough cocoa to get the command-line version of CCL to support ccl::%open-url-in-browser
+;;; Just enough cocoa to get the command-line version of CCL to support ccl::open-url-in-browser
 
 (in-package :ccl)
 
@@ -8,10 +8,11 @@
   
   (defparameter *mac-ui-files*
     '("cf-utils"
-      "libdispatch"
-      "ccl-application"
-      "event-process"
-      "cg"))
+     ; "libdispatch" ; these aren't necessary
+     ; "ccl-application"
+     ; "event-process"
+     ; "cg"
+      ))
   
   (defun load-mac-ui-files (names mac-ui-dir force-compile)
     (let* ((bin-dir (merge-pathnames ";fasls;" mac-ui-dir)))
