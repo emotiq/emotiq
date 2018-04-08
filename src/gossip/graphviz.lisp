@@ -129,10 +129,9 @@
         (massage-graphviz-svg-file svgpath htmlpath)
         (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring htmlpath))))
           #+LISPWORKS (sys:open-url urlstring)
-          #+CLOZURE
-          (let* ((url (NEXTSTEP-FUNCTIONS::|absoluteURL|
-                                           (make-instance 'ns:ns-url
-                                             :with-string (ccl::%make-nsstring urlstring)))))
-            (ccl::%open-url-in-browser url))
+          #+(and :CLOZURE :DARWIN)
+          (ccl::open-url-in-browser urlstring)
+          #-(or :LISPWORKS (and :CLOZURE :DARWIN))
+          (uiop:run-program (list "xdg-open" urlstring))
           (values dotpath htmlpath))))))
     
