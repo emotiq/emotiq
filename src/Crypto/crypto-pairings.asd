@@ -53,7 +53,8 @@ THE SOFTWARE.
        (format *standard-output* "~tWhew!  Finished.~&")))))
 
 (defsystem "crypto-pairings/t"
-  :depends-on (crypto-pairings)
+  :depends-on (lisp-unit
+               crypto-pairings)
   :perform (test-op (o s)
                     (symbol-call :lisp-unit :run-tests
                                  :all :pbc-test))
