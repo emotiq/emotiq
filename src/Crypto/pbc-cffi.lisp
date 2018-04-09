@@ -153,11 +153,22 @@ THE SOFTWARE.
    (:linux  "./libLispPBCIntf.so")
    (t (:default "libLispPBCIntf"))))
 
+(defun load-ral-dlls ()
+  "loads the DLLs (.so and .dylib) at runtime, from the current directory"
+  (cffi:define-foreign-library
+   libpbc
+   (:darwin "/usr/local/libLispPBCIntf.dylib")
+   (:linux  "/usr/local/libLispPBCIntf.so")
+   (t (:default "libLispPBCIntf"))))
+
 (defun load-dlls()
   "load the dev or production dlls at runtime"
-  (if nil ;; (emotiq:production-p)
+  #-:COM.RAL
+  (if (emotiq:production-p)
       (load-production-dlls)
     (load-dev-dlls))
+  #-:COM.RAL
+  (load-ral-dlls)
   (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
