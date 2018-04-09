@@ -1,5 +1,6 @@
 ;;; ccl-darwin-special.lisp
 ;;; Just enough cocoa to get the command-line version of CCL to support ccl::open-url-in-browser
+;;; UPDATE: 08-Apr-2018. Don't need this file at all. Just run 'open <url>' as a shell command.
 
 (in-package :ccl)
 
