@@ -141,7 +141,7 @@ THE SOFTWARE.
   ;; Cipolla method for finding square root of x over prime field m
   (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
                       (declare (integer a))
-                      (let ((v  (mmod (- (* a a) x))))
+                      (let ((v  (m- (m* a a) x)))
                         (declare (integer v))
                         (if (quadratic-residue-p v)
                             (iter (1+ a))
