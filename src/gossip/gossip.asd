@@ -13,5 +13,4 @@
   :serial t
   :components ((:file "package")
                (:file "gossip")
-               #+(and :CLOZURE :DARWIN) (:file "ccl-darwin-special")
                (:file "graphviz")))
