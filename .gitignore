@@ -1,5 +1,6 @@
 *.fasl
 *.64xfasl
+*.64ufasl
 *~
 var/local/include/gmp.h
 var/local/include/pbc/pbc.h

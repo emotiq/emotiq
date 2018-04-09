@@ -38,10 +38,12 @@ THE SOFTWARE.
 (defclass timer ()
   ((period   :accessor timer-period
              :initarg  :period
-             :initform nil)
+             :initform nil
+             :documentation "True if timer should repeat periodically.")
    (t0       :accessor timer-t0
              :initarg  :t0
-             :initform 0)
+             :initform 0
+             :documentation "Absolute universal-time when timer is set to expire.")
    (fn       :accessor timer-fn
              :initarg  :fn
              :initform (constantly nil))
