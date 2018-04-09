@@ -1,12 +1,20 @@
 ;;; graphviz interface for gossip
 ;;; SVS
 
-;;; You need to install graphviz before this will work. On a Mac, do this:
-;;; brew install graphviz --with-gts
+;;; You need to install graphviz before this will work.
+;;; On a Mac, do this:
+;;;  brew install graphviz --with-gts
+;;; On linux:
+;;;  sudo apt-get install graphviz
 
 (in-package :gossip)
 
-(defparameter *graphviz-command* "/usr/local/bin/sfdp")
+(defvar *graphviz-command* nil "Location of graphviz sfdp program")
+
+(defun find-graphviz ()
+  (let ((loc (uiop:run-program (list "which" "sfdp") :output :string)))
+    (when (and loc (eql 0 (ignore-errors (position #\/ loc))))
+      (string-trim '(#\newline) loc))))
 
 (defun random-name (&optional (prefix "ELEM"))
   (string-downcase (symbol-name (gensym prefix))))
@@ -63,12 +71,17 @@
 
 (defun convert-dotfile-to-svg (dotpath &optional svgpath)
   (let ((cmd *graphviz-command*))
-    (uiop:run-program (list cmd
-                            "-Tsvg"
-                            ;"-Gmodel=subset"
-                            (uiop:native-namestring dotpath)
-                            "-o"
-                            (uiop:native-namestring svgpath)))))
+    (unless cmd
+      (setf cmd
+            (setf *graphviz-command* (find-graphviz))))
+    (cond (cmd
+           (uiop:run-program (list cmd
+                                   "-Tsvg"
+                                   ;"-Gmodel=subset"
+                                   (uiop:native-namestring dotpath)
+                                   "-o"
+                                   (uiop:native-namestring svgpath))))
+          (t (error "Cannot locate graphviz sfdp command. Please install graphviz first.")))))
 
 (defmethod visualize-nodes ((nodes null))
   (visualize-nodes *nodes*))
@@ -130,7 +143,7 @@
         (let ((urlstring (concatenate 'string "file://" (uiop:native-namestring htmlpath))))
           #+LISPWORKS (sys:open-url urlstring)
           #+(and :CLOZURE :DARWIN)
-          (ccl::open-url-in-browser urlstring)
+          (uiop:run-program (list "open" urlstring))
           #-(or :LISPWORKS (and :CLOZURE :DARWIN))
           (uiop:run-program (list "xdg-open" urlstring))
           (values dotpath htmlpath))))))
