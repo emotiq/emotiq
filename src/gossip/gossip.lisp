@@ -44,8 +44,8 @@
                    *active-ignores* nil)))
   kind)
              
-; (set-protocol-style :neighborcast)
-; (set-protocol-style :gossip)
+; (set-protocol-style :neighborcast) ; you should expect 100% correct responses most of the time in this mode
+; (set-protocol-style :gossip)       ; you should expect 100% correct responses very rarely in this mode
 
 #|
 Discussion: :gossip style is more realistic for "loose" networks where nodes don't know much about their neighbors.
@@ -295,10 +295,10 @@ are in place between nodes.
        (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
          (deliver-gossip-msg gossip-msg node srcuid)))
-      (:relay
+      (:echo
        ; we expect node to be nil in this case, but it's actually
        ;   irrelevant. We could just as well use an actor attached to a node
-       ;   for relaying if we wanted to.
+       ;   for echoing if we wanted to.
        (destructuring-bind (srcuid destuid gossip-msg) (cdr actor-msg)
          (send-msg gossip-msg destuid srcuid))))))
 
@@ -332,20 +332,18 @@ are in place between nodes.
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
-; TODO: Rename all this s/relay/echo.
-(defparameter *relay-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
+(defparameter *echo-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
 
-(defmethod relay-msg ((msg gossip-message-mixin) destuid srcuid)
-  "Cause a message to be relayed to another node -- or back to myself.
-  Usually we use this in echo mode (where destuid = srcuid),
-  so an actor can send a message to itself but forcing itself to first yield and
+(defmethod echo-msg ((msg gossip-message-mixin) srcuid)
+  "Cause a message to be echoed back to myself.
+  An actor can send a message to itself while forcing itself to first yield and
   handle other messages before handling the one herein."
-  (unless *relay-actor*
-    (setf *relay-actor* (make-gossip-actor nil)))
-  (ac:send *relay-actor*
-           :relay ; actor-verb
+  (unless *echo-actor*
+    (setf *echo-actor* (make-gossip-actor nil)))
+  (ac:send *echo-actor*
+           :echo ; actor-verb
            srcuid  ; source node
-           destuid ; must send this as a parameter for relays, so relayer will know who to send it to
+           srcuid  ; destuid = srcuid because we're echoing
            msg))
 
 (defun make-node (&rest args)
@@ -889,7 +887,7 @@ are in place between nodes.
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. This is strictly a message handler; it's not a function
   a node actor should call. The sender of this message will usually be thisnode itself, via
-  the *relay-actor*."
+  the *echo-actor*."
   (declare (ignore srcuid))
   ; srcuid will usually (always) be that of thisnode, but we're not checking for that
   ;   because it doesn't matter if it's not true. For now.
@@ -1294,7 +1292,7 @@ gets sent back, and everything will be copacetic.
               :kind :maybe-sir
               :args (list soluid reply-kind))))
     (maybe-log thisnode :ECHO-MAYBE-SIR nil)
-    (relay-msg msg (uid thisnode) (uid thisnode))))
+    (echo-msg msg (uid thisnode))))
 
 (defun later-reply? (new old)
   "Returns true if old is nil or new has a higher uid"
