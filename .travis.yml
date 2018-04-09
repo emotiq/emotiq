@@ -58,7 +58,7 @@ script:
               :for 
                   (system dependencies) 
               :in 
-                  '((:emotiq :emotiq-test))
+                  '((:emotiq/blockchain :emotiq-test))
               :doing 
                  (ql:quickload dependencies)
               :unless 
@@ -72,7 +72,7 @@ script:
               :for 
                   (system dependencies) 
               :in 
-                  '((:cosi-bls :cosi-bls-test))
+                  '((:crypto-pairings :crypto-pairings/t))
               :doing 
                  (ql:quickload dependencies)
               :unless 
@@ -86,7 +86,7 @@ script:
               :for 
                   (system dependencies) 
               :in 
-                  '((:crypto-pairings :crypto-pairings/t))
+                  '((:core-crypto :core-crypto)) ; no test system, so system itself
               :doing 
                  (ql:quickload dependencies)
               :unless 
