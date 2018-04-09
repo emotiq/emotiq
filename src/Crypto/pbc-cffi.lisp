@@ -155,7 +155,7 @@ THE SOFTWARE.
 
 (defun load-dlls()
   "load the dev or production dlls at runtime"
-  (if (emotiq:production-p)
+  (if nil ;; (emotiq:production-p)
       (load-production-dlls)
     (load-dev-dlls))
   (cffi:use-foreign-library libpbc))
