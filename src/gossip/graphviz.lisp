@@ -2,9 +2,20 @@
 ;;; SVS
 
 ;;; You need to install graphviz before this will work.
-;;; On a Mac, do this:
+;;; On a Mac, just do this:
 ;;;  brew install graphviz --with-gts
+;;; 
 ;;; On linux:
+;;;  sudo apt install libgts-dev
+;;;  pkg-config --libs gts
+;;;  pkg-config --cflags gts
+;;; Download source from www.graphviz.org
+;;; Extract
+;;; .configure --with-gts
+;;; make
+;;; make install
+;;; 
+;;; Following WILL NOT work because the default graphviz build is not built with gts, and sfdp is useless without it.
 ;;;  sudo apt-get install graphviz
 
 (in-package :gossip)
