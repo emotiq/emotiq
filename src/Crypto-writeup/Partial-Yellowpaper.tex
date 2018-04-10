@@ -154,63 +154,56 @@ The second pass sends the, now validated, message and its multisignature to all 
 \subsection{Transaction Privacy}
 For blockchain systems that don't use pairing cryptography, a simple technique for cloaking all transactions can be developed, based on showing that homomorphic sums yield a recognizable zero balance. That only works when all cryptographic computations occur in a single curve, or when parings are symmetric and both curves are the same simple Elliptic Curve group.
 
-In our system, however, we are using asymmetric pairings and the two curve groups are completely different species. All of our public keys are developed in the $G_2$ group which is not a simple Elliptic Curve, unlike the $G_1$ group. Hence we are forced to use pairing relations to develop homomorphic proofs. The result is a little bit more complicated, but not by much.\footnote{An advantage to the pairing-based proofs is that they work for all pairing systems, even when using symmetric pairings and simple Elliptic Curve groups.}
+In our system, however, we are using asymmetric pairings and the two curve groups are completely different species. All of our public keys are developed in the $G_2$ group which is not a simple Elliptic Curve, unlike the $G_1$ group. Hence we are forced to use pairing relations to develop homomorphic proofs. The result is a little bit more complicated, but not by much.\footnote{An advantage to the pairing-based proofs is that they work for all pairing systems, whether using symmetric pairings with simple Elliptic Curve groups, or asymmetric pairings and more complex Elliptic Curve groups.}
 
-The basis for transactions is that the amount paid must equal the product cost plus fees, plus change returned to purchaser
-$$ {paid} = {cost} + {fees} + {change}$$
-or rather, 
-$$ {paid} - {change} = {cost} + {fees}$$
+The basis for transactions is that an unspent transaction (UTX) may be used by sending portions to one or more destinations. The value of an input UTX must equal the sum of the output UTX deriving from the input: 
+$$val(UTX_{in}) = \sum_n val(UTX_{out,n})$$
 
-So using our pairing-based cryptography, we can encrypt the purchase offer as a triple 
-$(T_{buy},R_{sell}, P_{buy})$
-$$ T_{buy} = \frac{k_{rand} \, s_{buy}}{paid - change} \, U \in G_1$$
-$$ R_{sell} = \frac{1}{k_{rand}}\,P_{sell} \in G_2$$
-for some random value $k_{rand}$ as a blinding factor, the buyer's secret key $s_{buy} \in Z_r$, buyer's public key $P_{buy} = s_{buy} \, V \in G_2$,  seller's public key $P_{sell} \in G_2$, and generators $U \in G_1$, and $V \in G_2$.
+Input and output UTX are specified with public keys of their owners. 
 
-Blinding factors ensure that repeated transactions for the same amount will appear different each time. Only the buyer needs to know the amount paid, and the change returned. The seller only needs assurance that their cost plus fees is covered.
+We can use pairings to cloak the quantities involved, when necessary, and provide proof of sender identity and UTX values. Bulletproofs accompany these pairings to prove that all quantities are within acceptable range.
 
-At the seller's end, this transaction can be completed by computing $C_{sell}$ 
-$$ C_{sell} = \frac{cost+fees}{s_{sell}} \, R_{sell} \in G_2$$
-for seller's private key $s_{sell} \in Z_r$, 
-and then verifying the pairing relation:
-$$ e(T_{buy},C_{sell}) = e(U,P_{buy}) \in G_T$$
-for buyer's public key $P_{buy}$. 
+A fundamental premise of bilinear pairings states that:
+$$ e(A +  B, C) = e(A,C)\, e(B,C)$$
 
-This accomplishes three things. First, only the intended seller can verify the pairing relation, since it requires their private key, $s_{sell}$. Second, it proves to the seller that the buyer, identified by their public key, $P_{buy}$, originated the transaction. And third, it proves to the seller that the buyer paid the proper amount after receiving their change. 
-
-Any mismatch between the two pairings indicates either that the seller was illegitimate and could not decrypt the $R_{sell}$ value properly, or that a presumed buyer did not originate the transaction, or else they didn't send a proper amount of currency. 
-
-Buyer and seller are protected against forgery and fraud, and seller is protected against denial on the part of the buyer. The purchase offer is completely cloaked to third parties. And currency amounts, beyond what is already known to the seller, are hidden from  view.
-
-To complete the transaction the seller must indicate acceptance and then the entire transaction must be published to the public blockchain with publicly verifiable proofs that the transaction was legitimate. 
-
-To accept the proposed purchase, the seller publishes the triple $(T_{buy}, C_{sell}, P_{buy})$ to the blockchain, where $T_{buy}$ was received from the buyer, and $C_{sell}$ was computed by the seller during verification. Together, these group elements form pairings that anyone can verify with the same pairing relation used by the seller:
-$$ e(T_{buy},C_{sell}) = e(U,P_{buy}) \in G_T$$
-This publication should be signed by the seller and posted to the blockchain. Doing so carries the signature weight of the seller as having accepted the purchase transaction. It would not have been published unless the seller accepted it. It proves that the buyer originated the transaction. And anyone can now verify that the transaction occurred. But all currency amounts remain hidden from view.
-
-But more is needed. Nothing here prevents a buyer from claiming fraudulent values for amounts paid and change received. All we know is that their difference was matched by the seller's cost plus fees. Nor can we see if buyer and seller were colluding with fraudulent values on both sides of the transaction. 
-
-So accompanying the purchase transaction, we must provide cryptographic proofs that the individual currency values lie within legitimate ranges. In particular, the difference, $(paid - change)$, and $paid$,  $change$, $cost$, and $fees$, must all be nonnegative amounts within some range, like $[0..2^{64})$.   This is provided by Bulletproofs. 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsubsection{Privacy without Encryption}
-There may be times when the $(cost + fees)$ is publicly known, and there is no seller involved in a transaction. We can still achieve transactional privacy in that case. Simply make the substitutions
+So if we cloak the value of an input $UTX_{in}$ with a blinding factor $k_{rand}$, we could write a pairing verification relation as:
+$$
 \begin{align}
-P_{sell} &\to V \in G_2 \notag \\
-s_{sell} &\to 1 \notag
+e(\frac {k_{rand} \, val(UTX_{in})}{s}\, & U, P) \\
+& = e(\frac{k_{rand} \, \sum_n val(UTX_{out,n})}{s} \, U, P) \\
+& = \prod_n e(\frac{k_{rand} \, val(UTX_{out,n})}{s} \, U, P)
 \end{align}
+$$
+for private key, $s$, and public key, $P$,  of sender.
 
-The buyer publishes the triple $(T_{buy},R, P_{buy})$, where $T_{buy}$ is as before,
-$$ T_{buy} = \frac{k_{rand} \, s_{buy}}{paid - change} \, U \in G_1$$
-and
-$$ R = \frac{1}{k_{rand}}\,V \in G_2$$
+So with this relation and the expression of a pairing of sums as the product of pairings from above, we can specify a transaction as a tuple $(UTX_{in}, UTX_{out,1}, UTX_{out,2}...)$ together with proof values $(S_{in}, P, R, O_1, O_2, ...)$, where
+$$ S_{in} = \frac{k_{rand} \, val(UTX_{in})}{s}\, U \in G_1$$
+for the input UTX, a value for any uncloaked UTX of
+$$ R = k_{rand} \, V \in G_2$$
+and a number of
+$$ O_i = k_{rand} \, val(UTX_{out,i}) \, U \in G_1$$
+for each cloaked output value. 
 
-Then anyone knowing the value of $(cost + fees)$ can verify the transaction using
-$$C = (cost + fees) \, R \in G_2$$
-and check that
-$$ e(T_{buy},C) = e(U,P_{buy}) \in G_T$$
+Some outputs will not be cloaked, such as escrow stake amounts, and transaction fees, so that everyone can see and work with them. For those, we use the $R$ value during proofs, as in
+$$ e(val(UTX_{out,u}) \, U, R) \in G_T$$
+The full proof of validity will be that
+$$
+\begin{align}
+e(S_{in},P) &= (\prod_i e(O_i, P)) \, (\prod_u e(val(UTX_{out,u})\, U, R)) \\
+&= e(\sum_i O_i, P) \, e((\sum_u val(UTX_{out,u})) \, U, R)
+\end{align}
+$$
 
-The validation relation proves that the buyer formed the purchase offer, and that they forwarded enough money to cover net costs, while still cloaking the values involved. The cloaked values need to be accompanied by range proofs.
+By providing $R \in G_2$, we are not in danger of disclosing anything about the cloaked input $UTX_{in}$ and outputs $UTX_{out,i}$, whose information is provided in group $G_1$. The blinding factor $k_{rand}$ ensures that nobody can learn anything useful about any of the cloaked outputs $UTX_{out,i}$. 
+
+Use of the private and public keys, $s$ and $P$, provides binding commitment and irrefutable proof of origination. Blending in the private key $s$, ensures that nobody could have forged the spending.
+
+Information about the actual values of $UTX_{out,i}$ must be provided separately to each recipient, via encrypted messages. But the public can fully verify the validity of these transactions, all without knowing anything about the actual values involved.
+
+Once a recipient receives disclosure of the amount, they can verify that
+$$e(O_i,P) = e(val(UTX_{out,i})\, U, R)$$
+
+Reporting proofs in $G_1$ keeps them as short as possible.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Cryptographic Proofs}
@@ -301,14 +294,20 @@ The use of BLS Signatures allows an abbreviated form of PVSS randomness generati
 
 Within each group, a sharing threshold is set at $t = \lfloor \frac{N}{3} \rfloor + 1$ for group size $N$. Secret random seeds are generated by each participant, then encrypted shares are formed over that secret and distributed to other group members, along with cryptographic proofs on the shares.
 
-For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $p(i)$, are then encrypted by multiplying the share value by the public key of each member, $E(share_i) = Z_r(p(i))\, P_i \in G_2$, and proofs are generated by forming a point, $Proof_i = Z_r(p(i)) \,U \in G_1$, for generator $U \in G_1$. 
+For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $share_i = p(i)$, are cloaked with the private key, $s$, and blinding factor $k_{rand}$, and also encrypted by multiplying the share value by the public key of each member, 
+$$Proof_i = \frac{k_{rand} \, p(i)}{s} \, U \in G_1$$
+$$Chk_i = k_{rand}\, p(i)\,  V \in G_2$$
+$$E(share_i) = p(i) \, P_i \in G_2$$
+$$R = k_{rand} \, U \in G_1$$
 
-A vector of shares and a vector of proofs is generated, one element for each member of the group, and these vectors are then transmitted to each group member.
-$$(E(share_1), E(share_2), ..., E(share_N))$$
+Vectors of proofs and their checks, and and a vector of encrypted shares, is generated, one element for each member of the group, and these vectors are then transmitted to each group member.
 $$ (Proof_1, Proof_2, ..., Proof_N)$$
+$$(Chk_1, Chk_2, ..., Chk_N)$$
+$$(R, E(share_1), E(share_2), ..., E(share_N))$$
 
-As with any BLS signature, each share is validated against its proof by checking that the pairings match:
-$$ e(Proof_i, P_i) = e(U, E(share_i))$$
+Every share can be validated with
+$$e(Proof_i, P) = e(U, Chk_i)$$
+where $P$ is the public key of the sender. This serves as proof of origination of the share.
 
 Every member of the group can also verify that all shares from another group member were consistently generated from the same sharing polynomial. To do so, we treat the share vector as a codeword from a Reed-Solomon encoding\cite{scrape}, compute a random polynomial of order $N - t - 1$ and use that to compute a test vector from the dual-space of the original share generating polynomial:
 $$f(x) = b_0 + b_1 x + ... + b_{N-t-1} x^{N-t-1}$$
@@ -319,21 +318,32 @@ $$\sum_i {c_{\perp}}_i \, Proof_i = G_1(0)$$
 
 This consistency check is absolutely certain for valid sharing vectors, and has an inconsequential probability of failing to detect an improper sharing set given as $\approx 1/q$, or about 1 chance in $2^{256}$. There is a greater likelihood of finding a hash collision in SHA3/256 than in seeing a failure to detect an inconsistent sharing vector.
 
-After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, $$G_2(share_i) = \frac{1}{s_i}E(share_i) \in G_2$$ for secret key $s_i \in Z_r$.
+After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, 
+$$
+\begin{align}
+Y_i &= e(\frac{1}{s_i}\, U, E(share_i)) \\ 
+       &= e(U,V)^{p(i)} \in G_T
+\end{align}
+$$
+for secret key $s_i \in Z_r$. The decryption can be verified with
+$$ e(\frac{1}{s_i} \, R, E(share_i)) = e(U, Chk_i)$$
 
-This decrypted share is then broadcast to all group members. Decrypted shares can be verified from the pairing relation:
-$$ e(Proof_i, V) = e(U, G_2(share_i))$$
+%As with any BLS signature, each decrypted share is validated against its proof by checking that the pairings match:
+%$$  e(Proof_i, P) &= e(\frac{1}{s_i} \, R, P_i)$$
 
-As soon as a sharing threshold number, $(n \ge t)$, of decrypted shares has been seen for any one sharing set, the secret randomness from that set can be discovered via Lagrange interpolation:
-$$G_2(random) = \sum_i G_2(share_i) \prod_{j \ne i} \frac{i}{i-j}$$
+The decrypted share, $Y_i$, is then broadcast to all group members. 
+%Decrypted shares can be verified from the pairing relation:
+%$$ e(Proof_i, P) = e(U, G_2(share_i))$$
 
-Finally, after a supermajority of sharing sets has been decrypted, $(n \ge 2 \lfloor \frac{N}{3} \rfloor + 1)$, their randomness is combined as a simple sum in $G_2$, and forwarded to all other groups.
-$$G_2(random_{grp}) = \sum_i G_2(random_i)$$
+As soon as a sharing threshold number, $(n \ge t)$, of decrypted shares has been seen for any one sharing group, the secret randomness from that set can be discovered via Lagrange interpolation:
+$$Y_{grp} = \prod_i Y_i^{\prod_{j \ne i} \frac{i}{i-j}}$$
 
-Proof of group randomness comes from the sum of Lagrange interpolations of the individual proof sets.
-Final randomness results from a supermajority sum of randomness obtained from each group, and its proof results from the sum of group proofs. 
+Finally, after a supermajority of sharing sets has been decrypted, $(n \ge 2 \lfloor \frac{N}{3} \rfloor + 1)$, their randomness is combined as a simple sum (in the exponent) in $G_T$, and forwarded to all clients.
+$$Y_{total} = \prod_{grp} Y_{grp}$$
 
-So the use of pairing-based cryptography shows great benefits, not only in minimizing network traffic, and by making immediate commitments to portions along the way, and also from the fact that proofs are so easily generated as simple sums of existing proofs.
+Final randomness results from a supermajority sum (in the exponent of the base pairing value) of randomness obtained from each group. 
+
+So the use of pairing-based cryptography shows great benefits, not only in minimizing network traffic, and by making immediate commitments to portions along the way.
 
 Timing tests show that this approach scales linearly with number of group participants, ranging from about 5 seconds for 32 group members, to about 3 minutes for 1024 group members, on an ordinary iMac with an Intel i7 processor. The timings are dominated by compute load, not network communications.
 
