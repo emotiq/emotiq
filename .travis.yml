@@ -58,9 +58,7 @@ script:
               :for 
                   (system dependencies) 
               :in 
-                  '((:emotiq :emotiq-test)
-                    (:cosi-bls :cosi-bls-test)
-                    (:crypto-pairings :crypto-pairings/t))
+                  '((:emotiq/blockchain :emotiq-test))
               :doing 
                  (ql:quickload dependencies)
               :unless 
@@ -69,4 +67,31 @@ script:
                  (uiop:quit (ash -1 i))
               :finally 
                  (uiop:quit 0))"
-
+  - ros -e "(loop
+              :for i :upfrom 1
+              :for 
+                  (system dependencies) 
+              :in 
+                  '((:crypto-pairings :crypto-pairings/t))
+              :doing 
+                 (ql:quickload dependencies)
+              :unless 
+                 (asdf:test-system system)
+              :return 
+                 (uiop:quit (ash -1 i))
+              :finally 
+                 (uiop:quit 0))"
+  - ros -e "(loop
+              :for i :upfrom 2
+              :for 
+                  (system dependencies) 
+              :in 
+                  '((:core-crypto :core-crypto)) ; no test system, so system itself
+              :doing 
+                 (ql:quickload dependencies)
+              :unless 
+                 (asdf:test-system system)
+              :return 
+                 (uiop:quit (ash -1 i))
+              :finally 
+                 (uiop:quit 0))"
