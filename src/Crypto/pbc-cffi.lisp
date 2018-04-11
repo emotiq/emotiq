@@ -24,8 +24,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(asdf:load-system :cffi)
-
 (defpackage :pbc-interface
   (:use :common-lisp
         :core-crypto
