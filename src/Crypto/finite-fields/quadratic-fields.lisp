@@ -102,24 +102,15 @@
 (defmethod element-div ((a qfield-pair) (b integer))
   (let* ((fld (qfield-pair-fld a)))
     (with-mod (field-ord fld)
-      (let ((1/b  (m/ b)))
-        (make-instance 'qfield-pair
-                       :fld fld
-                       :x   (m* 1/b (qfield-pair-x a))
-                       :y   (m* 1/b (qfield-pair-y a)))
-        ))))
+      (element-mul a (m/ b))
+      )))
 
 (defmethod element-div ((a qfield-pair) (b qfield-pair))
   (let* ((fld (qfield-pair-fld a)))
     (assert (eq fld (qfield-pair-fld b)))
-    (with-mod (field-ord fld)
-      (let ((1/b  (m/ (m+ (m* (qfield-pair-x b)
-                              (qfield-pair-x b))
-                          (m* (qfield-pair-y b)
-                              (qfield-pair-y b))))))
-        (element-mul (element-mul a (element-conj b))
-                     1/b))
-      )))
+    (element-div (element-mul a (element-conj b))
+                 (element-magsq b))
+    ))
 
 (defmethod element-0 ((a qfield-pair))
   (make-qfield-pair (qfield-pair-fld a) 0))
@@ -136,8 +127,8 @@
        (zerop (qfield-pair-y a))))
 
 (defmethod element-inv ((a qfield-pair))
-  (element-div (element-1 a)
-               a))
+  (element-div (element-conj a)
+               (element-magsq a)))
 
 (defmethod element-expt ((a qfield-pair) (b integer))
   (let ((ans (element-1 a)))
@@ -151,3 +142,18 @@
 (defmethod element-is-sqr ((a qfield-pair))
   (let* ((fld (qfield-pair-fld a)))
     (element-1p (element-expt a (truncate (1- (field-ord fld)) 2)))))
+
+(defmethod element-re ((a qfield-pair))
+  (qfield-pair-x a))
+
+(defmethod element-im ((a qfield-pair))
+  (qfield-pair-y a))
+
+(defmethod element-magsq ((a qfield-pair))
+  (let ((fld (qfield-pair-fld a)))
+    (with-mod (field-ord fld)
+      (let ((re  (qfield-pair-x a))
+            (im  (qfield-pair-y a)))
+        (m+ (m* re re) (m* im im)))
+      )))
+

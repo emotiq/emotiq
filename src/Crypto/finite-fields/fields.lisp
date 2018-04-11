@@ -139,7 +139,34 @@
 (defmethod element-conj ((x field-int))
   x)
 
+(defmethod element-re ((x field-int))
+  (field-int-val x))
+
+(defmethod element-im ((x field-int))
+  0)
+
+;; -------------------------------------------------
+
+(defmethod element-0p ((x integer))
+  (zerop x))
+
+(defmethod element-qp ((x integer))
+  (= x 1))
+
+(defmethod element-0 ((x integer))
+  0)
+
+(defmethod element-1 ((x integer))
+  1)
+
 (defmethod element-conj ((x integer))
   x)
+
+(defmethod element-re ((x integer))
+  x)
+
+(defmethod element-im ((x integer))
+  0)
+
 
 ;; ------------------------------------------------------------
