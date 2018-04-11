@@ -43,6 +43,16 @@
     (:neighborcast   (setf *use-all-neighbors* t
                    *active-ignores* nil)))
   kind)
+
+(defun get-protocol-style ()
+  "Get style of protocol. See set-protocol-style."
+  (cond ((and (null *use-all-neighbors*)
+              *active-ignores*)
+         :gossip)
+        ((and *use-all-neighbors*
+              (null *active-ignores*))
+         :neighborcast)
+        (t :unknown)))
              
 ; (set-protocol-style :neighborcast) ; you should expect 100% correct responses most of the time in this mode
 ; (set-protocol-style :gossip)       ; you should expect 100% correct responses very rarely in this mode
@@ -105,6 +115,15 @@ are in place between nodes.
    (with-slots (uid) thing
        (print-unreadable-object (thing stream :type t :identity t)
           (when uid (princ uid stream)))))
+
+;;; Should add this to actors.
+(defun ac::send-self (&rest msg)
+  "Different from self-call. This one just adds the message to the end of my own mailbox,
+   rather than executing it immediately. It's guaranteed to be found before (current-actor)
+   finishes executing, but if there are any messages ahead of it, they'll be executed first."
+  (uiop:if-let (self (ac:current-actor))
+    (let ((mbox (ac::actor-mailbox self)))
+      (ac::deposit-message mbox msg))))
 
 ;;; Should move these to mpcompat
 (defun all-processes ()
@@ -660,6 +679,16 @@ are in place between nodes.
            srcuid  ; first arg of actor-msg
            msg)))  ; second arg of actor-msg
 
+(defun current-node ()
+  (uiop:if-let (actor (ac:current-actor))
+    (node actor)))
+
+(defmethod send-self ((msg gossip-message-mixin))
+  "Send a gossip message to the current node, if any.
+   Should only be called from within a gossip-actor's code; otherwise nothing happens."
+  (uiop:if-let (node (current-node))
+    (ac::send-self :gossip (uid node) msg)))
+
 ;  TODO: Might want to also check hopcount and reject message where hopcount is too large.
 ;        Might want to not accept maybe-sir messages at all if their soluid is expired.
 (defmethod accept-msg? ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
@@ -776,7 +805,7 @@ are in place between nodes.
                   ; If we're ignoring a message from node X, make sure that we are not in fact
                   ;   waiting on X either. This is essential in the case where
                   ;   *use-all-neighbors* = true and
-                  ;   *active-ignores* = false
+                  ;   *active-ignores* = false [:neighborcast protocol]
                   ;   but it doesn't hurt anything in other cases.
                   (let ((was-present? (cancel-replier node (kind msg) soluid srcuid)))
                     (when was-present?
@@ -886,7 +915,7 @@ are in place between nodes.
 
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. This is strictly a message handler; it's not a function
-  a node actor should call. The sender of this message will usually be thisnode itself, via
+  a node actor should call. The sender of this message will be thisnode itself, via
   the *echo-actor*."
   (declare (ignore srcuid))
   ; srcuid will usually (always) be that of thisnode, but we're not checking for that
@@ -983,7 +1012,66 @@ are in place between nodes.
 
 ;; REPLY-NECESSARY methods. Three methods per message
 
+(defmethod generic-srr-handler ((msg solicitation) (thisnode gossip-node) srcuid)
+  "Generic handler for solicitations requiring replies (SRRs)"
+  (let* ((kind (kind msg))
+         (soluid (uid msg))
+         (downstream (get-downstream thisnode srcuid)) ; don't forward to the source of this solicitation
+         (timer nil)
+         (cleanup (make-timeout-handler thisnode msg kind)))
+    (initialize-reply-cache kind thisnode soluid (args msg))
+    (cond (downstream
+           (prepare-repliers thisnode soluid downstream)
+           (forward msg thisnode downstream)
+           ; wait a finite time for all replies
+           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+           (kvs:relate-unique! (timers thisnode) soluid timer)
+           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
+           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
+          (t ; this is a leaf node. Just reply upstream.
+           (funcall cleanup nil)))))
+
+(defmethod generic-srr-handler ((msg interim-reply) (thisnode gossip-node) srcuid)
+  (let ((kind (kind msg))
+        (soluid (solicitation-uid msg)))
+    ; First record the data in the reply appropriately
+    (when (record-interim-reply msg thisnode soluid srcuid) ; true if this reply is later than previous
+      ; coalesce all known data and send it upstream as another interim reply.
+      ; (if this reply is not later, drop it on the floor)
+      (if *delay-interim-replies*
+          (send-delayed-interim-reply thisnode kind soluid)
+          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
+            (send-interim-reply thisnode kind soluid upstream-source))))))
+
+(defmethod generic-srr-handler ((msg final-reply) (thisnode gossip-node) srcuid)
+  (let* ((kind (kind msg))
+         (soluid (solicitation-uid msg))
+         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
+         (coalescer (coalescer kind)))
+    ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
+    (kvs:relate-unique! (reply-cache thisnode)
+                        soluid
+                        (funcall coalescer local-data (first (args msg))))
+    (cancel-replier thisnode kind soluid srcuid)))
+
+(defgeneric initialize-reply-cache (kind thisnode soluid msgargs)
+  (:documentation "Initialize the reply-cache for the given kind of message"))
+
+(defmethod initialize-reply-cache ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) soluid msgargs)
+  (let* ((key (first msgargs))
+         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
+    (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))))
+
+(defmethod initialize-reply-cache ((kind (eql :list-alive)) (thisnode gossip-node) soluid msgargs)
+  (declare (ignore msgargs))
+  (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))))
+
+(defmethod initialize-reply-cache ((kind (eql :count-alive)) (thisnode gossip-node) soluid msgargs)
+  (declare (ignore msgargs))
+  (kvs:relate-unique! (reply-cache thisnode) soluid 1)) ; thisnode itself is 1 live node
+
 ;;;; List-Alive
+#+IGNORE
 (defmethod list-alive ((msg solicitation) (thisnode gossip-node) srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
   (let* ((soluid (uid msg))
@@ -1002,6 +1090,10 @@ are in place between nodes.
           (t ; this is a leaf node. Just reply upstream.
            (funcall cleanup nil)))))
 
+(defmethod list-alive ((msg solicitation) (thisnode gossip-node) srcuid)
+  (generic-srr-handler msg thisnode srcuid))
+
+#+IGNORE
 (defmethod list-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
   "Handler for interim replies of type :list-alive. These will come from children of a given node.
   Incoming interim-replies never change the local reply-cache. Rather, they
@@ -1016,6 +1108,10 @@ are in place between nodes.
           (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
             (send-interim-reply thisnode :list-alive soluid upstream-source))))))
 
+(defmethod list-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
+  (generic-srr-handler rep thisnode srcuid))
+
+#+IGNORE
 (defmethod list-alive ((rep final-reply) (thisnode gossip-node) srcuid)
   "Handler for final replies of type :list-alive. These will come from children of a given node.
   Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
@@ -1031,7 +1127,11 @@ are in place between nodes.
                         (funcall coalescer local-data (first (args rep))))
     (cancel-replier thisnode :list-alive soluid srcuid)))
 
+(defmethod list-alive ((rep final-reply) (thisnode gossip-node) srcuid)
+  (generic-srr-handler rep thisnode srcuid))
+
 ;;;; Count-Alive
+#+IGNORE
 (defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
   "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
   (let* ((soluid (uid msg))
@@ -1050,6 +1150,10 @@ are in place between nodes.
           (t ; this is a leaf node. Just reply upstream.
            (funcall cleanup nil)))))
 
+(defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
+  (generic-srr-handler msg thisnode srcuid))
+
+#+IGNORE
 (defmethod count-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
   "Handler for interim replies of type :count-alive. These will come from children of a given node.
   Incoming interim-replies never change the local reply-cache. Rather, they
@@ -1064,6 +1168,10 @@ are in place between nodes.
           (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
             (send-interim-reply thisnode :count-alive soluid upstream-source))))))
 
+(defmethod count-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
+  (generic-srr-handler rep thisnode srcuid))
+
+#+IGNORE
 (defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
   "Handler for final replies of type :count-alive. These will come from children of a given node.
   Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
@@ -1078,6 +1186,9 @@ are in place between nodes.
                         soluid
                         (funcall coalescer local-data (first (args rep))))
     (cancel-replier thisnode :count-alive soluid srcuid)))
+
+(defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
+  (generic-srr-handler rep thisnode srcuid))
 
 ;;;; Gossip-lookup-key
 (defmethod gossip-lookup-key ((msg solicitation) (thisnode gossip-node) srcuid)
@@ -1292,7 +1403,9 @@ gets sent back, and everything will be copacetic.
               :kind :maybe-sir
               :args (list soluid reply-kind))))
     (maybe-log thisnode :ECHO-MAYBE-SIR nil)
-    (echo-msg msg (uid thisnode))))
+    (send-self msg)
+    ;(echo-msg msg (uid thisnode))
+    ))
 
 (defun later-reply? (new old)
   "Returns true if old is nil or new has a higher uid"
@@ -1471,7 +1584,8 @@ gets sent back, and everything will be copacetic.
 
 (defun shutdown-gossip-server (&optional (port *gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
-  (internal-send-socket *local-ip* port "ShutDown"))
+  (cosi-simgen::internal-send-socket "127.0.0.1" port "ShutDown")
+  )
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   (declare (ignore srcuid))
@@ -1507,9 +1621,10 @@ gets sent back, and everything will be copacetic.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
+  ;(shutdown-gossip-server)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
-  (start-gossip-server)
+  ;(start-gossip-server)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
