@@ -23,6 +23,12 @@
 (defmethod print-object ((obj field) out-stream)
   (format out-stream "#<FIELD ORD = ~A>" (field-ord obj)))
 
+(defmethod make-field ((ord integer))
+  (make-instance 'field
+                 :ord  ord))
+
+;; -------------------------------------------------
+
 (defclass field-int ()
   ((fld   :reader field-int-fld
           :initarg :fld)
@@ -170,3 +176,12 @@
 
 
 ;; ------------------------------------------------------------
+;; ------------------------------------------------------------------------------
+
+(defvar *fld-q* (make-instance 'field
+                               :ord 115792089237314936872688561244471742058375878355761205198700409522629664518163))
+
+(defvar *fld-r* (make-instance 'field
+                               :ord 115792089237314936872688561244471742058035595988840268584488757999429535617037))
+
+;; --------------------------------------------------------------------
