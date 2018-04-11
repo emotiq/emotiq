@@ -88,7 +88,9 @@ script:
               :in 
                   '((:core-crypto :core-crypto)) ; no test system, so system itself
               :doing 
-                 (ql:quickload dependencies)
+              (progn
+                 (uiop:run-program \"rm -rf ~/.cache/\")
+                 (ql:quickload dependencies))
               :unless 
                  (asdf:test-system system)
               :return 
