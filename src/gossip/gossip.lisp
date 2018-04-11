@@ -1093,59 +1093,15 @@ are in place between nodes.
   (generic-srr-handler rep thisnode srcuid))
 
 ;;;; Gossip-lookup-key
+
 (defmethod gossip-lookup-key ((msg solicitation) (thisnode gossip-node) srcuid)
-  "Inquire as to the global value of a key. If this node has no further
-  neighbors, just return its value. Otherwise collect responses from subnodes.
-  Reply is of course expected.
-  Reply here is somewhat complicated: Reply will be an alist of ((value1 . n1) (value2 .n2) ...) where
-  value1 is value reported by n1 nodes downstream of thisnode,
-  value2 is value reported by n2 nodes downstream of thisnode, etc."
-  (let* ((soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid)) ; don't forward to the source of this solicitation
-         (timer nil)
-         (cleanup (make-timeout-handler thisnode msg :gossip-lookup-key))
-         (key (first (args msg)))
-         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))
-   (cond (downstream
-           (prepare-repliers thisnode soluid downstream)
-           (forward msg thisnode downstream)
-           ; wait a finite time for all replies
-           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
-           (kvs:relate-unique! (timers thisnode) soluid timer)
-           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
-          (t ; this is a leaf node. Just reply upstream.
-           (funcall cleanup nil)))))
+  (generic-srr-handler msg thisnode srcuid))
 
 (defmethod gossip-lookup-key ((rep interim-reply) (thisnode gossip-node) srcuid)
-  "Handler for replies of type :gossip-lookup-key. These will come from children of a given node.
-  Incoming interim-replies never change the local reply-cache. Rather, they
-  coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
-  (let ((soluid (solicitation-uid rep)))
-    ; First record the data in the reply appropriately
-    (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
-      ; coalesce all known data and send it upstream as another interim reply.
-      ; (if this reply is not later, drop it on the floor)
-      (if *delay-interim-replies*
-          (send-delayed-interim-reply thisnode :gossip-lookup-key soluid)
-          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
-            (send-interim-reply thisnode :gossip-lookup-key soluid upstream-source))))))
+  (generic-srr-handler rep thisnode srcuid))
 
 (defmethod gossip-lookup-key ((rep final-reply) (thisnode gossip-node) srcuid)
-  "Handler for final replies of type :gossip-lookup-key. These will come from children of a given node.
-  Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
-  Furthermore, they remove srcuid from downstream for this soluid.
-  Furthermore, they always cause either an interim reply or a final reply to be sent upstream,
-  depending on whether no further replies are expected or not."
-  (let* ((soluid (solicitation-uid rep))
-         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
-         (coalescer (coalescer :GOSSIP-LOOKUP-KEY)))
-    ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
-    (kvs:relate-unique! (reply-cache thisnode)
-                        soluid
-                        (funcall coalescer local-data (first (args rep))))
-    (cancel-replier thisnode :gossip-lookup-key soluid srcuid)))
+  (generic-srr-handler rep thisnode srcuid))
 
 (defmethod find-max (msg thisnode srcuid)
   "Retrieve maximum value of a given key on all the nodes"
