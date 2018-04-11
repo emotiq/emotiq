@@ -1071,121 +1071,23 @@ are in place between nodes.
   (kvs:relate-unique! (reply-cache thisnode) soluid 1)) ; thisnode itself is 1 live node
 
 ;;;; List-Alive
-#+IGNORE
-(defmethod list-alive ((msg solicitation) (thisnode gossip-node) srcuid)
-  "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
-  (let* ((soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid)) ; don't forward to the source of this solicitation
-         (timer nil)
-         (cleanup (make-timeout-handler thisnode msg :list-alive)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))) ; thisnode itself is 1 live node
-    (cond (downstream
-           (prepare-repliers thisnode soluid downstream)
-           (forward msg thisnode downstream)
-           ; wait a finite time for all replies
-           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
-           (kvs:relate-unique! (timers thisnode) soluid timer)
-           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
-          (t ; this is a leaf node. Just reply upstream.
-           (funcall cleanup nil)))))
 
 (defmethod list-alive ((msg solicitation) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
-#+IGNORE
-(defmethod list-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
-  "Handler for interim replies of type :list-alive. These will come from children of a given node.
-  Incoming interim-replies never change the local reply-cache. Rather, they
-  coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
-  (let* ((soluid (solicitation-uid rep)))
-    ; First record the reply including its data appropriately
-    (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
-      ; coalesce all known data and send it upstream as another interim reply.
-      ; (if this reply is not later, drop it on the floor)
-      (if *delay-interim-replies*
-          (send-delayed-interim-reply thisnode :list-alive soluid)
-          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
-            (send-interim-reply thisnode :list-alive soluid upstream-source))))))
-
 (defmethod list-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
   (generic-srr-handler rep thisnode srcuid))
-
-#+IGNORE
-(defmethod list-alive ((rep final-reply) (thisnode gossip-node) srcuid)
-  "Handler for final replies of type :list-alive. These will come from children of a given node.
-  Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
-  Furthermore, they remove srcuid from downstream for this soluid.
-  Furthermore, they always cause either an interim reply or a final reply to be sent upstream,
-  depending on whether no further replies are expected or not."
-  (let* ((soluid (solicitation-uid rep))
-         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
-         (coalescer (coalescer :LIST-ALIVE)))
-    ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
-    (kvs:relate-unique! (reply-cache thisnode)
-                        soluid
-                        (funcall coalescer local-data (first (args rep))))
-    (cancel-replier thisnode :list-alive soluid srcuid)))
 
 (defmethod list-alive ((rep final-reply) (thisnode gossip-node) srcuid)
   (generic-srr-handler rep thisnode srcuid))
 
 ;;;; Count-Alive
-#+IGNORE
-(defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
-  "Get a list of UIDs of live nodes downstream of thisnode, plus that of thisnode itself."
-  (let* ((soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid)) ; don't forward to the source of this solicitation
-         (timer nil)
-         (cleanup (make-timeout-handler thisnode msg :count-alive)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid 1) ; thisnode itself is 1 live node
-    (cond (downstream
-           (prepare-repliers thisnode soluid downstream)
-           (forward msg thisnode downstream)
-           ; wait a finite time for all replies
-           (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
-           (kvs:relate-unique! (timers thisnode) soluid timer)
-           (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
-          (t ; this is a leaf node. Just reply upstream.
-           (funcall cleanup nil)))))
 
 (defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
-#+IGNORE
-(defmethod count-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
-  "Handler for interim replies of type :count-alive. These will come from children of a given node.
-  Incoming interim-replies never change the local reply-cache. Rather, they
-  coalesce the local reply-cache with all latest interim-replies and forward a new interim reply upstream."
-  (let* ((soluid (solicitation-uid rep)))
-    ; First record the reply including its data appropriately
-    (when (record-interim-reply rep thisnode soluid srcuid) ; true if this reply is later than previous
-      ; coalesce all known data and send it upstream as another interim reply.
-      ; (if this reply is not later, drop it on the floor)
-      (if *delay-interim-replies*
-          (send-delayed-interim-reply thisnode :count-alive soluid)
-          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid rep))))
-            (send-interim-reply thisnode :count-alive soluid upstream-source))))))
-
 (defmethod count-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
   (generic-srr-handler rep thisnode srcuid))
-
-#+IGNORE
-(defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
-  "Handler for final replies of type :count-alive. These will come from children of a given node.
-  Incoming final-replies ALWAYS change the local reply-cache, to coalesce it with their data.
-  Furthermore, they remove srcuid from downstream for this soluid.
-  Furthermore, they always cause either an interim reply or a final reply to be sent upstream,
-  depending on whether no further replies are expected or not."
-  (let* ((soluid (solicitation-uid rep))
-         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
-         (coalescer (coalescer :count-ALIVE)))
-    ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
-    (kvs:relate-unique! (reply-cache thisnode)
-                        soluid
-                        (funcall coalescer local-data (first (args rep))))
-    (cancel-replier thisnode :count-alive soluid srcuid)))
 
 (defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
   (generic-srr-handler rep thisnode srcuid))

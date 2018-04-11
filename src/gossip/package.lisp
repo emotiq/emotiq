@@ -14,4 +14,5 @@
    #:as-hash-table
    #:make-node
    #:listify-nodes
-   #:set-protocol-style))
+   #:set-protocol-style
+   #:get-protocol-style))
