@@ -20,7 +20,8 @@
 
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-(defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one")
+(defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one.
+                                       Can be an integer to pick up to n neighbors.")
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
 (defparameter *gossip-port* 65002 "Gossip network port")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
@@ -35,14 +36,14 @@
 ; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary.
 ; Case 4: *use-all-neighbors* = false and *active-ignores* = false. Lots of timeouts. Poor results.
 
-(defun set-protocol-style (kind)
+(defun set-protocol-style (kind &optional n)
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
       There's no guarantee this will reach all nodes. But it's quicker and more realistic.
    :neighborcast   style to send solicitations to all neighbors. More likely to reach all nodes but replies may be slower.
    Neither style should result in timeouts of a node waiting forever for a response from a neighbor."
   (case kind
-    (:gossip (setf *use-all-neighbors* nil
+    (:gossip (setf *use-all-neighbors* n
                    *active-ignores* t))  ; must be true when *use-all-neighbors* is nil. Otherwise there will be timeouts.
     (:neighborcast   (setf *use-all-neighbors* t
                    *active-ignores* nil)))
@@ -53,6 +54,9 @@
   (cond ((and (null *use-all-neighbors*)
               *active-ignores*)
          :gossip)
+        ((and (integerp *use-all-neighbors*)
+              *active-ignores*)
+         (values :gossip *use-all-neighbors*))
         ((and *use-all-neighbors*
               (null *active-ignores*))
          :neighborcast)
@@ -396,6 +400,17 @@ are in place between nodes.
 (defun listify-nodes (&optional (nodetable *nodes*))
   (loop for node being each hash-value of nodetable collect node))
 
+(defun random-node (&optional (nodetable *nodes*))
+  (let* ((len (hash-table-count nodetable))
+         (num (random len))
+         (i 0))
+    (maphash (lambda (key value)
+               (declare (ignore key))
+               (if (>= i num)
+                   (return-from random-node value)
+                   (incf i)))
+             nodetable)))
+
 (defmethod connect ((node1 gossip-node) (node2 gossip-node))
   "Establish an edge between two nodes. Because every node must know its nearest neighbors,
    we store the edge information twice: Once in each endpoint node."
@@ -437,7 +452,7 @@ are in place between nodes.
 
 (defun make-graph (numnodes &optional (fraction 0.5))
   "Build a graph with numnodes nodes. Strategy here is to first connect all the nodes in a single
-   non-cyclic linear path, then add f random edges, where f is multiplied by the number of nodes."
+   non-cyclic linear path, then add f*n random edges, where n is the number of nodes."
   (clrhash *nodes*)
   (make-nodes numnodes)
   (let ((nodelist (listify-nodes)))
@@ -757,12 +772,51 @@ are in place between nodes.
   "Retrieves the upstream source uid for a given soluid on this node"
   (kvs:lookup-key (message-cache node) soluid))
 
+(defun remove-nth (n list)
+  "Remove nth item of list.
+  Returns nth item and new list.
+  May do list surgery but that's not guaranteed."
+  (when (< n (length list))
+    (let ((item (nth n list)))
+      (if (zerop n)
+          (values item (cdr list))
+          (progn
+            (setf (nthcdr n list)
+                  (nthcdr (1+ n) list))
+            (values item list))))))
+  
+(defun make-random-generator (list)
+  "Returns a thunk that returns another random member of list
+  every time it's called. Never generates same member twice
+  (unless that member appears more than once in list in the first place).
+  Generates nil when no members are left."
+  (lambda ()
+    (when list
+      (let ((n (random (length list)))
+            (item nil))
+        (multiple-value-setq (item list) (remove-nth n list))
+        item))))
+
+(defun use-some-neighbors (neighbors)
+  "Pick a few random neighbors based on value of *use-all-neighbors*"
+  (when neighbors
+    (let ((len (length neighbors)))
+      (cond ((integerp *use-all-neighbors*)
+             (if (< *use-all-neighbors* 1)
+                 nil ; if zero or less, return nil. Degenerate case.
+                 (if (>= *use-all-neighbors* len)
+                     neighbors ; just use them all
+                     (let ((fn (make-random-generator neighbors)))
+                       (loop for i below *use-all-neighbors* collect
+                         (funcall fn))))))
+            (*use-all-neighbors* ; if true but not integer, just use them all
+             neighbors)
+            (t ; false, so treat it as 1
+             (list (nth (random len) neighbors)))))))
+
 (defmethod get-downstream ((node gossip-node) srcuid)
   (let ((all-neighbors (remove srcuid (neighbors node))))
-  (if (or *use-all-neighbors*
-          (null all-neighbors))
-      all-neighbors
-      (list (nth (random (length all-neighbors)) all-neighbors)))))
+    (use-some-neighbors all-neighbors)))
 
 (defun send-active-ignore (to from kind soluid failure-reason)
   "Actively send a reply message to srcuid telling it we're ignoring it."
@@ -1530,6 +1584,17 @@ gets sent back, and everything will be copacetic.
 ; (make-graph 1000)
 ; (make-graph 10000)
 ; (visualize-nodes *nodes*)  ; probably not a great idea for >100 nodes
+
+; PARTIAL GOSSIP TESTS
+; (make-graph 10)
+; (set-protocol-style :gossip 2)
+; (get-protocol-style)
+; (run-gossip-sim)
+; (solicit-wait (random-node) :count-alive)
+; (solicit-wait (random-node) :list-alive)
+; (visualize-nodes *nodes*)
+; (inspect *log*)
+
 
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
