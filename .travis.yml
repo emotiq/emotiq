@@ -86,7 +86,7 @@ script:
               :for 
                   (system dependencies) 
               :in 
-                  '((:core-crypto :core-crypto)) ; no test system, so system itself
+                  '((:core-crypto :core-crypto)) 
               :doing 
                  (ql:quickload dependencies)
               :unless 
