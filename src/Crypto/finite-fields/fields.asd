@@ -33,5 +33,5 @@ THE SOFTWARE.
                 (:file "quadratic-fields")
                 (:file "polynomials")
                 (:file "curves"))
-  :depends-on   ("crypto-pairings/libraries"))
+  :depends-on   ("crypto-pairings"))
 
