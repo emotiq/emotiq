@@ -262,6 +262,34 @@ had just been used in the last transaction."
   (emotiq:with-blockchain-context (*test-blockchain-context*)
     (emotiq:print-blockchain-info)))
 
+(defun print-test-balance-summaries (list-of-pkey-hash-parameter-names)
+  (emotiq:with-blockchain-context (*test-blockchain-context*)
+    (loop for parameter-name in list-of-pkey-hash-parameter-names
+          as address
+            = (or (symbol-value parameter-name)
+                  (cerror
+                   "Continue"
+                   "What is ~a? It evaluated to nil, not a public key hash."
+                   parameter-name))
+          initially
+             (format t "~%  ~(~A~) ~25T~(~A~) ~70T~D"
+                     "parameter-name" "address" "balance amount")
+          when address
+            do (let ((balance-amount (emotiq:get-balance address)))
+                 (format t "~%  ~(~A~) ~25T~(~A~) ~70T~D"
+                         parameter-name address balance-amount)))))
+
+
+
+(defparameter *test-pkey-hash-parameter-names*
+  '(emotiq:*minter-0-pkey-hash*         ; initial coinbase recipient, in BLOCKCHAIN
+    *alice-pkey-hash* *bob-pkey-hash*
+    *cindy-pkey-hash* *david-pkey-hash*
+    *minter-a-pkey-hash* *minter-b-pkey-hash*)
+  "A list of parameter-name symbols each of whose symbol-value is a
+  public key hash used in these tests, such as *ALICE-PKEY-HASH*, et
+  al.")
+
 
 
 
@@ -274,6 +302,8 @@ had just been used in the last transaction."
   (blockchain-test-4)
   (format t "~%---~%Transactions tests finished. Now printing blockchain...~%")
   (print-test-blockchain)
+  (format t "~%---~%Balance Summaries...~%")
+  (print-test-balance-summaries *test-pkey-hash-parameter-names*)
   (format t "~%DONE.~%"))
 
 
