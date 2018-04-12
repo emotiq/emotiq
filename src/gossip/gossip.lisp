@@ -24,6 +24,10 @@
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
 (defparameter *gossip-port* 65002 "Gossip network port")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
+(defparameter *shutdown-msg* (coerce #(115 104 117 116 100 111 119 110) '(ARRAY (UNSIGNED-BYTE 8))) "shutdown")
+
+(defun shutdown-msg-len ()
+  (length *shutdown-msg*))
 
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage case.
@@ -99,6 +103,9 @@ are in place between nodes.
 
 ;; Ex: Include only :FINALREPLY messages
 ;; (setf *log-filter* (log-include "FINALREPLY"))
+
+;; Ex: Don't include SIR messages
+;; (setf *log-filter* (log-exclude "SIR"))
 
 (defun new-uid ()
   (incf *last-uid*))
@@ -619,10 +626,9 @@ are in place between nodes.
 (defmethod briefname ((id string) &optional (prefix ""))
   (format nil "~A~A" prefix id))
 
-#+IGNORE
 (defmethod briefname ((id null) &optional (prefix ""))
   (declare (ignore prefix))
-  "nil")
+  nil)
 
 (defmethod briefname ((id t) &optional (prefix ""))
   (declare (ignore prefix))
@@ -653,7 +659,9 @@ are in place between nodes.
 (defvar *log* (new-log) "Log of simulated actions.")
 
 (defun default-logging-function (logcmd nodename msgname &rest args)
-  (let ((logmsg (list* logcmd nodename msgname args)))
+  (let ((logmsg (if msgname
+                    (list* logcmd nodename msgname args)
+                    (list logcmd nodename))))
     (vector-push-extend logmsg *log*)
     logmsg))
 
@@ -1027,7 +1035,8 @@ are in place between nodes.
            (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
            (kvs:relate-unique! (timers thisnode) soluid timer)
            (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-           (maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream))
+           ;(maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
+           (maybe-log thisnode :WAITING msg downstream))
           (t ; this is a leaf node. Just reply upstream.
            (funcall cleanup nil)))))
 
@@ -1070,46 +1079,40 @@ are in place between nodes.
   (declare (ignore msgargs))
   (kvs:relate-unique! (reply-cache thisnode) soluid 1)) ; thisnode itself is 1 live node
 
+(defmethod initialize-reply-cache ((kind (eql :find-max)) (thisnode gossip-node) soluid msgargs)
+  (let* ((key (first msgargs))
+         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
+    (kvs:relate-unique! (reply-cache thisnode) soluid myvalue)))
+
+(defmethod initialize-reply-cache ((kind (eql :find-min)) (thisnode gossip-node) soluid msgargs)
+  (let* ((key (first msgargs))
+         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
+    (kvs:relate-unique! (reply-cache thisnode) soluid myvalue)))
+
 ;;;; List-Alive
 
-(defmethod list-alive ((msg solicitation) (thisnode gossip-node) srcuid)
+(defmethod list-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
-
-(defmethod list-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
-  (generic-srr-handler rep thisnode srcuid))
-
-(defmethod list-alive ((rep final-reply) (thisnode gossip-node) srcuid)
-  (generic-srr-handler rep thisnode srcuid))
 
 ;;;; Count-Alive
 
-(defmethod count-alive ((msg solicitation) (thisnode gossip-node) srcuid)
+(defmethod count-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
-
-(defmethod count-alive ((rep interim-reply) (thisnode gossip-node) srcuid)
-  (generic-srr-handler rep thisnode srcuid))
-
-(defmethod count-alive ((rep final-reply) (thisnode gossip-node) srcuid)
-  (generic-srr-handler rep thisnode srcuid))
 
 ;;;; Gossip-lookup-key
 
-(defmethod gossip-lookup-key ((msg solicitation) (thisnode gossip-node) srcuid)
+(defmethod gossip-lookup-key ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
-(defmethod gossip-lookup-key ((rep interim-reply) (thisnode gossip-node) srcuid)
-  (generic-srr-handler rep thisnode srcuid))
-
-(defmethod gossip-lookup-key ((rep final-reply) (thisnode gossip-node) srcuid)
-  (generic-srr-handler rep thisnode srcuid))
-
-(defmethod find-max (msg thisnode srcuid)
+;;;; Find-max
+(defmethod find-max ((msg gossip-message-mixin) thisnode srcuid)
   "Retrieve maximum value of a given key on all the nodes"
-  )
+  (generic-srr-handler msg thisnode srcuid))
 
-(defmethod find-min (msg thisnode srcuid)
+;;;; Find-min
+(defmethod find-min ((msg gossip-message-mixin) thisnode srcuid)
   "Retrieve minimum value of a given key on all the nodes"
-  )
+  (generic-srr-handler msg thisnode srcuid))
 
 (defmethod sound-off (msg thisnode srcuid)
   "Broadcast a request that all nodes execute sound-off with some status information"
@@ -1330,6 +1333,26 @@ gets sent back, and everything will be copacetic.
   "Proper coalescer for :GOSSIP-LOOKUP-KEY responses."
   'multiple-tally)
 
+(defmethod coalescer ((kind (eql :FIND-MAX)))
+  (lambda (x y) (cond ((and (numberp x)
+                            (numberp y))
+                       (max x y))
+                      ((numberp x)
+                       x)
+                      ((numberp y)
+                       y)
+                      (t nil))))
+
+(defmethod coalescer ((kind (eql :FIND-MIN)))
+  (lambda (x y) (cond ((and (numberp x)
+                            (numberp y))
+                       (min x y))
+                      ((numberp x)
+                       x)
+                      ((numberp y)
+                       y)
+                      (t nil))))
+
 (defmethod coalesce ((node gossip-node) kind soluid)
   "Grab all the data that interim repliers have sent me so far, combine it with my
   local reply-cache in a way that's specific to kind, and return result.
@@ -1423,14 +1446,19 @@ gets sent back, and everything will be copacetic.
                 (return-from serve-gossip-port))
 	    (multiple-value-bind (buf buf-len rem-ip rem-port)
 		(usocket:socket-receive socket maxbuf (length maxbuf))
-              (let ((saf-buf (if (eq buf maxbuf)
+              (let* ((saf-buf (if (eq buf maxbuf)
                                   (subseq buf 0 buf-len)
-                                buf)))
+                                buf))
+                     (shutdown-msg? (equalp *shutdown-msg* (subseq buf 0 (shutdown-msg-len)))))
+                (when shutdown-msg?
+                  (setf *shutting-down* nil)
+                  (return-from serve-gossip-port))
                 (incoming-message-handler saf-buf rem-ip rem-port))))
         (usocket:socket-close socket)
         )))
 
 (defun start-gossip-server (&optional (port *gossip-port*))
+  (setf *shutting-down* nil)
   (let* ((socket (usocket:socket-connect nil nil
                                          :protocol :datagram
                                          :local-host "127.0.0.1"
@@ -1442,8 +1470,7 @@ gets sent back, and everything will be copacetic.
 
 (defun shutdown-gossip-server (&optional (port *gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
-  (cosi-simgen::internal-send-socket "127.0.0.1" port "ShutDown")
-  )
+  (cosi-simgen::internal-send-socket "127.0.0.1" port *shutdown-msg*))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   (declare (ignore srcuid))
@@ -1479,10 +1506,11 @@ gets sent back, and everything will be copacetic.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
-  ;(shutdown-gossip-server)
+  (shutdown-gossip-server)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
-  ;(start-gossip-server)
+  (sleep .5)
+  (start-gossip-server)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
@@ -1515,6 +1543,14 @@ gets sent back, and everything will be copacetic.
 ; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
 ; (solicit (first (listify-nodes)) :gossip-relate :foo :baz)
 ; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
+
+; (set-protocol-style :gossip) ; ensure every node will likely not get the message
+; (solicit (first (listify-nodes)) :gossip-relate-unique :foo 2)
+; (solicit (second (listify-nodes)) :gossip-relate-unique :foo 17)
+; (solicit (third (listify-nodes)) :gossip-relate-unique :foo 5)
+; (set-protocol-style :neighborcast)
+; (solicit-wait (first (listify-nodes)) :find-max :foo)
+; (solicit-wait (first (listify-nodes)) :find-min :foo)
 
 ;; should produce something like (:FINALREPLY "node209" "sol255" (((:BAZ :BAR) . 4))) as last *log* entry
 
