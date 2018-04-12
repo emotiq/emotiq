@@ -1,3 +1,4 @@
+ 
 #|
 The MIT License
 
@@ -22,38 +23,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cl-user)
-
-(asdf:defsystem "core-crypto"
-  :description "core-crypto: core cryptography functions"
-  :version     "1.0"
+(defsystem "fields"
+  :description "fields: finite fields, polynomials, and Elliptic curves"
+  :version     "1.1.0"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
-  :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
-  :components  ((:file "ecc-package")
-                (:file "utilities")
-                (:file "vec-repr")
-                (:file "hash")
-                (:file "ctr-hash-drbg")
-                (:file "primes")
-                #+:COM.RAL (:file "crypto-le")
-                (:file "kdf")
-                (:file "gf-571")
-                (:file "mod-math")
-                (:file "modular-arith")
-                (:file "edwards")
-                (:file "ecc-B571")
-                (:file "curve-gen")
-                (:file "crypto-environ")
-                #+:COM.RAL (:file "machine-id")
-                (:file "lagrange-4-square"))
+  :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
-  :depends-on   ("ironclad"
-                 #+:COM.RAL "aesx"
-                 "useful-macros"
-                 "mpcompat"
-                 "lisp-object-encoder"
-                 "s-base64"
-                 "emotiq"
-                 "emotiq/delivery"
-                 ))
+  :components  ((:file "fields")
+                (:file "quadratic-fields")
+                (:file "polynomials")
+                (:file "curves"))
+  :depends-on   ("crypto-pairings"))
 

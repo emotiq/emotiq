@@ -113,6 +113,13 @@ THE SOFTWARE.
    :validate-pedersen-proof
    :make-cloaked-proof
    :validate-cloaked-proof
+
+   :confidential-purchase
+   :confidential-purchase-pbuy
+   :confidential-purchase-psell
+   :confidential-purchase-tbuy
+   :confidential-purchase-rsell
+   :check-confidential-purchase
    ))
 
 (in-package :pbc-interface)
@@ -351,15 +358,52 @@ not belonging to any field"))
 ;; -------------------------------------------------
 
 (defstruct curve-params
+  name
   pairing-text
   g1 g2
   ;; cached values filled in at init
   order g1-len g2-len zr-len gt-len)
 
 ;; ---------------------------------------------------------------------------------------
+
+;; from modified genfparam 449
+(defparameter *curve-fr449-params*
+  (make-curve-params
+   :name :curve-fr449
+   :pairing-text
+   #>.end
+type f
+q 1453677448591213781098647615517727737801456574135793739359641814210133565958086561658399625709718948307085772504735487548743943171189343
+r 1453677448591213781098647615517727737801456574135793739359641814210095438835869021901087559228486442136979933658464610817282321701858857
+b 3
+beta 1229750151499227825328472831094691662740855014468882576320227933811268457325811389491594663312116221111048905113135054099364147490316815
+alpha0 298900426690285755283106923224136990858821502781746907684148252712220485095267046905800379160959798842713091253816223767728475099528772
+alpha1 94767155804077352517678038114326012034615203665857146478293396108661642277407951463015818396017138542636648537581758284300101921434637
+.end
+   :g1  (make-instance 'g1-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "01e4c2281e669cff6761156a9f3e1e5a162f191ebfe60b33544bbd561984114353f9ea193cd2e768ca4d692f0f26b2a04298a726c5328b83b001")))
+   :g2  (make-instance 'g2-cmpr
+         :pt (bev
+              (make-instance 'hex
+                :str "00e4d7941297819a73c6218cf286aa008015aa7d5705d174aa2b60fe2f264ca7bf36d74aa9398921d16d332636cbe79b188812a2dc2d268c5a01db8f3931b3303a5fddeb4b75064a0172f8c26c40066e83be75a6638a04249df3a86999f311d55b4c8eadf4527de05923aeb0ea434a57ca8700")))
+)
+
+  "Curve parameters adapted to ensure q is as large as possible within
+the constraints that q < 2^449, q and r prime, q = 3 mod 4, q = 4 mod
+9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
+square roots.  This curve will wrap 1 in 5.5e27 hash/256.
+Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
+Barreto and Naehrig.
+Size of q^12 is 5388 bits.
+Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
+
+;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
 (defparameter *curve-fr256-params*
   (make-curve-params
+   :name :curve-fr256
    :pairing-text
    #>.end
 type f
@@ -384,12 +428,14 @@ the constraints that q < 2^256, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.  This curve will wrap 1 in 92 trillion hash/256.
 Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
-Barreto and Naehrig")
+Barreto and Naehrig
+Size of q^12 is 3072 bits.")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
 (defparameter *curve-fr255-params*
   (make-curve-params
+   :name  :curve-fr255
    :pairing-text
    #>.end
 type f
@@ -423,6 +469,7 @@ Curves of Prime Order' by Barreto and Naehrig")
 ;; from: genfparam 250
 (defparameter *curve-fr250-params*
   (make-curve-params
+   :name  :curve-fr250
    :pairing-text
    #>.end
 type f
@@ -457,6 +504,7 @@ Curves of Prime Order' by Barreto and Naehrig")
 ;; from: genfparam 248
 (defparameter *curve-fr248-params*
   (make-curve-params
+   :name :curve-fr248
    :pairing-text
    #>.end
 type f
@@ -491,6 +539,7 @@ Curves of Prime Order' by Barreto and Naehrig")
 ;; from: genfparam 247
 (defparameter *curve-fr247-params*
   (make-curve-params
+   :name :curve-fr247
    :pairing-text
    #>.end
 type f
@@ -609,7 +658,7 @@ SMP access. Everything else should be SMP-safe."
   (mpcompat:with-lock (*crypto-lock*)
     (let ((prev   *curve*)
           (params (or params
-                      *curve-fr256-params*)))
+                      *curve-fr449-params*)))
       ;; If params not specified, and we have already been called,
       ;; just skip doing anything.
       (when (or params-supplied-p
@@ -1146,6 +1195,75 @@ Certification includes a BLS Signature on the public key."
     (and (= (int c) (int chk))
          (= (int x) (int (vrf-x vrf)))
          (= (int y) (int (vrf-y vrf))))))
+
+;; --------------------------------------------------------
+;; Confidential Purchases - cloak a purchase by providing a
+;; crypto-proof of sufficient amount. The indifividual terms
+;; will still need accompanying range proofs.
+
+(defstruct confidential-purchase
+  pbuy psell tbuy rsell)
+
+(defmethod confidential-purchase ((paid integer) (change integer)
+                                  (pkey public-key) (skey secret-key)
+                                  &optional (pkey-vendor (get-g2)))
+  "Form a cloaked purchase by hiding (paid - change) so that vendor
+can use his (cost + fees) in a pairing relation and verify that,
+indeed the person with claimed public key actually did send the
+transaction, and that sufficient currency has been forwarded.
+
+The purchase is a binding commitment. If pkey-vendor is not specified,
+then this becomes a cloaked transaction that anyone can verify.
+Otherwise, only the vendor can verify.
+
+Purchase is represented by triple (Tbuy, Rsell, Pbuy)
+where P_buy  = public key of purchaser, in G_2
+      s_buy  = secret key of purchaser, in Z_r
+      T_buy  = G_1 value used in verification
+      R_sell = G_2 value used in verification
+      P_sell = public key of vendor, or generator V in G_2
+      s_sell = secret key of vendor, or 1, in Z_r
+      k_rand = random blinding factor, in Z_r
+      U      = generator for G_1
+      V      = generator for G_2
+
+   TBuy  = (k_rand * s_buy) / (paid - change) * U  in G_1
+   Rsell = P_sell / k_rand                         in G_2
+
+Proof is by computing:
+
+   C_sell = (cost + fees)/s_sell * Rsell;
+
+and then checking the pairing relation:
+
+   e(T_buy, C_sell) = e(U, P_buy)  in G_T
+"
+  (assert (typep pkey-vendor 'g2-cmpr))
+  (with-mod (get-order)
+    (let* ((krand  (random-between 1 (get-order)))
+           (tbuy   (mul-pt-zr (get-g1)
+                              (m/ (m* krand (int skey))
+                                  (m- paid change))))
+           (rsell  (mul-pt-zr pkey-vendor (m/ krand))))
+      (make-confidential-purchase
+       :pbuy  pkey
+       :psell pkey-vendor
+       :tbuy  tbuy
+       :rsell rsell))))
+
+(defmethod check-confidential-purchase ((purch confidential-purchase)
+                                        (cost integer)
+                                        (fees integer)
+                                        &optional (skey 1))
+  (with-accessors ((pbuy  confidential-purchase-pbuy)
+                   (tbuy  confidential-purchase-tbuy)
+                   (rsell confidential-purchase-rsell)) purch
+    (with-mod (get-order)
+      (let* ((csell (mul-pt-zr rsell (m/ (m+ cost fees) (int skey))))
+             (p1    (compute-pairing tbuy csell))
+             (p2    (compute-pairing (get-g1) pbuy)))
+        (= (int p1) (int p2))
+        ))))
 
 ;; --------------------------------------------------------
 ;; (init-pairing *curve-default-ar160-params*)
