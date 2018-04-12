@@ -11,8 +11,8 @@
 ;;; New mechanism: Interim replies instead of carefully-timed timeouts.
 
 ;;;; TODO:
-;;; Change gossip-lookup-key to use the new mechanism now used by list-alive.
-;;; Reorganize code after all the recent chaos.
+;;;; Change things such that when *use-all-neighbors* is an integer, if a node gets an active ignore back from
+;;;;  neighbor X, it should pick another neighbor if it has more available.
 
 ;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
 
