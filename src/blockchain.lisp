@@ -985,6 +985,15 @@ ellipsis (...); and it only uses 2 character cells for a bit of compactness."
 
 
 
+(defun expect-transaction-context ()
+  "Used for development-only testing. This may NOT be relied upon at run time in
+production to stop execution if there is no transaction context. When called in
+development, this signals a continuable error if there is no transaction."
+  (when (not (boundp '*current-blockchain-context*))
+    (cerror "continue anyhow" "not in a transaction context")))
+
+
+
 
 (defun tx-ids= (id-1 id-2)
   (string-equal id-1 id-2))
@@ -1275,71 +1284,66 @@ should be signed, and only coinbase transactions are not signed."
 
 
 
-
 ;;;; Wallet / Demo Stuff
+
 
 
 (defun account-addresses= (address-1 address-2)
   (string-equal address-1 address-2))
 
-(defun get-credits-per-account (account)
-  (let ((credits '()))
-    (do-blockchain (blk)
-      (do-transactions (tx blk)
-        (loop for tx-out in (transaction-outputs tx)
-              as public-key-hash = (tx-out-public-key-hash tx-out)
-              ;; ---*** update terminology!
-              as amount = (tx-out-amount tx-out)
+
+
+;;; UTXO-P: search first the mempool and then blockchain exhaustively starting
+;;; with the most-recently-created transaction returning true if the output of
+;;; TRANSACTION at OUTPUT-INDEX is found to have been spent, and false (nil) if
+;;; TRANSACTION itself or the beginning of the blockchain is reached.
+
+(defun utxo-p (transaction output-index)
+  (expect-transaction-context)
+  (do-blockchain (block)
+    (return
+      (do-transactions (tx block)
+        (return
+          (if (eq tx transaction)
+              nil
+              (loop for txi in (transaction-inputs tx)
+                    as index = (tx-in-index txi)
+                    when (eql index output-index)
+                      return t)))))))
+
+
+
+(defun get-utxos-per-account (address)
+  "Return the UTXOs for ADDRESS as list of n-tuples of the form
+
+  (TXO PARENT-TX ...)
+
+ADDRESS here is taken to mean the same thing as the public key hash."
+  (expect-transaction-context)
+  (let ((utxos-so-far '()))
+    (do-blockchain (block)
+      (do-transactions (tx block)
+        (loop for txo in (transaction-outputs tx)
+              as public-key-hash = (tx-out-public-key-hash txo)
               as index from 0
-              when (account-addresses= account public-key-hash)
-                do (push (list (transaction-id tx) index amount 
-                               (transaction-inputs tx)
-                               (transaction-outputs tx))
-                         credits))))
-    credits))
+              when (and (account-addresses= public-key-hash address)
+                        (utxo-p tx index))
+                collect (list txo tx)   ; ... addition entries maybe later?
+                  into result
+              finally (setq utxos-so-far
+                            (nconc utxos-so-far result)))))
+    utxos-so-far))
 
-(defun find-transaction-with-particular-input (input-tx-id input-index)
-  (do-blockchain (blk)
-    (do-transactions (tx blk)
-      (loop for tx-in in (transaction-inputs tx)
-            as tx-in-id = (tx-in-id tx-in)
-            as tx-in-index = (tx-in-index tx-in)
-            when (and (tx-ids= tx-in-id input-tx-id)
-                      (= tx-in-index input-index))
-              do (return-from find-transaction-with-particular-input 
-                   tx)))))
 
-(defun get-credit-redemptions (credits)
-  (loop for credit in credits
-        as (tx-id index) = credit
-        unless (find-transaction-with-particular-input tx-id index)
-          collect credit))
 
-(defun get-balance (account)
-  (let* ((credits (get-credits-per-account account))
-         (credits-after-redemptions (get-credit-redemptions credits)))
-    (loop for (tx-id nil amount inputs outputs) in credits
-          do (format t "~%In tx ~a:" tx-id)
-             (format t "~%  Coin amount IN: ~a" amount)
-             (format t "~%  ... in via: ")
-             (if (null inputs)
-                 (format t " COINBASE")
-                 (loop for tx-in in inputs
-                       do (format t "Tx ~a, index = ~a" (tx-in-id tx-in) (tx-in-index tx-in))))
-             (format t "~%  Coin OUT")
-             (loop for tx-out in outputs
-                   as acct = (tx-out-public-key-hash tx-out)
-                   as amt = (tx-out-amount tx-out)
-                   do (format t "~%    amount ~d to ~Aacct~A ~a"
-                              amt
-                              (if (account-addresses= acct account) "*" "")
-                              (if (account-addresses= acct account) "*" "")
-                              acct)))
-    (list (loop for (nil nil amount) in credits
-                sum amount)
-          (loop for (nil nil amount) in credits-after-redemptions
-                sum amount))))
-          
+(defun get-balance (address)
+  "Return the sum of all amounts of all UTXOs of ADDRESS."
+  (expect-transaction-context)
+  (let ((utxos (get-utxos-per-account address)))
+    (loop for (txo) in utxos
+          as amount = (tx-out-amount txo)
+          collect amount into amounts
+          finally (return (apply #'+ amounts)))))
 
 
 
