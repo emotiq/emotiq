@@ -47,15 +47,10 @@ THE SOFTWARE.
                         :serial t
                         :components ((:file "cosi-blkdef")
                                      (:file "cosi-keying")
-
-				     ;; (:file "cosi-async")
-                                     
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
                                      (:file "cosi-handlers")
                                      
-                                     (:file "confidential-purchase")
-
                                      (:file "range-proofs")))))
 
 (defsystem "cosi-bls/test/allegro"

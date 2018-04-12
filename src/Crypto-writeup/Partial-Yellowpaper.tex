@@ -152,77 +152,80 @@ In and of itself, a single pass through a Cosi tree is insufficient to guarantee
 The second pass sends the, now validated, message and its multisignature to all participant nodes in the Cosi network, to ensure that each node has seen the validated multisignature. Their new signatures attest that they will remember this message for future reference in efforts to deny double spending. This corresponds to the {\em{commit}} phase of consensus. Once all Cosi nodes have signed off on the validated message, and if the count remains above the pBFT threshold, the caller of this consensus round can be confident that pBFT consensus has been achieved.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Transaction Privacy}
-A simple technique for cloaking all transactions in a publicly verifiable manner does not need bilinear pairings, although an algorithm in bilinear pairings can also be developed.\footnote{For single curve computations, we perform in field $Z_r$ and group $G_2$ since that field already has our private keys, and the $G_2$ group has our public keys. Hence the same keying can be used over a single curve algorithm and for all of our pairing cryptography.}
+For blockchain systems that don't use pairing cryptography, a simple technique for cloaking all transactions can be developed, based on showing that homomorphic sums yield a recognizable zero balance. That only works when all cryptographic computations occur in a single curve, or when parings are symmetric and both curves are the same simple Elliptic Curve group.
 
-We start with recognizing that a full transaction satisfies the following simple relation:
-$$paid = cost + fees + change$$
-where $paid$ is the amount tendered in the transaction, $cost$ is the cost of the product or service, $fees$ are transaction fees that must be paid, and $change$ is the amount returned to the buyer, due to overpayment.
+In our system, however, we are using asymmetric pairings and the two curve groups are completely different species. All of our public keys are developed in the $G_2$ group which is not a simple Elliptic Curve, unlike the $G_1$ group. Hence we are forced to use pairing relations to develop homomorphic proofs. The result is a little bit more complicated, but not by much.\footnote{An advantage to the pairing-based proofs is that they work for all pairing systems, whether using symmetric pairings with simple Elliptic Curve groups, or asymmetric pairings and more complex Elliptic Curve groups.}
 
-Hence, if a spending transaction is rewritten in the form:
-$$change - paid = -(cost + fees)$$
-then when $(cost + fees)$ is added to this transaction by the seller, the resulting full transaction will show a zero balance. It is very simple to advertise a zero balance, or some function of zero, such that everyone can recognize it.
+The basis for transactions is that an unspent transaction (UTX) may be used by sending portions to one or more destinations. The value of an input UTX must equal the sum of the output UTX deriving from the input: 
+$$val(UTX_{in}) = \sum_n val(UTX_{out,n})$$
 
-To provide privacy for the transaction, the numeric value of $(change - paid)$ is homomorphically encrypted to prove that only the sender could have encrypted it, yet the addition of $(cost + fees)$ can be performed and produce the encoding of zero for all to see. 
+Input and output UTX are specified with public keys of their owners. 
 
-At the same time, we must also provide cryptographic proofs that the values of $change$ and $paid$ both lie within legitimate range, and that $change < paid$. That is the purpose of Bulletproofs, discussed in the next section.
+We can use pairings to cloak the quantities involved, when necessary, and provide proof of sender identity and UTX values. Bulletproofs accompany these pairings to prove that all quantities are within acceptable range.
 
-A buyer cloaks his or her purchase offer by forming a quadruple $(P_{buy}, P_{sell}, t_{buy}, R_{sell})$, for public keys $P_{buy} = s_{buy} \, V \in G_2$, $P_{sell} = s_{sell} \, V \in G_2$, $s_{buy}, t_{buy}, s_{sell} \in Z_r$, and a point on an Elliptic Curve, $R_{sell} \in G_2$, for generator $V \in G_2$ on the curve, given as
-$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_r$$
-and
-$$R_{sell} = k_{rand}\, P_{sell} \in G_2$$
-for $k_{rand}$ a random cloaking factor, and buyer's secret key $s_{buy} \in Z_r$.
+A fundamental premise of bilinear pairings states that:
+$$ e(A +  B, C) = e(A,C)\, e(B,C)$$
 
-The random cloaking factor, $k_{rand}$, provides privacy by making each transaction appear different, even when the same currency values are involved. It also protects the secret keys, since the only other relation anyone knows about them comes from the public keys, and there is the ECDLP barrier of difficulty between them.
-
-At the seller's end, we compute
-$$C_{sell} = \frac{cost + fees}{s_{sell}} \, R_{sell} \in G_2$$
-for seller's secret key $s_{sell} \in Z_r$, and check that
-$$t_{buy}\, P_{buy} + C_{sell} = G_2(0)$$
-Value $G_2(0)$ is the identity element in the curve group, and easily  recognized by everyone. To accept the transaction, seller publishes the quadruple $(P_{buy}, P_{sell}, t_{buy}, C_{sell})$ so that everyone can verify the same $G_2(0)$ that represents a valid transaction.
-
-The initial purchase offer cloaks its currency values from everyone, including the seller. The final published transaction is also cloaked with the same $k_{rand}$, and so hides all monetary values, except the zero balance that results from the check equation. Nobody but the intended seller can finish the transaction, and the check equation provides undeniable proof that the buyer created the offer. A zero balance proves that enough currency was supplied to cover net cost.
-
-If a zero result is not produced, then it can only mean one or more of three things. First, the seller may be illegitimate and unable to decrypt the $R_{sell}$ value with the secret key, $s_{sell}$. Second the transaction might not have been produced by the indicated buyer, $P_{buy}$. Or finally, the currency amounts may not match the seller's expectations. In any case, such a transaction would never be permitted into the blockchain.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsubsection{Privacy without Encryption}
-There may be times when the $(cost + fees)$ is publicly known, and there is no seller involved in a transaction. We can still achieve transactional privacy in that case. Simply make the substitutions
+So if we cloak the value of an input $UTX_{in}$ with a blinding factor $k_{rand}$, we could write a pairing verification relation as:
+$$
 \begin{align}
-P_{sell} &\to V \in G_2 \notag \\
-s_{sell} &\to 1 \notag
+e(\frac {k_{rand} \, val(UTX_{in})}{s}\, & U, P) \\
+& = e(\frac{k_{rand} \, \sum_n val(UTX_{out,n})}{s} \, U, P) \\
+& = \prod_n e(\frac{k_{rand} \, val(UTX_{out,n})}{s} \, U, P)
 \end{align}
+$$
+for private key, $s$, and public key, $P$,  of sender.
 
-The buyer publishes the triple $(P_{buy}, t_{buy}, R)$, where $t_{buy}$ is as before,
-$$t_{buy} = \frac{k_{rand} (change - paid)}{s_{buy}} \in Z_r$$
-and
-$$R = k_{rand}\, V \in G_2$$
+So with this relation and the expression of a pairing of sums as the product of pairings from above, we can specify a transaction as a tuple $(UTX_{in}, UTX_{out,1}, UTX_{out,2}...)$ together with proof values $(S_{in}, P, R, O_1, O_2, ...)$, where
+$$ S_{in} = \frac{k_{rand} \, val(UTX_{in})}{s}\, U \in G_1$$
+for the input UTX, a value for any uncloaked UTX of
+$$ R = k_{rand} \, V \in G_2$$
+and a number of
+$$ O_i = k_{rand} \, val(UTX_{out,i}) \, U \in G_1$$
+for each cloaked output value. 
 
-Then anyone knowing the value of $(cost + fees)$ can verify the transaction using
-$$C = (cost + fees) \, R \in G_2$$
-and check that
-$$t_{buy}\, P_{buy} + C = G_2(0)$$
+Some outputs will not be cloaked, such as escrow stake amounts, and transaction fees, so that everyone can see and work with them. For those, we use the $R$ value during proofs, as in
+$$ e(val(UTX_{out,u}) \, U, R) \in G_T$$
+The full proof of validity will be that
+$$
+\begin{align}
+e(S_{in},P) &= (\prod_i e(O_i, P)) \, (\prod_u e(val(UTX_{out,u})\, U, R)) \\
+&= e(\sum_i O_i, P) \, e((\sum_u val(UTX_{out,u})) \, U, R)
+\end{align}
+$$
 
-The validation relation proves that the buyer formed the purchase offer, and that they forwarded enough money to cover net costs, while still cloaking the values involved. The cloaked values need to be accompanied by range proofs.
+By providing $R \in G_2$, we are not in danger of disclosing anything about the cloaked input $UTX_{in}$ and outputs $UTX_{out,i}$, whose information is provided in group $G_1$. The blinding factor $k_{rand}$ ensures that nobody can learn anything useful about any of the cloaked outputs $UTX_{out,i}$. 
+
+Use of the private and public keys, $s$ and $P$, provides binding commitment and irrefutable proof of origination. Blending in the private key $s$, ensures that nobody could have forged the spending.
+
+Information about the actual values of $UTX_{out,i}$ must be provided separately to each recipient, via encrypted messages. But the public can fully verify the validity of these transactions, all without knowing anything about the actual values involved.
+
+Once a recipient receives disclosure of the amount, they can verify that
+$$e(O_i,P) = e(val(UTX_{out,i})\, U, R)$$
+
+Reporting proofs in $G_1$ keeps them as short as possible.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Cryptographic Proofs}
 Cryptographic proofs can be written for almost any claim. Value range proofs can be developed to prove that a hidden quantity lies within a specific range. That will be the topic of Bulletproofs. 
 
-But in preparation for more advanced forms of cryptographic proofs, let's first just examine a method for making a claim that some value is known, and can be proven to anyone as known, without  revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
+But in preparation for more advanced forms of cryptographic proofs, let's first examine a method for making a claim that some value is known, and can be proven to anyone as known, without  revealing anything about it except that it is known -- a Zero Knowledge Proof (ZKP).
 
 ZKP's require interaction. A claim is made cryptographically. A verifier challenges the claimant for proof, and the claimant provides another one or more values that can be used by the challenger to verify the claim using a simple calculation. Everything about all math relations is known to all, so everyone can agree that the computations prove a claim.
 
 We can convert ZKP's  into Non-Interactive ZKP's (NIZKP)
- by using the Shamir construction, where, instead of an interactive challenge, we simply provide a hash of the transcript used in making the commitments to the value. It would be extraordinarily difficult for a claimant to produce a hash with a cunningly chosen value, and so a hash stands in for random challenges offered by validators.
+ by using the Fiat-Shamir construction, where, instead of an interactive challenge, we simply provide a hash of the public transcript used in making the commitment to the value. It would be extraordinarily difficult for a claimant to produce a hash with a cunningly chosen value, and so a hash stands in for random challenges offered by validators.
 
-There are two parts to any cryptographic proof. First is making a binding claim, so that the claimant cannot change his mind and offer phony values later, just chosen to satisfy every query by the validators. We do that with Pedersen Commitments. 
+There are two parts to any cryptographic proof. First is making a binding claim, second is a cryptographic protocol that can prove the claim. A binding claim prevents the claimant from changing their value so as to satisfy challenges. But we allow a binding claim to hide the value, making the commitment both {\em{binding}} and {\em{hiding}}. We do that with Pedersen Commitments. 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsubsection{Pedersen Commitments}
 For value $x \in Z_r$ that we claim to know, we choose two random generators over an Elliptic Curve, $A \in G_1$ and $B \in G_1$, with no known ECDL relationship between them. We also chose a hiding value $\gamma \in Z_r$ so that we can present the commitment without also revealing anything about the value we claim to know.
  
-We publish our commitment and the two random generators as a triple $(A, B, C)$, keeping $x$ and the hiding factor $\gamma$ secret, and where commitment $C$ is given as:
+We publish our commitment and the two random generators as a triple $(A, B, C)$, keeping $x$ and the hiding value $\gamma$ secret, and where commitment $C$ is given as:
 $$C = \gamma A + x B \in G_1$$
 
-This is computationally binding on our choices of $x$ and $\gamma$ because they are applied to two independent curve generators $A$ and $B$. It is hiding because, even if you could perform ECDL, you still wouldn't be able to find them separately. All you would know is something about their sum, and that ranges over the entire field $Z_r$.
+This is computationally {\em{binding}} on our choices of $x$ and $\gamma$ because they are applied to two independent curve generators, $A$ and $B$. It is {\em{hiding}} because, even if you could perform ECDL, you still wouldn't be able to find them separately. All you would know is something about their sum, and that ranges over the entire field $Z_r$.
 
 We can prove knowledge of both $x$ and $\gamma$, for any random challenge value $z \in Z_r$, by computing and offering three values $(\alpha, L, R)$ where
 $$\alpha = z \, \gamma + \frac{x}{z} \in Z_r$$
@@ -238,40 +241,48 @@ $$ \alpha \, G' = C'$$
 
 For an NIZKP version of this, simply substitute 
 $$z = Z_r(H(A, B, C))$$ 
-as a {\em{nothing up my sleeve}} challenge value. It proves knowledge of both $x$ and hiding factor $\gamma$. This kind of proof forms the whole basis for Bulletproofs. 
+as a {\em{nothing up my sleeve}} (NUMS) challenge value.
+
+The protocol proves knowledge of both $x$ and hiding value $\gamma$. Values of $L$ and $R$ are unchanging for any challenge, and so, to allay suspicions, these could both be provided at the outset. Their constancy proves binding of $x$ and $\gamma$. 
+
+The only thing that changes with each challenge, $z$, is the response, $\alpha$. And since the verifier relations depend only on this response and the challenge itself, it proves that claimant knows the bound values of $x$ and $\gamma$. This kind of proof forms the basis for Bulletproofs. 
 
 \subsubsection{Pedersen Commitments with Cloaking}
-The only problem with this kind of ZKP is that we must reveal item $L =x \, A \in G_1$. If $x$ is known to have come from some restricted domain, then a simple brute force search, already knowing $A$, is all that is needed to reveal $x$. There is no danger facing $\gamma$ because it comes from a large field where brute force search is impractical.
+The problem with this kind of ZKP is that we must reveal item $L =x \, A \in G_1$. If $x$ is known to have come from some restricted domain, then a simple brute force search, already knowing $A$, is all that is needed to reveal $x$. There is no danger facing $\gamma$ because it comes from a large field where brute force search is impractical.
 
-So to really protect knowledge of $x$, we do additional cloaking, as do Bulletproofs, using a random cloaking factor $\xi \in Z_r$. Instead of committing only to $x$, we now form three Pedersen commitments, one for each of $\xi$, $(x - \xi)$, and $x$. We furnish Pedersen commitment proofs on $\xi$ and $(x-\xi)$, and an additional proof relating the three commitments. 
+So to protect  $x$, we do additional cloaking, as do Bulletproofs, using a random cloaking value $\xi \in Z_r$. Instead of committing only to $x$, we now form three Pedersen commitments, one for each of $\xi$, $(x - \xi)$, and $x$. We furnish Pedersen commitment proofs on $\xi$ and $(x-\xi)$, and an additional proof relating the three commitments. 
 
 The three commitments are
 $$C_\xi = \gamma_\xi \, A + \xi \, B$$
 $$C_{(x-\xi)} = \gamma_{(x-\xi)} \, A + (x - \xi)\, B$$
 $$C_x = \gamma_x \, A + x \, B$$
 
-Proof of $C_\xi$ and $C_{(x-\xi)}$ is by way of the same kind of proof we showed above for Pedersen commitments. There is no danger to $\xi$ and $(x - \xi)$ since they come from the entire range of field $Z_r$. 
+Proof of $C_\xi$ and $C_{(x-\xi)}$ is performed as shown above for Pedersen commitments. There is no danger to $\xi$ and $(x - \xi)$ since they come from the entire range of field $Z_r$. 
 
-But to prove the $C_x$ commitment, we publish an adjustment term, $\gamma_{adj}$ in the $A$ curve, which only someone who knows all of the $\gamma$ hiding factors could have created,
+But to prove the $C_x$ commitment, we publish an adjustment term, $\gamma_{adj}$ in the $A$ curve, which only someone who knows all of the $\gamma$ hiding values could have created,
 $$\gamma_{adj} = \gamma_x - (\gamma_\xi + \gamma_{(x-\xi)}) \in Z_r$$
 Then the validator sees that
 $$C_x = C_\xi + C_{(x-\xi)} + \gamma_{adj} \, A$$
 This proves our knowledge since, while the commitment point addition with the $B$ term is obvious, the point addition in $A$ has no known relationship to $\xi$, $x$, or $B$. 
 
-All three commitments are computationally binding and hiding. Committing to cloaking factor $\xi$ assures the validator that we aren't just making it up as we go. And committing to $(x - \xi)$ locks in the relationship between $\xi$ and $x$ in these coupled Pedersen commitments. The final proof between commitments shows that we know the relationship between $\gamma_x$ and the already proven $\gamma_\xi$ and $\gamma_{(x-\xi)}$. 
+All three commitments are computationally {\em{binding}} and {\em{hiding}}. Committing to cloaking value $\xi$ assures the validator that we aren't just making it up as we go. And committing to $(x - \xi)$ locks in the relationship between $\xi$ and $x$ in these coupled Pedersen commitments. The final proof between commitments shows that we know the relationship between $\gamma_x$ and the already proven $\gamma_\xi$ and $\gamma_{(x-\xi)}$. 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Bulletproofs}
-Bulletproofs are used to provide range proofs on numeric values. Non-cryptographic useful values generally come from restricted domains. We could provide range proofs on such values by providing Pedersen commitments and proofs to show that the value is equal to one of the possible values from the range. If there were only a small number of possibilities, this might seem reasonable.
+Bulletproofs\cite{bulletproofs} are used to provide range proofs on numeric values. Most useful, non-cryptographic, values  come from restricted domains. We could provide range proofs on such values by providing Pedersen commitments and proofs to show that the value is equal to one of the possible values from the range. If there were only a small number of possibilities, this might seem reasonable.
 
 But consider a value from the domain of 64-bit numbers. There are $2^{64}$ possible values, and it would be impractical to provide a proof over each possibility. Instead, we could provide proofs over each bit of the binary encoding of the value, to show that each one is either 0 or 1, and to prove that we know which it is. But that is still 64 or more commitments and proofs just for a single value.
 
-Going back to the Pedersen commitment proof, notice that our proofs show that we actually know two quantities, $x$ and hiding factor $\gamma$, and all we had to do to prove that duo was to furnish one additional field value, $\alpha$. That 2-to-1 reduction is the reason for the moniker {\em{BulletProofs}}, and is reminiscent of the very reason to use proofs over binary encodings of values. 
+Going back to the Pedersen commitment proof, notice that our proofs show that we actually know two quantities, $x$ and hiding value $\gamma$, and all we had to do to prove that duo was to furnish one additional field value, $\alpha$. That 2-to-1 reduction is the reason for the moniker {\em{BulletProofs}}, and is reminiscent of the very reason to use proofs over binary encodings of values. 
 
-By augmenting Pedersen commitment proofs to show that, not only do we know both $\gamma$ and $x$, but that their product has a particular value, $p = \gamma \, x$, we can then develop a recursive form of Pedersen commitment proof, of size $log_2(log_2 N))$ for values in the range $0 \le x < N$, based on dot-products of vectors encoding the bits of the value, $x$. Each stage of the recursion shrinks the bit encoding vectors by half, effectively making a binary encoding of a binary encoding. Now it becomes feasible and economical to prove value ranges of 64-bit values.
+By augmenting Pedersen commitment proofs to show that, not only do we know both $\gamma$ and $x$, but that their product has a particular value, $p = \gamma \, x$, we can then develop a recursive form of Pedersen commitment proof, of size $log_2(log_2 N))$ for values in the range $0 \le x < N$, based on dot-products of vectors representing the bits of the binary encoding of $x$. Each stage of the recursion shrinks the bit encoding vectors by half, effectively making a binary encoding of a binary encoding. Now it becomes feasible and economical to prove value ranges of 64-bit values.
 
 Of course, we must also use cloaking at every step, since the domains are so restricted that it would be trivial to uncover the hidden values. That complicates matters a bit, but the idea remains feasible and more economical that any other approach.
-
+$$
+$$
+{\em{I'm punting on providing the technical description of Bulletproofs. It would be longer than everything I have written so far, and the math would be nearly opaque to anyone except determined souls. Maybe come back to this later... For now, just refer to the paper.. if you can.}}
+$$
+$$
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Randomness}
 Bias-resistant public randomness is a critical component of the Emotiq consensus protocol. Emotiq employs RandHerd, a large-scale distributed protocol that provides publicly-verifiable, unpredictable, and unbiasable randomness against Byzantine adversaries by implementing an efficient, decentralized randomness beacon. RandHerd arranges participants into verifiably unbiased random
@@ -283,14 +294,20 @@ The use of BLS Signatures allows an abbreviated form of PVSS randomness generati
 
 Within each group, a sharing threshold is set at $t = \lfloor \frac{N}{3} \rfloor + 1$ for group size $N$. Secret random seeds are generated by each participant, then encrypted shares are formed over that secret and distributed to other group members, along with cryptographic proofs on the shares.
 
-For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $p(i)$, are then encrypted by multiplying the share value by the public key of each member, $E(share_i) = Z_r(p(i))\, P_i \in G_2$, and proofs are generated by forming a point, $Proof_i = Z_r(p(i)) \,U \in G_1$, for generator $U \in G_1$. 
+For sharing threshold $t$, a random polynomial of order $t-1$ is generated $$p(x) = a_0 + a_1 x + ... + a_{t-1} x^{t-1}$$ with the secret value denoted by $a_0$.  Shares are constructed by computing the value of this polynomial for each member of the group, assigned successive ordinal values, $i = 1 ... N$. The resulting share values, $share_i = p(i)$, are cloaked with the private key, $s$, and blinding factor $k_{rand}$, and also encrypted by multiplying the share value by the public key of each member, 
+$$Proof_i = \frac{k_{rand} \, p(i)}{s} \, U \in G_1$$
+$$Chk_i = k_{rand}\, p(i)\,  V \in G_2$$
+$$E(share_i) = p(i) \, P_i \in G_2$$
+$$R = k_{rand} \, U \in G_1$$
 
-A vector of shares and a vector of proofs is generated, one element for each member of the group, and these vectors are then transmitted to each group member.
-$$(E(share_1), E(share_2), ..., E(share_N))$$
+Vectors of proofs and their checks, and and a vector of encrypted shares, is generated, one element for each member of the group, and these vectors are then transmitted to each group member.
 $$ (Proof_1, Proof_2, ..., Proof_N)$$
+$$(Chk_1, Chk_2, ..., Chk_N)$$
+$$(R, E(share_1), E(share_2), ..., E(share_N))$$
 
-As with any BLS signature, each share is validated against its proof by checking that the pairings match:
-$$ e(Proof_i, P_i) = e(U, E(share_i))$$
+Every share can be validated with
+$$e(Proof_i, P) = e(U, Chk_i)$$
+where $P$ is the public key of the sender. This serves as proof of origination of the share.
 
 Every member of the group can also verify that all shares from another group member were consistently generated from the same sharing polynomial. To do so, we treat the share vector as a codeword from a Reed-Solomon encoding\cite{scrape}, compute a random polynomial of order $N - t - 1$ and use that to compute a test vector from the dual-space of the original share generating polynomial:
 $$f(x) = b_0 + b_1 x + ... + b_{N-t-1} x^{N-t-1}$$
@@ -299,23 +316,34 @@ where weights $\lambda_i = \prod_{j \ne i} \frac{1}{i-j}$, for $ i,j = 1...N$.
 Then the consistency of the encrypted shares is verified by checking that:
 $$\sum_i {c_{\perp}}_i \, Proof_i = G_1(0)$$
 
-This consistency check is absolutely certain for valid sharing vectors, and has an inconsequential probability of failing to detect an improper sharing set given as $\approx 1/q$, or about 1 chance in $2^{254}$. There is a greater likelihood of finding a hash collision in SHA3/256 than in seeing a failure to detect an inconsistent sharing vector.
+This consistency check is absolutely certain for valid sharing vectors, and has an inconsequential probability of failing to detect an improper sharing set given as $\approx 1/q$, or about 1 chance in $2^{256}$. There is a greater likelihood of finding a hash collision in SHA3/256 than in seeing a failure to detect an inconsistent sharing vector.
 
-After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, $$G_2(share_i) = \frac{1}{s_i}E(share_i) \in G_2$$ for secret key $s_i \in Z_r$.
+After performing consistency checks on the sharing set from one group member, the share directed at one node can be decrypted with its secret key to produce a decrypted share, 
+$$
+\begin{align}
+Y_i &= e(\frac{1}{s_i}\, U, E(share_i)) \\ 
+       &= e(U,V)^{p(i)} \in G_T
+\end{align}
+$$
+for secret key $s_i \in Z_r$. The decryption can be verified with
+$$ e(\frac{1}{s_i} \, R, E(share_i)) = e(U, Chk_i)$$
 
-This decrypted share is then broadcast to all group members. Decrypted shares can be verified from the pairing relation:
-$$ e(Proof_i, V) = e(U, G_2(share_i))$$
+%As with any BLS signature, each decrypted share is validated against its proof by checking that the pairings match:
+%$$  e(Proof_i, P) &= e(\frac{1}{s_i} \, R, P_i)$$
 
-As soon as a sharing threshold number, $(n \ge t)$, of decrypted shares has been seen for any one sharing set, the secret randomness from that set can be discovered via Lagrange interpolation:
-$$G_2(random) = \sum_i G_2(share_i) \prod_{j \ne i} \frac{i}{i-j}$$
+The decrypted share, $Y_i$, is then broadcast to all group members. 
+%Decrypted shares can be verified from the pairing relation:
+%$$ e(Proof_i, P) = e(U, G_2(share_i))$$
 
-Finally, after a supermajority of sharing sets has been decrypted, $(n \ge 2 \lfloor \frac{N}{3} \rfloor + 1)$, their randomness is combined as a simple sum in $G_2$, and forwarded to all other groups.
-$$G_2(random_{grp}) = \sum_i G_2(random_i)$$
+As soon as a sharing threshold number, $(n \ge t)$, of decrypted shares has been seen for any one sharing group, the secret randomness from that set can be discovered via Lagrange interpolation:
+$$Y_{grp} = \prod_i Y_i^{\prod_{j \ne i} \frac{i}{i-j}}$$
 
-Proof of group randomness comes from the sum of Lagrange interpolations of the individual proof sets.
-Final randomness results from a supermajority sum of randomness obtained from each group, and its proof results from the sum of group proofs. 
+Finally, after a supermajority of sharing sets has been decrypted, $(n \ge 2 \lfloor \frac{N}{3} \rfloor + 1)$, their randomness is combined as a simple sum (in the exponent) in $G_T$, and forwarded to all clients.
+$$Y_{total} = \prod_{grp} Y_{grp}$$
 
-So the use of pairing-based cryptography shows great benefits, not only in minimizing network traffic, and by making immediate commitments to portions along the way, and also from the fact that proofs are so easily generated as simple sums of existing proofs.
+Final randomness results from a supermajority sum (in the exponent of the base pairing value) of randomness obtained from each group. 
+
+So the use of pairing-based cryptography shows great benefits, not only in minimizing network traffic, and by making immediate commitments to portions along the way.
 
 Timing tests show that this approach scales linearly with number of group participants, ranging from about 5 seconds for 32 group members, to about 3 minutes for 1024 group members, on an ordinary iMac with an Intel i7 processor. The timings are dominated by compute load, not network communications.
 
@@ -338,7 +366,7 @@ $$e(Proof_i, P_i) = e(U,E(share_i))$$
 
 These proof sums correspond directly to the proofs presented in the previous section. And they also directly verify that every encrypted share came from the same polynomial. One advantage of this method is that instead of transmitting $2 N$ vector elements, we now only need to transmit $N+t$ elements.
 
-However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about three times slower when $N=1024$. But the method is equivalent in its information content, and every bit as secure.
+However, we now also need to supply these proof sums along with any decrypted shares that we compute, and the method scales super-linearly. Timing tests have shown it to be a hair slower than the first method for $N=32$, and about three times slower when $N=1024$. But the method is equivalent in its information content, and provably more secure. There are no cases where an inconsistent sharing set would escape detection.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Verifiable Random Functions}
 A verifiable random function (VRF)\cite{vrf2} uses a pseudo-random function (PRF) in such a way as to furnish proof that the resulting pseudo-random value came from a specific seed value mixed with the creator's secret key. And even though a secret key was involved in the generation of randomness, anyone can duplicate the calculation by knowing only the seed value and creator's public key. We follow the work of Dodis and Yampolskiy\cite{vrf}, to provide a PRF as follows:
@@ -371,32 +399,79 @@ In order to produce a stake-weighted lottery, we could imagine dividing a circle
 \begin{figure}[h!]
 \centering
 
+\resizebox{.3\textwidth}{!}{%
+
 \begin{tikzpicture}
-\pie [text=pin, rotate = 90, before number =, after number =,]
-    {40/Stake 1, 20/Stake 2, 30/Stake 3, 10/Stake 4}
+\pie [text=pin, rotate = 90, before number =, after number =,
+      color={black!40,black!20,black!30,black!10}]
+    {40/$S_{1}$, 20/$S_2$, 30/$S_3$, 10/$S_4$}
 \end{tikzpicture}
+
+}%
 
 \bigskip
 
+\resizebox{.3\textwidth}{!}{%
 \begin{tikzpicture}[sibling distance=4cm,
   every node/.style = { shape=rectangle, rounded corners,
     draw, align=center, top color=white, bottom color=blue!20}]
 
-\node{\ \ 100 (40 + 30 + 20 + 10)\ \ }[->]
-  child[->]{ node {\ \ \ 60 (40 + 20)\ \ \ }
-    child[sibling distance=2cm]{ node[bottom color=blue] {40}}
-    child[sibling distance=2cm]{ node[bottom color=cyan] {20}}
-  }
-  child[->]{ node {40 (30 + 10)}
-    child[sibling distance=2cm]{ node[bottom color=yellow] {30}}
-    child[sibling distance=2cm]{ node[bottom color=orange] {10}}
-  };
+\node[color=white, top color=black!100, bottom color=black!100]
+     {\ \ \ \ \ \ \ \( S_1 + S_2 + S_3 + S_4 = 100 \) \ \ \ \ \ \ \ }
+     child[->]
+          { node[color=white, top color=black!80, bottom color=black!80]
+                {\ \ \ \( S_1 + S_2 = 60 \)\ \ \ }
+                child[sibling distance=2cm]
+                     { node[top color=black!40, bottom color=black!40] {\( S_1 = 40 \)}}
+                child[sibling distance=2cm]
+                     { node[top color=black!20, bottom color=black!20] {\( S_2 = 20 \)}}
+          }
+     child[->]
+          { node[top color=black!40, bottom color=black!40]
+                {\(S_3 + S_4 = 40 \)}
+                child[sibling distance=2cm]
+                     { node[top color=black!30, bottom color=black!30] {\( S_3 = 30 \)}}
+                child[sibling distance=2cm]
+                     { node[top color=black!10, bottom color=black!10] {\( S_4 = 10 \)}}
+          };
 \end{tikzpicture}
+}%
 
 \caption{Imagining a spin dial as a tree. Segments
 are sized in proportion to escrow stakes.}
   \label{fig:spinner}
 \end{figure}
+
+
+%\begin{figure}[h!]
+%\centering
+%
+%\begin{tikzpicture}
+%\pie [text=pin, rotate = 90, before number =, after number =,]
+%    {40/Stake 1, 20/Stake 2, 30/Stake 3, 10/Stake 4}
+%\end{tikzpicture}
+%
+%\bigskip
+%
+%\begin{tikzpicture}[sibling distance=4cm,
+%  every node/.style = { shape=rectangle, rounded corners,
+%    draw, align=center, top color=white, bottom color=blue!20}]
+%
+%\node{\ \ 100 (40 + 30 + 20 + 10)\ \ }[->]
+%  child[->]{ node {\ \ \ 60 (40 + 20)\ \ \ }
+%    child[sibling distance=2cm]{ node[bottom color=blue] {40}}
+%    child[sibling distance=2cm]{ node[bottom color=cyan] {20}}
+%  }
+%  child[->]{ node {40 (30 + 10)}
+%    child[sibling distance=2cm]{ node[bottom color=yellow] {30}}
+%    child[sibling distance=2cm]{ node[bottom color=orange] {10}}
+%  };
+%\end{tikzpicture}
+%
+%\caption{Imagining a spin dial as a tree. Segments
+%are sized in proportion to escrow stakes.}
+%  \label{fig:spinner}
+%\end{figure}
 
 
 In practice a binary tree of participants is formed, in some consistent order, where each interior node represents the sum of all its sub-node stakes. The topmost node of the tree shows the full sum of all stakes represented in the tree, with all participants located in leafs. Branching decisions begin at the top node of the tree and descend toward leafs using the random value as a probe of the interval described by the partial sum at each node, with the division between left and right based on the relative weights of its two subtrees. Descent continues until meeting a leaf node, and declaring that node the winner of the election. 
@@ -416,28 +491,75 @@ Each stakeholder knows all the other participants in the escrow system, and can 
 
 All nodes should be able to agree on election outcome, but if not, then one of two things could happen. First, if a stakeholder thinks it won the election but was mistaken, then any attempts at forming new Cosi networks by the faux leader would be silently rejected by others, and it would fail to obtain a consensus on any new requests. If that happens, the rejected leader should resynchronize its list of participants, rerun its own election, and join back in after agreeing on the outcome. 
 
-Second, a stakeholder might think that someone else had won the election. In that case, it would silently reject Cosi formation requests by whomever had actually won, and never see any requests from whom it thought it should. After some reasonable timeout period, it should resynchronize its list of participants, and then join back in as most recently directed, after agreeing on the election outcome.
+Second, a stakeholder might think that someone else had won the election. In that case, it would silently reject Cosi formation requests by whomever had actually won, and never see any requests from whom it thought it should. If this happens for two consecutive election cycles, then something may be amiss, and it should attempt to re-synchronize its list of participants.
 
-If new election signals arrive during an interval between two consensus Cosi rounds, then participants should ignore the signals until either the second round completes, or some reasonable timeout expires. At that point they can run the election on the most recent signal received. 
-
-If a stakeholder wins an election but is absent or comes under attack, it may not respond to its own election as leader, or block assembly activities will cease in that epoch. Any stakeholder can call for a new early election, and after $(2 f+1)$ such calls have been seen, a new election cycle ensues. (Byzantine attacks may try this as well, hence the threshold.)
+If a stakeholder wins an election but is absent or comes under attack, it may not respond to its own election as leader, or block assembly activities will cease in that epoch. Any Cosi witness can call for a new early election, and after $(2 f+1)$ such calls have been seen, each from different nodes, a new election cycle ensues. (Byzantine attacks may try this as well, hence the threshold.)
 
 Honest stakeholder nodes will typically register a complaint after seeing no activity for longer than an adaptive threshold based on recent past rates. An exponential average could be used for this purpose. Early elections will use the last random election probe against a decision tree that excludes the previously elected leader.
 
-It might seem possible to confuse two situations. On the one hand, if a stakeholder gets out of sync on participants, and mistakenly concludes a different leader election outcome from the rest of its peers, it will eventually timeout waiting for activity from the expected leader. That is easy to differentiate from the case of a newly appointed leader being absent, since in the first case there ought to be activity from some other claimed leader. In the second case there is a total absence of activity. Only for the second case should we register a call for new early election.
+\subsubsection{Digression on Network Protocols}
+Our network protocol dictates that all messages must be authenticated with sender's signature or else the message will be ignored on delivery. Higher level portions of the system are completely network agnostic with regard to method of transport. It does not matter to Cosi, for example, whether messages arrive by UDP, Gossip, HTTP, or any other method.
 
-But it is still possible that both conditions are present. A new leader is elected, it is absent and does not respond, and our misinformed stakeholder is also out of sync. This won't be corrected until an early election is held and the errant stakeholder finally realizes its confusion.
-$$
-$$
-{\em{This looks like a situation with potential instability. 
-Oscillations could arise. 
-We really ought to simulate some of this before committing to a design...
+But however messages arrive, the port interface takes care to validate incoming message signatures, and if they fail, the messages are ignored. 
 
-It is also looking like a finite state machine could be written to cover the protocol... next on the agenda
-}}
-$$
-$$
+Signatures are merely a first line of defense against network trolls. But they do nothing other than to vouch for the sender as having a legitimate key pair. They cannot certify proper contents, nor censor illegitimate messages. 
 
+Getting past signature validation simply means that the structure of the message packet was such that a signature portion could be identified, along with a public key, and together with the hash of the message body, everything seems to check as a non-forgery from the claimed sender.
+
+Some protocols might choose to discard the incoming signature portion after verification. Others might optimize forwarding by retaining the original packet for forwarding, rather than rewrapping its message body with a new signature. 
+
+So it is quite possible that a message originating from one public key will arrive at its destination with the signature of an intermediary.
+
+With Gossip it is also possible that the same message will arrive more than once, by different routes. We must filter incoming messages to ignore repeats. Messages should carry the hash of their contents, or become hashed at delivery, as a timeless identifier for this purpose. But there will be a practical limit to the depth of this filtering. It should be deep enough to cover all but some miniscule portion of likely transport delays.
+
+And since the hash of the message might bear little relationship to its original signature, we cannot rely solely on the signature for this filtering.
+
+\subsubsection{Mostly-Stateless Design}
+In the interest of overall system stability and simplicity, a mostly stateless architecture seems desirable. Communications are often by {\em{Gossip}} protocol, and so no hard time limit can easily be stated for communication delays.
+
+So rather than defining node states with a transition diagram between states, we make each communicated message  carry information about its purpose along with relevant identifying information.  
+
+Immediately after a leader election, each node should determine its role for the new epoch. 
+\begin{itemize}
+    \item If elected leader, then begin next block assembly. 
+    \item If the node should become a member of a RandHerd group, then start running the protocol within its group.
+    \item If the node should become a Cosi witness node, then start a timeout timer. If that timeout ever fires, then it is time to call for a new election. But incoming messages can restart or cancel the timeout timer.
+    \item Otherwise, the node is on standby for the next election cycle. Nodes in standby can ignore almost all messages, but must pay attention to election related messages.
+\end{itemize}  
+
+All stakeholder nodes must pay attention to election messages:
+\begin{itemize}
+\item New Election Message - Run an election with the random value provided in the election message, and determine next role for this node - one of Leader, Cosi participant, RandHerd participant, or standby. Reset the counter of calls for new election.
+
+\item Call For New Election Message - Increment the count, $n$,  of such calls seen from different nodes, and if $n \ge 2 f +1$, then run another election round based on the last election random value, with a decision tree sans current leader node. Determine new leader and next role for this node.  Reset the counter of calls for new  election.
+
+Note that repeated calls from the same public key must be ignored. That extends beyond the hash filtering for duplicate incoming messages.  An attacker might otherwise flood the system with calls for new election that overcome the incoming message filtering. So, in fact, such messages must be signed by the public key holder.\footnote{All incoming message are already signed with the signature of the sender. But that signature might be discarded by the port manager, once validated. Nothing otherwise dictates what can be sent by any node.  And recall that the signature might have no relation to the public key in the message.
+
+Furthermore, sender might be an attacker who is able to sign network messages, and who attempts to forge attribution to other public keys. 
+We need to know that the public key of the complainant was legitimately used to call for new election.}
+\end{itemize}
+
+For nodes in a Cosi group there are five different events that have any relevance to each witness node: 
+\begin{itemize}
+\item Consensus Prepare Message - Attempt to validate the message. If valid, affix signature and send back to leader. Validation includes checking that the message arrived from the current leader node. If not, then just ignore the message. If the message was valid, then restart the timeout timer if it was running.
+
+\item Consensus Commit Message - Check that the message arrived from the current leader. If so, affix a signature, send back to leader, and record the message in persistent store.
+
+If the message arrived from someone, not the current leader, then it either already had enough signatures to become committed, and so it is now in the current blockchain. Or else, it failed to gain commit consensus and it was dropped. Either way, we can just ignore it.
+
+Leave the timeout timer running.
+
+\item Self Timeout - Gossip a call for new elections. Do not restart timeout timer. Message gossipped must include the public key of this node for accounting purposes.
+
+\item New Election Message - Kill the timeout timer, then proceed as usual for a new election message.
+
+\item Call For New Election Message - Increment the count, $n$,  of such calls seen from different nodes, and if $n \ge 2 f +1$, then kill the timeout timer, and proceed as usual for early elections.
+\end{itemize}
+
+Nodes in a RandHerd group must pay attention to the following messages:
+\begin{itemize}
+\item TBD...
+\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Cryptographic Sortition}
@@ -446,43 +568,7 @@ Sortition\cite{algorand} is the process of randomly selecting members for Cosi n
 As the outcome of selections becomes known, those stakeholders must be removed from the selection tree before holding additional rounds. The purpose of sortition rounds specifies roles, each of which may have different threshold requirements in number of selected participants. Roles specify the purpose of selection, such as for Cosi networks, Randherd groups, and so forth.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Blockchain Leader Election}
-Publicly verifiable randomness generation is used to perform leader elections for blockchain production. All public key holders can choose to participate in elections by depositing an amount of currency into escrow as their stake. Stakeholders also participate as members of Cosi and Randherd protocols.
 
-The amount at stake is a hedge against misbehavior to thwart attacks.  Requiring a stake helps prevent Sybil attacks. If a participant has staked some currency and is found to be misbehaving, that stake will be forfeited and the participant will be barred from future participation for some period of time. Conversely, members in good standing are rewarded for their services by sharing transaction fees with them in proportion to their stake.
-
-Elections are stake-weighted lotteries. The larger your stake, the greater your chances of winning a round. After serving one round, the leader relinquishes his right to be re-elected until some number of rounds later. But former leaders can still serve as participants in other blockchain activities and receive rewards. The leader block is awarded a fixed fraction of the fee bounty, while the remainder is distributed to other participants in proportion to their stakes.
-
-In order to produce a stake-weighted lottery, we could imagine dividing a circle into angular sections proportional to individual stakes, with the full circumference of the circle representing the sum of all stakes. A uniform random number over a finite interval acts as a spinner in a dial readout, and wherever it points after a spin, that member is selected as the next leader. Larger stakeholders occupy a larger portion of the circumference, and so have a more likely chance of winning.
-
-In practice a binary tree of participants is formed, in arbitrary order, where each interior node represents the sum of all its sub-node stakes. The topmost node of the tree shows the full sum of all stakes represented in the tree, with all participants located in leafs. Branching decisions begin at the top node of the tree and descend toward leafs using the random value as a probe of the interval described by the partial sum at each node, with the division between left and right based on the relative weights of its two subtrees. Descent continues until meeting a leaf node, and declaring that node the winner of the election. 
-
-If the random probe value is converted into a fractional value of its range, and each interior node is relabeled with its division fractional value, then it is simple to choose left or right subnodes based on a single comparison between the two fractional values.
-
-Once elected, the leader forms the necessary Cosi trees and Randherd groups, and begins assembling a new block for the duration of the epoch until the next election round. There must be a balancing between the period between elections and the length of time it takes to assemble and validate blocks. The larger the block, in number of transactions to be verified, the longer it must take. At some size, that administrative duration will exceed the interval between Randherd beacon outputs.
-$$
-$$
-{\em{(What happens if another Randherd random value arrives while everyone is busy validating blocks? Holding a new election right then could spoil the ongoing consensus, marking that block as a failure. And the same thing would happen again, or worse, during the next epoch, as it plays catch-up in block assembly. 
-
-Do we need consensus to hold a new election? Then consensus again to validate the election outcome? And so should nodes involved in consensus rounds be stateful so they know not to respond to elections until consensus has completed?
-
-Is consensus nested? Can there be consensus rounds ongoing, inside of an outer consensus round?)}}
-$$
-$$
-
-If a stakeholder wins an election but is absent or comes under attack, it may not respond to its election as leader, or block assembly activities will cease in that epoch. Any stakeholder can call for a new forced election, and after $(2 f+1)$ such calls have been seen, a new election cycle ensues. All other honest stakeholder nodes that have also seen the threshold number of calls for new election will eagerly grant consensus to newly elected leaders. Stakeholder nodes will typically register a complaint after seeing no activity for longer than an adaptive threshold based on recent past rates. An exponential average could be used for this purpose. 
-
-Calls for election are by gossip protocol, and the election protocol is performed in each stakeholder node. Whichever node notices its election as leader must gain the consensus of all other nodes in forming its own Cosi trees. Hence it must use the extant Cosi networks from the current epoch. Failed consensus constitutes a failed election cycle from the perspective of that node. The node can register a call for new election, or else respond to new gossip messages to participate in an epoch managed by some other node that also sees itself as winning the lottery. 
-
-If this happens, then it may be time to resynchronize its notion of stakeholder participants against the blockchain record. A stakeholder node so distracted in this manner constitutes just another example from the spectrum of Byzantine failures, and while distracted the node may fail to perform other duties it should have been doing. But the consensus protocol is adaptable to Byzantine failures and will proceed without the node.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Cryptographic Sortition}
-Sortition\cite{algorand} is the process of randomly selecting members for Cosi networks and Randherd groups, based on stake weighting. We described one type of sortition event in the description of blockchain leader election. The process is repeated for selection of other duties. Random values for sortition probing are developed using VRF's to prove fairness in making selections.
-
-As the outcome of selections becomes known, those stakeholders must be removed from the selection tree before holding additional rounds. The purpose of sortition rounds specifies roles, each of which may have different threshold requirements in number of selected participants. Roles specify the purpose of selection, such as for Cosi networks, Randherd groups, and so forth.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Safe Hierarchical Keying}
 
 In current blockchain designs which utilize simple Elliptic Curve cryptography, the possibility of producing subkeys from a master public key is presented. But that is wholly unsafe in the event that a decryption key is also generated for a derived public key. A simple bit of finite field arithmetic is all it takes to discover the original master private key.
@@ -530,6 +616,9 @@ In this form, a new private key cannot be used to sign messages in the usual man
 
 \bibitem{bn}Paulo S. L. M. Barreto and Michael Naehrig
 {\em{Pairing-Friendly Elliptic Curves of Prime Order}}
+
+\bibitem{bulletproofs} Benedikt Bunz, Jonathan Bootle, Dan Boneh, Andrew Poelstra, Pieter Wuille, and Greg Maxwell
+{\em{Bulletproofs: Short Proofs for Confidential Transactions and More}}
 
 \bibitem{scrape}Ignacio Casudo and Bernardo David, 
 {\em{ SCRAPE: Scalable Randomness Attested by Public Entities}} 
