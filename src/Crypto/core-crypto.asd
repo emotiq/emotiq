@@ -53,5 +53,7 @@ THE SOFTWARE.
                  "mpcompat"
                  "lisp-object-encoder"
                  "s-base64"
+                 "emotiq"
+                 "emotiq/delivery"
                  ))
 
