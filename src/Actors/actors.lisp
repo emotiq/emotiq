@@ -508,7 +508,13 @@ THE SOFTWARE.
         (mp:make-mailbox)))
 
   (defun release-mailbox (mbox)
-    (sys:atomic-push mbox (car queue))))
+    (sys:atomic-push mbox (car queue)))
+
+  (defun ensure-mbox-empty (mbox)
+  (um:nlet-tail iter ()
+    (unless (mp:mailbox-empty-p mbox)
+      (mp:mailbox-read mbox)
+      (iter)))))
 
 #+(or :ALLEGRO :CLOZURE)
 (let ((queue (list nil))
@@ -521,13 +527,13 @@ THE SOFTWARE.
 
   (defun release-mailbox (mbox)
     (mpcompat:with-lock (lock)
-       (push mbox (car queue)))))
+       (push mbox (car queue))))
 
-(defun ensure-mbox-empty (mbox)
-  (um:nlet-tail iter ()
-    (unless (mpcompat:mailbox-empty? mbox)
-      (mpcompat:mailbox-read mbox)
-      (iter))))
+  (defun ensure-mbox-empty (mbox)
+    (um:nlet-tail iter ()
+      (unless (mpcompat:mailbox-empty? mbox)
+        (mpcompat:mailbox-read mbox)
+        (iter)))))
 
 (defun do-with-borrowed-mailbox (fn)
   (let ((mbox (get-mailbox)))
@@ -796,10 +802,17 @@ THE SOFTWARE.
          (tail-parm    (when has-rest
                          (nthcdr (1+ has-rest) parms))))
     ;; ooftah...
+    #+:LISPWORKS
+    `(progn
+       (defmacro ,name ,parms
+         `(,',f %sk ,,@prefix-parms ,@,@tail-parm))
+       (defun ,f (%sk ,@parms) ,@body))
+    #-:LISPWORKS
     `(progn
        (defmacro ,name ,parms
          `(,',f %sk ,,@prefix-parms ,,@tail-parm))
-       (defun ,f (%sk ,@parms) ,@body))))
+       (defun ,f (%sk ,@parms) ,@body))
+    ))
 
 (defmacro =bind (parms expr &body body)
   ;;
