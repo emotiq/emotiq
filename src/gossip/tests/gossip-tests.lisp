@@ -74,6 +74,30 @@
       (setf *nodes* oldnodes)
       )))
 
+(define-test partial-gossip "Test partial-gossip with parameter 2"
+  (let ((oldnodes *nodes*))
+    (unwind-protect
+        (let ((results nil)
+              (*log-filter* nil))
+          (setf *nodes* (gossip::make-uid-mapper))
+          (clrhash *nodes*)
+          (make-graph 100)
+          (ac::kill-executives)
+          (assert-eql 100 (run-gossip-sim))
+          (set-protocol-style :gossip 2)
+          (dotimes (i 100)
+            (push (solicit-wait (random-node) :count-alive) results))
+          (setf results (mapcar (lambda (x) (if (numberp x) x nil)) results)) ; ensure :TIMEOUT doesn't appear in data
+          (assert (lambda ()
+                    (every (lambda (x)
+                             (if (numberp x)
+                                 (> x 90)
+                                 t))
+                           results))))
+      (setf *nodes* oldnodes)
+      )))
+
+; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
 ; (let ((*print-failures* t))  (run-tests :all))
 
 (defun make-test-network ()

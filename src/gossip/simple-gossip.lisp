@@ -783,7 +783,7 @@
            (all-processes))
     node-processes))
 
-; Mostly for debugging. Node processes should automaticallykill themselves.
+; Mostly for debugging. Node processes should automatically kill themselves.
 (defun kill-node-processes ()
   (let ((node-processes (node-processes)))
     (mapc 'process-kill node-processes)))
