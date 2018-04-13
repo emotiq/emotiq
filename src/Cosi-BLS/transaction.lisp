@@ -181,7 +181,7 @@ So that
    (rng-proof  :reader  value-rng-proof ;; a Bulletproof
                :initarg :rng)))
 
-(defun make-value-proof (x &optional (gam (rand)))
+(defun make-value-proof (x &optional gam)
   (assert (and (<= 0 x)
                (<= (integer-length x) 64)))
   (multiple-value-bind (clk-proof clk-secr)
@@ -298,7 +298,7 @@ to the uncloaked value"
   "Spends is a list of utx-spend, sends is a list of utx-sends, some
 cloaked, some not.  Add up the spends, subtract the sends. Result
 should be zero value, but some non-zero gamma sum. We make a
-correction factor gamma on curve A for the overall transaction."
+correction factor gamma for the overall transaction."
   (let* ((gam-sends  (mapcar 'utx-send-secr-gam send-secrets))
          (gamma      (with-mod *ed-r*
                        (m- (reduce 'm+ gam-sends)
@@ -309,11 +309,8 @@ correction factor gamma on curve A for the overall transaction."
                    :gamma   gamma)))
 
 
-(defun decrypt-spend-info (encr skey)
-  (pbc:ibe-decrypt encr skey))
-
 (defmethod validate-spend-utx ((utx utx-spend))
-  (let* ((hl  (make-hashlock (utx-spend-cmt utx)
+  (let* ((hl  (make-hashlock (cmt-val (utx-spend-cmt utx))
                              (utx-spend-pkey utx))))
     (and (= (int hl)
             (int (utx-spend-hashlock utx)))
@@ -337,11 +334,11 @@ correction factor gamma on curve A for the overall transaction."
     (when (and (every 'validate-spend-utx spends)
                (every 'validate-send-utx sends))
       (let* ((cspends  (mapcar 'ed-decompress-pt
-                               (mapcar (um:compose 'cmt-val 'utx-spend-cmt)
-                                       (trans-spend-utxs trn))))
+                               (mapcar 'cmt-val (trans-spend-utxs trn)
+                                       :key 'utx-spend-cmt)))
              (csends   (mapcar 'ed-decompress-pt
-                               (mapcar (um:compose 'cmt-val 'utx-send-cmt)
-                                       (trans-send-utxs trn))))
+                               (mapcar 'cmt-val (trans-send-utxs trn)
+                                       :key 'utx-send-cmt)))
              (tspend   (reduce 'ed-add cspends
                                :initial-value (ed-neutral-point)))
              (tsend    (reduce 'ed-add csends
@@ -350,25 +347,4 @@ correction factor gamma on curve A for the overall transaction."
                                     (ed-sub tspend tsend)))
         ))))
 
-;; ------------------------------------------------------------------
-#|
-(let* ((k    (pbc:make-key-pair :dave))
-       (pkey (pbc:keying-triple-pkey k))
-       (skey (pbc:keying-triple-skey k)))
-  (multiple-value-bind (utxin info) 
-      (make-utx-spend 1000 1 pkey skey)
-    (let* ((km   (pbc:make-key-pair :mary))
-           (pkeym (pbc:keying-triple-pkey km)))
-      (multiple-value-bind (utxo1 secr1)
-          (make-utx-send 750 pkeym)
-        (multiple-value-bind (utxo2 secr2)
-            (make-utx-send 250 pkey)
-          (let ((trans (make-transaction `(,utxin) `(,info)
-                                         `(,utxo1 ,utxo2)
-                                         `(,secr1 ,secr2))))
-            (inspect trans)
-            (time (validate-transaction trans)) ;; 7.6s MacBook Pro
-            ;; (inspect utx)
-            ;; (validate-spend-utx utx)
-            ))))))
- |#
+        
