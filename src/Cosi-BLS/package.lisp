@@ -55,7 +55,7 @@
    :convert-bytes-to-int)
   (:export
    :make-range-proofs
-   :validate-range-proof
+   :validate-range-proofs
    :make-range-prover
    :range-proof-block))
 
@@ -104,7 +104,8 @@
    :ed-compress-pt
    :ed-decompress-pt
    :ed-validate-point
-   :ed-random-pair)
+   :ed-random-pair
+   :make-ecc-pt)
   (:import-from :ecc-crypto-b571
    :random-between
    :convert-int-to-nbytesv
@@ -175,3 +176,16 @@
 
 (defpackage :cosi-test
   (:use :cl))
+
+(defpackage :cosi/proofs
+  (:use
+   :common-lisp :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :edec)
+  (:import-from :ecc-crypto-b571
+   :random-between)
+  (:export
+   ))
+
+

@@ -188,6 +188,7 @@ THE SOFTWARE.
    :ed-proj-pt
    :ed-affine
    :ed-pt=
+   :ed-neutral-point
    :ed-neutral-point-p
    :ed-satisfies-curve
    :ed-add
@@ -232,6 +233,8 @@ THE SOFTWARE.
    :compute-elligator-schnorr-deterministic-random
    :elligator-ed-dsa
    :elligator-ed-dsa-validate
+
+   :make-ecc-pt
    ))
 
 (defpackage :lagrange-4-square
