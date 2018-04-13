@@ -1,0 +1,83 @@
+\documentclass{yellowpaper}
+\usepackage{graphicx}
+\usepackage{balance}  % for  \balance command ON LAST PAGE  (only there!)
+\usepackage{pgf-pie}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shadows,arrows}
+
+\begin{document}
+
+\title{Emotiq Yellowpaper}
+
+\numberofauthors{1} 
+
+\author{
+\alignauthor
+The team\\
+       %\affaddr{Emotiq AG}\\
+       \email{info@emotiq.ch}
+}
+\date{22 March 2018}
+
+\maketitle
+
+\section{UTX Transfer Proof}
+When a transaction is submitted with cloaked values, the use of Pedersen commitments enables transfer of tokens to other parties. But those recipients must then be able to use them in future transactions that they initiate. 
+
+Proof of ownership is shown by evidence that they know the cloaking and hiding terms in the commitments that originally referred to their tokens. That information must have been transmitted to them through a secret side channel from the originator of the output UTX transferred to them.
+
+Recall that a Pedersen commitment with cloaking refers to a commitment that looks like this:
+$$ C = \gamma \, A + (k_{rand} + x) \, B$$
+Where $A$ and $B$ are independent generators from group $G_1$, $\gamma$ is a hiding factor for the commitment, $k_{rand}$ is a cloaking factor to protect knowledge of transaction amount $x$. 
+
+This commitment is always accompanied by terms 
+ $$L = (k_{rand} + x) \, A$$
+ and 
+$$R = \gamma \, B$$
+  for use in verification. 
+  
+  For a Fiat-Shamir challenge, computed as the hash of the public transcript:
+$$z = Z_r(H(A, B, C, L, R))$$
+the verifier computes a new generator in $G_1$ as
+$$G = \frac{1}{z} \, A + z\, B$$
+and then verifies that
+$$ \alpha \, G = \frac{1}{z^2} \, L + C + z^2\, R$$
+where $\alpha$ was transmitted to verifier in response to challenge $z$ as
+$$\alpha = z \, \gamma + \frac{1}{z} (k_{rand} + x)$$
+
+This proves that the commitment quantities $\gamma$ and $(k_{rand} + x)$ were known by the committer, without having to reveal the actual values involved.
+
+Now when $x$ is transmitted via secret channel to the new owner, we must also transmit the values of $\gamma$ and $k_{rand}$ to them so that they can utilize this output commitment in their own future transaction proofs. Only the person with full knowledge of $\gamma$, $k_{rand}$, and $x$ can produce verifiable proofs on their values when used again. 
+
+In effect, it is the value of this output commitment which ties the output UTX to its use as input in a future transaction, and the output commitment should be repeated in input position in that new transaction. That provides a record of transfer.
+
+There is no need for identification with public keys in this process. Nothing needs to tie a commitment to any particular key. It is sufficient to prove knowledge of the commitment quantities, which only the owner of the UTX could possibly know.
+
+Hence complete anonymity is provided in the public ledger. The only person needing knowledge of the public keys of recipients is the initiator of the transaction, for purposes of secret channel communications regarding the commitment items.
+
+A transaction need not even be signed with keyed signatures, since it either validates properly through all the cryptographic validation proofs, or it doesn't. There is no requirement in transfer of ownership to show public information about who originated the transaction, and who now owns output UTX tokens.
+
+This further implies that we should choose generators $A$ and $B$, in $G_1$, once and for all to use, so that prior commitment values, $C$, can be used in a chain of transactions. There should be no need to select different independent generators. If new generators are ever utilized, then we need additional proofs that can verify the chain of transactions through the change of generators. It is simpler just to use previous, already publicly known, values for $A$ and $B$ throughout the entire chain.
+
+\subsection{Protection of UTX Owner}
+With the above arrangement, two people know everything they need to know to support spending proofs on a newly created UTX -- the creator of the UTX output, and the new owner. 
+
+In order to prevent a dishonest creator from turning around and spending the output UTX for themselves, the output UTX must be declared as directed at some new owner. We need not identify them in the public record, but some public key needs to be made up to support the output and we publish the hash of the output commitment, $C$, and public key, $P$, as $h = H(C, P)$.
+
+Then when the UTX is next spent, the input UTX is presented as a tuple $(h, C, P, Sig(h, P))$, where $Sig(h, P)$ is a valid signature on $h$, corresponding to public key $P$.
+
+Value $h$ could serve as a unique identifier for the UTX, and double spending can be prevented by allowing only one time for $h$ to be used as input UTX in an otherwise valid transaction. Everyone can validate the spending attempt as unique, verify that $h = H(C, P)$, and verify the validity of signature $Sig(h, P)$.
+
+The public key used in the transactions, $P$, can be freshly created and need not correspond to any known public key for the recipient. That preserves a measure of anonymity in these transactions.
+
+So a full transaction record must consist of an input $UTX_{in}$ and one or more $UTX_{out}$ where
+$$UTX_{in} = (h, C, P, Sig(h, P))$$
+$$UTX_{out, i} = (C_i, H(C_i, P_i))$$
+$$Trans = (UTX_{in}, UTX_{out,1}, UTX_{out,2}, ...)$$
+
+The transaction must also include Pedersen commitment proofs on all the quantities involved, along with range proofs on each.
+
+In order for recipients to locate their new UTX, we can store the them along with encrypted vital quantities, in the blockchain blocks, tagged by the hash of the public key used in forming the directed commitments. Only the recipient knows what to look for. The actual public key is never shown until, just once, at the start of a new spend transaction involving that UTX.
+
+\end{document}
+
