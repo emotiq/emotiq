@@ -305,10 +305,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   nil)
 
 (defmethod node-check-transaction (node reply-to (msg cosi/proofs:transaction))
-  (if (cosi/proofs:validate-transaction)
-      (cache-transaction (hash:hash/256 msg))
-  ())
-
+  (cache-transaction (hash:hash/256 msg) (and (cosi/proofs:validate-transaction msg)
+                                              msg)))
   
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
