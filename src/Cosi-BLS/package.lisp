@@ -186,8 +186,6 @@
   (:import-from :ecc-crypto-b571
    :random-between)
   (:export
-   :transaction
-   :validate-transaction
    ))
 
 

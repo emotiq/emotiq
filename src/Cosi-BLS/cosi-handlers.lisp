@@ -44,9 +44,6 @@ THE SOFTWARE.
 
      (:cosi-sign-commit (reply-to msg)
       (node-compute-cosi-commit node reply-to msg))
-
-     (:new-transaction (reply-to msg)
-      (node-check-transaction node reply-to msg))
      
      (:validate (reply-to sig bits)
       (node-validate-cosi reply-to sig bits))
