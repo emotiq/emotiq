@@ -24,6 +24,8 @@
                                        Can be an integer to pick up to n neighbors.")
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
 (defparameter *gossip-port* 65002 "Gossip network port")
+(defvar *udp-gossip-socket* nil "Local passive open gossip socket, if any")
+(defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
 (defparameter *shutdown-msg* (coerce #(115 104 117 116 100 111 119 110) '(ARRAY (UNSIGNED-BYTE 8))) "shutdown")
 (defun shutdown-msg-len ()
@@ -287,15 +289,19 @@ are in place between nodes.
 
 (defclass gossip-mixin (uid-mixin)
   ((address :initarg :address :initform nil :accessor address
-            :documentation "Network address (e.g. IP) of node.")))
+            :documentation "Network address (e.g. IP) of node.")
+   (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
+          :documentation "If non-nil, assumed to be a function called with every
+              message seen to log it.")))
    
 (defclass gossip-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
-         :documentation "The gossip-node this actor on behalf of which this actor works")))
+         :documentation "The gossip-node on behalf of which this actor works")))
 
+#+OBSOLETE
 (defclass gossip-network-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
-         :documentation "The gossip-node this actor on behalf of which this actor works.
+         :documentation "The gossip-node on behalf of which this actor works.
          Should only be attached to remote-gossip-nodes.")))
 
 (defclass actor-mixin ()
@@ -313,7 +319,6 @@ are in place between nodes.
                      that I expect to reply to that solicitation. Values in second hashtable are interim replies
                      that have been received from that srcuid for the given solicitation id.
                      Only accessed from this node's actor thread. No locking needed.")
-
    (reply-cache :initarg :reply-cache :initform (kvs:make-store ':hashtable :test 'equal)
                :accessor reply-cache
                :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
@@ -329,10 +334,7 @@ are in place between nodes.
                      :documentation "Table of functions of 1 arg: timed-out-p that should be
           called to clean up after waiting operations are done. Keyed on solicitation id.
           Timed-out-p is true if a timeout happened. If nil, it means operations completed without
-          timing out.")
-   (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
-          :documentation "If non-nil, assumed to be a function called with every
-              message seen to log it.")))
+          timing out.")))
 
 (defmethod clear-caches ((node gossip-node))
   "Caches should be cleared in the normal course of events, but this can be used to make sure."
@@ -356,6 +358,10 @@ are in place between nodes.
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
+(defmethod clear-caches ((node remote-gossip-node))
+  "Caches should be cleared in the normal course of events, but this can be used to make sure."
+  )
+
 (defclass tcp-gossip-node (remote-gossip-node)
   ())
 
@@ -377,6 +383,7 @@ are in place between nodes.
        (destructuring-bind (srcuid destuid gossip-msg) (cdr actor-msg)
          (send-msg gossip-msg destuid srcuid))))))
 
+#+OBSOLETE
 (defmethod gossip-dispatcher ((node remote-gossip-node) &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
@@ -386,13 +393,14 @@ are in place between nodes.
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
          (transmit-msg gossip-msg node srcuid))))))
 
-(defmethod make-gossip-actor ((node gossip-node))
+(defmethod make-gossip-actor ((node t))
   (make-instance 'gossip-actor
     :node node
     :fn 
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
+#+OBSOLETE
 (defmethod make-gossip-actor ((node null))
   (make-instance 'gossip-actor
     :node node
@@ -400,6 +408,7 @@ are in place between nodes.
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
+#+OBSOLETE
 (defmethod make-gossip-actor ((node remote-gossip-node))
   (make-instance 'gossip-network-actor
     :node node
@@ -409,6 +418,7 @@ are in place between nodes.
 
 (defparameter *echo-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
 
+#+OBSOLETE
 (defmethod echo-msg ((msg gossip-message-mixin) srcuid)
   "Cause a message to be echoed back to myself.
   An actor can send a message to itself while forcing itself to first yield and
@@ -581,7 +591,7 @@ are in place between nodes.
   action because they should set the srcuid parameter to be their own rather than nil."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+  (let ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
                  (uid node)
                  node)))
     (let* ((solicitation (make-solicitation
@@ -598,7 +608,7 @@ are in place between nodes.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+  (let ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
                  (uid node)
                  node))
         (response nil))
@@ -625,10 +635,10 @@ are in place between nodes.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'gossip-node) ; yeah this is kludgy.
+  (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
                   (uid node)
                   node))
-         (node (if (typep node 'gossip-node)
+         (node (if (typep node 'gossip-mixin)
                    node
                    (lookup-node node)))
          (response nil)
@@ -699,7 +709,7 @@ are in place between nodes.
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
-(defmethod maybe-log ((node gossip-node) logcmd msg &rest args)
+(defmethod maybe-log ((node gossip-mixin) logcmd msg &rest args)
   (when *log-filter*
     (when (or (eq t *log-filter*)
               (funcall *log-filter* logcmd))
@@ -745,6 +755,7 @@ are in place between nodes.
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
+    (if (null destactor) (break))
     (ac:send destactor
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
@@ -1553,6 +1564,7 @@ gets sent back, and everything will be copacetic.
                        ; destuid will be that of a gossip-node on receiver (this) machine
                        (parse-raw-message-udp buf rem-ip rem-port)
     (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
+    (default-logging-function :INCOMING msg :FROM rem-ip :TO destuid) ; just for debugging
     (send-msg msg destuid srcuid)))
 
 (defun incoming-message-handler-tcp (stream)
@@ -1619,19 +1631,35 @@ gets sent back, and everything will be copacetic.
                  (incoming-message-handler-tcp stream)))))
     (when listening-socket (usocket:socket-close listening-socket))))
 
-(defmethod start-gossip-server ((mode (eql :udp)) &optional (port *gossip-port*))
-  (unless (find-process *udp-gossip-server-name*)
-    (setf *shutting-down* nil)
-    (let* ((socket (usocket:socket-connect nil nil
-                                           :protocol :datagram
-                                           :local-host "127.0.0.1"
-                                           :local-port port
-                                           )))
-      (mpcompat:process-run-function *udp-gossip-server-name* nil
-        'serve-gossip-port mode socket)
-      (usocket:get-local-port socket))))
+(defun open-passive-udp-socket (port)
+  "Open a passive udp socket. Returns socket if successful.
+   Returns a keyword if some kind of error."
+  (handler-case (usocket:socket-connect nil nil
+                        :protocol :datagram
+                        :local-host "127.0.0.1"
+                        :local-port port)
+  (USOCKET:ADDRESS-IN-USE-ERROR ()
+                                :ADDRESS-IN-USE)))
 
-(defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *gossip-port*))
+(defmethod start-gossip-server ((mode (eql :udp)) &optional (port *gossip-port*) (try-count 0))
+  "Starts local passive gossip server and return it and its local port."
+  (when (< try-count *max-server-tries*)
+    (unless (find-process *udp-gossip-server-name*)
+      (setf *shutting-down* nil)
+      (let* ((socket (open-passive-udp-socket port)))
+        (cond ((usocket:datagram-usocket-p socket)
+               (mpcompat:process-run-function *udp-gossip-server-name* nil
+                 'serve-gossip-port mode socket)
+               (setf *udp-gossip-socket* socket)
+               (values socket (usocket:get-local-port socket)))
+              ((eql :ADDRESS-IN-USE socket)
+               (if (find-process *udp-gossip-server-name*)
+                   ; if process exists for serving UDP in THIS LISP IMAGE, we're done
+                   nil
+                   ; otherwise, assume process exists for serving UDP on some OTHER lisp image, which means we can retry
+                   (start-gossip-server mode (1+ port) (1+ try-count)))))))))
+
+(defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *gossip-port*) (try-count 0))
   (unless (find-process *tcp-gossip-server-name*)
     (setf *shutting-down* nil)
     (let* ((socket (usocket:socket-listen
@@ -1643,16 +1671,21 @@ gets sent back, and everything will be copacetic.
         'serve-gossip-port mode socket)
       (usocket:get-local-port socket))))
 
-(defun shutdown-gossip-server-udp (&optional (port *gossip-port*))
+(defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
     (progn
       (sleep .5)
       (cosi-simgen::internal-send-socket "127.0.0.1" port *shutdown-msg*)
       (sleep .5)
-      (process-kill process))))
+      (process-kill process)
+      (when (and *udp-gossip-socket*
+                 ;;; #+CCL (ccl::socket-connected *udp-gossip-socket*) ; won't work. usockets are not ccl sockets.
+                 )
+        (usocket:socket-close *udp-gossip-socket*))
+      (setf *udp-gossip-socket* nil))))
 
-(defun shutdown-gossip-server-tcp (&optional (port *gossip-port*))
+(defmethod shutdown-gossip-server ((mode (eql :TCP)) &optional (port *gossip-port*))
   (declare (ignore port)) ; probably don't need this
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *tcp-gossip-server-name*))
@@ -1667,6 +1700,7 @@ gets sent back, and everything will be copacetic.
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
+  (maybe-log node :TRANSMIT msg)
   (cosi-simgen::internal-send-socket
    (real-ip node)
    (real-port node)
@@ -1718,13 +1752,13 @@ gets sent back, and everything will be copacetic.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
-  ;(shutdown-gossip-server-udp)
-  ;(shutdown-gossip-server-tcp)
+  (shutdown-gossip-server :udp)
+  ;(shutdown-gossip-server :tcp)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   (sleep .5)
-  ;(start-gossip-server :UDP)
-  (start-gossip-server :TCP)
+  (start-gossip-server :UDP)
+  ;(start-gossip-server :TCP)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
@@ -1755,6 +1789,38 @@ gets sent back, and everything will be copacetic.
 ; (visualize-nodes *nodes*)
 ; (inspect *log*)
 
+#+CCL ; because this method doesn't exist in CCL, and the default doesn't work for udpsockets.
+(defmethod ccl::local-socket-address ((socket ccl::udp-socket))
+  (getf (ccl::socket-keys socket) :local-address))
+
+(defun other-port ()
+  (when *udp-gossip-socket*
+    (if (= 65002 (usocket:get-local-port *udp-gossip-socket*))
+        65003
+        65002)))
+    
+; UDP TESTS
+; ON SERVER MACHINE
+; (clrhash *nodes*)
+#+TEST
+(setf localnode (make-node
+  :UID 200
+  :ADDRESS 'NIL
+  :NEIGHBORS nil))
+; (run-gossip-sim)
+
+; ON CLIENT MACHINE
+; (clrhash *nodes*)
+; (run-gossip-sim)
+#+TEST
+(setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+#+TEST ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
+       ;   continuation that solicit-wait makes across the network
+(setf localnode (make-node
+  :UID 201
+  :ADDRESS 'NIL
+  :NEIGHBORS (list (uid rnode))))
+; (solicit-wait localnode :count-alive)
 
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
