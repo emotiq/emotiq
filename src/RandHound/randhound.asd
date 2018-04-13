@@ -36,6 +36,7 @@ THE SOFTWARE.
                usocket
                bloom-filter
                ads-clos
+	       emotiq/delivery
                cosi-bls)
   :in-order-to ((test-op (test-op "randhound-test")))
   :components ((:module package
