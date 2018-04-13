@@ -40,10 +40,10 @@ THE SOFTWARE.
      ;; user accessible entry points - directed to leader node
      
      (:cosi-sign-prepare (reply-to msg)
-      (node-compute-cosi-prepare node reply-to msg))
+      (node-compute-cosi node reply-to :prepare msg))
 
      (:cosi-sign-commit (reply-to msg)
-      (node-compute-cosi-commit node reply-to msg))
+      (node-compute-cosi node reply-to :commit msg))
 
      (:new-transaction (reply-to msg)
       (node-check-transaction node reply-to msg))
@@ -66,8 +66,8 @@ THE SOFTWARE.
      ;; -------------------------------
      ;; internal comms between Cosi nodes
      
-     (:signing (reply-to msg seq)
-      (node-cosi-signing node reply-to msg seq))
+     (:signing (reply-to consensus-stage msg seq)
+      (node-cosi-signing node reply-to consensus-stage msg seq))
 
      ;; -----------------------------------
      ;; for sim and debug
@@ -325,6 +325,29 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defun lookup-transaction (key)
   (gethash key *trans-cache*))
 
+;; -------------------------------
+;; testing-version UTX log
+
+(defvar *utx-log*  (make-hash-table
+                    :test 'equalp))
+
+(defun record-new-utx (key)
+  (multiple-value-bind (x present-p)
+      (gethash key *utx-log*)
+    (declare (ignore x))
+    (when present-p
+      (error "Effective Hash Collision!!!"))
+    (setf (gethash key *utx-log*) :spendable)))
+
+(defun log-utx-spend (key)
+  (multiple-value-bind (spend-state present-p)
+      (gethash key *utx-log*)
+    (unless present-p
+      (error "Attempt to spend non-existent UTX"))
+    (if (eq spend-state :spent)
+        (error "Attempt to double-spend")
+      (setf (gethash key *utx-log*) :spent))))
+
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
@@ -433,14 +456,14 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; ------------------------------
 
-(defun sub-signing (my-ip msg seq-id)
+(defun sub-signing (my-ip consensus-stage msg seq-id)
   (=lambda (node)
     (let ((start    (get-universal-time))
           (timeout  10
                     ;; (* (node-load node) *default-timeout-period*)
                     )
           (ret-addr (make-return-addr my-ip)))
-      (send node :signing ret-addr msg seq-id)
+      (send node :signing ret-addr consensus-stage msg seq-id)
       (labels
           ((!dly ()
                  #+:LISPWORKS
@@ -478,11 +501,11 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 ;; each different type of Cosi network... For now, just act as notary
 ;; service - sign anything.
 
-(defun validate-cosi-message (node msg)
-  (declare (ignore node msg)) ;; for now, in sim as notary
+(defun validate-cosi-message (node consensus-stage msg)
+  (declare (ignore node consensus-stage msg)) ;; for now, in sim as notary
   t)
 
-(defun node-cosi-signing (node reply-to msg seq-id)
+(defun node-cosi-signing (node reply-to consensus-stage msg seq-id)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
@@ -490,12 +513,12 @@ Connecting to #$(NODE "10.0.1.6" 65000)
         ;; Here is where we decide whether to lend our signature. But
         ;; even if we don't, we stil give others in the group a chance
         ;; to decide for themselves
-        (if (validate-cosi-message node msg)
+        (if (validate-cosi-message node consensus-stage msg)
             (values (pbc:sign-message msg (node-pkey node) (node-skey node))
                     (node-bitmap node))
           (values nil 0))
       (=bind (r-lst)
-             (pmapcar (sub-signing (node-real-ip node) msg seq-id) subs)
+             (pmapcar (sub-signing (node-real-ip node) consensus-stage msg seq-id) subs)
          (=bind ()
             (let ((=fold-answer
                    (=lambda (sub resp)
@@ -523,13 +546,13 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 ;; -----------------------------------------------------------
 
-(defun node-compute-cosi (node reply-to msg)
+(defun node-compute-cosi (node reply-to consensus-stage msg)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
   (declare (ignore node))
   (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
         (self (current-actor)))
-    (ac:self-call :signing self msg sess)
+    (ac:self-call :signing self consensus-stage msg sess)
     (labels
         ((unknown-message (msg)
            (error "Unknown message: ~A" msg))
