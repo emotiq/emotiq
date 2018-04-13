@@ -258,6 +258,16 @@ to the uncloaked value"
                     :sig       sig)
      gam)))
 
+#|
+(let* ((k    (pbc:make-key-pair :dave))
+       (pkey (pbc:keying-triple-pkey k))
+       (skey (pbc:keying-triple-skey k))
+       (utx  (make-utx-spend 1000 1 pkey skey)))
+  ;; (inspect utx)
+  (validate-spend-utx utx)
+  )
+ |#
+
 (defmethod make-utx-send ((amt integer) (pkey pbc:public-key))
   "Make a cloaked send with value proof"
   (multiple-value-bind (prf secr) (make-value-proof amt)
@@ -298,7 +308,7 @@ to the uncloaked value"
   "Spends is a list of utx-spend, sends is a list of utx-sends, some
 cloaked, some not.  Add up the spends, subtract the sends. Result
 should be zero value, but some non-zero gamma sum. We make a
-correction factor gamma for the overall transaction."
+correction factor gamma on curve A for the overall transaction."
   (let* ((gam-sends  (mapcar 'utx-send-secr-gam send-secrets))
          (gamma      (with-mod *ed-r*
                        (m- (reduce 'm+ gam-sends)
@@ -313,7 +323,7 @@ correction factor gamma for the overall transaction."
   (pbc:ibe-decrypt encr skey))
 
 (defmethod validate-spend-utx ((utx utx-spend))
-  (let* ((hl  (make-hashlock (cmt-val (utx-spend-cmt utx))
+  (let* ((hl  (make-hashlock (utx-spend-cmt utx)
                              (utx-spend-pkey utx))))
     (and (= (int hl)
             (int (utx-spend-hashlock utx)))
