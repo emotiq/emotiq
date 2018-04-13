@@ -88,6 +88,9 @@ THE SOFTWARE.
              :initform (make-subs))
    (bit      :accessor node-bit      ;; bit position in bitmap
              :initform 0)
+   (stake    :accessor node-stake
+             :initarg  :stake
+             :initform 0)
    ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
              :initarg  :real-ip)

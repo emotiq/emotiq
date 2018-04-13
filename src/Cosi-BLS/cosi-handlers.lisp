@@ -39,9 +39,12 @@ THE SOFTWARE.
      ;; ----------------------------
      ;; user accessible entry points - directed to leader node
      
-     (:cosi-sign (reply-to msg)
-      (node-compute-cosi node reply-to msg))
+     (:cosi-sign-prepare (reply-to msg)
+      (node-compute-cosi-prepare node reply-to msg))
 
+     (:cosi-sign-commit (reply-to msg)
+      (node-compute-cosi-commit node reply-to msg))
+     
      (:validate (reply-to sig bits)
       (node-validate-cosi reply-to sig bits))
           

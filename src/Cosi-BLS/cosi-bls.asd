@@ -49,7 +49,8 @@ THE SOFTWARE.
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
-                                     (:file "cosi-handlers")
+                                     (:file "transaction")
+                                      (:file "cosi-handlers")
                                      
                                      (:file "range-proofs")))))
 

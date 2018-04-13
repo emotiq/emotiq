@@ -45,12 +45,20 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------
 
+(defstruct ecc-pt
+  x y)
+
+(defstruct ed-proj-pt
+  x y z)
+
+#|
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)
     (defstruct ecc-pt
       x y))
   (defstruct ed-proj-pt
     x y z))
+|#
 
 ;; ------------------------------------------------------------------------------
 ;; Curve parameters from SafeCurves

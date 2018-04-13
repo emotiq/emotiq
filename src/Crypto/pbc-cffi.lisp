@@ -92,6 +92,9 @@ THE SOFTWARE.
    :signed-message-sig
    :signed-message-pkey
 
+   :sign-hash
+   :check-hash
+
    :crypto-packet
    :crypto-packet-pkey
    :crypto-packet-id
