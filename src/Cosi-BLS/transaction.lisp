@@ -258,16 +258,6 @@ to the uncloaked value"
                     :sig       sig)
      gam)))
 
-#|
-(let* ((k    (pbc:make-key-pair :dave))
-       (pkey (pbc:keying-triple-pkey k))
-       (skey (pbc:keying-triple-skey k))
-       (utx  (make-utx-spend 1000 1 pkey skey)))
-  ;; (inspect utx)
-  (validate-spend-utx utx)
-  )
- |#
-
 (defmethod make-utx-send ((amt integer) (pkey pbc:public-key))
   "Make a cloaked send with value proof"
   (multiple-value-bind (prf secr) (make-value-proof amt)
@@ -347,11 +337,11 @@ correction factor gamma on curve A for the overall transaction."
     (when (and (every 'validate-spend-utx spends)
                (every 'validate-send-utx sends))
       (let* ((cspends  (mapcar 'ed-decompress-pt
-                               (mapcar 'cmt-val (trans-spend-utxs trn)
-                                       :key 'utx-spend-cmt)))
+                               (mapcar (um:compose 'cmt-val 'utx-spend-cmt)
+                                       (trans-spend-utxs trn))))
              (csends   (mapcar 'ed-decompress-pt
-                               (mapcar 'cmt-val (trans-send-utxs trn)
-                                       :key 'utx-send-cmt)))
+                               (mapcar (um:compose 'cmt-val 'utx-send-cmt)
+                                       (trans-send-utxs trn))))
              (tspend   (reduce 'ed-add cspends
                                :initial-value (ed-neutral-point)))
              (tsend    (reduce 'ed-add csends
@@ -360,4 +350,25 @@ correction factor gamma on curve A for the overall transaction."
                                     (ed-sub tspend tsend)))
         ))))
 
-        
+;; ------------------------------------------------------------------
+#|
+(let* ((k    (pbc:make-key-pair :dave))
+       (pkey (pbc:keying-triple-pkey k))
+       (skey (pbc:keying-triple-skey k)))
+  (multiple-value-bind (utxin info) 
+      (make-utx-spend 1000 1 pkey skey)
+    (let* ((km   (pbc:make-key-pair :mary))
+           (pkeym (pbc:keying-triple-pkey km)))
+      (multiple-value-bind (utxo1 secr1)
+          (make-utx-send 750 pkeym)
+        (multiple-value-bind (utxo2 secr2)
+            (make-utx-send 250 pkey)
+          (let ((trans (make-transaction `(,utxin) `(,info)
+                                         `(,utxo1 ,utxo2)
+                                         `(,secr1 ,secr2))))
+            (inspect trans)
+            (time (validate-transaction trans)) ;; 7.6s MacBook Pro
+            ;; (inspect utx)
+            ;; (validate-spend-utx utx)
+            ))))))
+ |#
