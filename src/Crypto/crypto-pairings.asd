@@ -31,6 +31,7 @@ THE SOFTWARE.
   :components  ((:file "pbc-cffi")
                 (:file "proofs"))
   :depends-on   ("core-crypto"
+                 "emotiq"
                  "cffi"
                  "crypto-pairings/libraries"))
 
@@ -53,14 +54,14 @@ THE SOFTWARE.
        (format *standard-output* "~tWhew!  Finished.~&")))))
 
 (defsystem "crypto-pairings/t"
-  :depends-on (lisp-unit
-               crypto-pairings)
+  :depends-on (crypto-pairings
+               lisp-unit)
   :perform (test-op (o s)
-                    (symbol-call :lisp-unit :run-tests
-                                 :all :pbc-test))
+             (symbol-call :lisp-unit :run-tests
+                          :all :pbc-test))
   :components ((:module package
-                        :pathname "tests/"
-                        :components ((:file "package")))
+                :pathname "tests/"
+                :components ((:file "package")))
                (:module tests
                 :depends-on (package)
                 :pathname "tests/"

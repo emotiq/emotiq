@@ -8,9 +8,9 @@
   :depends-on (:uiop
                :mpcompat
                :key-value-store
-               :actors)
+               :actors ; should be loaded by cosi-BLS
+               :cosi-BLS)
   :serial t
   :components ((:file "package")
                (:file "gossip")
-               #+(and :CLOZURE :DARWIN) (:file "ccl-darwin-special")
                (:file "graphviz")))
