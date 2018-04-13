@@ -511,10 +511,10 @@ THE SOFTWARE.
     (sys:atomic-push mbox (car queue)))
 
   (defun ensure-mbox-empty (mbox)
-  (um:nlet-tail iter ()
-    (unless (mp:mailbox-empty-p mbox)
-      (mp:mailbox-read mbox)
-      (iter)))))
+    (um:nlet-tail iter ()
+      (unless (mp:mailbox-empty-p mbox)
+        (mp:mailbox-read mbox)
+        (iter)))))
 
 #+(or :ALLEGRO :CLOZURE)
 (let ((queue (list nil))
