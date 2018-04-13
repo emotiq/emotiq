@@ -44,6 +44,9 @@ THE SOFTWARE.
 
      (:cosi-sign-commit (reply-to msg)
       (node-compute-cosi-commit node reply-to msg))
+
+     (:new-transaction (reply-to msg)
+      (node-check-transaction node reply-to msg))
      
      (:validate (reply-to sig bits)
       (node-validate-cosi reply-to sig bits))
@@ -295,6 +298,18 @@ Connecting to #$(NODE "10.0.1.6" 65000)
    ))
 |#         
 
+;; --------------------------------------------------------------------
+
+(defmethod node-check-transaction (node reply-to msg)
+  "Just ignore invalid messages"
+  nil)
+
+(defmethod node-check-transaction (node reply-to (msg cosi/proofs:transaction))
+  (if (cosi/proofs:validate-transaction)
+      (cache-transaction (hash:hash/256 msg))
+  ())
+
+  
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
