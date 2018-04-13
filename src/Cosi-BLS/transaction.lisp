@@ -181,7 +181,7 @@ So that
    (rng-proof  :reader  value-rng-proof ;; a Bulletproof
                :initarg :rng)))
 
-(defun make-value-proof (x &optional gam)
+(defun make-value-proof (x &optional (gam (rand)))
   (assert (and (<= 0 x)
                (<= (integer-length x) 64)))
   (multiple-value-bind (clk-proof clk-secr)

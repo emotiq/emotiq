@@ -44,6 +44,9 @@ THE SOFTWARE.
 
      (:cosi-sign-commit (reply-to msg)
       (node-compute-cosi-commit node reply-to msg))
+
+     (:new-transaction (reply-to msg)
+      (node-check-transaction node reply-to msg))
      
      (:validate (reply-to sig bits)
       (node-validate-cosi reply-to sig bits))
@@ -302,26 +305,11 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   nil)
 
 (defmethod node-check-transaction (node reply-to (msg cosi/proofs:transaction))
-  (let ((key  (hash:hash/256 msg)))
-    (multiple-value-bind (v present-p) (lookup-transaction key)
-      (declare (ignore v))
-      (unless present-p
-        (cache-transaction key (and (cosi/proofs:validate-transaction msg)
-                                    msg)))
-      )))
+  (if (cosi/proofs:validate-transaction)
+      (cache-transaction (hash:hash/256 msg))
+  ())
 
-;; -------------------------------
-;; testing-version transaction cache
-
-(defvar *trans-cache*  (make-hash-table
-                        :test 'equalp))
-
-(defun cache-transaction (key val)
-  (setf (gethash key *trans-cache*) val))
-
-(defun lookup-transaction (key)
-  (gethash key *trans-cache*))
-
+  
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
