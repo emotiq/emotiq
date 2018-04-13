@@ -309,6 +309,9 @@ correction factor gamma for the overall transaction."
                    :gamma   gamma)))
 
 
+(defun decrypt-spend-info (encr skey)
+  (pbc:ibe-decrypt encr skey))
+
 (defmethod validate-spend-utx ((utx utx-spend))
   (let* ((hl  (make-hashlock (cmt-val (utx-spend-cmt utx))
                              (utx-spend-pkey utx))))
