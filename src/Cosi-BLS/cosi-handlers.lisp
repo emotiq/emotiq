@@ -305,9 +305,26 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   nil)
 
 (defmethod node-check-transaction (node reply-to (msg cosi/proofs:transaction))
-  (cache-transaction (hash:hash/256 msg) (and (cosi/proofs:validate-transaction msg)
-                                              msg)))
-  
+  (let ((key  (hash:hash/256 msg)))
+    (multiple-value-bind (v present-p) (lookup-transaction key)
+      (declare (ignore v))
+      (unless present-p
+        (cache-transaction key (and (cosi/proofs:validate-transaction msg)
+                                    msg)))
+      )))
+
+;; -------------------------------
+;; testing-version transaction cache
+
+(defvar *trans-cache*  (make-hash-table
+                        :test 'equalp))
+
+(defun cache-transaction (key val)
+  (setf (gethash key *trans-cache*) val))
+
+(defun lookup-transaction (key)
+  (gethash key *trans-cache*))
+
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
