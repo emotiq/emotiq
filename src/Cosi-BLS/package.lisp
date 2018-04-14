@@ -39,6 +39,7 @@
    :ed-div
    :ed-negate
    :ed-affine
+   :ed-projective
    :*edcurve*
    :*ed-r*
    :*ed-q*
