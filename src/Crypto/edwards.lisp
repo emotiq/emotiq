@@ -589,7 +589,7 @@ THE SOFTWARE.
 
 (defun ed-random-generator ()
   "Every point of the curve is a generator"
-  (ed-from-hash (random-between 1 *ed-q*)))
+  (second (multiple-value-list (ed-random-pair))))
 
 ;; -----------------------------------------------------
 ;; Hashing onto curve
