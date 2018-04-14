@@ -30,6 +30,7 @@
 (defpackage :range-proofs
   (:use :common-lisp
    :crypto/modular-arith
+   :vec-repr
    :hash)
   (:import-from :edwards-ecc
    :ed-mul
@@ -49,6 +50,7 @@
    :ed-decompress-pt
    :with-ed-curve
    :ed-nth-pt
+   :ed-random-generator
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
    :convert-int-to-nbytesv
