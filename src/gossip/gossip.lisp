@@ -1530,35 +1530,42 @@ gets sent back, and everything will be copacetic.
 
 (defun parse-raw-message-udp (raw-message-buffer rem-ip rem-port)
   "Deserialize a raw message string, srcuid, and destuid.
-   srcuid and destuid will be that of a remote-gossip-node and gossip-node on THIS machine,
-   respectively."
-  ;network message: (list (real-uid node) srcuid msg)
-  ;                    uid  --^            ^-- source uid
-  ;         on destination machine             on source machine
-  (destructuring-bind (real-uid srcuid msg)
+  srcuid and destuid will be that of a remote-gossip-node and gossip-node on THIS machine,
+  respectively."
+  ;network message: (list (pseudo-uid node) (real-uid node) srcuid msg)
+  ;    uid of remote-gossip-node --^     uid  --^            ^-- source uid
+  ;             on local machine     on destination machine      on local machine
+  (destructuring-bind (pseudo-uid real-uid srcuid msg)
                       (loenc:decode raw-message-buffer)
-    (let ((proxy (ensure-proxy-node :UDP rem-ip rem-port srcuid)))
-      ;ensure a local node of type remote-gossip-node exists on this machine with
-      ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
-      (values msg (uid proxy) real-uid)
-      )))
+    (if (typep msg 'reply)
+        ; don't make a proxy if it's a reply, since replies are never replied to
+        (values msg pseudo-uid real-uid) ; now you see what pseudo-uid is for. It's the uid
+        ; of the local remote-gossip-node that some local gossip node is already waiting for a reply from.
+        (let ((proxy (ensure-proxy-node :UDP rem-ip rem-port srcuid)))
+          ;ensure a local node of type remote-gossip-node exists on this machine with
+          ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
+          (values msg (uid proxy) real-uid)
+          ))))
 
 (defun parse-raw-message-tcp (stream)
   "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a remote-gossip-node and gossip-node on THIS machine,
   respectively."
-  ;network message: (list (real-uid node) srcuid msg)
-  ;                    uid  --^            ^-- source uid
-  ;         on destination machine             on source machine
+  ;network message: (list (pseudo-uid node) (real-uid node) srcuid msg)
+  ;    uid of remote-gossip-node --^     uid  --^            ^-- source uid
+  ;             on local machine     on destination machine      on local machine
   (let ((rem-ip   (usocket:get-peer-address stream))
         (rem-port (usocket:get-peer-port stream)))
-    (destructuring-bind (real-uid srcuid msg)
+    (destructuring-bind (pseudo-uid real-uid srcuid msg)
                         (loenc:deserialize stream)
-      (let ((proxy (ensure-proxy-node :TCP rem-ip rem-port srcuid)))
-        ;ensure a local node of type remote-gossip-node exists on this machine with
-        ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
-        (values msg (uid proxy) real-uid)
-        ))))
+      (if (typep msg 'reply)
+          ; don't make a proxy if it's a reply, since replies are never replied to
+          (values msg pseudo-uid real-uid) 
+          (let ((proxy (ensure-proxy-node :TCP rem-ip rem-port srcuid)))
+            ;ensure a local node of type remote-gossip-node exists on this machine with
+            ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
+            (values msg (uid proxy) real-uid)
+            )))))
 
 (defun incoming-message-handler-udp (buf rem-ip rem-port)
   "Locally dispatch messages received from network"
@@ -1735,7 +1742,8 @@ gets sent back, and everything will be copacetic.
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (cond (*udp-gossip-socket*
          (maybe-log node :TRANSMIT msg)
-         (let* ((packet (loenc:encode (list (real-uid node) srcuid msg)))
+         (let* ((packet (loenc:encode (list (uid node) (real-uid node) srcuid msg)))
+                ;                             ^---pseudo UID
                 (nb (length packet)))
            (when (> nb cosi-simgen::*max-buffer-length*)
              (error "Packet too large for UDP transmission"))
@@ -1754,7 +1762,7 @@ gets sent back, and everything will be copacetic.
   srcuid is that of the (real) local gossip-node that sent message to this node."
   (let ((stream (ensure-open-stream (real-ip node) (real-port node))))
     (when (streamp stream)
-      (loenc:serialize (list (real-uid node) srcuid msg) stream))))
+      (loenc:serialize (list (uid node) (real-uid node) srcuid msg) stream))))
 
 ; network messages are 3 pieces in a list:
 ;   destuid of ultimate receiving node
