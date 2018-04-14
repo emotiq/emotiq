@@ -23,7 +23,10 @@
 (defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one.
                                        Can be an integer to pick up to n neighbors.")
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
-(defparameter *gossip-port* 65002 "Gossip network port")
+(defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
+   in an effort to find an unused local port")
+(defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
+(defvar *actual-gossip-port* nil "Local gossip network port actually in use")
 (defvar *udp-gossip-socket* nil "Local passive open gossip socket, if any")
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
@@ -1650,8 +1653,8 @@ gets sent back, and everything will be copacetic.
         (cond ((usocket:datagram-usocket-p socket)
                (mpcompat:process-run-function *udp-gossip-server-name* nil
                  'serve-gossip-port mode socket)
-               (setf *udp-gossip-socket* socket)
-               (values socket (usocket:get-local-port socket)))
+               (values (setf *udp-gossip-socket* socket)
+                       (setf *actual-gossip-port* (usocket:get-local-port socket))))
               ((eql :ADDRESS-IN-USE socket)
                (if (find-process *udp-gossip-server-name*)
                    ; if process exists for serving UDP in THIS LISP IMAGE, we're done
@@ -1683,7 +1686,8 @@ gets sent back, and everything will be copacetic.
                  ;;; #+CCL (ccl::socket-connected *udp-gossip-socket*) ; won't work. usockets are not ccl sockets.
                  )
         (usocket:socket-close *udp-gossip-socket*))
-      (setf *udp-gossip-socket* nil))))
+      (setf *udp-gossip-socket* nil
+            *actual-gossip-port* nil))))
 
 (defmethod shutdown-gossip-server ((mode (eql :TCP)) &optional (port *gossip-port*))
   (declare (ignore port)) ; probably don't need this
@@ -1697,14 +1701,53 @@ gets sent back, and everything will be copacetic.
   (declare (ignore srcuid))
   (error "Bug: Cannot transmit to a local node!"))
 
+;;; Need to write an equivalent for this in Lispworks
+#+IGNORE
+(defun internal-send-socket (ip port local-host local-port packet)
+    (let ((nb (length packet)))
+      (when (> nb cosi-simgen::*max-buffer-length*)
+        (error "Packet too large for UDP transmission"))
+      (let ((socket (usocket:socket-connect ip port
+                                            :local-host local-host
+                                            :local-port local-port
+                                            :protocol :datagram)))
+        ;; (pr :sock-send (length packet) real-ip packet)
+        (unless (eql nb (usocket:socket-send socket packet nb))
+          (ac::pr :socket-send-error ip packet))
+        (usocket:socket-close socket)
+        )))
+
+#+IGNORE
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (maybe-log node :TRANSMIT msg)
-  (cosi-simgen::internal-send-socket
+  (;cosi-simgen::internal-send-socket ; cannot use this because it doesn't have a local-port option
+   internal-send-socket
    (real-ip node)
    (real-port node)
+   "localhost"
+   *actual-gossip-port* ; or nil if you don't care
    (loenc:encode (list (real-uid node) srcuid msg))))
+
+(defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
+  "Send message across network.
+   srcuid is that of the (real) local gossip-node that sent message to this node."
+  (cond (*udp-gossip-socket*
+         (maybe-log node :TRANSMIT msg)
+         (let* ((packet (loenc:encode (list (real-uid node) srcuid msg)))
+                (nb (length packet)))
+           (when (> nb cosi-simgen::*max-buffer-length*)
+             (error "Packet too large for UDP transmission"))
+           (unless (eql nb (usocket:socket-send
+                            *udp-gossip-socket*
+                            packet
+                            nb
+                            :host (real-ip node)
+                            :port (real-port node)))
+             (ac::pr :socket-send-error (real-ip node) packet))))
+        (t
+         (maybe-log node :CANNOT-TRANSMIT "no socket"))))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
   "Send message across network.
@@ -1795,7 +1838,7 @@ gets sent back, and everything will be copacetic.
 
 (defun other-port ()
   (when *udp-gossip-socket*
-    (if (= 65002 (usocket:get-local-port *udp-gossip-socket*))
+    (if (= 65002 *actual-gossip-port*)
         65003
         65002)))
     
