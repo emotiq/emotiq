@@ -200,7 +200,7 @@ THE SOFTWARE.
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
-       (let* ((alpha (random-between 1 *ed-q*)))
+     (let* ((alpha (random-between 1 *ed-q*)))
          (with-mod *ed-q*
            (make-ed-proj-pt
             :x (m* alpha x)
@@ -459,7 +459,7 @@ THE SOFTWARE.
     (ed-basic-mul pt (+ n alpha))))
 
 (defun ed-div (pt n)
-  (with-mod *ed-q*
+  (with-mod *ed-r*
     (ed-mul pt (m/ n))))
 
 (defun ed-nth-pt (n)
@@ -589,7 +589,7 @@ THE SOFTWARE.
 
 (defun ed-random-generator ()
   "Every point of the curve is a generator"
-  (second (multiple-value-list (ed-random-pair))))
+  (ed-from-hash (random-between 1 *ed-q*)))
 
 ;; -----------------------------------------------------
 ;; Hashing onto curve
