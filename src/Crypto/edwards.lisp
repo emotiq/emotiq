@@ -540,6 +540,13 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------
 
+(defun ed-valid-point-p (pt)
+  (and (not (ed-neutral-point-p pt))
+       (ed-satisfies-curve pt)
+       (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*)))
+       pt))
+
+#|
 (defun ed-validate-point (pt)
   ;; guard against neutral point
   (assert (not (ed-neutral-point-p pt)))
@@ -547,6 +554,11 @@ THE SOFTWARE.
   (assert (ed-satisfies-curve pt))
   ;; guard against small subgroup attack
   (assert (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*))))
+  pt)
+|#
+
+(defun ed-validate-point (pt)
+  (assert (ed-valid-point-p pt))
   pt)
 
 ;; -----------------------------------------------------------------
@@ -588,8 +600,8 @@ THE SOFTWARE.
     (values skey pt)))
 
 (defun ed-random-generator ()
-  "Every point of the curve is a generator"
-  (second (multiple-value-list (ed-random-pair))))
+  (ed-from-hash (get-hash-nbits (1+ (ed-nbits))
+                                (random-between 1 *ed-q*))))
 
 ;; -----------------------------------------------------
 ;; Hashing onto curve
@@ -613,9 +625,12 @@ we are done. Else re-probe with (X^2 + 1)."
                      (y  (if (eql sgn (ldb (byte 1 0) y))
                              y
                            (m- y))))
-                (make-ecc-pt
-                 :x  x
-                 :y  y))
+                (or (ed-valid-point-p
+                     (ed-basic-mul (make-ecc-pt
+                                    :x x
+                                    :y y)
+                                   *ed-h*))
+                    (iter (m+ 1 (m* x x)))))
             ;; else 
             (iter (m+ 1 (m* x x)))
             ))))))
