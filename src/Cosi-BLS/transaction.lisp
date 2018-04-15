@@ -8,16 +8,16 @@
               :initarg :hashlock)
    (prf       :reader  txin-prf      ;; Bulletproof on amount - includes C
               :initarg :prf)
-   (pkey      :reader  txin-pkey     ;; P
+   (pkey      :reader  txin-pkey     ;; P in G_2
               :initarg :pkey)
-   (sig       :reader  txin-sig      ;; Sig(h, P)
+   (sig       :reader  txin-sig      ;; Sig(h, P) in G_1
               :initarg :sig))
   (:documentation "The 4-tuple that represents the txin side of a simple transaction"))
 
 (defclass uncloaked-txout ()
   ((hashpkey :reader  txout-hashpkey
              :initarg :hashpkey)
-   (hashlock :reader  txout-hashlock
+   (hashlock :reader  txout-hashlock  ;; = Hash(C, P) - locks this TXOUT to recipient
              :initarg :hashlock)
    (amt      :reader  uncloaked-txout-amt
              :initarg :amt)
@@ -27,7 +27,7 @@
 (defclass txout ()
   ((hashpkey  :reader  txout-hashpkey ;; hash of recipient's public key
               :initarg :hashpkey)
-   (hashlock  :reader  txout-hashlock ;; h = H(C, P) -- this is the UTX ID
+   (hashlock  :reader  txout-hashlock ;; h = H(C, P) -- this is the UTX ID, and locks TXOUT to recipient
               :initarg :hashlock)
    (prf       :reader  txout-prf      ;; Bulletproof on sent amount - includes C
               :initarg :prf)
@@ -45,6 +45,8 @@
   (:documentation "This is the stuff needed by recipient to be able to reconstruct a txin proof.
 It should be stored in the wallet"))
 
+;; ---------------------------------------------------------------------
+
 (defmethod pedersen-commitment ((prf range-proofs:range-proof))
   (ed-decompress-pt (range-proofs:proof-simple-commitment prf)))
 
@@ -61,6 +63,8 @@ It should be stored in the wallet"))
   "We are often given a long value proof, and we need the commitment
 to the uncloaked value"
   (hash:hash/256 (pedersen-commitment prf) pkey))
+
+;; ---------------------------------------------------------------------
 
 (defun make-txin (amt gam pkey skey)
   "Make a txin UTX with value proof"
@@ -119,6 +123,8 @@ to the uncloaked value"
             :initarg :gamadj) 
    ))
 
+;; ---------------------------------------------------------------------
+
 (defun make-transaction (txins gam-txins txouts txout-secrets)
   "TXINS is a list of utx's, txouts is a list of txouts, some
 cloaked, some not.  Add up the txins, subtract the txouts. Result
@@ -138,8 +144,7 @@ correction factor gamma on curve A for the overall transaction."
                    :gamadj  gamadj)))
 
 
-(defun decrypt-txout-info (encr skey)
-  (pbc:ibe-decrypt encr skey))
+;; ---------------------------------------------------------------------
 
 (defmethod validate-txin ((utx txin))
   (let* ((hl  (make-hashlock (txin-prf utx)
@@ -171,10 +176,16 @@ correction factor gamma on curve A for the overall transaction."
              (ctxouts   (mapcar 'pedersen-commitment (trans-txouts  trn)))
              (ttxout    (reduce 'ed-add ctxouts
                                :initial-value (ed-neutral-point))))
-        ;; check that txin = txout
+        ;; check that Sum(txin) = Sum(txout)
         (ed-neutral-point-p (ed-add (ed-mul (range-proofs:hpt) gamadj)
                                     (ed-sub ttxin ttxout)))
         ))))
+
+;; ---------------------------------------------------------------------
+;; Recover spend info
+
+(defun decrypt-txout-info (encr skey)
+  (pbc:ibe-decrypt encr skey))
 
 (defmethod find-txout-for-pkey-hash (pkey-hash (trn transaction))
   (find pkey-hash (trans-txouts trn)
