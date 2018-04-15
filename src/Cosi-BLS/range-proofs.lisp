@@ -188,8 +188,10 @@ THE SOFTWARE.
 
 (defstruct range-proof-block
   ;; curve and basis vectors
-  basis
-  proofs)
+  basis   ;; should not change between blocks, so common public info
+  proofs  ;; public values
+  sum-cmt    ;; sum of commitments for this batch
+  sum-gamma) ;; secret value = sum of gamma factors used
 
 (defstruct (range-proof
             (:constructor %make-range-proof))
@@ -663,50 +665,90 @@ THE SOFTWARE.
                ))
         ))
 
-(defun make-range-proofs (nbits &rest vals)
-  (let ((*bp-basis*  (init-basis :nbits nbits)))
-    (with-ed-curve *curve*
-      (with-mod *ed-r*
-        (let* ((*hpt*  *bhpt*)
-               (*gs*   *bgs*)
-               (*hs*   *bhs*)
-               (prover (make-range-prover :nbits nbits)))
-          (make-range-proof-block
-           :basis  *bp-basis*
-           :proofs (mapcar prover vals))
-          )))))
-
-(defmethod validate-range-proofs ((proof-block range-proof-block))
-  (let ((*bp-basis*  (range-proof-block-basis proof-block)))
+(defun do-with-basis (basis fn)
+  (let ((*bp-basis*  basis))
     (with-ed-curve *curve*
       (with-mod *ed-r*
         (let* ((*hpt*  *bhpt*)
                (*gs*   *bgs*)
                (*hs*   *bhs*))
-          (every 'validate-range-proof (range-proof-block-proofs proof-block))
-          )))))
+          (funcall fn))))))
+
+(defmacro with-basis (basis &body body)
+  `(do-with-basis ,basis
+                  (lambda ()
+                    ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-basis" 1)
+
+;; ---------------------------------------------------------------------
+
+(defun make-range-proofs (&key (nbits *max-bit-length*)
+                               vals)
+  (with-basis (init-basis :nbits nbits)
+    (let* ((prover (make-range-prover))
+           (proofs nil)
+           (gammas nil))
+      (dolist (val vals)
+        (multiple-value-bind (proof gamma)
+            (funcall prover val)
+          (push proof proofs)
+          (push gamma gammas)))
+      (let* ((sum-cmt (reduce 'ed-add
+                              (mapcar (um:compose 'ed-decompress-pt 'range-proof-vcmt) proofs)
+                              :initial-value (ed-neutral-point)))
+             (sum-gamma (reduce 'm+ gammas)))
+        (make-range-proof-block
+         :basis     *bp-basis*
+         :proofs    (nreverse proofs)
+         :sum-cmt   (ed-compress-pt sum-cmt)
+         :sum-gamma sum-gamma)
+        ))))
+
+(defmethod validate-range-proofs ((proof-block range-proof-block))
+  (with-basis (range-proof-block-basis proof-block)
+    (every 'internal-validate-range-proof (range-proof-block-proofs proof-block))))
+
+;; -------------------------------------------------------------------
+;; Transaction support -- fixed basis
+
+(defmethod make-range-proof (val &key (gamma (rand-val)))
+  (with-basis (init-basis :nbits *max-bit-length*)
+    (let ((prover (make-range-prover)))
+      (funcall prover val :gamma gamma))))
+
+(defmethod validate-range-proof ((prf range-proof))
+  (with-basis (init-basis :nbits *max-bit-length*)
+    (internal-validate-range-proof prf)))
+
+(defmethod proof-simple-commitment ((proof range-proof))
+  "This is the item used to form the hash-lock on a send in a
+transaction. Hash this value with the public key of the recipient to
+lock it to the recipient."
+  (range-proof-vcmt proof))
+
+(defun hpt ()
+  "Return the *hpt* curve point used to make Pedersen commitments"
+  *bhpt*)
 
 ;; ------------------------------
 ;; Construct a range-prover for use on multiple values
 
-(defun make-range-prover (&key (nbits *max-bit-length*))
-  #-ccl
-  (check-type nbits (fixnum 1))
-  #+ccl
-  (check-type nbits fixnum)
+(defun make-range-prover ()
   
   ;; let's compute the basis vectors just once, and share them
-  (let* ((hpt  *hpt*)
-         (hs   *hs*)
-         (gs   *gs*))
+  (let* ((hpt   *hpt*)
+         (hs    *hs*)
+         (gs    *gs*)
+         (nbits *nbits*))
 
     (labels
         ;; ---------------------------------------------
-        ((make-range-proof (v)
-           (check-type v (integer 0))
-           (assert (< v (ash 1 nbits)))
-           (let* ((gamma      (rand-val))
-                  (vcmt       (simple-commit hpt gamma v))
+        ((make-range-proof (v &key (gamma (rand-val)))
+           (check-type v     (integer 0))
+           (check-type gamma (integer 1))
+           (let* ((vcmt       (simple-commit hpt gamma v))
                   (vcmt-cmpr  (ed-compress-pt vcmt))
                   
                   (a_l        (bits-vector v nbits))
@@ -764,23 +806,25 @@ THE SOFTWARE.
                   
                   ;; publish tau_x, mu, t_hat, lvec, rvec
                   )
-             (%make-range-proof
-              ;; commitments
-              :vcmt  vcmt-cmpr
-              :acmt  acmt-cmpr
-              :scmt  scmt-cmpr
-              :t1cmt t1cmt-cmpr
-              :t2cmt t2cmt-cmpr
-              ;; parameters
-              :tau_x tau_x
-              :mu    mu
-              :t_hat t_hat
-              :dot-proof (make-lr-dot-prod-proof y mu t_hat lvec rvec)
-              ;; challenge values x, y, z
-              :x     x
-              :y     y
-              :z     z))
-           ))
+             (values
+              (%make-range-proof
+               ;; commitments
+               :vcmt  vcmt-cmpr
+               :acmt  acmt-cmpr
+               :scmt  scmt-cmpr
+               :t1cmt t1cmt-cmpr
+               :t2cmt t2cmt-cmpr
+               ;; parameters
+               :tau_x tau_x
+               :mu    mu
+               :t_hat t_hat
+               :dot-proof (make-lr-dot-prod-proof y mu t_hat lvec rvec)
+               ;; challenge values x, y, z
+               :x     x
+               :y     y
+               :z     z)
+              gamma)
+             )))
       
       ;; ---------------------------------------------------
       #'make-range-proof)))
@@ -788,7 +832,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------------
 ;; Range proof validation
 
-(defun validate-range-proof (proof)
+(defun internal-validate-range-proof (proof)
   (let* ((nbits     *nbits*)
          (y         (range-proof-y proof))
          (yvec      (pow-vec y nbits))
