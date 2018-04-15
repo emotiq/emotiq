@@ -54,6 +54,7 @@ THE SOFTWARE.
    :crypto-text-vec
    
    :init-pairing
+   :need-pairing
    :set-generator  ;; 1 each for G1, and G2 groups
    
    :get-g1
@@ -123,6 +124,11 @@ THE SOFTWARE.
    :confidential-purchase-tbuy
    :confidential-purchase-rsell
    :check-confidential-purchase
+
+   :*curve*
+   :*curve-name*
+   :*g1-zero*
+   :*g2-zero*
    ))
 
 (in-package :pbc-interface)
@@ -629,6 +635,7 @@ comparison.")
 
 (defparameter *curve*      nil)
 
+(define-symbol-macro *curve-name*    (curve-params-name    *curve*)) ;; symbolic name of curve
 (define-symbol-macro *curve-order*   (curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
 (define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
 (define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
@@ -646,7 +653,7 @@ comparison.")
   "Initialize the pairings lib.
 
   If params not specified and we haven't been called yet, or specified
-as nil, then use default parameters for 256-bit G1 BN-curve. If params
+as nil, then use default parameters for 449-bit G1 BN-curve. If params
 not specified and we have already been called, just skip doing
 anything. Specified params forces a cryptosystem state change.
 
@@ -657,8 +664,8 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
-  (load-dlls)
   (mpcompat:with-lock (*crypto-lock*)
+    (load-dlls)
     (let ((prev   *curve*)
           (params (or params
                       *curve-fr449-params*)))
