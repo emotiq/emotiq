@@ -33,7 +33,7 @@
               :initarg :prf)
    (encr      :reader  txout-encr     ;; encrypted info for future txining of UTX
               :initarg :encr))
-  (:documentation "The pair that represents a txout UTX"))
+  (:documentation "The 4-tuple that represents a TXOUT"))
 
 (defclass txout-secrets ()
   ((pkey      :reader  txout-secr-pkey ;; pkey used for this receipt, hash to help locate UTX
@@ -60,8 +60,8 @@ It should be stored in the wallet"))
   (ed-nth-pt (uncloaked-txout-amt utx)))
 
 (defmethod make-hashlock ((prf range-proofs:range-proof) (pkey pbc:public-key))
-  "We are often given a long value proof, and we need the commitment
-to the uncloaked value"
+  "We are often given a long value proof, and we need the to hash on
+the simple commitment to the uncloaked value"
   (hash:hash/256 (pedersen-commitment prf) pkey))
 
 ;; ---------------------------------------------------------------------
@@ -142,7 +142,6 @@ correction factor gamma on curve A for the overall transaction."
                    :txins   txins
                    :txouts  txouts
                    :gamadj  gamadj)))
-
 
 ;; ---------------------------------------------------------------------
 
