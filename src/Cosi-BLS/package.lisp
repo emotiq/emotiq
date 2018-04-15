@@ -46,6 +46,7 @@
    :*ed-gen*
    :ed-curve-name
    :random-between
+   :ed-neutral-point
    :ed-pt=
    :ed-compress-pt
    :ed-decompress-pt
@@ -57,10 +58,17 @@
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:export
+   :hpt
+   :range-proof-block
+   :range-proof-block-sum-gamma
+   :range-proof-block-sum-cmt
+   :range-proof-block-proofs
+   :range-proof
    :make-range-proofs
+   :make-range-proof
    :validate-range-proofs
-   :make-range-prover
-   :range-proof-block))
+   :validate-range-proof
+   :proof-simple-commitment))
 
 
 (defpackage :crypto-purchase
