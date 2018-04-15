@@ -509,38 +509,41 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
-    (multiple-value-bind (sig bits)
-        ;; Here is where we decide whether to lend our signature. But
-        ;; even if we don't, we stil give others in the group a chance
-        ;; to decide for themselves
-        (if (validate-cosi-message node consensus-stage msg)
-            (values (pbc:sign-message msg (node-pkey node) (node-skey node))
-                    (node-bitmap node))
-          (values nil 0))
-      (=bind (r-lst)
-             (pmapcar (sub-signing (node-real-ip node) consensus-stage msg seq-id) subs)
-         (=bind ()
-            (let ((=fold-answer
-                   (=lambda (sub resp)
-                     (cond
-                      ((null resp)
-                       ;; no response from node, or bad subtree
-                       (pr (format nil "No signing: ~A" sub))
-                       (mark-node-no-response node sub)
-                       (=values))
-                      
-                      (t
-                       (destructuring-bind (sub-sig sub-bits) resp
-                         (if (pbc:check-message sub-sig)
-                             (setf sig  (if sig
-                                            (pbc:combine-signatures sig sub-sig)
-                                          sub-sig)
-                                   bits (logior bits sub-bits))
-                           ;; else
-                           (mark-node-corrupted node sub))
-                         (=values)))
-                      ))))
-              (smapc =fold-answer subs r-lst))
+    (=bind (v-lst r-lst)
+        (ac:par
+          (=values 
+           ;; Here is where we decide whether to lend our signature. But
+           ;; even if we don't, we stil give others in the group a chance
+           ;; to decide for themselves
+           (if (validate-cosi-message node consensus-stage msg)
+               (list (pbc:sign-message msg (node-pkey node) (node-skey node))
+                     (node-bitmap node))
+             (list nil 0)))
+          (pmapcar (sub-signing (node-real-ip node)
+                                consensus-stage
+                                msg
+                                seq-id)
+                   subs))
+      (destructuring-bind (sig bits) v-lst ;; from validation effort
+        (labels ((fold-answer (sub resp)
+                   (cond
+                    ((null resp)
+                     ;; no response from node, or bad subtree
+                     (pr (format nil "No signing: ~A" sub))
+                     (mark-node-no-response node sub))
+                    
+                    (t
+                     (destructuring-bind (sub-sig sub-bits) resp
+                       (if (pbc:check-message sub-sig)
+                           (setf sig  (if sig
+                                          (pbc:combine-signatures sig sub-sig)
+                                        sub-sig)
+                                 bits (logior bits sub-bits))
+                         ;; else
+                         (mark-node-corrupted node sub))
+                       ))
+                    )))
+          (mapc #'fold-answer subs r-lst) ;; gather results from subs
           (send reply-to :signed seq-id sig bits))
         ))))
 
