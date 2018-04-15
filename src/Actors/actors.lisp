@@ -958,8 +958,8 @@ THE SOFTWARE.
   ;; Internal transform function. Converts a list of clauses to a form
   ;; suitable for application by PMAPCAR or PFIRST
   `(,pfn (=lambda (fn)
-          (=values (funcall fn)))
-         (list ,@(mapcar #`(lambda () ,a1) clauses))))
+           (=funcall fn))
+         (list ,@(mapcar #`(=lambda () ,a1) clauses))))
 
 (defmacro par (&rest clauses)
   ;; PAR - perform clauses in parallel
@@ -982,16 +982,16 @@ THE SOFTWARE.
   
 (=bind (lst)
     (par
-      (sin 1)
-      (sin 2)
-      (sin 3))
+      (=values (sin 1))
+      (=values (sin 2))
+      (=values (sin 3)))
   (pr (reduce '+ lst)))
 => 1.8918884
 
 (with-futures (a b c)
-    ((sin 1)
-     (sin 2)
-     (sin 3))
+    ((=values (sin 1))
+     (=values (sin 2))
+     (=values (sin 3)))
   (pr (+ a b c)))
 => 1.8918884
 
@@ -1016,6 +1016,26 @@ THE SOFTWARE.
              '(sin cos tan))
   (pr lst))
 => (0.84147096 0.5403023 1.5574077)
+
+(=bind (lst)
+    (pmapcar (=lambda (fn)
+               (=bind (vals)
+                   (pmapcar (=lambda (x)
+                              (=values (1+ x)))
+                            '(1 2 3))
+                 (=values (mapcar fn vals))))
+             '(sin cos tan))
+  (pr lst))
+=> ((0.9092974 0.14112 -0.7568025) (-0.41614684 -0.9899925 -0.6536436) (-2.1850398 -0.14254655 1.1578213))
+
+(=bind (&rest ans)
+    (par
+      (=values (list 1 2))
+      (pmapcar (=lambda (v)
+                 (=values (sin v)))
+               '(1 2 3)))
+  (pr ans))
+=> (((1 2) (0.84147096 0.9092974 0.14112)))
 |#
 
 ;; ---------------------------------------------------------------
