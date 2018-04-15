@@ -68,6 +68,7 @@
    :make-range-proof
    :validate-range-proofs
    :validate-range-proof
+   :simple-commit
    :proof-simple-commitment))
 
 
