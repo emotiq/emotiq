@@ -20,7 +20,9 @@
    (hashlock :reader  utx-send-hashlock
              :initarg :hashlock)
    (amt      :reader  utx-uncloaked-send-amt
-             :initarg :amt)))
+             :initarg :amt)
+   (gamma    :reader  utx-uncloaked-send-gamma
+             :initarg :gamma)))
 
 (defclass utx-send ()
   ((hashpkey  :reader  utx-send-hashpkey ;; hash of recipient's public key
@@ -79,16 +81,16 @@ to the uncloaked value"
 
 (defmethod make-utx-send ((amt integer) (pkey null))
   "Make an uncloaked send with raw value showing"
-  (let* ((pkey (pbc:get-g2))
-         (cmt  (ed-compress-pt
-                (range-proofs:simple-commit (range-proofs:hpt)
-                                            (random-between 1 *ed-r*)
-                                            amt)))
+  (let* ((pkey     (pbc:get-g2))
+         (gamma    (random-between 1 *ed-r*))
+         (cmt      (ed-compress-pt
+                    (range-proofs:simple-commit (range-proofs:hpt) gamma amt)))
          (hashlock (hash:hash/256 cmt pkey)))
     (make-instance 'utx-uncloaked-send
                    :hashlock hashlock
                    :hashpkey (hash:hash/256 pkey)
-                   :amt      amt)))
+                   :amt      amt
+                   :gamma    gamma)))
 
 (defmethod utx-send-cmt ((utx utx-uncloaked-send))
   (ed-compress-pt (ed-nth-pt (utx-uncloaked-send-amt utx))))
