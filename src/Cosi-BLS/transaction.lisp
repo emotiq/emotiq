@@ -60,14 +60,14 @@ It should be stored in the wallet"))
   (ed-nth-pt (uncloaked-txout-amt utx)))
 
 (defmethod make-hashlock ((prf range-proofs:range-proof) (pkey pbc:public-key))
-  "We are often given a long value proof, and we need the to hash on
+  "We are often given a long Bulletproof, and we need the to hash on
 the simple commitment to the uncloaked value"
   (hash:hash/256 (pedersen-commitment prf) pkey))
 
 ;; ---------------------------------------------------------------------
 
 (defun make-txin (amt gam pkey skey)
-  "Make a txin UTX with value proof"
+  "Make a TXIN with value proof"
   (let* ((prf       (range-proofs:make-range-proof amt :gamma gam))
          (hashlock  (make-hashlock prf pkey))
          (sig       (pbc:sign-hash hashlock skey)))
@@ -80,7 +80,7 @@ the simple commitment to the uncloaked value"
      gam)))
 
 (defmethod make-txout ((amt integer) (pkey pbc:public-key))
-  "Make a cloaked txout with value proof"
+  "Make a cloaked TXOUT with value proof"
   (multiple-value-bind (prf gam)
       (range-proofs:make-range-proof amt)
     (let ((info  (make-instance 'txout-secrets
@@ -96,7 +96,7 @@ the simple commitment to the uncloaked value"
        info))))
 
 (defmethod make-txout ((amt integer) (pkey null))
-  "Make an uncloaked txout with raw value showing"
+  "Make an uncloaked TXOUT with raw value showing"
   (let* ((pkey     (pbc:get-g2))
          (gamma    (random-between 1 *ed-r*))
          (cmt      (range-proofs:simple-commit (range-proofs:hpt) gamma amt))
@@ -126,10 +126,10 @@ the simple commitment to the uncloaked value"
 ;; ---------------------------------------------------------------------
 
 (defun make-transaction (txins gam-txins txouts txout-secrets)
-  "TXINS is a list of utx's, txouts is a list of txouts, some
-cloaked, some not.  Add up the txins, subtract the txouts. Result
+  "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
+some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
-correction factor gamma on curve A for the overall transaction."
+correction factor gamadj on curve H for the overall transaction."
   (let* ((gam-txouts (mapcar 'txout-secr-gam txout-secrets))
          (gamadj     (with-mod *ed-r*
                        ;; adjustment factor = Sum(gamma_txouts) - Sum(gamma_txinx)
