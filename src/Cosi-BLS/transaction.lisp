@@ -76,7 +76,7 @@ to the uncloaked value"
                       :hashpkey  (hash:hash/256 pkey)     ;; for recipient to locate tokens
                       :hashlock  (make-hashlock prf pkey) ;; the UTX ID
                       :cmt       prf                      ;; value proof
-                      :encr      (pbc:ibe-encrypt (loenc:encode info) pkey :spend-info))
+                      :encr      (pbc:ibe-encrypt info pkey :spend-info))
        info))))
 
 (defmethod make-utx-send ((amt integer) (pkey null))
@@ -184,5 +184,23 @@ correction factor gamma on curve A for the overall transaction."
             (time (validate-transaction trans)) ;; 7.6s MacBook Pro
             ;; (inspect utx)
             ;; (validate-spend-utx utx)
+
+            (let* ((skeym  (pbc:keying-triple-skey km))
+                   (minfo  (decrypt-spend-info (utx-send-encr utxo1) skeym)))
+              (inspect minfo)
+              (multiple-value-bind (utxin info)
+                  (make-utx-spend (utx-send-secr-amt minfo)
+                                  (utx-send-secr-gam minfo)
+                                  pkeym skeym)
+                (multiple-value-bind (utxo1 secr1)
+                    (make-utx-send 250 pkeym)
+                  (multiple-value-bind (utxo2 secr2)
+                      (make-utx-send 500 pkey)
+                    (let ((trans (make-transaction `(,utxin) `(,info)
+                                                   `(,utxo1 ,utxo2)
+                                                   `(,secr1 ,secr2))))
+                      (inspect trans)
+                      (time (validate-transaction trans))
+                      )))))
             ))))))
  |#
