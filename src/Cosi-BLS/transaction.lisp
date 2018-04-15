@@ -141,7 +141,7 @@ correction factor gamma on curve A for the overall transaction."
 (defun decrypt-txout-info (encr skey)
   (pbc:ibe-decrypt encr skey))
 
-(defmethod validate-txin-utx ((utx txin))
+(defmethod validate-txin ((utx txin))
   (let* ((hl  (make-hashlock (txin-prf utx)
                              (txin-pkey utx))))
     (and (= (int hl)
@@ -152,10 +152,10 @@ correction factor gamma on curve A for the overall transaction."
          (range-proofs:validate-range-proof (txin-prf utx))
          )))
 
-(defmethod validate-txout-utx ((utx txout))
+(defmethod validate-txout ((utx txout))
   (range-proofs:validate-range-proof (txout-prf utx)))
 
-(defmethod validate-txout-utx ((utx uncloaked-txout))
+(defmethod validate-txout ((utx uncloaked-txout))
   t)
 
 (defmethod validate-transaction ((trn transaction))
@@ -163,8 +163,8 @@ correction factor gamma on curve A for the overall transaction."
   (with-accessors ((txins   trans-txins)
                    (txouts  trans-txouts)
                    (gamadj  trans-gamadj)) trn
-    (when (and (every 'validate-txin-utx txins)
-               (every 'validate-txout-utx txouts))
+    (when (and (every 'validate-txin txins)
+               (every 'validate-txout txouts))
       (let* ((ctxins  (mapcar 'pedersen-commitment (trans-txins trn)))
              (ttxin   (reduce 'ed-add ctxins
                                :initial-value (ed-neutral-point)))
@@ -176,7 +176,7 @@ correction factor gamma on curve A for the overall transaction."
                                     (ed-sub ttxin ttxout)))
         ))))
 
-(defmethod find-utx-for-pkey-hash (pkey-hash (trn transaction))
+(defmethod find-txout-for-pkey-hash (pkey-hash (trn transaction))
   (find pkey-hash (trans-txouts trn)
         :key  'txout-hashpkey
         :test (lambda (k1 k2)
@@ -215,10 +215,10 @@ correction factor gamma on curve A for the overall transaction."
           (print "Validate transaction")
           (time (assert (validate-transaction trans))) ;; 7.6s MacBook Pro
           ;; (inspect utx)
-          ;; (validate-txin-utx utx)
+          ;; (validate-txin utx)
           
           (print "Find UTX for Mary")
-          (let* ((utxm   (find-utx-for-pkey-hash (hash:hash/256 pkeym) trans))
+          (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
                  (minfo  (decrypt-txout-info (txout-encr utxm) skeym)))
             (inspect minfo)
             
