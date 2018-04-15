@@ -599,10 +599,6 @@ THE SOFTWARE.
          (pt   (ed-nth-pt skey)))
     (values skey pt)))
 
-(defun ed-random-generator ()
-  (ed-from-hash (get-hash-nbits (1+ (ed-nbits))
-                                (random-between 1 *ed-q*))))
-
 ;; -----------------------------------------------------
 ;; Hashing onto curve
 
@@ -634,6 +630,10 @@ we are done. Else re-probe with (X^2 + 1)."
             ;; else 
             (iter (m+ 1 (m* x x)))
             ))))))
+
+(defun ed-random-generator ()
+  (ed-from-hash (get-hash-nbits (1+ (ed-nbits))
+                                (random-between 1 *ed-q*))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive

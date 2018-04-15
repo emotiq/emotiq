@@ -748,6 +748,7 @@ lock it to the recipient."
         ((make-range-proof (v &key (gamma (rand-val)))
            (check-type v     (integer 0))
            (check-type gamma (integer 1))
+           (assert (<= 0 v (1- (ash 1 nbits))))
            (let* ((vcmt       (simple-commit hpt gamma v))
                   (vcmt-cmpr  (ed-compress-pt vcmt))
                   

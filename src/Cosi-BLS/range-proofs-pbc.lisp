@@ -92,9 +92,7 @@ THE SOFTWARE.
     vec))
 
 (defun random-generator ()
-  ;; (pbc:mul-pt-zr (pbc:get-g1) (rand-val))
-  (pbc:g1-from-hash (hash/256 (rand-val)))
-  )
+  (pbc:g1-from-hash (hash/256 (rand-val))))
 
 (defun basis-pts (&optional (nel *max-bit-length*))
   ;; compute a vector of basis-vector curve points
@@ -173,7 +171,7 @@ THE SOFTWARE.
 (defun simple-commit (hpt blind val)
   ;; commit to a value val with blinding blind*Hpt
   (pbc:add-pts (pbc:mul-pt-zr hpt blind)
-              (pbc:mul-pt-zr (pbc:get-g1) val)))
+               (pbc:mul-pt-zr (pbc:get-g1) val)))
 
 (defun vec-commit (hpt blind hs hvec gs gvec)
   ;; form a vector commitment with basis vector gs,
@@ -194,7 +192,9 @@ THE SOFTWARE.
 (defstruct range-proof-block
   ;; curve and basis vectors
   basis
-  proofs)
+  proofs
+  sum-cts
+  sum-gamma)
 
 (defstruct (range-proof
             (:constructor %make-range-proof))
@@ -225,6 +225,7 @@ THE SOFTWARE.
 (defvar *bp-basis*
   ;; define fully here for default basis so we have comparable proofs
   ;; across blockchain
+  (pbc:need-pairing)
   (make-bp-basis
    :CURVE :CURVE-FR449
    :NBITS 64
@@ -361,15 +362,12 @@ THE SOFTWARE.
          #.(make-instance 'PBC-INTERFACE:G1-CMPR :value #.(VEC-REPR:BEV (VEC-REPR::HEX-OF-STR "017feed6e4731c762eb1e46143db97f3c2e2422e7b3c6660aff3cf68919fd81e5337113bd4859cf0a9e50400d10f2de1c08f145493c9f0626b01")))
          )))
 
-
-
-
 (defvar *gs*        nil)
 (defvar *hs*        nil)
 (defvar *hpt*       nil)
 
 (defun init-basis (&key (nbits *max-bit-length*)
-                        (curve pbc::*curve*))
+                        (curve pbc:*curve-name*))
   (cond (*bp-basis*
          (cond ((eql curve *curve*)
                 (cond ((= nbits *nbits*)
@@ -413,48 +411,90 @@ THE SOFTWARE.
                ))
         ))
 
-(defun make-range-proofs (nbits &rest vals)
-  (let ((*bp-basis*  (init-basis :nbits nbits)))
-    (with-mod (pbc:get-order)
-      (let* ((*hpt*  *bhpt*)
-             (*gs*   *bgs*)
-             (*hs*   *bhs*)
-             (prover (make-range-prover :nbits nbits)))
-        (make-range-proof-block
-         :basis  *bp-basis*
-         :proofs (mapcar prover vals))
-        ))))
-
-(defmethod validate-range-proofs ((proof-block range-proof-block))
-  (let ((*bp-basis*  (range-proof-block-basis proof-block)))
+(defun do-with-basis (basis fn)
+  (let ((*bp-basis*  basis))
     (with-mod (pbc:get-order)
       (let* ((*hpt*  *bhpt*)
              (*gs*   *bgs*)
              (*hs*   *bhs*))
-        (every 'validate-range-proof (range-proof-block-proofs proof-block))
+        (funcall fn)))))
+
+(defmacro with-basis (basis &body body)
+  `(do-with-basis ,basis
+                  (lambda ()
+                    ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-basis" 1)
+
+;; ---------------------------------------------------------------------
+
+(defun make-range-proofs (&key (nbits *max-bit-length*)
+                               vals)
+  (with-basis (init-basis :nbits nbits)
+    (let* ((prover (make-range-prover))
+           (proofs nil)
+           (gammas nil))
+      (dolist (val vals)
+        (multiple-value-bind (proof gamma)
+            (funcall prover val)
+          (push proof proofs)
+          (push gamma gammas)))
+      (let* ((sum-cmt (reduce 'pbc:add-pts
+                              (mapcar 'range-proof-vcmt proofs)
+                              :initial-value pbc:*g1-zero*))
+             (sum-gamma (reduce 'm+ gammas)))
+        (make-range-proof-block
+         :basis     *bp-basis*
+         :proofs    (nreverse proofs)
+         :sum-cmt   sum-cmt
+         :sum-gamma sum-gamma)
         ))))
+
+(defmethod validate-range-proofs ((proof-block range-proof-block))
+  (with-basis (range-proof-block-basis proof-block)
+    (every 'internal-validate-range-proof (range-proof-block-proofs proof-block))))
+
+;; -------------------------------------------------------------------
+;; Transaction support -- fixed basis
+
+(defmethod make-range-proof (val &key (gamma (rand-val)))
+  (with-basis (init-basis :nbits *max-bit-length*)
+    (let ((prover (make-range-prover)))
+      (funcall prover val :gamma gamma))))
+
+(defmethod validate-range-proof ((prf range-proof))
+  (with-basis (init-basis :nbits *max-bit-length*)
+    (internal-validate-range-proof prf)))
+
+(defmethod proof-simple-commitment ((proof range-proof))
+  "This is the item used to form the hash-lock on a send in a
+transaction. Hash this value with the public key of the recipient to
+lock it to the recipient."
+  (range-proof-vcmt proof))
+
+(defun hpt ()
+  "Return the *hpt* curve point used to make Pedersen commitments"
+  *bhpt*)
 
 ;; ------------------------------
 ;; Construct a range-prover for use on multiple values
 
-(defun make-range-prover (&key (nbits *max-bit-length*))
-  #-ccl
-  (check-type nbits (fixnum 1))
-  #+ccl
-  (check-type nbits fixnum)
+(defun make-range-prover ()
   
   ;; let's compute the basis vectors just once, and share them
-  (let* ((hpt  *hpt*)
-         (hs   *hs*)
-         (gs   *gs*))
+  (let* ((hpt   *hpt*)
+         (hs    *hs*)
+         (gs    *gs*)
+         (nbits *nbits*))
 
     (labels
         ;; ---------------------------------------------
-        ((make-range-proof (v)
-           (check-type v (integer 0))
-           (assert (< v (ash 1 nbits)))
-           (let* ((gamma      (rand-val))
-                  (vcmt       (simple-commit hpt gamma v))
+        ((make-range-proof (v &key (gamma (rand-val)))
+           (check-type v     (integer 0))
+           (check-type gamma (integer 1))
+           (assert (<= 0 v (1- (ash 1 nbits))))
+           (let* ((vcmt       (simple-commit hpt gamma v))
                   
                   (a_l        (bits-vector v nbits))
                   (a_r        (vec-decr a_l 1))
@@ -531,7 +571,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------------
 ;; Range proof validation
 
-(defun validate-range-proof (proof)
+(defun internal-validate-range-proof (proof)
   (let* ((nbits     *nbits*)
          (y         (range-proof-y proof))
          (yvec      (pow-vec y nbits))

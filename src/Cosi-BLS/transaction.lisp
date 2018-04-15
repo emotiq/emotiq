@@ -45,10 +45,22 @@
   (:documentation "This is the stuff needed by recipient to be able to reconstruct a spend proof.
 It should be stored in the wallet"))
 
+(defmethod pedersen-commitment ((prf range-proofs:range-proof))
+  (ed-decompress-pt (range-proofs:proof-simple-commitment prf)))
+
+(defmethod pedersen-commitment ((utx utx-spend))
+  (pedersen-commitment (utx-spend-cmt utx)))
+
+(defmethod pedersen-commitment ((utx utx-send))
+  (pedersen-commitment (utx-send-cmt utx)))
+
+(defmethod pedersen-commitment ((utx utx-uncloaked-send))
+  (ed-nth-pt (utx-uncloaked-send-amt utx)))
+
 (defmethod make-hashlock ((prf range-proofs:range-proof) (pkey pbc:public-key))
   "We are often given a long value proof, and we need the commitment
 to the uncloaked value"
-  (hash:hash/256 (range-proofs:proof-simple-commitment prf) pkey))
+  (hash:hash/256 (pedersen-commitment prf) pkey))
 
 (defun make-utx-spend (amt gam pkey skey)
   "Make a spend UTX with value proof"
@@ -83,17 +95,18 @@ to the uncloaked value"
   "Make an uncloaked send with raw value showing"
   (let* ((pkey     (pbc:get-g2))
          (gamma    (random-between 1 *ed-r*))
-         (cmt      (ed-compress-pt
-                    (range-proofs:simple-commit (range-proofs:hpt) gamma amt)))
+         (cmt      (range-proofs:simple-commit (range-proofs:hpt) gamma amt))
          (hashlock (hash:hash/256 cmt pkey)))
-    (make-instance 'utx-uncloaked-send
-                   :hashlock hashlock
-                   :hashpkey (hash:hash/256 pkey)
-                   :amt      amt
-                   :gamma    gamma)))
-
-(defmethod utx-send-cmt ((utx utx-uncloaked-send))
-  (ed-compress-pt (ed-nth-pt (utx-uncloaked-send-amt utx))))
+    (values
+     (make-instance 'utx-uncloaked-send
+                    :hashlock hashlock
+                    :hashpkey (hash:hash/256 pkey)
+                    :amt      amt)
+     (make-instance 'utx-send-secrets
+                    :pkey pkey
+                    :amt  amt
+                    :gam  gamma))
+    ))
 
 ;; ------------------------------------------------------------------------------
 
@@ -113,6 +126,10 @@ should be zero value, but some non-zero gamma sum. We make a
 correction factor gamma on curve A for the overall transaction."
   (let* ((gam-sends  (mapcar 'utx-send-secr-gam send-secrets))
          (gamma      (with-mod *ed-r*
+                       ;; adjustment factor = Sum(gamma_sends) - Sum(gamma_spends)
+                       ;; so that adding all spend Pedersen commitments,
+                       ;; subtracting sum of all send Pedersen commitents,
+                       ;; then adding gamma_adj * Hpt => ECC(0) 
                        (m- (reduce 'm+ gam-sends)
                            (reduce 'm+ gam-spends)))))
     (make-instance 'transaction
@@ -148,59 +165,81 @@ correction factor gamma on curve A for the overall transaction."
                    (gamma   trans-gamma)) trn
     (when (and (every 'validate-spend-utx spends)
                (every 'validate-send-utx sends))
-      (let* ((cspends  (mapcar 'ed-decompress-pt
-                               (mapcar (um:compose 'range-proofs:proof-simple-commitment
-                                                   'utx-spend-cmt)
-                                       (trans-spend-utxs trn))))
-             (csends   (mapcar 'ed-decompress-pt
-                               (mapcar (um:compose 'range-proofs:proof-simple-commitment
-                                                   'utx-send-cmt)
-                                       (trans-send-utxs trn))))
+      (let* ((cspends  (mapcar 'pedersen-commitment (trans-spend-utxs trn)))
              (tspend   (reduce 'ed-add cspends
                                :initial-value (ed-neutral-point)))
+             (csends   (mapcar 'pedersen-commitment (trans-send-utxs  trn)))
              (tsend    (reduce 'ed-add csends
                                :initial-value (ed-neutral-point))))
+        ;; check that spend = send
         (ed-neutral-point-p (ed-add (ed-mul (range-proofs:hpt) gamma)
                                     (ed-sub tspend tsend)))
         ))))
 
+(defmethod find-utx-for-pkey-hash (pkey-hash (trn transaction))
+  (find pkey-hash (trans-send-utxs trn)
+        :key  'utx-send-hashpkey
+        :test (lambda (k1 k2)
+                (= (int k1) (int k2)))))
+
 ;; ------------------------------------------------------------------
 #|
-(let* ((k    (pbc:make-key-pair :dave))
-       (pkey (pbc:keying-triple-pkey k))
-       (skey (pbc:keying-triple-skey k)))
-  (multiple-value-bind (utxin info) 
+ ;; Test it out by creating a genesis transaction for 1000 tokens,
+ ;; spend 750 on Mary, return 250 to genesis. Validate transaction.
+ ;;
+ ;; Now Mary searches for her UTX, constructs a 2nd transaction
+ ;; sending 250 back to herself, and 500 back to genesis. Validate transaction.
+ ;;
+(let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
+       (pkey  (pbc:keying-triple-pkey k))
+       (skey  (pbc:keying-triple-skey k))
+       
+       (km    (pbc:make-key-pair :mary)) ;; Mary keying
+       (pkeym (pbc:keying-triple-pkey km))
+       (skeym (pbc:keying-triple-skey km)))
+  
+  (print "Construct Genesis transaction")
+  (multiple-value-bind (utxin info)  ;; spend side
       (make-utx-spend 1000 1 pkey skey)
-    (let* ((km   (pbc:make-key-pair :mary))
-           (pkeym (pbc:keying-triple-pkey km)))
-      (multiple-value-bind (utxo1 secr1)
-          (make-utx-send 750 pkeym)
-        (multiple-value-bind (utxo2 secr2)
-            (make-utx-send 250 pkey)
-          (let ((trans (make-transaction `(,utxin) `(,info)
-                                         `(,utxo1 ,utxo2)
-                                         `(,secr1 ,secr2))))
-            (inspect trans)
-            (time (validate-transaction trans)) ;; 7.6s MacBook Pro
-            ;; (inspect utx)
-            ;; (validate-spend-utx utx)
+    
+    (multiple-value-bind (utxo1 secr1) ;; sends
+        (make-utx-send 750 pkeym)
+      (multiple-value-bind (utxo2 secr2)
+          (make-utx-send 250 pkey)
+        
+        (let ((trans (make-transaction `(,utxin) `(,info)
+                                       `(,utxo1 ,utxo2)
+                                       `(,secr1 ,secr2))))
+          (inspect trans)
+          
+          (print "Validate transaction")
+          (time (assert (validate-transaction trans))) ;; 7.6s MacBook Pro
+          ;; (inspect utx)
+          ;; (validate-spend-utx utx)
+          
+          (print "Find UTX for Mary")
+          (let* ((utxm   (find-utx-for-pkey-hash (hash:hash/256 pkeym) trans))
+                 (minfo  (decrypt-spend-info (utx-send-encr utxm) skeym)))
+            (inspect minfo)
+            
+            (print "Construct 2nd transaction")
+            (multiple-value-bind (utxin info)  ;; spend side
+                (make-utx-spend (utx-send-secr-amt minfo)
+                                (utx-send-secr-gam minfo)
+                                pkeym skeym)
+              
+              (multiple-value-bind (utxo1 secr1) ;; sends
+                  (make-utx-send 250 pkeym)
+                (multiple-value-bind (utxo2 secr2)
+                    (make-utx-send 500 pkey)
+                  
+                  (let ((trans (make-transaction `(,utxin) `(,info)
+                                                 `(,utxo1 ,utxo2)
+                                                 `(,secr1 ,secr2))))
+                    (inspect trans)
 
-            (let* ((skeym  (pbc:keying-triple-skey km))
-                   (minfo  (decrypt-spend-info (utx-send-encr utxo1) skeym)))
-              (inspect minfo)
-              (multiple-value-bind (utxin info)
-                  (make-utx-spend (utx-send-secr-amt minfo)
-                                  (utx-send-secr-gam minfo)
-                                  pkeym skeym)
-                (multiple-value-bind (utxo1 secr1)
-                    (make-utx-send 250 pkeym)
-                  (multiple-value-bind (utxo2 secr2)
-                      (make-utx-send 500 pkey)
-                    (let ((trans (make-transaction `(,utxin) `(,info)
-                                                   `(,utxo1 ,utxo2)
-                                                   `(,secr1 ,secr2))))
-                      (inspect trans)
-                      (time (validate-transaction trans))
-                      )))))
-            ))))))
+                    (print "Validate 2nd transaction")
+                    (time (assert (validate-transaction trans)))
+                    )))))
+          )))))
  |#
