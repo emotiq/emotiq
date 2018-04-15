@@ -6,8 +6,8 @@
 (defclass txin ()
   ((hashlock  :reader  txin-hashlock ;; h = H(C, P)
               :initarg :hashlock)
-   (cmt       :reader  txin-cmt      ;; C
-              :initarg :cmt)
+   (prf       :reader  txin-prf      ;; Bulletproof on amount - includes C
+              :initarg :prf)
    (pkey      :reader  txin-pkey     ;; P
               :initarg :pkey)
    (sig       :reader  txin-sig      ;; Sig(h, P)
@@ -29,8 +29,8 @@
               :initarg :hashpkey)
    (hashlock  :reader  txout-hashlock ;; h = H(C, P) -- this is the UTX ID
               :initarg :hashlock)
-   (cmt       :reader  txout-cmt      ;; C - committment proof on sent amount
-              :initarg :cmt)
+   (prf       :reader  txout-prf      ;; Bulletproof on sent amount - includes C
+              :initarg :prf)
    (encr      :reader  txout-encr     ;; encrypted info for future txining of UTX
               :initarg :encr))
   (:documentation "The pair that represents a txout UTX"))
@@ -49,10 +49,10 @@ It should be stored in the wallet"))
   (ed-decompress-pt (range-proofs:proof-simple-commitment prf)))
 
 (defmethod pedersen-commitment ((utx txin))
-  (pedersen-commitment (txin-cmt utx)))
+  (pedersen-commitment (txin-prf utx)))
 
 (defmethod pedersen-commitment ((utx txout))
-  (pedersen-commitment (txout-cmt utx)))
+  (pedersen-commitment (txout-prf utx)))
 
 (defmethod pedersen-commitment ((utx uncloaked-txout))
   (ed-nth-pt (uncloaked-txout-amt utx)))
@@ -70,7 +70,7 @@ to the uncloaked value"
     (values 
      (make-instance 'txin
                     :hashlock  hashlock
-                    :cmt       prf
+                    :prf       prf
                     :pkey      pkey
                     :sig       sig)
      gam)))
@@ -87,7 +87,7 @@ to the uncloaked value"
        (make-instance 'txout
                       :hashpkey  (hash:hash/256 pkey)     ;; for recipient to locate tokens
                       :hashlock  (make-hashlock prf pkey) ;; the UTX ID
-                      :cmt       prf                      ;; value proof
+                      :prf       prf                      ;; value proof
                       :encr      (pbc:ibe-encrypt info pkey :txin-info))
        info))))
 
@@ -142,18 +142,18 @@ correction factor gamma on curve A for the overall transaction."
   (pbc:ibe-decrypt encr skey))
 
 (defmethod validate-txin-utx ((utx txin))
-  (let* ((hl  (make-hashlock (txin-cmt utx)
+  (let* ((hl  (make-hashlock (txin-prf utx)
                              (txin-pkey utx))))
     (and (= (int hl)
             (int (txin-hashlock utx)))
          (pbc:check-hash hl
                          (txin-sig utx)
                          (txin-pkey utx))
-         (range-proofs:validate-range-proof (txin-cmt utx))
+         (range-proofs:validate-range-proof (txin-prf utx))
          )))
 
 (defmethod validate-txout-utx ((utx txout))
-  (range-proofs:validate-range-proof (txout-cmt utx)))
+  (range-proofs:validate-range-proof (txout-prf utx)))
 
 (defmethod validate-txout-utx ((utx uncloaked-txout))
   t)
