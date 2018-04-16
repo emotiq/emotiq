@@ -723,7 +723,7 @@ THE SOFTWARE.
 (defmethod make-range-proof (val &key (gamma (rand-val)))
   (with-basis (init-basis :nbits *max-bit-length*)
     (let ((prover (make-range-prover)))
-      (funcall prover val :gamma gamma))))
+      (funcall prover val gamma))))
 
 (defmethod validate-range-proof ((prf range-proof))
   (with-basis (init-basis :nbits *max-bit-length*)
@@ -752,7 +752,7 @@ lock it to the recipient."
 
     (labels
         ;; ---------------------------------------------
-        ((make-range-proof (v &key (gamma (rand-val)))
+        ((make-range-proof (v &optional (gamma (rand-val)))
            (check-type v     (integer 0))
            (check-type gamma (integer 1))
            (assert (<= 0 v (1- (ash 1 nbits))))
