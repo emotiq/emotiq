@@ -49,10 +49,9 @@ THE SOFTWARE.
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
+                                     (:file "range-proofs")
                                      (:file "transaction")
-                                      (:file "cosi-handlers")
-                                     
-                                     (:file "range-proofs")))))
+                                     (:file "cosi-handlers")))))
 
 (defsystem "cosi-bls/test/allegro"
   :description "Allegro specific CAS timing code from dbm."
