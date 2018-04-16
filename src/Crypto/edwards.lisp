@@ -165,15 +165,22 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------
 
-(defvar *known-curves*
-  (let* ((lst (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
-         (chk (list *chk-curve1174* *chk-curve-e382* *chk-curve41417* *chk-curve-e521*)))
-    (assert (every 'chksum-verify lst chk))
-    lst))
-
 (defun chksum-verify (curve chk)
   (= (int (hash/256 curve))
      chk))
+
+(assert (every 'chksum-verify
+               (list *curve1174*
+                     *curve-e382*
+                     *curve41417*
+                     *curve-e521*)
+               (list *chk-curve1174*
+                     *chk-curve-e382*
+                     *chk-curve41417*
+                     *chk-curve-e521*)))
+
+(defvar *known-curves*
+  (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
 
 (defmethod select-curve ((curve ed-curve))
   curve)

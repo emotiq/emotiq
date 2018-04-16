@@ -666,17 +666,15 @@ comparison.")
   (= (int (hash/256 curve))
      chk))
 
-(defun check-curves ()
-  (assert (every 'chk-curve
-                 (list *curve-fr449-params*
-                       *curve-fr256-params*
-                       *curve-fr256-params-old*
-                       *curve-default-ar160-params*)
-                 (list *chk-curve-fr449-params*
-                       *chk-curve-fr256-params*
-                       *chk-curve-fr256-params-old*
-                       *chk-curve-default-ar160-params*))))
-(check-curves)
+(assert (every 'chk-curve
+               (list *curve-fr449-params*
+                     *curve-fr256-params*
+                     *curve-fr256-params-old*
+                     *curve-default-ar160-params*)
+               (list *chk-curve-fr449-params*
+                     *chk-curve-fr256-params*
+                     *chk-curve-fr256-params-old*
+                     *chk-curve-default-ar160-params*)))
 
 (defun init-pairing (&optional (params nil params-supplied-p))
   "Initialize the pairings lib.
