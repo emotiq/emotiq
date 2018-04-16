@@ -78,6 +78,7 @@ THE SOFTWARE.
    :hash/512
    :get-hash-nbytes
    :hashable
+   :hash-check
    ))
 
 (defpackage :ecc-crypto-b571
