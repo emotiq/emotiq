@@ -455,8 +455,11 @@ THE SOFTWARE.
 |#
 
 (defun ed-mul (pt n)
+  #|
   (let* ((alpha  (* *ed-r* *ed-h* (random-between 1 #.(ash 1 48)))))
-    (ed-basic-mul pt (+ n alpha))))
+    (ed-basic-mul pt (+ n alpha)))
+  |#
+  (ed-basic-mul pt n))
 
 (defun ed-div (pt n)
   (with-mod *ed-r*
