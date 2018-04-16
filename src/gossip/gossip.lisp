@@ -33,6 +33,8 @@
 (defparameter *shutdown-msg* (coerce #(115 104 117 116 100 111 119 110) '(ARRAY (UNSIGNED-BYTE 8))) "shutdown")
 (defun shutdown-msg-len ()
   (length *shutdown-msg*))
+(defvar *udp-proxy-table* (make-hash-table) "Hash table of all UDP proxies on this machine")
+(defvar *tcp-proxy-table* (make-hash-table) "Hash table of all TCP proxies on this machine")
 
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
@@ -305,7 +307,7 @@ are in place between nodes.
 (defclass gossip-network-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works.
-         Should only be attached to remote-gossip-nodes.")))
+         Should only be attached to proxy-gossip-nodes.")))
 
 (defclass actor-mixin ()
   ((actor :initarg :actor :initform nil :accessor actor
@@ -348,27 +350,27 @@ are in place between nodes.
   )
 
 ; We'll use these for real (not simulated on one machine) protocol over the network
-(defclass remote-gossip-node (gossip-mixin actor-mixin)
-  ((real-ip :initarg :real-ip :initform nil :accessor real-ip
+(defclass proxy-gossip-node (gossip-mixin actor-mixin)
+  ((real-address :initarg :real-address :initform nil :accessor real-address
             :documentation "Real IP address of remote node")
-   (real-port :initarg :real-port :initform *gossip-port* :accessor real-port
+   (real-port :initarg :real-port :initform *nominal-gossip-port* :accessor real-port
               :documentation "Real port of remote node")
    (real-uid :initarg :real-uid :initform nil :accessor real-uid
                   :documentation "UID of the (real) gossip node on the other end.
-               The remote object will also have its own UID just for local lookup purposes,
+               This proxy node will also have its own UID just for local lookup purposes,
                but the real-uid is used to route it to the proper node on the remote
                machine."))
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
-(defmethod clear-caches ((node remote-gossip-node))
+(defmethod clear-caches ((node proxy-gossip-node))
   "Caches should be cleared in the normal course of events, but this can be used to make sure."
   )
 
-(defclass tcp-gossip-node (remote-gossip-node)
+(defclass tcp-gossip-node (proxy-gossip-node)
   ())
 
-(defclass udp-gossip-node (remote-gossip-node)
+(defclass udp-gossip-node (proxy-gossip-node)
   ())
 
 (defmethod gossip-dispatcher (node &rest actor-msg)
@@ -387,7 +389,7 @@ are in place between nodes.
          (send-msg gossip-msg destuid srcuid))))))
 
 #+OBSOLETE
-(defmethod gossip-dispatcher ((node remote-gossip-node) &rest actor-msg)
+(defmethod gossip-dispatcher ((node proxy-gossip-node) &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
     (ecase gossip-cmd
@@ -412,7 +414,7 @@ are in place between nodes.
       (apply 'gossip-dispatcher node msg))))
 
 #+OBSOLETE
-(defmethod make-gossip-actor ((node remote-gossip-node))
+(defmethod make-gossip-actor ((node proxy-gossip-node))
   (make-instance 'gossip-network-actor
     :node node
     :fn 
@@ -442,15 +444,16 @@ are in place between nodes.
     (kvs:relate-unique! *nodes* (uid node) node)
     node))
 
-(defun make-remote-node (mode &rest args)
-  "Makes a new node"
+(defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
+  "Makes a new proxy node of given mode: :UDP or :TCP"
+  (remf args :proxy-subtable)
   (let* ((node (case mode
                  (:tcp (apply 'make-instance 'tcp-gossip-node args))
                  (:udp (apply 'make-instance 'udp-gossip-node args))))
          (actor (make-gossip-actor node)))
     (setf (actor node) actor)
     (kvs:relate-unique! *nodes* (uid node) node)
-    node))
+    (memoize-proxy node proxy-subtable)))
 
 ;;;; Graph making routines
 (defun make-nodes (numnodes)
@@ -960,9 +963,9 @@ are in place between nodes.
 ; * we take no special action for non-solicitation messages because they can't
 ;   ever be replied to anyway.
 
-(defmethod locally-receive-msg ((msg t) (thisnode remote-gossip-node) srcuid)
+(defmethod locally-receive-msg ((msg t) (thisnode proxy-gossip-node) srcuid)
   (declare (ignore srcuid))
-  (error "Bug: Cannot locally-receive to a remote node!"))
+  (error "Bug: Cannot locally-receive to a proxy node!"))
 
 (defun forward (msg srcuid destuids)
   "Sends msg from srcuid to multiple destuids"
@@ -1519,50 +1522,83 @@ gets sent back, and everything will be copacetic.
 
 ;;;; Network communications
 
-; TODO: Memoize these things. s/remote/proxy
-(defun ensure-proxy-node (mode real-ip real-port real-uid)
-  (make-remote-node mode :real-ip real-ip :real-port real-port :real-uid real-uid))
-
 ; network messages are 3 pieces in a list:
 ;   destuid of ultimate receiving node
 ;   srcuid of sending node
 ;   gossip-msg
 
-(defun parse-raw-message-udp (raw-message-buffer rem-ip rem-port)
+(defmethod memoize-proxy ((proxy proxy-gossip-node) &optional subtable)
+  "Memoize given proxy for quick lookup. Returns proxy itself."
+  (with-slots (real-address real-port real-uid) proxy
+    (let ((table (typecase proxy
+                   (udp-gossip-node *udp-proxy-table*)
+                   (tcp-gossip-node *tcp-proxy-table*))))
+      (unless subtable
+        (let ((key (if (and (integerp real-address)
+                            (null real-port))
+                       real-address ; means port is already folded into real-address
+                       (+ (ash real-address 16) real-port))))
+          (setf subtable (gethash key table))
+          (unless subtable (setf subtable (setf (gethash key table) (make-hash-table))))))
+      (setf (gethash real-uid subtable) proxy))))
+
+(defun ensure-proxy-node (mode real-address real-port real-uid)
+  "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
+   Returns newly-created or old proxy-gossip-node."
+  (let* ((key (if (and (integerp real-address)
+                       (null real-port))
+                  real-address ; means port is already folded into real-address
+                  (progn
+                    (setf real-address (usocket::host-to-hbo real-address))
+                    (+ (ash real-address 16) real-port))))
+         (table (case mode
+                   (:udp *udp-proxy-table*)
+                   (:tcp *tcp-proxy-table*)))
+         (proxy-subtable (gethash key table))
+         (proxy nil))
+    (when proxy-subtable
+           (setf proxy (gethash real-uid proxy-subtable)))
+    (unless proxy
+      ; make one and memoize it
+      (setf proxy (make-proxy-node mode
+                                   :real-address real-address
+                                   :real-port real-port
+                                   :real-uid real-uid
+                                   :proxy-subtable proxy-subtable)))
+    proxy))
+
+(defun parse-raw-message-udp (raw-message-buffer rem-address rem-port)
   "Deserialize a raw message string, srcuid, and destuid.
-  srcuid and destuid will be that of a remote-gossip-node and gossip-node on THIS machine,
+  srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
-  ;network message: (list (pseudo-uid node) (real-uid node) srcuid msg)
-  ;    uid of remote-gossip-node --^     uid  --^            ^-- source uid
-  ;             on local machine     on destination machine      on local machine
-  (destructuring-bind (pseudo-uid real-uid srcuid msg)
+  ;network message: (list (real-uid node) srcuid msg)
+  ;                     uid  --^            ^-- source uid
+  ;             on local machine            on destination machine
+  (destructuring-bind (destuid srcuid msg)
                       (loenc:decode raw-message-buffer)
-    (if (typep msg 'reply)
-        ; don't make a proxy if it's a reply, since replies are never replied to
-        (values msg pseudo-uid real-uid) ; now you see what pseudo-uid is for. It's the uid
-        ; of the local remote-gossip-node that some local gossip node is already waiting for a reply from.
-        (let ((proxy (ensure-proxy-node :UDP rem-ip rem-port srcuid)))
-          ;ensure a local node of type remote-gossip-node exists on this machine with
-          ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
-          (values msg (uid proxy) real-uid)
-          ))))
+    (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
+      ;ensure a local node of type proxy-gossip-node exists on this machine with
+      ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
+      (values msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
+      ;   on THIS machine.
+      )))
 
 (defun parse-raw-message-tcp (stream)
   "Deserialize a raw message string, srcuid, and destuid.
-  srcuid and destuid will be that of a remote-gossip-node and gossip-node on THIS machine,
+  srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
-  ;network message: (list (pseudo-uid node) (real-uid node) srcuid msg)
-  ;    uid of remote-gossip-node --^     uid  --^            ^-- source uid
+  ;network message: (list (real-uid node) srcuid msg)
+  ;                    uid  --^            ^-- source uid
   ;             on local machine     on destination machine      on local machine
   (let ((rem-ip   (usocket:get-peer-address stream))
         (rem-port (usocket:get-peer-port stream)))
-    (destructuring-bind (pseudo-uid real-uid srcuid msg)
+    (destructuring-bind (real-uid srcuid msg)
                         (loenc:deserialize stream)
       (if (typep msg 'reply)
           ; don't make a proxy if it's a reply, since replies are never replied to
-          (values msg pseudo-uid real-uid) 
+          (values msg real-uid) 
           (let ((proxy (ensure-proxy-node :TCP rem-ip rem-port srcuid)))
-            ;ensure a local node of type remote-gossip-node exists on this machine with
+            ;ensure a local node of type proxy-gossip-node exists on this machine with
             ;  given rem-ip, rem-port, and srcuid (the last of which will be the node's real-uid).
             (values msg (uid proxy) real-uid)
             )))))
@@ -1570,8 +1606,8 @@ gets sent back, and everything will be copacetic.
 (defun incoming-message-handler-udp (buf rem-ip rem-port)
   "Locally dispatch messages received from network"
   (multiple-value-bind (msg srcuid destuid)
-                       ; srcuid will be that of a remote-gossip-node on receiver (this) machine
-                       ; destuid will be that of a gossip-node on receiver (this) machine
+                       ; srcuid will be that of a proxy-gossip-node on receiver (this) machine
+                       ; destuid will be that of a true gossip-node on receiver (this) machine
                        (parse-raw-message-udp buf rem-ip rem-port)
     (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
     (default-logging-function :INCOMING msg :FROM rem-ip :TO destuid) ; just for debugging
@@ -1580,7 +1616,7 @@ gets sent back, and everything will be copacetic.
 (defun incoming-message-handler-tcp (stream)
   "Locally dispatch messages received from network"
   (multiple-value-bind (msg srcuid destuid)
-                       ; srcuid will be that of a remote-gossip-node on receiver (this) machine
+                       ; srcuid will be that of a proxy-gossip-node on receiver (this) machine
                        ; destuid will be that of a gossip-node on receiver (this) machine
                        (parse-raw-message-tcp stream)
     (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
@@ -1651,7 +1687,7 @@ gets sent back, and everything will be copacetic.
   (USOCKET:ADDRESS-IN-USE-ERROR ()
                                 :ADDRESS-IN-USE)))
 
-(defmethod start-gossip-server ((mode (eql :udp)) &optional (port *gossip-port*) (try-count 0))
+(defmethod start-gossip-server ((mode (eql :udp)) &optional (port *nominal-gossip-port*) (try-count 0))
   "Starts local passive gossip server and return it and its local port."
   (when (< try-count *max-server-tries*)
     (unless (find-process *udp-gossip-server-name*)
@@ -1669,7 +1705,7 @@ gets sent back, and everything will be copacetic.
                    ; otherwise, assume process exists for serving UDP on some OTHER lisp image, which means we can retry
                    (start-gossip-server mode (1+ port) (1+ try-count)))))))))
 
-(defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *gossip-port*) (try-count 0))
+(defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*) (try-count 0))
   (unless (find-process *tcp-gossip-server-name*)
     (setf *shutting-down* nil)
     (let* ((socket (usocket:socket-listen
@@ -1681,7 +1717,7 @@ gets sent back, and everything will be copacetic.
         'serve-gossip-port mode socket)
       (usocket:get-local-port socket))))
 
-(defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *gossip-port*))
+(defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *nominal-gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
     (progn
@@ -1696,7 +1732,7 @@ gets sent back, and everything will be copacetic.
       (setf *udp-gossip-socket* nil
             *actual-gossip-port* nil))))
 
-(defmethod shutdown-gossip-server ((mode (eql :TCP)) &optional (port *gossip-port*))
+(defmethod shutdown-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*))
   (declare (ignore port)) ; probably don't need this
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *tcp-gossip-server-name*))
@@ -1718,7 +1754,7 @@ gets sent back, and everything will be copacetic.
                                             :local-host local-host
                                             :local-port local-port
                                             :protocol :datagram)))
-        ;; (pr :sock-send (length packet) real-ip packet)
+        ;; (pr :sock-send (length packet) real-address packet)
         (unless (eql nb (usocket:socket-send socket packet nb))
           (ac::pr :socket-send-error ip packet))
         (usocket:socket-close socket)
@@ -1731,7 +1767,7 @@ gets sent back, and everything will be copacetic.
   (maybe-log node :TRANSMIT msg)
   (;cosi-simgen::internal-send-socket ; cannot use this because it doesn't have a local-port option
    internal-send-socket
-   (real-ip node)
+   (real-address node)
    (real-port node)
    "localhost"
    *actual-gossip-port* ; or nil if you don't care
@@ -1742,8 +1778,7 @@ gets sent back, and everything will be copacetic.
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (cond (*udp-gossip-socket*
          (maybe-log node :TRANSMIT msg)
-         (let* ((packet (loenc:encode (list (uid node) (real-uid node) srcuid msg)))
-                ;                             ^---pseudo UID
+         (let* ((packet (loenc:encode (list (real-uid node) srcuid msg)))
                 (nb (length packet)))
            (when (> nb cosi-simgen::*max-buffer-length*)
              (error "Packet too large for UDP transmission"))
@@ -1751,23 +1786,20 @@ gets sent back, and everything will be copacetic.
                             *udp-gossip-socket*
                             packet
                             nb
-                            :host (real-ip node)
+                            :host (real-address node)
                             :port (real-port node)))
-             (ac::pr :socket-send-error (real-ip node) packet))))
+             (ac::pr :socket-send-error (real-address node) packet))))
         (t
          (maybe-log node :CANNOT-TRANSMIT "no socket"))))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
   "Send message across network.
   srcuid is that of the (real) local gossip-node that sent message to this node."
-  (let ((stream (ensure-open-stream (real-ip node) (real-port node))))
+  (let ((stream (ensure-open-stream (real-address node) (real-port node))))
     (when (streamp stream)
       (loenc:serialize (list (uid node) (real-uid node) srcuid msg) stream))))
 
-; network messages are 3 pieces in a list:
-;   destuid of ultimate receiving node
-;   srcuid of sending node
-;   gossip-msg
+
 
 #|
 (defun ensure-open-stream (ip port)
@@ -1794,7 +1826,7 @@ gets sent back, and everything will be copacetic.
   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
   (locally-receive-msg gossip-msg node srcuid))
 
-(defmethod deliver-gossip-msg (gossip-msg (node remote-gossip-node) srcuid)
+(defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg gossip-msg node srcuid))
 
