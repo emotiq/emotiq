@@ -619,8 +619,9 @@ THE SOFTWARE.
 (defvar *chk-bp-basis*
   #x0a724c420c103cca56d93e67bf04677727f6bdafabcb01e788f872b5342ae6c78)
 
-(assert (= *chk-bp-basis*
-           (int (hash/256 *bp-basis*))))
+(assert (hash-check *bp-basis* *chk-bp-basis*))
+
+;; --------------------------------------------------------------------------------
 
 (defvar *gs*        nil)
 (defvar *hs*        nil)

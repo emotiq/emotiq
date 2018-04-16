@@ -645,6 +645,18 @@ comparison.")
 
 ;; ---------------------------------------------------------------------------------------
 
+(assert (every 'hash-check
+               (list *curve-fr449-params*
+                     *curve-fr256-params*
+                     *curve-fr256-params-old*
+                     *curve-default-ar160-params*)
+               (list *chk-curve-fr449-params*
+                     *chk-curve-fr256-params*
+                     *chk-curve-fr256-params-old*
+                     *chk-curve-default-ar160-params*)))
+
+;; ---------------------------------------------------------------------------------------
+
 (defparameter *curve*      nil)
 
 (define-symbol-macro *curve-name*    (curve-params-name    *curve*)) ;; symbolic name of curve
@@ -660,21 +672,6 @@ comparison.")
 
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
-
-(defun chk-curve (curve chk)
-  "Used to verify that nothing got trashed in the above curve params"
-  (= (int (hash/256 curve))
-     chk))
-
-(assert (every 'chk-curve
-               (list *curve-fr449-params*
-                     *curve-fr256-params*
-                     *curve-fr256-params-old*
-                     *curve-default-ar160-params*)
-               (list *chk-curve-fr449-params*
-                     *chk-curve-fr256-params*
-                     *chk-curve-fr256-params-old*
-                     *chk-curve-default-ar160-params*)))
 
 (defun init-pairing (&optional (params nil params-supplied-p))
   "Initialize the pairings lib.

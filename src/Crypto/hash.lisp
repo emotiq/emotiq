@@ -130,4 +130,6 @@ THE SOFTWARE.
       (subseq bytes 0 nb)))
    ))
 
+(defun hash-check (item expected)
+  (= expected (int (hash/256 item))))
 

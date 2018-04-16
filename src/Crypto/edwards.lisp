@@ -153,6 +153,18 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------
 
+(assert (every 'hash-check
+               (list *curve1174*
+                     *curve-e382*
+                     *curve41417*
+                     *curve-e521*)
+               (list *chk-curve1174*
+                     *chk-curve-e382*
+                     *chk-curve41417*
+                     *chk-curve-e521*)))
+
+;; ------------------------------------------------------
+
 (defvar *edcurve* *curve1174*)
 
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
@@ -164,20 +176,6 @@ THE SOFTWARE.
 (define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
 
 ;; ------------------------------------------------------
-
-(defun chksum-verify (curve chk)
-  (= (int (hash/256 curve))
-     chk))
-
-(assert (every 'chksum-verify
-               (list *curve1174*
-                     *curve-e382*
-                     *curve41417*
-                     *curve-e521*)
-               (list *chk-curve1174*
-                     *chk-curve-e382*
-                     *chk-curve41417*
-                     *chk-curve-e521*)))
 
 (defvar *known-curves*
   (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
