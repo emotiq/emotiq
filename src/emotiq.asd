@@ -34,7 +34,8 @@
   :components ((:module source
                 :pathname "./"
                 :serial t
-                :components ((:file "blockchain")))))
+                :components ((:file "blockchain")
+                             (:file "blocks")))))
                                        
 (defsystem "emotiq/startup"
   ;; add gossip here soon:

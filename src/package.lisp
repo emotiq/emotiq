@@ -3,7 +3,7 @@
 (defpackage #:emotiq
   (:use #:cl)
   ;; We don't need CL:BLOCK, want to use BLOCK in our package.
-  (:shadowing-import-from #:cl #:block)
+  (:shadow cl:block)
   (:export #:octet #:octet-vector #:octet-vector-p
            #:make-octet-vector #:ovref
            #:octet-vector-to-hex-string #:hex-string-to-octet-vector

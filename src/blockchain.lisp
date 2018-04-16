@@ -1301,15 +1301,14 @@ should be signed, and only coinbase transactions are not signed."
 (defun utxo-p (transaction output-index)
   (expect-transaction-context)
   (do-blockchain (block)
-    (return
-      (do-transactions (tx block)
-        (return
-          (if (eq tx transaction)
-              nil
-              (loop for txi in (transaction-inputs tx)
-                    as index = (tx-in-index txi)
-                    when (eql index output-index)
-                      return t)))))))
+    (do-transactions (tx block)
+      (return-from utxo-p
+        (if (eq tx transaction)
+            nil
+            (loop for txi in (transaction-inputs tx)
+                  as index = (tx-in-index txi)
+                  when (eql index output-index)
+                    return t))))))
 
 
 
