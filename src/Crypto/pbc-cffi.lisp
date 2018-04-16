@@ -369,7 +369,10 @@ not belonging to any field"))
 (defstruct curve-params
   name
   pairing-text
-  g1 g2
+  g1 g2)
+
+(defstruct (full-curve-params
+            (:include curve-params))
   ;; cached values filled in at init
   order g1-len g2-len zr-len gt-len)
 
@@ -409,7 +412,7 @@ Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
 (defparameter *chk-curve-fr449-params*
-  #x0ea9b1f01bc0a8a5a100115313bca6fff14f240a62bac518712fdbc7080fd2c23)
+  #x0732d454c47858b528680914049875b1b5620587b401786af7463846dcdd2fc45)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
@@ -444,7 +447,7 @@ Barreto and Naehrig
 Size of q^12 is 3072 bits.")
 
 (defparameter *chk-curve-fr256-params*
-  #x08f85312302eb3f23adf9b24f962f356629d23f72375427f645425952e6887881)
+  #x0c99a23cae907bbb3675b74ba04d731c78a68dba60f91bddd9c91a83a546c8e74)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
@@ -611,7 +614,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 3 out of 4 hash/256")
 
 (defparameter *chk-curve-fr256-params-old*
-  #x05e77af8ea86dc1534e58c2a93d199343942fd2599189689d13109a43fdd46d3d)
+  #x0f78607c325104ff451da10c516b929b4cdf6a12609316947bc6c29d1a0d77eab)
 
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
@@ -641,32 +644,21 @@ serves as a check on our implementation with his pbc-calc for
 comparison.")
 
 (defparameter *chk-curve-default-ar160-params*
-  #x06b519fddd67320a90d47fe5bbe50e13a9230a11d0468f3b5a09779e9a807cc4d)
-
-;; ---------------------------------------------------------------------------------------
-
-(assert (every 'hash-check
-               (list *curve-fr449-params*
-                     *curve-fr256-params*
-                     *curve-fr256-params-old*
-                     *curve-default-ar160-params*)
-               (list *chk-curve-fr449-params*
-                     *chk-curve-fr256-params*
-                     *chk-curve-fr256-params-old*
-                     *chk-curve-default-ar160-params*)))
+  #x08c6f089a6c6d637b34b3e9653dbe2a7430556624fc0f964d8ee35a1ac03ed6b7)
 
 ;; ---------------------------------------------------------------------------------------
 
 (defparameter *curve*      nil)
 
 (define-symbol-macro *curve-name*    (curve-params-name    *curve*)) ;; symbolic name of curve
-(define-symbol-macro *curve-order*   (curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
 (define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
 (define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
-(define-symbol-macro *g1-size*       (curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
-(define-symbol-macro *g2-size*       (curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
-(define-symbol-macro *zr-size*       (curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
-(define-symbol-macro *gt-size*       (curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
+
+(define-symbol-macro *curve-order*   (full-curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
+(define-symbol-macro *g1-size*       (full-curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
+(define-symbol-macro *g2-size*       (full-curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
+(define-symbol-macro *zr-size*       (full-curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
+(define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
 
 ;; -------------------------------------------------
 
@@ -705,7 +697,11 @@ SMP access. Everything else should be SMP-safe."
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
               (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
-              (setf *curve* params
+              (setf *curve* (make-full-curve-params
+                             :name          (curve-params-name         params)
+                             :pairing-text  (curve-params-pairing-text params)
+                             :g1            (curve-params-g1           params)
+                             :g2            (curve-params-g2           params))
                     *g1-size*  (cffi:mem-aref ansbuf :long 0)
                     *g2-size*  (cffi:mem-aref ansbuf :long 1)
                     *gt-size*  (cffi:mem-aref ansbuf :long 2)

@@ -153,18 +153,6 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------
 
-(assert (every 'hash-check
-               (list *curve1174*
-                     *curve-e382*
-                     *curve41417*
-                     *curve-e521*)
-               (list *chk-curve1174*
-                     *chk-curve-e382*
-                     *chk-curve41417*
-                     *chk-curve-e521*)))
-
-;; ------------------------------------------------------
-
 (defvar *edcurve* *curve1174*)
 
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))

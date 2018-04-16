@@ -1,6 +1,17 @@
 
 (in-package :pbc-test)
 
+(define-test basis-consistency
+  (assert-true (hash:hash-check edec::*curve1174*  edec::*chk-curve1174*))
+  (assert-true (hash:hash-check edec::*curve-e382* edec::*chk-curve-e382*))
+  (assert-true (hash:hash-check edec::*curve41417* edec::*chk-curve41417*))
+  (assert-true (hash:hash-check edec::*curve-e521* edec::*chk-curve-e521*))
+  
+  (assert-true (hash:hash-check pbc::*curve-default-ar160-params* pbc::*chk-curve-default-ar160-params*))
+  (assert-true (hash:hash-check pbc::*curve-fr256-params-old*     pbc::*chk-curve-fr256-params-old*))
+  (assert-true (hash:hash-check pbc::*curve-fr256-params*         pbc::*chk-curve-fr256-params*))
+  (assert-true (hash:hash-check pbc::*curve-fr449-params*         pbc::*chk-curve-fr449-params*)))
+
 (define-test keying
   (let ((k (make-key-pair :test)))
     (assert-true (check-public-key (keying-triple-pkey k)
@@ -35,7 +46,7 @@
 
 (define-test vrf
   (let* ((k    (make-key-pair :test))
-        (vrf  (compute-vrf :test-seed (keying-triple-skey k))))
+        (vrf   (compute-vrf :test-seed (keying-triple-skey k))))
     (assert-true (validate-vrf vrf (keying-triple-pkey k)))))
 
 (define-test pedersen-proof

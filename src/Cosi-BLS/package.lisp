@@ -191,15 +191,32 @@
 
 (defpackage :cosi/proofs
   (:use
-   :common-lisp :cosi
+   :common-lisp
+   :cosi
    :crypto/modular-arith
    :vec-repr
-   :edec)
+   :edec
+   :pbc)
   (:import-from :ecc-crypto-b571
    :random-between)
   (:export
+   :txin
+   :make-txin
+
+   :txout
+   :make-txout
+   :txout-encr
+   
    :transaction
+   :make-transaction
    :validate-transaction
+
+   :find-txout-for-pkey-hash
+   :decrypt-txout-info
+   :txout-secrets
+   :txout-secr-pkey
+   :txout-secr-amt
+   :txout-secr-gamma
    ))
 
 
