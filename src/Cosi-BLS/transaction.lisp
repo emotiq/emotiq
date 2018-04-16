@@ -40,8 +40,8 @@
               :initarg :pkey)
    (amt       :reader  txout-secr-amt  ;; form commitment C = gam*A + amt*B to form
               :initarg :amt)              ;;  the hashlock h = Hash(C, P) = UTX ID
-   (gam       :reader  txout-secr-gam  ;; use this hiding factor when you re-make the commitment
-              :initarg :gam))
+   (gamma     :reader  txout-secr-gamma  ;; use this hiding factor when you re-make the commitment
+              :initarg :gamma))
   (:documentation "This is the stuff needed by recipient to be able to reconstruct a txin proof.
 It should be stored in the wallet"))
 
@@ -81,12 +81,12 @@ the simple commitment to the uncloaked value"
 
 (defmethod make-txout ((amt integer) (pkey pbc:public-key))
   "Make a cloaked TXOUT with value proof"
-  (multiple-value-bind (prf gam)
+  (multiple-value-bind (prf gamma)
       (range-proofs:make-range-proof amt)
     (let ((info  (make-instance 'txout-secrets
                                 :pkey  pkey
                                 :amt   amt
-                                :gam   gam)))
+                                :gamma gamma)))
       (values
        (make-instance 'txout
                       :hashpkey  (hash:hash/256 pkey)     ;; for recipient to locate tokens
@@ -107,9 +107,9 @@ the simple commitment to the uncloaked value"
                     :hashpkey (hash:hash/256 pkey)
                     :amt      amt)
      (make-instance 'txout-secrets
-                    :pkey pkey
-                    :amt  amt
-                    :gam  gamma))
+                    :pkey   pkey
+                    :amt    amt
+                    :gamma  gamma))
     ))
 
 ;; ------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ the simple commitment to the uncloaked value"
 some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
 correction factor gamadj on curve H for the overall transaction."
-  (let* ((gam-txouts (mapcar 'txout-secr-gam txout-secrets))
+  (let* ((gam-txouts (mapcar 'txout-secr-gamma txout-secrets))
          (gamadj     (with-mod *ed-r*
                        ;; adjustment factor = Sum(gamma_txouts) - Sum(gamma_txinx)
                        ;; so that adding all txin Pedersen commitments,
@@ -235,7 +235,7 @@ correction factor gamadj on curve H for the overall transaction."
             (print "Construct 2nd transaction")
             (multiple-value-bind (utxin info)  ;; spend side
                 (make-txin (txout-secr-amt minfo)
-                                (txout-secr-gam minfo)
+                                (txout-secr-gamma minfo)
                                 pkeym skeym)
               
               (multiple-value-bind (utxo1 secr1) ;; sends
