@@ -1,0 +1,26 @@
+@startuml
+[*] --> Startup
+Startup --> Startup2 : done
+Startup2 --> Startup : more
+Startup2 --> election : random
+election --> leader_prepare : leader
+election --> witness_prepare : witness
+leader_prepare --> leader_prepare : txn
+witness_prepare --> witness_prepare : txn
+leader_prepare --> leader_prepare : ignore
+witness_prepare --> witness_prepare : ignore
+leader_prepare : start new block
+leader_prepare --> election : random
+witness_prepare --> election : random
+
+leader_prepare --> leader_commit :enough
+leader_commit --> leader_commit : ignore
+leader_commit --> election : random\n-wipe block-
+
+witness_prepare --> witness_commit :enough
+witness_commit --> witness_commit : ignore
+witness_commit --> election : random\n-wipe block-
+
+leader_commit --> election : publish_block
+witness_commit --> election : done
+@enduml
