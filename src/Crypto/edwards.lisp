@@ -88,6 +88,9 @@ THE SOFTWARE.
           :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
    ))
 
+(defvar *chk-curve1174*
+  #x0a3b6b42e54adadf8d667141330d1d7416c87091c0d597adb20eb27d5429c5144)
+
 ;; ---------------------------
 
 (defvar *curve-E382*
@@ -104,6 +107,9 @@ THE SOFTWARE.
           :x  3914921414754292646847594472454013487047137431784830634731377862923477302047857640522480241298429278603678181725699
           :y  17)
    ))
+
+(defvar *chk-curve-E382*
+  #x0fb76d134d0df4bb1b04994ded81197a2501c5cbcd233660213c6201d7a82eead)
 
 ;; ---------------------------
 
@@ -122,6 +128,9 @@ THE SOFTWARE.
           :y  34)
    ))
 
+(defvar *chk-curve41417*
+  #x0be03fd15c1d4e68f85da60dd6fe6324275a6ddd3059764bad546c73c7f03d402)
+
 ;; ---------------------------
 
 (defvar *curve-E521*
@@ -139,6 +148,9 @@ THE SOFTWARE.
           :y  12)
    ))
 
+(defvar *chk-curve-E521*
+  #x0dceb7761259b1b090f5e3dc0a370ed3169a7cb8bb29990efda6158acb3c2716e)
+
 ;; ------------------------------------------------------
 
 (defvar *edcurve* *curve1174*)
@@ -154,7 +166,14 @@ THE SOFTWARE.
 ;; ------------------------------------------------------
 
 (defvar *known-curves*
-  (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
+  (let* ((lst (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
+         (chk (list *chk-curve1174* *chk-curve-e382* *chk-curve41417* *chk-curve-e521*)))
+    (assert (every 'chksum-verify lst chk))
+    lst))
+
+(defun chksum-verify (curve chk)
+  (= (int (hash/256 curve))
+     chk))
 
 (defmethod select-curve ((curve ed-curve))
   curve)

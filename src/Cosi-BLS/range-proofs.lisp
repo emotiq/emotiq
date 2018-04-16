@@ -616,6 +616,12 @@ THE SOFTWARE.
                                    :Z 296434638121815007163580183345037929837977157971858366576139539079696541425))
    ))
 
+(defvar *chk-bp-basis*
+  #x0a724c420c103cca56d93e67bf04677727f6bdafabcb01e788f872b5342ae6c78)
+
+(assert (= *chk-bp-basis*
+           (int (hash/256 *bp-basis*))))
+
 (defvar *gs*        nil)
 (defvar *hs*        nil)
 (defvar *hpt*       nil)
@@ -625,10 +631,7 @@ THE SOFTWARE.
   (cond (*bp-basis*
          (cond ((eql curve *curve*)
                 (cond ((= nbits *nbits*)
-                       (if (= (int (hash/256 *bp-basis*))
-                              #x0a724c420c103cca56d93e67bf04677727f6bdafabcb01e788f872b5342ae6c78)
-                           *bp-basis*
-                         (error "Hex check failure on bp-basis")))
+                       *bp-basis*)
                       ((< nbits *nbits*)
                        (make-bp-basis
                         :curve  curve
