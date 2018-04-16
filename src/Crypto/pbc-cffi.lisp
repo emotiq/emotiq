@@ -408,6 +408,9 @@ Barreto and Naehrig.
 Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
+(defparameter *chk-curve-fr449-params*
+  #x0ea9b1f01bc0a8a5a100115313bca6fff14f240a62bac518712fdbc7080fd2c23)
+
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
 (defparameter *curve-fr256-params*
@@ -439,6 +442,9 @@ square roots.  This curve will wrap 1 in 92 trillion hash/256.
 Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
 Barreto and Naehrig
 Size of q^12 is 3072 bits.")
+
+(defparameter *chk-curve-fr256-params*
+  #x08f85312302eb3f23adf9b24f962f356629d23f72375427f645425952e6887881)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
@@ -604,6 +610,9 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   "Ben Lynn's quick and dirty F-type generation. This curve will wrap
 3 out of 4 hash/256")
 
+(defparameter *chk-curve-fr256-params-old*
+  #x05e77af8ea86dc1534e58c2a93d199343942fd2599189689d13109a43fdd46d3d)
+
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
   (make-curve-params
@@ -631,6 +640,9 @@ developed and 80-bit security is no longer sufficient. But this curve
 serves as a check on our implementation with his pbc-calc for
 comparison.")
 
+(defparameter *chk-curve-default-ar160-params*
+  #x06b519fddd67320a90d47fe5bbe50e13a9230a11d0468f3b5a09779e9a807cc4d)
+
 ;; ---------------------------------------------------------------------------------------
 
 (defparameter *curve*      nil)
@@ -648,6 +660,23 @@ comparison.")
 
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
+
+(defun chk-curve (curve chk)
+  "Used to verify that nothing got trashed in the above curve params"
+  (= (int (hash/256 curve))
+     chk))
+
+(defun check-curves ()
+  (assert (every 'chk-curve
+                 (list *curve-fr449-params*
+                       *curve-fr256-params*
+                       *curve-fr256-params-old*
+                       *curve-default-ar160-params*)
+                 (list *chk-curve-fr449-params*
+                       *chk-curve-fr256-params*
+                       *chk-curve-fr256-params-old*
+                       *chk-curve-default-ar160-params*))))
+(check-curves)
 
 (defun init-pairing (&optional (params nil params-supplied-p))
   "Initialize the pairings lib.
