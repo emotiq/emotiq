@@ -35,9 +35,8 @@ THE SOFTWARE.
                lisp-object-encoder
                useful-macros
                usocket
-               bloom-filter
                ads-clos)
-  :in-order-to ((test-op (test-op "cosi-bls-test")))
+  :in-order-to ((test-op (test-op "cosi-bls-tests")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
@@ -49,10 +48,9 @@ THE SOFTWARE.
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
+                                     (:file "range-proofs")
                                      (:file "transaction")
-                                      (:file "cosi-handlers")
-                                     
-                                     (:file "range-proofs")))))
+                                     (:file "cosi-handlers")))))
 
 (defsystem "cosi-bls/test/allegro"
   :description "Allegro specific CAS timing code from dbm."
@@ -61,3 +59,16 @@ THE SOFTWARE.
                         :pathname "./"
                         :components ((:file "test-cas")))))
                         
+(defsystem "cosi-bls-tests"
+  :depends-on (lisp-unit
+               cosi-bls)
+  :perform  (test-op (o s)
+                     (symbol-call :lisp-unit :run-tests
+                                  :all :cosi-tests))
+  :components ((:module package
+                :pathname "t/"
+                :components ((:file "package")))
+               (:module tests
+                :pathname "t/"
+                :components ((:file "cosi-tests")))))
+  

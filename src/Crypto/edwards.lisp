@@ -88,6 +88,9 @@ THE SOFTWARE.
           :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
    ))
 
+(defvar *chk-curve1174*
+  #x0a3b6b42e54adadf8d667141330d1d7416c87091c0d597adb20eb27d5429c5144)
+
 ;; ---------------------------
 
 (defvar *curve-E382*
@@ -104,6 +107,9 @@ THE SOFTWARE.
           :x  3914921414754292646847594472454013487047137431784830634731377862923477302047857640522480241298429278603678181725699
           :y  17)
    ))
+
+(defvar *chk-curve-E382*
+  #x0fb76d134d0df4bb1b04994ded81197a2501c5cbcd233660213c6201d7a82eead)
 
 ;; ---------------------------
 
@@ -122,6 +128,9 @@ THE SOFTWARE.
           :y  34)
    ))
 
+(defvar *chk-curve41417*
+  #x0be03fd15c1d4e68f85da60dd6fe6324275a6ddd3059764bad546c73c7f03d402)
+
 ;; ---------------------------
 
 (defvar *curve-E521*
@@ -138,6 +147,9 @@ THE SOFTWARE.
           :x  1571054894184995387535939749894317568645297350402905821437625181152304994381188529632591196067604100772673927915114267193389905003276673749012051148356041324
           :y  12)
    ))
+
+(defvar *chk-curve-E521*
+  #x0dceb7761259b1b090f5e3dc0a370ed3169a7cb8bb29990efda6158acb3c2716e)
 
 ;; ------------------------------------------------------
 
@@ -200,7 +212,7 @@ THE SOFTWARE.
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
-       (let* ((alpha (random-between 1 *ed-q*)))
+     (let* ((alpha (random-between 1 *ed-q*)))
          (with-mod *ed-q*
            (make-ed-proj-pt
             :x (m* alpha x)
@@ -455,11 +467,14 @@ THE SOFTWARE.
 |#
 
 (defun ed-mul (pt n)
+  #|
   (let* ((alpha  (* *ed-r* *ed-h* (random-between 1 #.(ash 1 48)))))
-    (ed-basic-mul pt (+ n alpha))))
+    (ed-basic-mul pt (+ n alpha)))
+  |#
+  (ed-basic-mul pt n))
 
 (defun ed-div (pt n)
-  (with-mod *ed-q*
+  (with-mod *ed-r*
     (ed-mul pt (m/ n))))
 
 (defun ed-nth-pt (n)
@@ -540,6 +555,13 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------
 
+(defun ed-valid-point-p (pt)
+  (and (not (ed-neutral-point-p pt))
+       (ed-satisfies-curve pt)
+       (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*)))
+       pt))
+
+#|
 (defun ed-validate-point (pt)
   ;; guard against neutral point
   (assert (not (ed-neutral-point-p pt)))
@@ -547,6 +569,11 @@ THE SOFTWARE.
   (assert (ed-satisfies-curve pt))
   ;; guard against small subgroup attack
   (assert (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*))))
+  pt)
+|#
+
+(defun ed-validate-point (pt)
+  (assert (ed-valid-point-p pt))
   pt)
 
 ;; -----------------------------------------------------------------
@@ -587,10 +614,6 @@ THE SOFTWARE.
          (pt   (ed-nth-pt skey)))
     (values skey pt)))
 
-(defun ed-random-generator ()
-  "Every point of the curve is a generator"
-  (second (multiple-value-list (ed-random-pair))))
-
 ;; -----------------------------------------------------
 ;; Hashing onto curve
 
@@ -613,12 +636,19 @@ we are done. Else re-probe with (X^2 + 1)."
                      (y  (if (eql sgn (ldb (byte 1 0) y))
                              y
                            (m- y))))
-                (make-ecc-pt
-                 :x  x
-                 :y  y))
+                (or (ed-valid-point-p
+                     (ed-basic-mul (make-ecc-pt
+                                    :x x
+                                    :y y)
+                                   *ed-h*))
+                    (iter (m+ 1 (m* x x)))))
             ;; else 
             (iter (m+ 1 (m* x x)))
             ))))))
+
+(defun ed-random-generator ()
+  (ed-from-hash (get-hash-nbits (1+ (ed-nbits))
+                                (random-between 1 *ed-q*))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
