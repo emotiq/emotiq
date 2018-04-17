@@ -156,11 +156,7 @@ to Alice, and 1000 to David."
 
 (defun get-test-blockchain-penultimate-tx ()
   (emotiq:with-blockchain-context (*test-blockchain-context*)
-    (emotiq:hash-pointer-item
-     (emotiq:hash-pointer-of-transaction
-      (emotiq:hash-pointer-item
-       (emotiq:hash-pointer-of-previous-block
-        (emotiq:last-block)))))))
+    (first (emotiq:transactions (emotiq:prev-block (emotiq:last-block))))))
 
 (defun blockchain-test-2 ()
   "Test by first invoking function blockchain-test-1, q.v., and then attempting

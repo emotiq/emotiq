@@ -76,7 +76,7 @@ ellipsis (...); and it only uses 2 character cells for a bit of compactness."
 
 (defun get-block-timestamp-string (blockchain-block)
   (with-output-to-string (out)
-    (stamp-time (timestamp blockchain-block) out)))
+    (stamp-time (block-timestamp blockchain-block) out)))
   
 
 
@@ -902,13 +902,8 @@ ellipsis (...); and it only uses 2 character cells for a bit of compactness."
 
 
 (defun make-genesis-block ()
-  (let* ((b (make-blockchain-block))
-         (transaction (make-genesis-transaction *minter-0-pkey-hash*)))
-    (setf (timestamp b) (get-timestamp))
-    (setf (hash-pointer-of-previous-block b) nil)
-    (setf (hash-pointer-of-transaction b)
-          (make-hash-pointer-for-transaction transaction))
-    (values transaction b)))
+  (let ((tx (make-genesis-transaction *minter-0-pkey-hash*)))
+    (values tx (create-block 0 nil (list tx)))))
 
 
 
@@ -1018,15 +1013,13 @@ have been visited."
   `(loop with ,block-var = (last-block)
          while ,block-var
          do (progn ,@body)
-            (setq ,block-var (previous-block ,block-var))))
+            (setq ,block-var (prev-block ,block-var))))
 
 (defmacro do-transactions ((tx-var block) &body body)
   (let ((tx-list '#:tx-list))
     `(let ((,tx-list                    ; temporary for now! real multiple
                                         ; transactions per block soon!
-             (list
-              (hash-pointer-item
-               (hash-pointer-of-transaction ,block)))))
+             (transactions ,block)))
        (loop for ,tx-var in ,tx-list
              do (progn ,@body)))))
 
@@ -1244,20 +1237,9 @@ should be signed, and only coinbase transactions are not signed."
 
 (defun add-transaction-to-blockchain (transaction)
   (require-blockchain)                  ; error checking
-  (let* ((hash-pointer-of-transaction
-           (make-hash-pointer-for-transaction transaction))
-         (previous-block (last-block))
-         (hash-pointer-of-previous-block
-           (make-hash-pointer-for-block previous-block))
-         (epoch (1+ (epoch-of-block previous-block)))
-         (timestamp (get-timestamp))
-         (b (make-blockchain-block
-             :timestamp timestamp
-             :hash-pointer-of-previous-block 
-             hash-pointer-of-previous-block
-             :hash-pointer-of-transaction
-             hash-pointer-of-transaction
-             :epoch-of-block epoch)))
+  (let* ((previous-block (last-block))
+         (epoch (1+ (epoch previous-block)))
+         (b (create-block epoch previous-block (list transaction))))
     (loop for tx-in in (transaction-inputs transaction)
           do (setf (%tx-in-epoch tx-in) epoch))
     (setf (last-block) b)
@@ -1276,7 +1258,7 @@ should be signed, and only coinbase transactions are not signed."
 
 (defun get-current-epoch ()
   (+                           ; 1+, since it's for the pending block,
-   (epoch-of-block             ; 1 greater than last block
+   (epoch                      ; 1 greater than last block
     (last-block))
    1))
 
@@ -1363,7 +1345,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 (defun print-block-info (block)
   (format t "Time: ~a~%" (get-block-timestamp-string block))
-  (let ((transaction (hash-pointer-item (hash-pointer-of-transaction block))))
+  (let ((transaction (first (emotiq:transactions block))))
     (format t "TX: ~a~%" transaction)))
 
 

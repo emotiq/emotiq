@@ -7,37 +7,83 @@
 
                                                                                 ;
 (defclass block ()
-  ((block-sw-version :initform 0)
-   (block-height
-    :accessor block-height
-    :documentation "Position of block in the chain, an integer.")
+  ((protocol-version
+    :accessor protocol-version
+    :initform 1
+    :documentation 
+      "Version of the protocol/software, an integer")
 
-   (prev-block-hash
-    :documentation "Hash of previous block (nil for genesis block).")
+   (epoch                               ; aka "height"
+    :initarg :epoch :accessor epoch
+    :initform nil 
+    :documentation
+      "The integer of the epoch that this block is a part of."
+      ;; height: "Position of block in the chain, an integer."
+      )
+
    (prev-block
     :accessor prev-block
     :documentation "Previous block (nil for genesis block).")
+   (prev-block-hash
+    :accessor prev-block-hash
+    :documentation "Hash of previous block (nil for genesis block).")
 
    (merkle-root-hash
+    :accessor merkle-root-hash
     :documentation "Merkle root hash of block-transactions.")
-   (block-transactions
-    :documentation "Sequence of transactions"))
+
+   (block-timestamp
+    :accessor block-timestamp
+    :documentation 
+      "Approximate creation time in seconds from January 1, 1900 GMT")
+
+   ;; Block-transactions is generally what's considered the main
+   ;; contents of a block whereas the rest of the above comprises
+   ;; what's known as the 'block header' information.
+   (transactions
+    :accessor transactions
+    :documentation "Sequence of transactions")
+
+   ;; Caller can set and maintain these slots. These could be set to
+   ;; contain a treap or possibly for now just a simple list.
+   (validator-keys-joining
+    :accessor validator-keys-joining
+    :documentation "The validators nodes joining in this epoch.")
+   (validator-keys-leaving
+    :accessor validator-keys-leaving
+    :documentation "The validator nodes leaving in this epoch."))
+
+
   (:documentation "A block in the Emotiq chain."))
 
-;; Start with a something that resembles the basic Bitcoin-like block
-;; header for now. Add advanced features, using the chain/block
-;; prototype, later. -mhd, 4/16/18
 
 
-
-(defun make-block (height prev-block transactions)
-  (let ((block (make-block)))
-    (setf (block-height block) height)
+(defun create-block (epoch prev-block transactions)
+  (let ((block (make-instance 'block :epoch epoch)))
     (setf (prev-block block) prev-block)
-    (setf (prev-block-hash block) (hash-block prev-block))
+    (setf (prev-block-hash block) 
+          (if (null prev-block)
+              nil
+              (hash-block prev-block)))
     (setf (merkle-root-hash block)
           (compute-merkle-root-hash transactions))
-    (setf (block-transactions block) transactions)))
+    (setf (transactions block) transactions)
+    (setf (block-timestamp block) (get-universal-time))
+    block))
+
+
+
+(defun hash-block (block)
+  (hash-256-string (serialize-block block)))
+
+(defun serialize-block (block)  
+  (with-output-to-string (out)
+    (flet ((emit (x)
+             (format out "~a " x)))
+      (emit (protocol-version block))
+      (emit (epoch block))
+      (emit (prev-block-hash block))
+      (emit (merkle-root-hash block)))))
 
 
 
@@ -54,57 +100,24 @@
    #'hash-256-string))
 
 (defun compute-merkle (nodes hash-fn)
+  "Compute merkle root hash on nonempty list of hashables NODES."
+  (assert (not (null nodes)) () "NODES must not be null.")
   (cond
-    ((null nodes) nil)                  ; degenerate case => nil
     ((null (rest nodes))                ; just 1
      (funcall hash-fn (first nodes)))
     (t (compute-merkle-pairs nodes hash-fn))))
 
 
 (defun compute-merkle-pairs (nodes hash-fn)
-  (flet ((H (x) (funcall hash-fn x))
+  (flet ((hsh (x) (funcall hash-fn x))
          (pair (a b) (concatenate 'string a b)))
-    (if (null (cddr nodes))
+    (if (null (rest (rest nodes)))
         ;; 2 left
-        (H (pair (first nodes) (second nodes)))
+        (hsh (pair (first nodes) (second nodes)))
         ;; three or more:
         (loop for (a b . rest?) on nodes by #'cddr
               when (and (null rest?) (null b))
                 do (setq b a) ; odd-length row case: duplicate last row item
-              collect (H (pair a b))
+              collect (hsh (pair a b))
                 into row
               finally (return (compute-merkle row hash-fn))))))
-
-
-
-#+omnichain-emotiq-future             ; from Mark E, get to this later
-(defclass chain/block ()
-  ((version :initarg :version :accessor version
-            :initform "20180404a")
-   (epoch ;; aka "height"
-    :initarg :epoch :accessor epoch
-    :initform nil 
-    :documentation "The integer of the epoch that this block is a part of.")
-   (block-hash
-    :initarg :block-hash :accessor block-hash
-    :initform nil)
-   (previous-block
-    :initarg :previous-block :accessor previous-block
-    :initform nil)
-   (genesis-block
-    :initarg :genesis-block :accessor genesis-block
-    :initform nil
-    :documentation "The hash of the genesis block.")
-   (transaction-blocks
-    :initarg :transaction-blocks :accessor transaction-blocks
-    :initform (ads-treap:make-authenticated-treap))
-   (validator-keys-joining
-    :initarg :validator-keys-joining :accessor validator-keys-joining
-    :initform (ads-treap:make-authenticated-treap)
-    :documentation "The validators nodes joining in this epoch.")
-   (validator-keys-leaving
-    :initarg :validator-keys-leaving :accessor validator-keys-leaving
-    :initform (ads-treap:make-authenticated-treap)
-    :documentation "The validator nodes leaving in this epoch."))
-  (:documentation "A block in the Emotiq chain."))
-
