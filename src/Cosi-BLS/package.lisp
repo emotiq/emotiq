@@ -202,12 +202,21 @@
   (:export
    :txin
    :make-txin
-
+   :txin-hashlock
+   :txin-pkey
+   :txin-sig
+   :txin-prf
+   
    :txout
    :make-txout
+   :txout-hashlock
+   :txout-hashpkey
+   :txout-prf
    :txout-encr
    
    :transaction
+   :trans-txins
+   :trans-txouts
    :make-transaction
    :validate-transaction
 
