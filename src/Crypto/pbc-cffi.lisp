@@ -54,6 +54,7 @@ THE SOFTWARE.
    :crypto-text-vec
    
    :init-pairing
+   :need-pairing
    :set-generator  ;; 1 each for G1, and G2 groups
    
    :get-g1
@@ -123,6 +124,11 @@ THE SOFTWARE.
    :confidential-purchase-tbuy
    :confidential-purchase-rsell
    :check-confidential-purchase
+
+   :*curve*
+   :*curve-name*
+   :*g1-zero*
+   :*g2-zero*
    ))
 
 (in-package :pbc-interface)
@@ -363,7 +369,10 @@ not belonging to any field"))
 (defstruct curve-params
   name
   pairing-text
-  g1 g2
+  g1 g2)
+
+(defstruct (full-curve-params
+            (:include curve-params))
   ;; cached values filled in at init
   order g1-len g2-len zr-len gt-len)
 
@@ -402,6 +411,9 @@ Barreto and Naehrig.
 Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
+(defparameter *chk-curve-fr449-params*
+  #x0732d454c47858b528680914049875b1b5620587b401786af7463846dcdd2fc45)
+
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
 (defparameter *curve-fr256-params*
@@ -433,6 +445,9 @@ square roots.  This curve will wrap 1 in 92 trillion hash/256.
 Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
 Barreto and Naehrig
 Size of q^12 is 3072 bits.")
+
+(defparameter *chk-curve-fr256-params*
+  #x0c99a23cae907bbb3675b74ba04d731c78a68dba60f91bddd9c91a83a546c8e74)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
@@ -598,6 +613,9 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   "Ben Lynn's quick and dirty F-type generation. This curve will wrap
 3 out of 4 hash/256")
 
+(defparameter *chk-curve-fr256-params-old*
+  #x0f78607c325104ff451da10c516b929b4cdf6a12609316947bc6c29d1a0d77eab)
+
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
   (make-curve-params
@@ -625,17 +643,22 @@ developed and 80-bit security is no longer sufficient. But this curve
 serves as a check on our implementation with his pbc-calc for
 comparison.")
 
+(defparameter *chk-curve-default-ar160-params*
+  #x08c6f089a6c6d637b34b3e9653dbe2a7430556624fc0f964d8ee35a1ac03ed6b7)
+
 ;; ---------------------------------------------------------------------------------------
 
 (defparameter *curve*      nil)
 
-(define-symbol-macro *curve-order*   (curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
+(define-symbol-macro *curve-name*    (curve-params-name    *curve*)) ;; symbolic name of curve
 (define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
 (define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
-(define-symbol-macro *g1-size*       (curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
-(define-symbol-macro *g2-size*       (curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
-(define-symbol-macro *zr-size*       (curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
-(define-symbol-macro *gt-size*       (curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
+
+(define-symbol-macro *curve-order*   (full-curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
+(define-symbol-macro *g1-size*       (full-curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
+(define-symbol-macro *g2-size*       (full-curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
+(define-symbol-macro *zr-size*       (full-curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
+(define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
 
 ;; -------------------------------------------------
 
@@ -646,7 +669,7 @@ comparison.")
   "Initialize the pairings lib.
 
   If params not specified and we haven't been called yet, or specified
-as nil, then use default parameters for 256-bit G1 BN-curve. If params
+as nil, then use default parameters for 449-bit G1 BN-curve. If params
 not specified and we have already been called, just skip doing
 anything. Specified params forces a cryptosystem state change.
 
@@ -657,8 +680,8 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
-  (load-dlls)
   (mpcompat:with-lock (*crypto-lock*)
+    (load-dlls)
     (let ((prev   *curve*)
           (params (or params
                       *curve-fr449-params*)))
@@ -674,7 +697,11 @@ SMP access. Everything else should be SMP-safe."
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
               (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
-              (setf *curve* params
+              (setf *curve* (make-full-curve-params
+                             :name          (curve-params-name         params)
+                             :pairing-text  (curve-params-pairing-text params)
+                             :g1            (curve-params-g1           params)
+                             :g2            (curve-params-g2           params))
                     *g1-size*  (cffi:mem-aref ansbuf :long 0)
                     *g2-size*  (cffi:mem-aref ansbuf :long 1)
                     *gt-size*  (cffi:mem-aref ansbuf :long 2)

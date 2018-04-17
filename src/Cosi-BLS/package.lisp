@@ -30,6 +30,7 @@
 (defpackage :range-proofs
   (:use :common-lisp
    :crypto/modular-arith
+   :vec-repr
    :hash)
   (:import-from :edwards-ecc
    :ed-mul
@@ -38,26 +39,37 @@
    :ed-div
    :ed-negate
    :ed-affine
+   :ed-projective
    :*edcurve*
    :*ed-r*
    :*ed-q*
    :*ed-gen*
    :ed-curve-name
    :random-between
+   :ed-neutral-point
    :ed-pt=
    :ed-compress-pt
    :ed-decompress-pt
    :with-ed-curve
    :ed-nth-pt
+   :ed-random-generator
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:export
+   :hpt
+   :range-proof-block
+   :range-proof-block-sum-gamma
+   :range-proof-block-sum-cmt
+   :range-proof-block-proofs
+   :range-proof
    :make-range-proofs
+   :make-range-proof
    :validate-range-proofs
-   :make-range-prover
-   :range-proof-block))
+   :validate-range-proof
+   :simple-commit
+   :proof-simple-commitment))
 
 
 (defpackage :crypto-purchase
@@ -179,15 +191,32 @@
 
 (defpackage :cosi/proofs
   (:use
-   :common-lisp :cosi
+   :common-lisp
+   :cosi
    :crypto/modular-arith
    :vec-repr
-   :edec)
+   :edec
+   :pbc)
   (:import-from :ecc-crypto-b571
    :random-between)
   (:export
+   :txin
+   :make-txin
+
+   :txout
+   :make-txout
+   :txout-encr
+   
    :transaction
+   :make-transaction
    :validate-transaction
+
+   :find-txout-for-pkey-hash
+   :decrypt-txout-info
+   :txout-secrets
+   :txout-secr-pkey
+   :txout-secr-amt
+   :txout-secr-gamma
    ))
 
 

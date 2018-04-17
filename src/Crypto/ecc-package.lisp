@@ -78,6 +78,7 @@ THE SOFTWARE.
    :hash/512
    :get-hash-nbytes
    :hashable
+   :hash-check
    ))
 
 (defpackage :ecc-crypto-b571
@@ -200,6 +201,7 @@ THE SOFTWARE.
    :ed-compress-pt
    :ed-decompress-pt
    :ed-validate-point
+   :ed-valid-point-p
    :ed-random-pair
    :ed-random-generator
    :ed-from-hash
