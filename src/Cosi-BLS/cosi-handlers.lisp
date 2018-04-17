@@ -305,13 +305,29 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   nil)
 
 (defmethod node-check-transaction (node reply-to (msg cosi/proofs:transaction))
-  (let ((key  (hash:hash/256 msg)))
+  (check-transaction-math msg))
+
+(defun check-transaction-math (tx)
+  "TX is a transaction. Check that every TXIN and TXOUT has a valid
+range proof, and that the sum of TXIN equals the sum of TXOUT. In any
+event record the transaction in a cache log to speed up later block
+validation. If transaction was valid record itself as the value
+corresponding to its hash as key, otherwise record a nil.
+
+Also record the TXOUTS as unspent.
+
+Return nil if transaction is invalid."
+  (let ((key  (hash:hash/256 tx)))
     (multiple-value-bind (v present-p) (lookup-transaction key)
-      (declare (ignore v))
-      (unless present-p
-        (cache-transaction key (and (cosi/proofs:validate-transaction msg)
-                                    msg)))
-      )))
+      (cond (present-p  v)  ;; return nil or non-nil as valid
+            (t 
+             (let ((valid-p (cosi/proofs:validate-transaction tx)))
+               (cache-transaction key (and valid-p tx))
+               (when valid-p
+                 (dolist (txout (cosi/proofs:trans-txouts tx))
+                   (record-new-utx (cosi/proofs:txout-hashlock)))
+                 t))) ;; indicate valid transaction
+            ))))
 
 ;; -------------------------------
 ;; testing-version transaction cache
@@ -326,28 +342,61 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   (gethash key *trans-cache*))
 
 ;; -------------------------------
-;; testing-version UTX log
+;; testing-version TXOUT log
 
-(defvar *utx-log*  (make-hash-table
+(defvar *txout-log*  (make-hash-table
                     :test 'equalp))
 
 (defun record-new-utx (key)
+  "KEY is Hash(P,C) of TXOUT"
   (multiple-value-bind (x present-p)
-      (gethash key *utx-log*)
+      (gethash key *txout-log*)
     (declare (ignore x))
     (when present-p
-      (error "Effective Hash Collision!!!"))
-    (setf (gethash key *utx-log*) :spendable)))
+      (error "Shouldn't Happen: Effective Hash Collision!!!"))
+    (setf (gethash key *txout-log*) :spendable)))
 
-(defun log-utx-spend (key)
-  (multiple-value-bind (spend-state present-p)
-      (gethash key *utx-log*)
-    (unless present-p
-      (error "Attempt to spend non-existent UTX"))
-    (if (eq spend-state :spent)
-        (error "Attempt to double-spend")
-      (setf (gethash key *utx-log*) :spent))))
+;; -------------------------------------------------------------------
 
+(defun check-block-transactions (tlst)
+  "TLST is list of transactions from current pending block. Return nil
+if invalid block."
+  (let ((valid-p (and (every 'check-transaction-math tlst)
+                      ;; now we have checked the math on all
+                      ;; transactions, recorded the transactions in a
+                      ;; log, and have now seen all TXOUT and recorded
+                      ;; them in another log.
+                      ;;
+                      ;; So check TXINS to be sure no double spending,
+                      ;; and no spending of unseen TXOUTS
+                      (every 'check-double-spend tlst))))
+    (unless valid-p
+      ;; remove all TX that were invalid - valid one's might show up
+      ;; again in another attempt to form a block. And remove all
+      ;; TXOUT that were spawned by invalid TX.
+      (dolist (tx tlst)
+        (let ((key (hash:hash/256 tx))) 
+          (unless (gethash key *trans-cache*) ;; remove TX if was invalid
+            (remhash key *trans-cache*)
+            (dolist (txout (cosi/proofs:trans-txouts tx)) ;; remove its spawned TXOUTs
+              (remhash (cosi/proofs:txout-hashlock txout) *txout-log*)))
+          )))
+    valid-p))
+
+(defun check-double-spend (tx)
+  "TX is transaction in current pending block.  Check every TXIN to be
+sure no double-spending, nor referencing unknown TXOUT. Return nil if
+invalid TX."
+  (labels ((txin-ok (txin)
+             (let ((key (cosi/proofs:txin-hashlock txin)))
+               (multiple-value-bind (v present-p)
+                   (gethash key *txout-log*)
+                 (when (and present-p
+                            (eq v :spendable))
+                   (setf (gethash key *txout-log*) tx)) ;; record where TXOUT was spent
+                 ))))
+    (every #'txin-ok (cosi/proofs:trans-txins tx))))
+    
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
@@ -501,9 +550,39 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 ;; each different type of Cosi network... For now, just act as notary
 ;; service - sign anything.
 
+(defvar *byz-thresh*  0)  ;; established at bootstrap time - consensus threshold
+(defvar *blockchain*  (make-hash-table
+                       :test 'equalp))
+
+(defun signed-message (msg)
+  (NYI "signed-message"))
+
+(defun signed-bitmap (msg)
+  (NYI "signed-bitmap"))
+
+(defun block-hash (blk)
+  (NYI "block-hash"))
+
+(defun get-block-transactions (blk)
+  (NYI "get-block-transactions"))
+
 (defun validate-cosi-message (node consensus-stage msg)
-  (declare (ignore node consensus-stage msg)) ;; for now, in sim as notary
-  t)
+  (declare (ignore node)) ;; for now, in sim as notary
+  (ecase consensus-stage
+    (:prepare
+     ;; msg is a pending block
+     (let ((txs  (get-block-transactions msg)))
+       (check-block-transactions txs))) ;; returns nil if invalid - should not sign
+
+    (:commit
+     ;; message is a block with multisignature check signature for
+     ;; validity and then sign to indicate we have seen and committed
+     ;; block to blockchain. Return non-nil to indicate willingness to sign.
+     (when (and (pbc:check-message (signed-message msg))
+                (>= (logcount (signed-bitmap msg)) *byz-thresh*))
+       (let ((key (block-hash (pbc:signed-message-msg msg))))
+         (setf (gethash key *blockchain*) msg))))
+    ))
 
 (defun node-cosi-signing (node reply-to consensus-stage msg seq-id)
   ;; Compute a collective BLS signature on the message. This process
