@@ -570,3 +570,7 @@ THE SOFTWARE.
            bev)
           )))
 
+(defun int= (a b)
+  "Easy way to do equality testing on UB8V items"
+  (= (int a) (int b)))
+

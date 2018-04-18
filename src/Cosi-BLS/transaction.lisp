@@ -11,7 +11,9 @@
    (pkey      :reader  txin-pkey     ;; P in G_2
               :initarg :pkey)
    (sig       :reader  txin-sig      ;; Sig(h, P) in G_1
-              :initarg :sig))
+              :initarg :sig)
+   (encr      :reader  txin-encr     ;; Encrypted amount info
+              :initarg :encr))
   (:documentation "The 4-tuple that represents the txin side of a simple transaction"))
 
 (defclass uncloaked-txout ()
@@ -70,13 +72,15 @@ the simple commitment to the uncloaked value"
   "Make a TXIN with value proof"
   (let* ((prf       (range-proofs:make-range-proof amt :gamma gam))
          (hashlock  (make-hashlock prf pkey))
-         (sig       (pbc:sign-hash hashlock skey)))
+         (sig       (pbc:sign-hash hashlock skey))
+         (encr      (ibe-encrypt amt pkey :spend-amount)))
     (values 
      (make-instance 'txin
                     :hashlock  hashlock
                     :prf       prf
                     :pkey      pkey
-                    :sig       sig)
+                    :sig       sig
+                    :encr      encr)
      gam)))
 
 (defmethod make-txout ((amt integer) (pkey pbc:public-key))
@@ -183,14 +187,22 @@ correction factor gamadj on curve H for the overall transaction."
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
 
-(defun decrypt-txout-info (encr skey)
-  (pbc:ibe-decrypt encr skey))
+(defun decrypt-txin-info  (txin skey)
+  (pbc:ibe-decrypt (txin-encr txin) skey))
+
+(defmethod find-txin-for-pkey-hash (pkey (trn transaction))
+  (find pkey (trans-txins trn)
+        :key 'txin-pkey
+        :test 'int=))
+
+
+(defun decrypt-txout-info (txout skey)
+  (pbc:ibe-decrypt (txout-encr txout) skey))
 
 (defmethod find-txout-for-pkey-hash (pkey-hash (trn transaction))
   (find pkey-hash (trans-txouts trn)
         :key  'txout-hashpkey
-        :test (lambda (k1 k2)
-                (= (int k1) (int k2)))))
+        :test 'int=))
 
 ;; ------------------------------------------------------------------
 #|
