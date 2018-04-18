@@ -153,8 +153,28 @@ are in place between nodes.
 ;; Ex: Don't include SIR messages
 ;; (setf *log-filter* (log-exclude "SIR"))
 
+#+IGNORE
 (defun new-uid ()
   (incf *last-uid*))
+
+#+NOTYET
+(defun encode-uid (machine-id process-id numeric-id)
+  (logior (ash machine-id 48)
+          (ash process-id 32)
+          numeric-id))
+
+#+IGNORE
+(defun generate-new-monotonic-id ()
+  (incf *last-uid*))
+
+#+NOTYET ; would like to use this but getpid is CCL-specific
+(defun new-uid ()
+  (encode-uid #+OPENMCL (ccl::primary-ip-interface-address) ; 32 bits
+              (logand #xFFFF #+OPENMCL (ccl::getpid)) ; 16 bits
+              (logand #xFFFF (generate-new-monotonic-id)))) ; 32 bits
+
+(defun new-uid ()
+  (uuid::uuid-to-integer (uuid::make-v1-uuid)))
 
 (defun uid? (thing)
   (integerp thing))
@@ -1722,6 +1742,7 @@ gets sent back, and everything will be copacetic.
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
     (progn
       (sleep .5)
+      ; TODO: Get rid of this call. See transmit-msg for guidance
       (cosi-simgen::internal-send-socket "127.0.0.1" port *shutdown-msg*)
       (sleep .5)
       (process-kill process)
@@ -1743,35 +1764,6 @@ gets sent back, and everything will be copacetic.
 (defmethod transmit-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   (declare (ignore srcuid))
   (error "Bug: Cannot transmit to a local node!"))
-
-;;; Need to write an equivalent for this in Lispworks
-#+IGNORE
-(defun internal-send-socket (ip port local-host local-port packet)
-    (let ((nb (length packet)))
-      (when (> nb cosi-simgen::*max-buffer-length*)
-        (error "Packet too large for UDP transmission"))
-      (let ((socket (usocket:socket-connect ip port
-                                            :local-host local-host
-                                            :local-port local-port
-                                            :protocol :datagram)))
-        ;; (pr :sock-send (length packet) real-address packet)
-        (unless (eql nb (usocket:socket-send socket packet nb))
-          (ac::pr :socket-send-error ip packet))
-        (usocket:socket-close socket)
-        )))
-
-#+IGNORE
-(defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
-  "Send message across network.
-   srcuid is that of the (real) local gossip-node that sent message to this node."
-  (maybe-log node :TRANSMIT msg)
-  (;cosi-simgen::internal-send-socket ; cannot use this because it doesn't have a local-port option
-   internal-send-socket
-   (real-address node)
-   (real-port node)
-   "localhost"
-   *actual-gossip-port* ; or nil if you don't care
-   (loenc:encode (list (real-uid node) srcuid msg))))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
@@ -1798,8 +1790,6 @@ gets sent back, and everything will be copacetic.
   (let ((stream (ensure-open-stream (real-address node) (real-port node))))
     (when (streamp stream)
       (loenc:serialize (list (uid node) (real-uid node) srcuid msg) stream))))
-
-
 
 #|
 (defun ensure-open-stream (ip port)
@@ -1904,6 +1894,9 @@ gets sent back, and everything will be copacetic.
   :ADDRESS 'NIL
   :NEIGHBORS (list (uid rnode))))
 ; (solicit-wait localnode :count-alive)
+; (solicit-wait localnode :list-alive)
+; (solicit localnode :gossip-relate-unique :foo :bar)
+; (solicit-wait localnode :gossip-lookup-key :foo)
 
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
@@ -1947,7 +1940,7 @@ gets sent back, and everything will be copacetic.
 ; (solicit (first (listify-nodes)) :gossip-tally :foo 1)
 ; (get-kvs :foo) ; should return a list of (node . 2)
 
-#+IGNORE
+#+TESTING
 (setf node (make-node
   :UID 253
   :ADDRESS 'NIL
@@ -1955,10 +1948,10 @@ gets sent back, and everything will be copacetic.
   :LOGFN 'GOSSIP::DEFAULT-LOGGING-FUNCTION
   :KVS (as-hash-table 'eql '((key1 . 1) (key2 . 2) (key3 . 3)))))
 
-#+IGNORE
+#+TESTING
 (save-node node *standard-output*)
 
-#+IGNORE
+#+TESTING
 (setf msg (make-solicitation :kind :list-alive))
-#+IGNORE
+#+TESTING
 (copy-message msg)
