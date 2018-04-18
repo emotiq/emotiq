@@ -1,0 +1,418 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-drawing</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-strings.html">
+Prev:&nbsp;plotter-strings.lisp</a>
+<br/>
+<a href="plotter-watermark.html">
+Next:&nbsp;plotter-watermark.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-drawing.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-drawing.lisp
+</h2>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Method summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3439">
+draw-horizontal-bars</a>
+</td>
+<td class="summary">
+port (bars &lt;pair-scanner&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3441">
+draw-polyline</a>
+</td>
+<td class="summary">
+port (pairs &lt;pair-scanner&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3440">
+draw-staircase</a>
+</td>
+<td class="summary">
+port (pairs &lt;pair-scanner&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3438">
+draw-vertical-bars</a>
+</td>
+<td class="summary">
+port (bars &lt;pair-scanner&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3445">
+pw-plot-bars-xv-yv</a>
+</td>
+<td class="summary">
+(cpw &lt;plotter-mixin&gt;) port xvector yvectors <em>&amp;key</em> (color
+                                                  #(:rgb 0.0 0.5 0.0)) (neg-color
+                                                                        color) alpha thick (linewidth
+                                                                                            (or thick
+                                                                                                1)) (bar-width
+                                                                                                     6) (symbol
+                                                                                                         (ecase (length yvectors)
+                                                                                                           (2
+                                                                                                            :sigma)
+                                                                                                           (3
+                                                                                                            :hlc-bar)
+                                                                                                           (4
+                                                                                                            :ohlc-bar))) <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3443">
+pw-plot-xv-yv</a>
+</td>
+<td class="summary">
+(cpw &lt;plotter-mixin&gt;) port xvector yvector <em>&amp;key</em> legend-x legend-y legend-anchor plot-style <em>&amp;allow-other-keys</em></td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3437">
+draw-path</a>
+</td>
+<td class="summary">
+port <em>&amp;rest</em> positions</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3444">
+get-bar-symbol-plotfn</a>
+</td>
+<td class="summary">
+port symbol color neg-color bar-width testfn</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3442">
+get-symbol-plotfn</a>
+</td>
+<td class="summary">
+port sf symbol-style</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-drawing.html#_g3446">
+plt-draw-shape</a>
+</td>
+<td class="summary">
+pane port shape x0 y0 x1 y1 <em>&amp;key</em> color alpha filled border-thick border-color border-alpha start-angle sweep-angle</td>
+</tr>
+</table>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3439">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-horizontal-bars&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port (bars &lt;pair-scanner&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3441">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-polyline&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port (pairs &lt;pair-scanner&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3440">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-staircase&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port (pairs &lt;pair-scanner&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3438">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-vertical-bars&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port (bars &lt;pair-scanner&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3445">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+pw-plot-bars-xv-yv&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(cpw &lt;plotter-mixin&gt;) port xvector yvectors <em>&amp;key</em> (color
+                                                  #(:rgb 0.0 0.5 0.0)) (neg-color
+                                                                        color) alpha thick (linewidth
+                                                                                            (or thick
+                                                                                                1)) (bar-width
+                                                                                                     6) (symbol
+                                                                                                         (ecase (length yvectors)
+                                                                                                           (2
+                                                                                                            :sigma)
+                                                                                                           (3
+                                                                                                            :hlc-bar)
+                                                                                                           (4
+                                                                                                            :ohlc-bar))) <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3443">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+pw-plot-xv-yv&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(cpw &lt;plotter-mixin&gt;) port xvector yvector <em>&amp;key</em> legend-x legend-y legend-anchor plot-style <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3437">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-path&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port <em>&amp;rest</em> positions</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3444">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+get-bar-symbol-plotfn&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port symbol color neg-color bar-width testfn</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3442">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+get-symbol-plotfn&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port sf symbol-style</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3446">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plt-draw-shape&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane port shape x0 y0 x1 y1 <em>&amp;key</em> color alpha filled border-thick border-color border-alpha start-angle sweep-angle</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

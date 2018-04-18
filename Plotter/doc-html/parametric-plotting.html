@@ -1,0 +1,962 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+parametric-plotting</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-images.html">
+Prev:&nbsp;plotter-images.lisp</a>
+<br/>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+parametric-plotting.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+parametric-plotting.lisp
+</h2>
+<table style="width: 100%;" class="external-summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="3">
+External symbol summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3585">
+plotter:fplot</a>
+</td>
+<td class="summary">
+pane domain fn <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3584">
+plotter:paramplot</a>
+</td>
+<td class="summary">
+pane domain xfn yfn <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Structure summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3564">
+plot-arg</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3575">
+compute-adaptive-values</a>
+</td>
+<td class="summary">
+xfn yfn tparms xparms yparms</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3582">
+compute-tcheby-tvals</a>
+</td>
+<td class="summary">
+tmin tmax npts</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3574">
+copy-plot-arg</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3576">
+do-param-plotting</a>
+</td>
+<td class="summary">
+plotfn pane xfn yfn npts tparms xparms yparms args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3580">
+fill-in-computed-vals</a>
+</td>
+<td class="summary">
+parms fn tparms</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3579">
+fill-in-estimated-range</a>
+</td>
+<td class="summary">
+parms</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3581">
+fill-in-parms</a>
+</td>
+<td class="summary">
+parms islog fn range tparms screen-size</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3577">
+fill-in-prepfns</a>
+</td>
+<td class="summary">
+islog parms</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3578">
+fill-in-range</a>
+</td>
+<td class="summary">
+parms range</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3585">
+fplot</a>
+</td>
+<td class="summary">
+pane domain fn <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3583">
+internal-paramplot</a>
+</td>
+<td class="summary">
+pane domain xfn yfn <em>&amp;rest</em> args <em>&amp;key</em> tlog xlog ylog xrange yrange npts <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3572">
+make-plot-arg</a>
+</td>
+<td class="summary">
+<em>&amp;key</em> min max prepfn iprepfn vals sf (autoscale t)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3584">
+paramplot</a>
+</td>
+<td class="summary">
+pane domain xfn yfn <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3565">
+plot-arg-autoscale</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3568">
+plot-arg-iprepfn</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3570">
+plot-arg-max</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3571">
+plot-arg-min</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3573">
+plot-arg-p</a>
+</td>
+<td class="summary">
+object</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3569">
+plot-arg-prepfn</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3566">
+plot-arg-sf</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="parametric-plotting.html#_g3567">
+plot-arg-vals</a>
+</td>
+<td class="summary">
+plot-arg</td>
+</tr>
+</table>
+<div class="defstruct">
+<div class="defunsignatures">
+<a id="_g3564">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Structure]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3565">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-autoscale&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the autoscale of the specified plot-arg 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3568">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-iprepfn&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the iprepfn of the specified plot-arg 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3570">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-max&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the max of the specified plot-arg 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3571">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-min&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the min of the specified plot-arg 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3569">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-prepfn&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the prepfn of the specified plot-arg 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3566">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-sf&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the sf of the specified plot-arg 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3567">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-vals&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the vals of the specified plot-arg 
+ </p>
+</div>
+</div>
+</div>
+<div class="defstruct-defuns">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3572">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+make-plot-arg&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;key</em> min max prepfn iprepfn vals sf (autoscale t)</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns a newly created plot-arg. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3574">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+copy-plot-arg&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plot-arg</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns a copy of the specified plot-arg. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3573">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-arg-p&nbsp;&nbsp;</td>
+<td class="lambda-list">
+object</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns T if the specified object is of type plot-arg. 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3575">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+compute-adaptive-values&nbsp;&nbsp;</td>
+<td class="lambda-list">
+xfn yfn tparms xparms yparms</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Collect the function (x,y) values on an adaptive grid for smooth plotting 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3582">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+compute-tcheby-tvals&nbsp;&nbsp;</td>
+<td class="lambda-list">
+tmin tmax npts</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Compute roots of the Tchebyshev polynomial of order npts in the domain 
+ (tmin, tmax) mapped to (-1,1) 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3576">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-param-plotting&nbsp;&nbsp;</td>
+<td class="lambda-list">
+plotfn pane xfn yfn npts tparms xparms yparms args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Internal workhorse routine for functional and parametric plotting 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3580">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-in-computed-vals&nbsp;&nbsp;</td>
+<td class="lambda-list">
+parms fn tparms</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Set up the computed values in the plot-arg structure 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3579">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-in-estimated-range&nbsp;&nbsp;</td>
+<td class="lambda-list">
+parms</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Estimate the range of the function 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3581">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-in-parms&nbsp;&nbsp;</td>
+<td class="lambda-list">
+parms islog fn range tparms screen-size</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Collect the plotting parameters for the plot-arg structure 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3577">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-in-prepfns&nbsp;&nbsp;</td>
+<td class="lambda-list">
+islog parms</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Log plots need pref-functions of log10 and pow10 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3578">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-in-range&nbsp;&nbsp;</td>
+<td class="lambda-list">
+parms range</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Set up the range in the plot-arg object 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3585">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fplot&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane domain fn <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Functional plotting in pane of the function over the indicated domain. 
+ </p>
+<ul>
+<li>
+<p>
+Example: 
+ </p>
+<pre>
+    (plt:fplot 'plt '(-20 20) (lambda (x) (/ (sin x) x)) 
+         :clear t :thick 2 :title &quot;Sinc(x)&quot;) </pre>
+<p>
+where 'plt is the name of the desired plotting window. It will be 
+ created if not already visible on screen. 
+ </p>
+</li>
+</ul>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3583">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+internal-paramplot&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane domain xfn yfn <em>&amp;rest</em> args <em>&amp;key</em> tlog xlog ylog xrange yrange npts <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Internal driver routine for paramplot and fplot 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3584">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+paramplot&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane domain xfn yfn <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Parametric ploting in pane of the xfn and yfn functions over the indicated domain. 
+ </p>
+<p>
+All functional plotting is really performed as parametric plotting. Parametric plotting 
+ allows for non-single-valued functions. 
+ </p>
+<ul>
+<li>
+<p>
+Example: 
+ </p>
+<pre>
+    (plt:paramplot 'plt '(0 1) 
+        (lambda (phi) (cos (* 2 pi phi))) ;; the X-function 
+        (lambda (phi) (sin (* 2 pi phi))) ;; the Y-function 
+        :clear t :thick 2 :title &quot;Circle&quot;) </pre>
+<p>
+where 'plt is the name of the desired plotting window. It will be 
+ created if not already visible on screen. 
+ </p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:59<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

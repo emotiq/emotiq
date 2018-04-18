@@ -1,0 +1,3615 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-classes</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="scanner.html">
+Prev:&nbsp;scanner.lisp</a>
+<br/>
+<a href="plotter-compat.html">
+Next:&nbsp;plotter-compat.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-classes.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-classes.lisp
+</h2>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Variable summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3247">
+*cross-cursor*</a>
+</td>
+<td class="summary">
+(ignore-errors (capi:load-cursor '((:win32
+                                    (translate-logical-pathname &quot;PROJECTS:LIB;crosshair.cur&quot;))
+                                   (:cocoa
+                                    (translate-logical-pathname &quot;PROJECTS:LIB;crosshair.gif&quot;))
+                                   :x-hot
+                                   7
+                                   :y-hot
+                                   7)))</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Class summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3267">
+&lt;legend&gt;</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3248">
+&lt;line-style&gt;</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3263">
+&lt;plot-style&gt;</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3278">
+&lt;plotter-mixin&gt;</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3304">
+&lt;plotter-pane&gt;</a>
+</td>
+<td class="summary">
+inherits from <a href="plotter-classes.html#_g3278"><em class="cl">&lt;plotter-mixin&gt;</em></a> and <em class="cl">output-pane</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3254">
+&lt;symbol-style&gt;</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Method summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3277">
+activep</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3255">
+bar-offset</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3256">
+bar-width</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3258">
+border-alpha</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3259">
+border-color</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3257">
+border-thick</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3324">
+display-pane-of</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3325">
+display-pane-of</a>
+</td>
+<td class="summary">
+(obj capi:pinboard-object)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3270">
+dragging</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3269">
+dx</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3268">
+dy</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3260">
+fill-alpha</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3261">
+fill-color</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3276">
+has-content</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3271">
+height</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3275">
+highlighted</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3264">
+legend</a>
+</td>
+<td class="summary">
+&lt;plot-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3250">
+line-alpha</a>
+</td>
+<td class="summary">
+&lt;line-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3251">
+line-color</a>
+</td>
+<td class="summary">
+&lt;line-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3252">
+line-dashing</a>
+</td>
+<td class="summary">
+&lt;line-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3266">
+line-style</a>
+</td>
+<td class="summary">
+&lt;plot-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3253">
+line-thick</a>
+</td>
+<td class="summary">
+&lt;line-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3249">
+line-type</a>
+</td>
+<td class="summary">
+&lt;line-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3308">
+mark-x</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3306">
+mark-x-raw</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3307">
+mark-y</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3305">
+mark-y-raw</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3262">
+plot-symbol</a>
+</td>
+<td class="summary">
+&lt;symbol-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3318">
+plotter-backing-image</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3316">
+plotter-backing-pixmap</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3296">
+plotter-box</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3315">
+plotter-delay-backing</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3292">
+plotter-delayed-update</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3280">
+plotter-dirty</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3293">
+plotter-display-list</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3314">
+plotter-full-crosshair</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3294">
+plotter-inv-xform</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3283">
+plotter-legend</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3284">
+plotter-legend-anchor</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3287">
+plotter-legend-info</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3286">
+plotter-legend-x</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3285">
+plotter-legend-y</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3303">
+plotter-lock</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3288">
+plotter-magn</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3322">
+plotter-mixin-of</a>
+</td>
+<td class="summary">
+pane-rep <em>&amp;optional</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3290">
+plotter-nominal-height</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3291">
+plotter-nominal-width</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3313">
+plotter-prev-x</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3312">
+plotter-prev-y</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3317">
+plotter-resize-timer</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3289">
+plotter-sf</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3309">
+plotter-valid</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3311">
+plotter-x-readout-hook</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3295">
+plotter-xform</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3302">
+plotter-xlog</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3300">
+plotter-xmax</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3301">
+plotter-xmin</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3310">
+plotter-y-readout-hook</a>
+</td>
+<td class="summary">
+&lt;plotter-pane&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3299">
+plotter-ylog</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3297">
+plotter-ymax</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3298">
+plotter-ymin</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3282">
+preferred-x</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3281">
+preferred-y</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3279">
+reply-mbox</a>
+</td>
+<td class="summary">
+&lt;plotter-mixin&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3265">
+symbol-style</a>
+</td>
+<td class="summary">
+&lt;plot-style&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3272">
+width</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3274">
+x</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3273">
+y</a>
+</td>
+<td class="summary">
+&lt;legend&gt;</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3331">
+all-legends</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3326">
+append-display-list</a>
+</td>
+<td class="summary">
+pane item</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3330">
+append-legend</a>
+</td>
+<td class="summary">
+pane item</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3319">
+destroy-callback</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3327">
+discard-display-list</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3329">
+display-list-empty-p</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3328">
+display-list-items</a>
+</td>
+<td class="summary">
+pane <em>&amp;key</em> discard</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3321">
+maybe-remove-legend</a>
+</td>
+<td class="summary">
+pane x y <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-classes.html#_g3320">
+popup-menu</a>
+</td>
+<td class="summary">
+pane selection x y</td>
+</tr>
+</table>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3267">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;legend&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3277">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+activep&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the activep of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3270">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+dragging&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the dragging of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3269">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+dx&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the dx of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3268">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+dy&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the dy of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3276">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+has-content&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the has-content of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3271">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+height&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the height of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3275">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+highlighted&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the highlighted of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3272">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+width&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the width of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3274">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+x&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the x of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3273">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;legend&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the y of the specified &lt;legend&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3248">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;line-style&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:alpha&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:color&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:dashing&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:thick&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:type&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3250">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+line-alpha&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;line-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the line-alpha of the specified &lt;line-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3251">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+line-color&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;line-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the line-color of the specified &lt;line-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3252">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+line-dashing&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;line-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the line-dashing of the specified &lt;line-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3253">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+line-thick&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;line-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the line-thick of the specified &lt;line-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3249">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+line-type&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;line-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the line-type of the specified &lt;line-style&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3263">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;plot-style&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:legend&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:line-style&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:symbol-style&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3264">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+legend&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plot-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the legend of the specified &lt;plot-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3266">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+line-style&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plot-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the line-style of the specified &lt;plot-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3265">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+symbol-style&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plot-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the symbol-style of the specified &lt;plot-style&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3278">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;plotter-mixin&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:nominal-height&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:nominal-width&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3296">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-box&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the box of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3292">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-delayed-update&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the delayed of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3280">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-dirty&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the dirty of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3293">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-display-list&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the dlist of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3294">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-inv-xform&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the inv-xform of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3283">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-legend&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the legend of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3284">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-legend-anchor&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the legend-anchor of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3287">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-legend-info&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the legend-info of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3286">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-legend-x&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the legend-x of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3285">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-legend-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the legend-y of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3303">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-lock&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the lock of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3288">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-magn&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the magn of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3290">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-nominal-height&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the def-ht of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3291">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-nominal-width&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the def-wd of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3289">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-sf&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the sf of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3295">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-xform&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the xform of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3302">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-xlog&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the xlog of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3300">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-xmax&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the xmax of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3301">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-xmin&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the xmin of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3299">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-ylog&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the ylog of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3297">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-ymax&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the ymax of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3298">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-ymin&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the ymin of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3282">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+preferred-x&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the preferred-x of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3281">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+preferred-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the preferred-y of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3279">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+reply-mbox&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-mixin&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the reply-mbox of the specified &lt;plotter-mixin&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3304">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;plotter-pane&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+inherits from <a href="plotter-classes.html#_g3278"><em class="cl">&lt;plotter-mixin&gt;</em></a> and <em class="cl">output-pane</em></td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:full-crosshair&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3308">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-x&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the mark-x of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3306">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-x-raw&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the mark-x-raw of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3307">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the mark-y of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3305">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-y-raw&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the mark-y-raw of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3318">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-backing-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the backing-image of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3316">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-backing-pixmap&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the backing-pixmap of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3315">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-delay-backing&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the delay-backing of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3314">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-full-crosshair&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the full-crosshair of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3313">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-prev-x&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the prev-x of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3312">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-prev-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the prev-y of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3317">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-resize-timer&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the timer of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3309">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-valid&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the plotter-valid of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3311">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-x-readout-hook&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the x-ro-hook of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3310">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-y-readout-hook&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-pane&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the y-ro-hook of the specified &lt;plotter-pane&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3254">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;symbol-style&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:bar-offset&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:bar-width&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:border-alpha&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:border-color&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:border-thick&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:fill-alpha&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:fill-color&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:symbol&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3255">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+bar-offset&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the bar-offset of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3256">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+bar-width&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the bar-width of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3258">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+border-alpha&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the border-alpha of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3259">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+border-color&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the border-color of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3257">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+border-thick&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the border-thick of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3260">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-alpha&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the fill-alpha of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3261">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+fill-color&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the fill-color of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3262">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-symbol&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;symbol-style&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the plot-symbol of the specified &lt;symbol-style&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3247">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*cross-cursor*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Variable]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3322">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plotter-mixin-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane-rep <em>&amp;optional</em> args</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3324">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-pane-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3325">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-pane-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(obj capi:pinboard-object)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3331">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+all-legends&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3326">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+append-display-list&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane item</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3330">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+append-legend&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane item</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3319">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+destroy-callback&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3327">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+discard-display-list&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3329">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-list-empty-p&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3328">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-list-items&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;key</em> discard</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3321">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+maybe-remove-legend&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3320">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+popup-menu&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane selection x y</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-strings</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="pane-locations.html">
+Prev:&nbsp;pane-locations.lisp</a>
+<br/>
+<a href="plotter-drawing.html">
+Next:&nbsp;plotter-drawing.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-strings.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-strings.lisp
+</h2>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-strings.html#_g3432">
+bounds-overlap-p</a>
+</td>
+<td class="summary">
+bounds1 bounds2</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-strings.html#_g3434">
+draw-string-x-y</a>
+</td>
+<td class="summary">
+pane port string x y <em>&amp;key</em> (x-alignment :left) (y-alignment :baseline) prev-bounds font (margin
+                                                                                        2) (transparent
+                                                                                            t) (color
+                                                                                                (foreground-color
+                                                                                                 port)) alpha clip <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-strings.html#_g3435">
+draw-vert-string-x-y</a>
+</td>
+<td class="summary">
+port string x y <em>&amp;key</em> (x-alignment :left) (y-alignment :baseline) font prev-bounds (margin
+                                                                                   2) (color
+                                                                                       (foreground-color
+                                                                                        port))</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-strings.html#_g3433">
+expand-bounds</a>
+</td>
+<td class="summary">
+bounds dx</td>
+</tr>
+</table>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3432">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+bounds-overlap-p&nbsp;&nbsp;</td>
+<td class="lambda-list">
+bounds1 bounds2</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3434">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-string-x-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane port string x y <em>&amp;key</em> (x-alignment :left) (y-alignment :baseline) prev-bounds font (margin
+                                                                                        2) (transparent
+                                                                                            t) (color
+                                                                                                (foreground-color
+                                                                                                 port)) alpha clip <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3435">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-vert-string-x-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+port string x y <em>&amp;key</em> (x-alignment :left) (y-alignment :baseline) font prev-bounds (margin
+                                                                                   2) (color
+                                                                                       (foreground-color
+                                                                                        port))</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3433">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+expand-bounds&nbsp;&nbsp;</td>
+<td class="lambda-list">
+bounds dx</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

@@ -1,0 +1,887 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-commands</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-styles.html">
+Prev:&nbsp;plotter-styles.lisp</a>
+<br/>
+<a href="plotter-callbacks.html">
+Next:&nbsp;plotter-callbacks.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-commands.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-commands.lisp
+</h2>
+<table style="width: 100%;" class="external-summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="3">
+External symbol summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3496">
+plotter:axes</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3493">
+plotter:clear</a>
+</td>
+<td class="summary">
+pane <em>&amp;key</em> reply-mbox</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3486">
+plotter:draw-arc</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3485">
+plotter:draw-ellipse</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3484">
+plotter:draw-rect</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3491">
+plotter:plot</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3492">
+plotter:plot-bars</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3481">
+plotter:with-default-args</a>
+</td>
+<td class="summary">
+(<em>&amp;rest</em> args) <em>&amp;body</em> body</td>
+<td class="summary-type">
+Macro</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Parameter summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3479">
+*default-args*</a>
+</td>
+<td class="summary">
+(list :watermarkfn #'watermark)</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3496">
+axes</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3495">
+axes2</a>
+</td>
+<td class="summary">
+pane xvector yvectors <em>&amp;rest</em> args <em>&amp;key</em> xrange xlog ylog (logo *ext-logo*) (logo-alpha
+                                                                          *ext-logo-alpha*) (cright1
+                                                                                             *cright1*) (cright2
+                                                                                                         *cright2*) reply-mbox <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3493">
+clear</a>
+</td>
+<td class="summary">
+pane <em>&amp;key</em> reply-mbox</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3477">
+do-plot</a>
+</td>
+<td class="summary">
+cpw port xvector yvector <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3478">
+do-plot-bars</a>
+</td>
+<td class="summary">
+cpw port xvector yvectors <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3480">
+do-with-default-args</a>
+</td>
+<td class="summary">
+args fn</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3486">
+draw-arc</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3485">
+draw-ellipse</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3484">
+draw-rect</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3483">
+draw-shape</a>
+</td>
+<td class="summary">
+shape pane x0 y0 x1 y1 <em>&amp;key</em> (color :darkgreen) (filled t) (alpha 1) border-thick (border-color
+                                                                                  :black) (border-alpha
+                                                                                           1) start-angle sweep-angle reply-mbox</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3489">
+find-x-y-parms</a>
+</td>
+<td class="summary">
+args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3488">
+oplot-bars2</a>
+</td>
+<td class="summary">
+pane xv yvs <em>&amp;rest</em> args <em>&amp;key</em> clear (color :black) (neg-color color) thick (linewidth
+                                                                          (or thick
+                                                                              1)) (logo
+                                                                                   *ext-logo*) (logo-alpha
+                                                                                                *ext-logo-alpha*) (cright1
+                                                                                                                   *cright1*) (cright2
+                                                                                                                               *cright2*) reply-mbox <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3487">
+oplot2</a>
+</td>
+<td class="summary">
+pane xv yv <em>&amp;rest</em> args <em>&amp;key</em> clear xlog ylog (logo *ext-logo*) (logo-alpha
+                                                              *ext-logo-alpha*) (cright1
+                                                                                 *cright1*) (cright2
+                                                                                             *cright2*) reply-mbox <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3497">
+outsxy</a>
+</td>
+<td class="summary">
+pane x y str <em>&amp;rest</em> args <em>&amp;key</em> (font-size $normal-times-font-size) (font
+                                                                  &quot;Times&quot;) anchor (align
+                                                                                   :w) (offset-x
+                                                                                        0) (offset-y
+                                                                                            0) clip (color
+                                                                                                     :black) alpha reply-mbox <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3491">
+plot</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3492">
+plot-bars</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3482">
+set-reply-mbox</a>
+</td>
+<td class="summary">
+pane mbox</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3494">
+stuff-display-list</a>
+</td>
+<td class="summary">
+pane lst <em>&amp;key</em> reply-mbox</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3490">
+vector-to-plotfn</a>
+</td>
+<td class="summary">
+fn pane args</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Macro summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-commands.html#_g3481">
+with-default-args</a>
+</td>
+<td class="summary">
+(<em>&amp;rest</em> args) <em>&amp;body</em> body</td>
+</tr>
+</table>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3479">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*default-args*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Parameter]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3496">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+axes&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3495">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+axes2&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane xvector yvectors <em>&amp;rest</em> args <em>&amp;key</em> xrange xlog ylog (logo *ext-logo*) (logo-alpha
+                                                                          *ext-logo-alpha*) (cright1
+                                                                                             *cright1*) (cright2
+                                                                                                         *cright2*) reply-mbox <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3493">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+clear&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;key</em> reply-mbox</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3477">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-plot&nbsp;&nbsp;</td>
+<td class="lambda-list">
+cpw port xvector yvector <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3478">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-plot-bars&nbsp;&nbsp;</td>
+<td class="lambda-list">
+cpw port xvector yvectors <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3480">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-with-default-args&nbsp;&nbsp;</td>
+<td class="lambda-list">
+args fn</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3486">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-arc&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3485">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-ellipse&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3484">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-rect&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3483">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-shape&nbsp;&nbsp;</td>
+<td class="lambda-list">
+shape pane x0 y0 x1 y1 <em>&amp;key</em> (color :darkgreen) (filled t) (alpha 1) border-thick (border-color
+                                                                                  :black) (border-alpha
+                                                                                           1) start-angle sweep-angle reply-mbox</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3489">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+find-x-y-parms&nbsp;&nbsp;</td>
+<td class="lambda-list">
+args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3488">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+oplot-bars2&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane xv yvs <em>&amp;rest</em> args <em>&amp;key</em> clear (color :black) (neg-color color) thick (linewidth
+                                                                          (or thick
+                                                                              1)) (logo
+                                                                                   *ext-logo*) (logo-alpha
+                                                                                                *ext-logo-alpha*) (cright1
+                                                                                                                   *cright1*) (cright2
+                                                                                                                               *cright2*) reply-mbox <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3487">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+oplot2&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane xv yv <em>&amp;rest</em> args <em>&amp;key</em> clear xlog ylog (logo *ext-logo*) (logo-alpha
+                                                              *ext-logo-alpha*) (cright1
+                                                                                 *cright1*) (cright2
+                                                                                             *cright2*) reply-mbox <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3497">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+outsxy&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y str <em>&amp;rest</em> args <em>&amp;key</em> (font-size $normal-times-font-size) (font
+                                                                  &quot;Times&quot;) anchor (align
+                                                                                   :w) (offset-x
+                                                                                        0) (offset-y
+                                                                                            0) clip (color
+                                                                                                     :black) alpha reply-mbox <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3491">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3492">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-bars&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3482">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+set-reply-mbox&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane mbox</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3494">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+stuff-display-list&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane lst <em>&amp;key</em> reply-mbox</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3490">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vector-to-plotfn&nbsp;&nbsp;</td>
+<td class="lambda-list">
+fn pane args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3481">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+with-default-args&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(<em>&amp;rest</em> args) <em>&amp;body</em> body</td>
+<td class="symbol-type">
+&nbsp;[Macro]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

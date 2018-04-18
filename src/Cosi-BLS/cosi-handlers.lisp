@@ -45,6 +45,9 @@ THE SOFTWARE.
      (:cosi-sign-commit (reply-to msg)
       (node-compute-cosi node reply-to :commit msg))
 
+     (:cosi-sign (reply-to msg)
+      (node-compute-cosi node reply-to :notary msg))
+     
      (:new-transaction (reply-to msg)
       (node-check-transaction node reply-to msg))
      
@@ -679,6 +682,12 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
 ;; each different type of Cosi network... For now, just act as notary
 ;; service - sign anything.
 
+(defun notary-validate-cosi-message (node consensus-stage msg)
+  (declare (ignore node consensus-stage msg))
+  t)
+
+;; ------------------------------------------------------------------------
+
 (defvar *byz-thresh*  0)  ;; established at bootstrap time - consensus threshold
 (defvar *blockchain*  (make-hash-table
                        :test 'equalp))
@@ -728,7 +737,7 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
            ;; Here is where we decide whether to lend our signature. But
            ;; even if we don't, we stil give others in the group a chance
            ;; to decide for themselves
-           (if (validate-cosi-message node consensus-stage msg)
+           (if (notary-validate-cosi-message node consensus-stage msg)
                (list (pbc:sign-message msg (node-pkey node) (node-skey node))
                      (node-bitmap node))
              (list nil 0)))

@@ -1,0 +1,634 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-images</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-histogram.html">
+Prev:&nbsp;plotter-histogram.lisp</a>
+<br/>
+<a href="parametric-plotting.html">
+Next:&nbsp;parametric-plotting.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-images.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-images.lisp
+</h2>
+<table style="width: 100%;" class="external-summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="3">
+External symbol summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3558">
+plotter:plot-image</a>
+</td>
+<td class="summary">
+pane xv yv image-arr <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3562">
+plotter:read-image</a>
+</td>
+<td class="summary">
+<em>&amp;optional</em> filename</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3560">
+plotter:render-image</a>
+</td>
+<td class="summary">
+pane ext-img <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3556">
+plotter:tvscl</a>
+</td>
+<td class="summary">
+pane arr <em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3551">
+plotter:$gray-colormap</a>
+</td>
+<td class="summary">
+(let ((map (make-array 256)))
+  (loop for ix from 0 to 255
+        do (setf (aref map ix) (color:make-gray (/ (float ix) 255.0))))
+  map)</td>
+<td class="summary-type">
+Constant</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3552">
+plotter:$heat-colormap</a>
+</td>
+<td class="summary">
+(let ((map (make-array 256)))
+  (labels ((clip (v) (max 0.0 (min 1.0 (/ v 255)))))
+    (loop for ix from 0 to 255
+          do (setf (aref map ix)
+                   (color:make-rgb (clip (/ (* 255 ix) 176))
+                                   (clip (/ (* 255 (- ix 120)) 135))
+                                   (clip (/ (* 255 (- ix 190)) 65))))))
+  map)</td>
+<td class="summary-type">
+Constant</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Constant summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3551">
+$gray-colormap</a>
+</td>
+<td class="summary">
+(let ((map (make-array 256)))
+  (loop for ix from 0 to 255
+        do (setf (aref map ix) (color:make-gray (/ (float ix) 255.0))))
+  map)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3552">
+$heat-colormap</a>
+</td>
+<td class="summary">
+(let ((map (make-array 256)))
+  (labels ((clip (v) (max 0.0 (min 1.0 (/ v 255)))))
+    (loop for ix from 0 to 255
+          do (setf (aref map ix)
+                   (color:make-rgb (clip (/ (* 255 ix) 176))
+                                   (clip (/ (* 255 (- ix 120)) 135))
+                                   (clip (/ (* 255 (- ix 190)) 65))))))
+  map)</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Parameter summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3553">
+*current-colormap*</a>
+</td>
+<td class="summary">
+$heat-colormap</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3554">
+*tst-img*</a>
+</td>
+<td class="summary">
+(let ((img (make-array '(64 64))))
+  (loop for row from 0 below 64
+        do (loop for col from 0 below 64
+                 do (setf (aref img row col) (* row col))))
+  img)</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Variable summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3561">
+*last-image-path*</a>
+</td>
+<td class="summary">
+nil</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3557">
+do-plot-image</a>
+</td>
+<td class="summary">
+pane xv yv arr <em>&amp;rest</em> args <em>&amp;key</em> (colormap *current-colormap*) reply-mbox zlog <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3559">
+do-render-image</a>
+</td>
+<td class="summary">
+pane ext-img <em>&amp;key</em> (magn 1) (to-x 0) (to-y 0) (from-x 0) (from-y 0) to-width to-height from-width from-height transform global-alpha reply-mbox <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3555">
+do-tvscl</a>
+</td>
+<td class="summary">
+pane arr <em>&amp;key</em> (magn 1) (colormap *current-colormap*) reply-mbox <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3558">
+plot-image</a>
+</td>
+<td class="summary">
+pane xv yv image-arr <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3562">
+read-image</a>
+</td>
+<td class="summary">
+<em>&amp;optional</em> filename</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3560">
+render-image</a>
+</td>
+<td class="summary">
+pane ext-img <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-images.html#_g3556">
+tvscl</a>
+</td>
+<td class="summary">
+pane arr <em>&amp;rest</em> args</td>
+</tr>
+</table>
+<div class="defconstant">
+<div class="defunsignatures">
+<a id="_g3551">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+$gray-colormap&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(let ((map (make-array 256)))
+  (loop for ix from 0 to 255
+        do (setf (aref map ix) (color:make-gray (/ (float ix) 255.0))))
+  map)</td>
+<td class="symbol-type">
+&nbsp;[Constant]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+A gray-scale colormap. 
+ </p>
+</div>
+</div>
+<div class="defconstant">
+<div class="defunsignatures">
+<a id="_g3552">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+$heat-colormap&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(let ((map (make-array 256)))
+  (labels ((clip (v) (max 0.0 (min 1.0 (/ v 255)))))
+    (loop for ix from 0 to 255
+          do (setf (aref map ix)
+                   (color:make-rgb (clip (/ (* 255 ix) 176))
+                                   (clip (/ (* 255 (- ix 120)) 135))
+                                   (clip (/ (* 255 (- ix 190)) 65))))))
+  map)</td>
+<td class="symbol-type">
+&nbsp;[Constant]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+A reddish to white colormap. 
+ </p>
+</div>
+</div>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3553">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*current-colormap*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Parameter]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+The colormap currently in effect for TVSCL and Plot-Image. 
+ </p>
+</div>
+</div>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3561">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*last-image-path*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Variable]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Holds the last used folder path for read-image. 
+ </p>
+</div>
+</div>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3554">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*tst-img*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Parameter]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3557">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-plot-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane xv yv arr <em>&amp;rest</em> args <em>&amp;key</em> (colormap *current-colormap*) reply-mbox zlog <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Internal workhorse for image plotting. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3559">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-render-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane ext-img <em>&amp;key</em> (magn 1) (to-x 0) (to-y 0) (from-x 0) (from-y 0) to-width to-height from-width from-height transform global-alpha reply-mbox <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Internal workhorse for image rendering. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3555">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-tvscl&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane arr <em>&amp;key</em> (magn 1) (colormap *current-colormap*) reply-mbox <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Internal workhorse routine for TVSCL. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3558">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plot-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane xv yv image-arr <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Plot an image in the specified pane using the sequences xv and yv 
+ for the X and Y scales. The image array holds the z-values. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3562">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+read-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;optional</em> filename</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Read an external image file. If the filename argument is elided, 
+ CAPI will prompt for one. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3560">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+render-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane ext-img <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Render an external image in the specified window pane. 
+ </p>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3556">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+tvscl&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane arr <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Display an image array of z-values in the specified pane. 
+ </p>
+<p>
+This is distinct from plotting an image with user specified 
+ X and Y values. TVSCL always uses implicit pixel coordinates 
+ for its X and Y values. 
+ </p>
+</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:59<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>
