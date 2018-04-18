@@ -348,9 +348,8 @@ they will be added to utxo-table"
 Check that every TXIN and TXOUT has a valid range proof, and that the
 sum of TXIN equals the sum of TXOUT.
 
-In any event record the transaction in a cache log to speed up later
-block validation. If transaction was valid record itself as the value
-corresponding to its hash as key, otherwise record a nil.
+If passes these checks, record the transaction and its hash in a pair
+in a cache log to speed up later block validation.
 
 Return nil if transaction is invalid."
   (let* ((key        (hash/256 tx))
@@ -386,36 +385,31 @@ TLST is a list of pairs (k v) with k being the hash of the
 transaction, and v being the transaction itself."
   (cond ((null tlst) nil)
         (t
-         (um:nlet-tail iter ((lst     (sort (copy-list tlst)
-                                            'partial-order
-                                            :key 'cadr))
-                             (trimmed nil))
-           ;; we know we have a car element since we weeded out null
-           ;; lists in first clause.
-           (let ((hd  (car lst))
-                 (tl  (cdr lst)))
-             (if (null tl) ;; singleton?
-                 (nreverse (cons hd trimmed))
-               (let ((txins (txin-keys (cadr hd))))
-                 (labels ((dependent-on (tx)
-                            (let ((txouts (txout-keys (cadr tx))))
-                              (some (lambda (txin)
-                                      (member txin txouts))
-                                    txins))))
-                   (if (notany #'dependent-on lst)
-                       (iter tl (cons hd trimmed))
-                     (iter tl trimmed))))
+         (um:accum acc
+           (um:nlet-tail iter ((lst (sort (copy-list tlst)
+                                          'partial-order
+                                          :key 'cadr)))
+             ;; we know we have a car element since we weeded out null
+             ;; lists in first clause.
+             (let ((hd  (car lst))
+                   (tl  (cdr lst)))
+               (when tl
+                 (let ((txins (txin-keys (cadr hd))))
+                   (labels ((dependent-on (tx)
+                              (let ((txouts (txout-keys (cadr tx))))
+                                (some (lambda (txin)
+                                        (member txin txouts))
+                                      txins))))
+                     (when (notany #'dependent-on lst)
+                       (acc hd))
+                     (iter tl))))
                ))))
         ))
-
-(defun int= (a b)
-  "Easy way to test vectors of all representations"
-  (= (int a) (int b)))
 
 (defun get-candidate-transactions ()
   "Scan available TXs for numerically valid, spend-valid, and return
 topo-sorted partial order"
-  (let ((txs     nil))
+  (let ((txs  nil))
     (maphash (lambda (k v)
                (push (list k v) txs))
              *trans-cache*)
@@ -426,16 +420,10 @@ topo-sorted partial order"
         ;; outupts
         (remhash (car tx) *trans-cache*))
       ;; checking for double spending also creates additional UTXO's.
-      (um:nlet-tail iter ((txs trimmed)
-                          (ans nil))
-        (if (endp txs)
-            (nreverse ans)
-          (let ((hd  (car txs))
-                (tl  (cdr txs)))
-            (if (check-double-spend hd)
-                (iter tl (cons hd ans))
-              (iter tl ans)))
-          ))
+      (um:accum acc
+        (dolist (tx trimmed)
+          (when (check-double-spend tx)
+            (acc tx))))
       )))
                
 (defun check-double-spend (tx-pair)
