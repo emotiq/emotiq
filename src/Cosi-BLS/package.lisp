@@ -197,6 +197,7 @@
    :vec-repr
    :edec
    :pbc)
+  (:shadow :block)
   (:import-from :ecc-crypto-b571
    :random-between)
   (:export
@@ -226,6 +227,12 @@
    :txout-secr-pkey
    :txout-secr-amt
    :txout-secr-gamma
-   ))
+   )
+  (:export
+   :block :protocol-version :epoch :prev-block :prev-block-hash
+   :merkle-root-hash :block-timestamp :transactions
+   :validator-keys-joining :validator-keys-leaving
+   :create-block :hash-block :serialize-block 
+   :compute-merkle-root-hash))
 
 
