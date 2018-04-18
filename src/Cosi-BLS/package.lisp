@@ -153,6 +153,7 @@
    :vec-repr
    :hash
    :cosi/proofs)
+  (:shadow :block)
   (:import-from :edwards-ecc
    :ed-add 
    :ed-sub 
@@ -195,7 +196,8 @@
   (:export
    :generate-tree
    :reconstruct-tree
-   :forwarding))
+   :forwarding)
+  (:export :block))
 
 (defpackage :cosi-keying
   (:use
