@@ -3,7 +3,7 @@
 (defpackage #:emotiq
   (:use #:cl)
   ;; We don't need CL:BLOCK, want to use BLOCK in our package.
-  (:shadowing-import-from #:cl #:block)
+  (:shadow #:block)
   (:export #:octet #:octet-vector #:octet-vector-p
            #:make-octet-vector #:ovref
            #:octet-vector-to-hex-string #:hex-string-to-octet-vector
@@ -24,7 +24,6 @@
    #:hash-pointer-of-previous-block 
    #:hash-pointer-item
    #:hash-pointer-of-transaction
-   #:hash-pointer-item
    #:transaction-id
    #:do-blockchain
    #:print-blockchain-info
@@ -37,6 +36,12 @@
    #:initial-total-coin-amount
    #:*minter-0-pkey-hash* #:*minter-0-pkey* #:*minter-0-skey*
    #:get-utxos-per-account #:get-balance)
+  (:export
+   #:block #:protocol-version #:epoch #:prev-block #:prev-block-hash
+   #:merkle-root-hash #:block-timestamp #:transactions
+   #:validator-keys-joining #:validator-keys-leaving
+   #:create-block #:hash-block #:serialize-block 
+   #:compute-merkle-root-hash)
   (:export
    #:production-p
    #:main
