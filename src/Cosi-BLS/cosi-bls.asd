@@ -50,6 +50,7 @@ THE SOFTWARE.
                                      (:file "cosi-sockets")
                                      (:file "range-proofs")
                                      (:file "transaction")
+                                     (:file "block")
                                      (:file "cosi-handlers")))))
 
 (defsystem "cosi-bls/test/allegro"
