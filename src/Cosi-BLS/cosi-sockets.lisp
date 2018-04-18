@@ -339,7 +339,7 @@ THE SOFTWARE.
                            :local-port port)))
       (udp-cosi-server-receive-next async-io-state)
       (multiple-value-bind (ip port)
-          (comm:async-io-state-address async-io-state);; returns address,port
+          (comm:async-io-state-address async-io-state)  ;; returns address,port
         (declare (ignore ip))
         port)))
       

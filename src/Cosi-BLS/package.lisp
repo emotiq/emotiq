@@ -188,6 +188,7 @@
    :current-actor
    :recv
    :become
+   :par
    :do-nothing
    :make-actor
    :set-executive-pool

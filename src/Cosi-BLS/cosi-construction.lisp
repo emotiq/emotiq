@@ -34,7 +34,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.2")
+(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
                          ("Malachite.local" . "10.0.1.6")
                          ("Dachshund.local" . "10.0.1.3")
                          ("Rambo"           . "10.0.1.13")

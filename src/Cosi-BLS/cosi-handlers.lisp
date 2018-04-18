@@ -70,7 +70,7 @@ THE SOFTWARE.
      ;; internal comms between Cosi nodes
      
      (:signing (reply-to consensus-stage msg seq)
-      (node-cosi-signing node reply-to consensus-stage msg seq))
+      (node-cosi-notary-signing node reply-to consensus-stage msg seq))
 
      ;; -----------------------------------
      ;; for sim and debug
@@ -732,12 +732,12 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
     (=bind (v-lst r-lst)
-        (ac:par
+        (par
           (=values 
            ;; Here is where we decide whether to lend our signature. But
            ;; even if we don't, we stil give others in the group a chance
            ;; to decide for themselves
-           (if (notary-validate-cosi-message node consensus-stage msg)
+           (if (validate-cosi-message node consensus-stage msg)
                (list (pbc:sign-message msg (node-pkey node) (node-skey node))
                      (node-bitmap node))
              (list nil 0)))
@@ -751,7 +751,7 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
                    (cond
                     ((null resp)
                      ;; no response from node, or bad subtree
-                     (pr (format nil "No signing: ~A" sub))
+                     (pr (format nil "No signing: ~A" (node-ip sub)))
                      (mark-node-no-response node sub))
                     
                     (t
@@ -768,6 +768,49 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
           (mapc #'fold-answer subs r-lst) ;; gather results from subs
           (send reply-to :signed seq-id sig bits))
         ))))
+
+(defun node-cosi-notary-signing (node reply-to consensus-stage msg seq-id)
+  ;; Compute a collective BLS signature on the message. This process
+  ;; is tree-recursivde.
+  (let* ((subs (remove-if 'node-bad (group-subs node))))
+    (=bind (ans)
+        (par
+          (=values 
+           ;; Here is where we decide whether to lend our signature. But
+           ;; even if we don't, we stil give others in the group a chance
+           ;; to decide for themselves
+           (if (notary-validate-cosi-message node consensus-stage msg)
+               (list (pbc:sign-message msg (node-pkey node) (node-skey node))
+                     (node-bitmap node))
+             (list nil 0)))
+          (pmapcar (sub-signing (node-real-ip node)
+                                consensus-stage
+                                msg
+                                seq-id)
+                   subs))
+      (destructuring-bind (v-lst r-lst) ans
+        (destructuring-bind (sig bits) v-lst ;; from validation effort
+          (labels ((fold-answer (sub resp)
+                     (cond
+                      ((null resp)
+                       ;; no response from node, or bad subtree
+                       (pr (format nil "No signing: ~A" (node-ip sub)))
+                       (mark-node-no-response node sub))
+                      
+                      (t
+                       (destructuring-bind (sub-sig sub-bits) resp
+                         (if (pbc:check-message sub-sig)
+                             (setf sig  (if sig
+                                            (pbc:combine-signatures sig sub-sig)
+                                          sub-sig)
+                                   bits (logior bits sub-bits))
+                           ;; else
+                           (mark-node-corrupted node sub))
+                         ))
+                      )))
+            (mapc #'fold-answer subs r-lst) ;; gather results from subs
+            (send reply-to :signed seq-id sig bits))
+          )))))
 
 ;; -----------------------------------------------------------
 
