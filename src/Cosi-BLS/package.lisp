@@ -98,9 +98,55 @@
                 :convert-int-to-nbytesv)
   (:export))
 
+(defpackage :cosi/proofs
+  (:use
+   :common-lisp
+   :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :edec
+   :pbc)
+  (:import-from :ecc-crypto-b571
+   :random-between)
+  (:export
+   :txin
+   :make-txin
+   :txin-hashlock
+   :txin-pkey
+   :txin-sig
+   :txin-prf
+   
+   :txout
+   :make-txout
+   :txout-hashlock
+   :txout-hashpkey
+   :txout-prf
+   :txout-encr
+   
+   :transaction
+   :trans-txins
+   :trans-txouts
+   :make-transaction
+   :validate-transaction
+
+   :find-txout-for-pkey-hash
+   :decrypt-txout-info
+   :txout-secrets
+   :txout-secr-pkey
+   :txout-secr-amt
+   :txout-secr-gamma
+   ))
+
+
 ;; from cosi-construction
 (defpackage :cosi-simgen
-  (:use :common-lisp :cosi :crypto/modular-arith)
+  (:use
+   :common-lisp
+   :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :hash
+   :cosi/proofs)
   (:import-from :edwards-ecc
    :ed-add 
    :ed-sub 
@@ -188,51 +234,4 @@
 
 (defpackage :cosi-test
   (:use :cl))
-
-(defpackage :cosi/proofs
-  (:use
-   :common-lisp
-   :cosi
-   :crypto/modular-arith
-   :vec-repr
-   :edec
-   :pbc)
-  (:shadow :block)
-  (:import-from :ecc-crypto-b571
-   :random-between)
-  (:export
-   :txin
-   :make-txin
-   :txin-hashlock
-   :txin-pkey
-   :txin-sig
-   :txin-prf
-   
-   :txout
-   :make-txout
-   :txout-hashlock
-   :txout-hashpkey
-   :txout-prf
-   :txout-encr
-   
-   :transaction
-   :trans-txins
-   :trans-txouts
-   :make-transaction
-   :validate-transaction
-
-   :find-txout-for-pkey-hash
-   :decrypt-txout-info
-   :txout-secrets
-   :txout-secr-pkey
-   :txout-secr-amt
-   :txout-secr-gamma
-   )
-  (:export
-   :block :protocol-version :epoch :prev-block :prev-block-hash
-   :merkle-root-hash :block-timestamp :transactions
-   :validator-keys-joining :validator-keys-leaving
-   :create-block :hash-block :serialize-block 
-   :compute-merkle-root-hash))
-
 
