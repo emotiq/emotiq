@@ -1,0 +1,1221 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-callbacks</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-commands.html">
+Prev:&nbsp;plotter-commands.lisp</a>
+<br/>
+<a href="plotter-windows.html">
+Next:&nbsp;plotter-windows.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-callbacks.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-callbacks.lisp
+</h2>
+<table style="width: 100%;" class="external-summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="3">
+External symbol summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3525">
+plotter:save-image</a>
+</td>
+<td class="summary">
+pane file <em>&amp;key</em> <em>&amp;allow-other-keys</em></td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3526">
+plotter:save-plot</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3530">
+plotter:set-full-crosshair</a>
+</td>
+<td class="summary">
+pane full-crosshair</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3516">
+plotter:set-x-readout-hook</a>
+</td>
+<td class="summary">
+pane fn</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3517">
+plotter:set-y-readout-hook</a>
+</td>
+<td class="summary">
+pane fn</td>
+<td class="summary-type">
+Function</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Variable summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3523">
+*last-save-path*</a>
+</td>
+<td class="summary">
+nil</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Method summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3505">
+display-callback</a>
+</td>
+<td class="summary">
+(pane &lt;plotter-pane&gt;) x y width height</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3508">
+display-cursor-readout</a>
+</td>
+<td class="summary">
+intf name x y</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3509">
+display-cursor-readout</a>
+</td>
+<td class="summary">
+(obj capi:simple-pane) name x y</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3507">
+compute-x-y-at-cursor</a>
+</td>
+<td class="summary">
+pane x y</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3528">
+copy-image-to-clipboard</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3502">
+discard-backing-image</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3500">
+discard-backing-pixmap</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3518">
+do-with-bare-pdf-image</a>
+</td>
+<td class="summary">
+pane fn</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3503">
+draw-crosshair-lines</a>
+</td>
+<td class="summary">
+pane color x y</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3504">
+draw-mark</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3520">
+draw-nominal-image</a>
+</td>
+<td class="summary">
+pane port</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3524">
+get-dest-path</a>
+</td>
+<td class="summary">
+</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3521">
+get-nominal-image</a>
+</td>
+<td class="summary">
+pane</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3512">
+mark-x-at-cursor</a>
+</td>
+<td class="summary">
+pane x y <em>&amp;rest</em> _</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3514">
+mark-x-y-at-cursor</a>
+</td>
+<td class="summary">
+pane x y <em>&amp;rest</em> _</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3513">
+mark-y-at-cursor</a>
+</td>
+<td class="summary">
+pane x y <em>&amp;rest</em> _</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3510">
+mouse-move</a>
+</td>
+<td class="summary">
+pane x y <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3529">
+print-plotter-pane</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3506">
+resize-callback</a>
+</td>
+<td class="summary">
+pane x y width height</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3501">
+save-backing-image</a>
+</td>
+<td class="summary">
+pane port</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3499">
+save-backing-pixmap</a>
+</td>
+<td class="summary">
+pane port</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3525">
+save-image</a>
+</td>
+<td class="summary">
+pane file <em>&amp;key</em> <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3527">
+save-image-from-menu</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3526">
+save-plot</a>
+</td>
+<td class="summary">
+<em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3530">
+set-full-crosshair</a>
+</td>
+<td class="summary">
+pane full-crosshair</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3516">
+set-x-readout-hook</a>
+</td>
+<td class="summary">
+pane fn</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3517">
+set-y-readout-hook</a>
+</td>
+<td class="summary">
+pane fn</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3511">
+show-x-y-at-cursor</a>
+</td>
+<td class="summary">
+pane x y <em>&amp;rest</em> _</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3531">
+toggle-full-crosshair</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> args</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3515">
+unmark-x-y</a>
+</td>
+<td class="summary">
+pane <em>&amp;rest</em> _</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Macro summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3519">
+with-bare-pdf-image</a>
+</td>
+<td class="summary">
+(pane) <em>&amp;body</em> body</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-callbacks.html#_g3522">
+with-nominal-image</a>
+</td>
+<td class="summary">
+(pane img) <em>&amp;body</em> body</td>
+</tr>
+</table>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3523">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*last-save-path*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Variable]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3505">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-callback&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(pane &lt;plotter-pane&gt;) x y width height</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3508">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-cursor-readout&nbsp;&nbsp;</td>
+<td class="lambda-list">
+intf name x y</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3509">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-cursor-readout&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(obj capi:simple-pane) name x y</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3507">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+compute-x-y-at-cursor&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3528">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+copy-image-to-clipboard&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3502">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+discard-backing-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3500">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+discard-backing-pixmap&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3518">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+do-with-bare-pdf-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane fn</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3503">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-crosshair-lines&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane color x y</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3504">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-mark&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3520">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+draw-nominal-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane port</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3524">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+get-dest-path&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3521">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+get-nominal-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3512">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-x-at-cursor&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y <em>&amp;rest</em> _</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3514">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-x-y-at-cursor&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y <em>&amp;rest</em> _</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3513">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mark-y-at-cursor&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y <em>&amp;rest</em> _</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3510">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+mouse-move&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3529">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+print-plotter-pane&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3506">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+resize-callback&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y width height</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3501">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+save-backing-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane port</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3499">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+save-backing-pixmap&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane port</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3525">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+save-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane file <em>&amp;key</em> <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3527">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+save-image-from-menu&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3526">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+save-plot&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3530">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+set-full-crosshair&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane full-crosshair</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3516">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+set-x-readout-hook&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane fn</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3517">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+set-y-readout-hook&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane fn</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3511">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+show-x-y-at-cursor&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane x y <em>&amp;rest</em> _</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3531">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+toggle-full-crosshair&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> args</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3515">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+unmark-x-y&nbsp;&nbsp;</td>
+<td class="lambda-list">
+pane <em>&amp;rest</em> _</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3519">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+with-bare-pdf-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(pane) <em>&amp;body</em> body</td>
+<td class="symbol-type">
+&nbsp;[Macro]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3522">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+with-nominal-image&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(pane img) <em>&amp;body</em> body</td>
+<td class="symbol-type">
+&nbsp;[Macro]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

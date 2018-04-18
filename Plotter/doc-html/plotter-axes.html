@@ -1,0 +1,383 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-axes</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-watermark.html">
+Prev:&nbsp;plotter-watermark.lisp</a>
+<br/>
+<a href="plotter-legends.html">
+Next:&nbsp;plotter-legends.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-axes.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-axes.lisp
+</h2>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Parameter summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3460">
+$axis-style</a>
+</td>
+<td class="summary">
+(make-instance '&lt;plot-style&gt;
+               :line-style
+               (make-instance '&lt;line-style&gt; :color #(:gray 0.5)))</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3459">
+*log-subdivs*</a>
+</td>
+<td class="summary">
+(mapcar #'log10 '(0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 2 3 ...))</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Method summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3463">
+pw-axes</a>
+</td>
+<td class="summary">
+(cpw &lt;plotter-mixin&gt;) port <em>&amp;key</em> (fullgrid t) (xtitle &quot;X&quot;) (ytitle &quot;Y&quot;) (title
+                                                                        &quot;Plot&quot;) (watermarkfn
+                                                                                 #'watermark) (logo
+                                                                                               *ext-logo*) (logo-alpha
+                                                                                                            *ext-logo-alpha*) (cright1
+                                                                                                                               *cright1*) (cright2
+                                                                                                                                           *cright2*) (clear
+                                                                                                                                                       t) <em>&amp;allow-other-keys</em></td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3456">
+adjust-sf-for-midvalue</a>
+</td>
+<td class="summary">
+sf vmin vmax</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3458">
+calc-start-delta</a>
+</td>
+<td class="summary">
+vmin vmax</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3455">
+calc-starting-sf</a>
+</td>
+<td class="summary">
+vmin vmax</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3457">
+get-delta-sf</a>
+</td>
+<td class="summary">
+vmin vmax</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3462">
+plabel</a>
+</td>
+<td class="summary">
+val</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-axes.html#_g3461">
+trim-mantissa</a>
+</td>
+<td class="summary">
+v</td>
+</tr>
+</table>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3460">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+$axis-style&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Parameter]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defparam">
+<div class="defunsignatures">
+<a id="_g3459">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+*log-subdivs*&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Parameter]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3463">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+pw-axes&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(cpw &lt;plotter-mixin&gt;) port <em>&amp;key</em> (fullgrid t) (xtitle &quot;X&quot;) (ytitle &quot;Y&quot;) (title
+                                                                        &quot;Plot&quot;) (watermarkfn
+                                                                                 #'watermark) (logo
+                                                                                               *ext-logo*) (logo-alpha
+                                                                                                            *ext-logo-alpha*) (cright1
+                                                                                                                               *cright1*) (cright2
+                                                                                                                                           *cright2*) (clear
+                                                                                                                                                       t) <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3456">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+adjust-sf-for-midvalue&nbsp;&nbsp;</td>
+<td class="lambda-list">
+sf vmin vmax</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3458">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+calc-start-delta&nbsp;&nbsp;</td>
+<td class="lambda-list">
+vmin vmax</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3455">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+calc-starting-sf&nbsp;&nbsp;</td>
+<td class="lambda-list">
+vmin vmax</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3457">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+get-delta-sf&nbsp;&nbsp;</td>
+<td class="lambda-list">
+vmin vmax</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3462">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+plabel&nbsp;&nbsp;</td>
+<td class="lambda-list">
+val</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3461">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+trim-mantissa&nbsp;&nbsp;</td>
+<td class="lambda-list">
+v</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

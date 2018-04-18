@@ -1,0 +1,784 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-arrays</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-macros.html">
+Prev:&nbsp;plotter-macros.lisp</a>
+<br/>
+<a href="plotter-boxes.html">
+Next:&nbsp;plotter-boxes.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-arrays.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-arrays.lisp
+</h2>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Method summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3396">
+aref-of</a>
+</td>
+<td class="summary">
+arg <em>&amp;rest</em> indices</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3397">
+aref-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;) <em>&amp;rest</em> indices</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3394">
+array-dimension-of</a>
+</td>
+<td class="summary">
+arg n</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3395">
+array-dimension-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;) n</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3392">
+array-total-size-of</a>
+</td>
+<td class="summary">
+arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3393">
+array-total-size-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3379">
+coerce-to-vector</a>
+</td>
+<td class="summary">
+(v vector)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3380">
+coerce-to-vector</a>
+</td>
+<td class="summary">
+(lst list)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3381">
+coerce-to-vector</a>
+</td>
+<td class="summary">
+(a array)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3382">
+coerce-to-vector</a>
+</td>
+<td class="summary">
+(cv c-arrays:&lt;carray&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3383">
+length-of</a>
+</td>
+<td class="summary">
+arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3384">
+length-of</a>
+</td>
+<td class="summary">
+(arg array)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3385">
+length-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3398">
+subseq-of</a>
+</td>
+<td class="summary">
+arg start <em>&amp;optional</em> end</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3399">
+subseq-of</a>
+</td>
+<td class="summary">
+(arg array) start <em>&amp;optional</em> end</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3400">
+subseq-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;) start <em>&amp;optional</em> end</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3386">
+vmax-of</a>
+</td>
+<td class="summary">
+arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3387">
+vmax-of</a>
+</td>
+<td class="summary">
+(arg array)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3388">
+vmax-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3389">
+vmin-of</a>
+</td>
+<td class="summary">
+arg</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3390">
+vmin-of</a>
+</td>
+<td class="summary">
+(arg array)</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-arrays.html#_g3391">
+vmin-of</a>
+</td>
+<td class="summary">
+(arg c-arrays:&lt;carray&gt;)</td>
+</tr>
+</table>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3396">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+aref-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg <em>&amp;rest</em> indices</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3397">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+aref-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;) <em>&amp;rest</em> indices</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3394">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+array-dimension-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg n</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3395">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+array-dimension-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;) n</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3392">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+array-total-size-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3393">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+array-total-size-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3379">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+coerce-to-vector&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(v vector)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3380">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+coerce-to-vector&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(lst list)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3381">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+coerce-to-vector&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(a array)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3382">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+coerce-to-vector&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(cv c-arrays:&lt;carray&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3383">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+length-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3384">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+length-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg array)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3385">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+length-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3398">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+subseq-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg start <em>&amp;optional</em> end</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3399">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+subseq-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg array) start <em>&amp;optional</em> end</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3400">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+subseq-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;) start <em>&amp;optional</em> end</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3386">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vmax-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3387">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vmax-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg array)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3388">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vmax-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3389">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vmin-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+arg</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3390">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vmin-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg array)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3391">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+vmin-of&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(arg c-arrays:&lt;carray&gt;)</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>

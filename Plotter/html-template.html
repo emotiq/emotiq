@@ -1,0 +1,484 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html> 
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <title>PLOTTER - a library for scientific graphing</title>
+  <style type="text/css">
+  pre { padding:5px; background-color:#e0e0e0 }
+  h3, h4 { text-decoration: underline; }
+  a { text-decoration: none; padding: 1px 2px 1px 2px; }
+  a:visited { text-decoration: none; padding: 1px 2px 1px 2px; }
+  a:hover { text-decoration: none; padding: 1px 1px 1px 1px; border: 1px solid #000000; } 
+  a:focus { text-decoration: none; padding: 1px 2px 1px 2px; border: none; }
+  a.none { text-decoration: none; padding: 0; }
+  a.none:visited { text-decoration: none; padding: 0; } 
+  a.none:hover { text-decoration: none; border: none; padding: 0; } 
+  a.none:focus { text-decoration: none; border: none; padding: 0; } 
+  a.noborder { text-decoration: none; padding: 0; } 
+  a.noborder:visited { text-decoration: none; padding: 0; } 
+  a.noborder:hover { text-decoration: none; border: none; padding: 0; } 
+  a.noborder:focus { text-decoration: none; border: none; padding: 0; }  
+  pre.none { padding:5px; background-color:#ffffff }
+  </style>
+</head>
+
+<body bgcolor=white>
+
+<h2> PLOTTER - a library for scientific graphing</h2>
+
+<br>&nbsp;<br><h3><a class=none name="contents">Contents</a></h3>
+<ol>
+  <li><a href="#dictionary">The PLOTTER dictionary</a>
+    <ol>
+      <li><a href="#$big-times-font-size"><code>$big-times-font-size</code></a>
+      <li><a href="#$gray-colormap"><code>$gray-colormap</code></a>
+      <li><a href="#$heat-colormap"><code>$heat-colormap</code></a>
+      <li><a href="#$normal-times-font-size"><code>$normal-times-font-size</code></a>
+      <li><a href="#$tiny-times-font-size"><code>$tiny-times-font-size</code></a>
+      <li><a href="#axes"><code>axes</code></a>
+      <li><a href="#clear"><code>clear</code></a>
+      <li><a href="#draw-arc"><code>draw-arc</code></a>
+      <li><a href="#draw-ellipse"><code>draw-ellipse</code></a>
+      <li><a href="#draw-rect"><code>draw-rect</code></a>
+      <li><a href="#draw-text"><code>draw-text</code></a>
+      <li><a href="#fplot"><code>fplot</code></a>
+      <li><a href="#histogram"><code>histogram</code></a>
+      <li><a href="#paramplot"><code>paramplot</code></a>
+      <li><a href="#plot"><code>plot</code></a>
+      <li><a href="#plot-bars"><code>plot-bars</code></a>
+      <li><a href="#plot-image"><code>plot-image</code></a>
+      <li><a href="#read-image"><code>read-image</code></a>
+      <li><a href="#render-image"><code>render-image</code></a>
+      <li><a href="#save-image"><code>save-image</code></a>
+      <li><a href="#save-plot"><code>save-plot</code></a>
+      <li><a href="#set-full-crosshair"><code>set-full-crosshair</code></a>
+      <li><a href="#set-x-readout-hook"><code>set-x-readout-hook</code></a>
+      <li><a href="#set-y-readout-hook"><code>set-y-readout-hook</code></a>
+      <li><a href="#tvscl"><code>tvscl</code></a>
+      <li><a href="#wait-until-finished"><code>wait-until-finished</code></a>
+      <li><a href="#wclose"><code>wclose</code></a>
+      <li><a href="#window"><code>window</code></a>
+      <li><a href="#with-default-args"><code>with-default-args</code></a>
+      <li><a href="#with-delayed-update"><code>with-delayed-update</code></a>
+      <li><a href="#wset"><code>wset</code></a>
+      <li><a href="#wshow"><code>wshow</code></a>
+    </ol>
+  <li><a href="#ack">Acknowledgements</a>
+</ol>
+
+<br>&nbsp;<br><h3><a class=none name="dictionary">The PLOTTER dictionary</a></h3>
+
+
+
+<!-- Entry for $BIG-TIMES-FONT-SIZE -->
+
+<p><br>[Constant]<br><a class=none name='$big-times-font-size'><b>$big-times-font-size</b></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for $BIG-TIMES-FONT-SIZE -->
+
+
+<!-- Entry for $GRAY-COLORMAP -->
+
+<p><br>[Constant]<br><a class=none name='$gray-colormap'><b>$gray-colormap</b></a>
+<blockquote><br>
+
+A gray-scale colormap.
+
+</blockquote>
+
+<!-- End of entry for $GRAY-COLORMAP -->
+
+
+<!-- Entry for $HEAT-COLORMAP -->
+
+<p><br>[Constant]<br><a class=none name='$heat-colormap'><b>$heat-colormap</b></a>
+<blockquote><br>
+
+A reddish to white colormap.
+
+</blockquote>
+
+<!-- End of entry for $HEAT-COLORMAP -->
+
+
+<!-- Entry for $NORMAL-TIMES-FONT-SIZE -->
+
+<p><br>[Constant]<br><a class=none name='$normal-times-font-size'><b>$normal-times-font-size</b></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for $NORMAL-TIMES-FONT-SIZE -->
+
+
+<!-- Entry for $TINY-TIMES-FONT-SIZE -->
+
+<p><br>[Constant]<br><a class=none name='$tiny-times-font-size'><b>$tiny-times-font-size</b></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for $TINY-TIMES-FONT-SIZE -->
+
+
+<!-- Entry for AXES -->
+
+<p><br>[Function]<br><a class=none name='axes'><b>axes</b> <i>pane <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for AXES -->
+
+
+<!-- Entry for CLEAR -->
+
+<p><br>[Function]<br><a class=none name='clear'><b>clear</b> <i>pane <tt>&amp;key</tt> reply-mbox</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for CLEAR -->
+
+
+<!-- Entry for DRAW-ARC -->
+
+<p><br>[Function]<br><a class=none name='draw-arc'><b>draw-arc</b> <i><tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for DRAW-ARC -->
+
+
+<!-- Entry for DRAW-ELLIPSE -->
+
+<p><br>[Function]<br><a class=none name='draw-ellipse'><b>draw-ellipse</b> <i><tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for DRAW-ELLIPSE -->
+
+
+<!-- Entry for DRAW-RECT -->
+
+<p><br>[Function]<br><a class=none name='draw-rect'><b>draw-rect</b> <i><tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for DRAW-RECT -->
+
+
+<!-- Entry for DRAW-TEXT -->
+
+<p><br>[Function]<br><a class=none name='draw-text'><b>draw-text</b> <i>pane str org <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for DRAW-TEXT -->
+
+
+<!-- Entry for FPLOT -->
+
+<p><br>[Function]<br><a class=none name='fplot'><b>fplot</b> <i>pane domain fn <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Functional plotting in pane of the function over the indicated domain.
+   - Example:
+   ;;; (plt:fplot &#039;plt &#039;(-20 20) (lambda (x) (/ (sin x) x))
+   ;;;     :clear t :thick 2 :title &quot;Sinc(x)&quot;)
+   where &#039;plt is the name of the desired plotting window. It will be
+   created if not already visible on screen.
+
+</blockquote>
+
+<!-- End of entry for FPLOT -->
+
+
+<!-- Entry for HISTOGRAM -->
+
+<p><br>[Function]<br><a class=none name='histogram'><b>histogram</b> <i>pane v <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for HISTOGRAM -->
+
+
+<!-- Entry for PARAMPLOT -->
+
+<p><br>[Function]<br><a class=none name='paramplot'><b>paramplot</b> <i>pane domain xfn yfn <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Parametric ploting in pane of the xfn and yfn functions over the indicated domain.
+   All functional plotting is really performed as parametric plotting. Parametric plotting
+   allows for non-single-valued functions.
+   - Example:
+   ;;; (plt:paramplot &#039;plt &#039;(0 1)
+   ;;;    (lambda (phi) (cos (* 2 pi phi))) ;; the X-function
+   ;;;    (lambda (phi) (sin (* 2 pi phi))) ;; the Y-function
+   ;;;    :clear t :thick 2 :title &quot;Circle&quot;)
+   where &#039;plt is the name of the desired plotting window. It will be
+   created if not already visible on screen.
+
+</blockquote>
+
+<!-- End of entry for PARAMPLOT -->
+
+
+<!-- Entry for PLOT -->
+
+<p><br>[Function]<br><a class=none name='plot'><b>plot</b> <i>pane <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for PLOT -->
+
+
+<!-- Entry for PLOT-BARS -->
+
+<p><br>[Function]<br><a class=none name='plot-bars'><b>plot-bars</b> <i>pane <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for PLOT-BARS -->
+
+
+<!-- Entry for PLOT-IMAGE -->
+
+<p><br>[Function]<br><a class=none name='plot-image'><b>plot-image</b> <i>pane xv yv image-arr <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Plot an image in the specified pane using the sequences xv and yv
+   for the X and Y scales. The image array holds the z-values.
+
+</blockquote>
+
+<!-- End of entry for PLOT-IMAGE -->
+
+
+<!-- Entry for READ-IMAGE -->
+
+<p><br>[Function]<br><a class=none name='read-image'><b>read-image</b> <i><tt>&amp;optional</tt> filename</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Read an external image file. If the filename argument is elided,
+   CAPI will prompt for one.
+
+</blockquote>
+
+<!-- End of entry for READ-IMAGE -->
+
+
+<!-- Entry for RENDER-IMAGE -->
+
+<p><br>[Function]<br><a class=none name='render-image'><b>render-image</b> <i>pane ext-img <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Render an external image in the specified window pane.
+
+</blockquote>
+
+<!-- End of entry for RENDER-IMAGE -->
+
+
+<!-- Entry for SAVE-IMAGE -->
+
+<p><br>[Function]<br><a class=none name='save-image'><b>save-image</b> <i>pane file <tt>&amp;key</tt> <tt>&amp;allow-other-keys</tt></i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for SAVE-IMAGE -->
+
+
+<!-- Entry for SAVE-PLOT -->
+
+<p><br>[Function]<br><a class=none name='save-plot'><b>save-plot</b> <i><tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for SAVE-PLOT -->
+
+
+<!-- Entry for SET-FULL-CROSSHAIR -->
+
+<p><br>[Function]<br><a class=none name='set-full-crosshair'><b>set-full-crosshair</b> <i>pane full-crosshair</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for SET-FULL-CROSSHAIR -->
+
+
+<!-- Entry for SET-X-READOUT-HOOK -->
+
+<p><br>[Function]<br><a class=none name='set-x-readout-hook'><b>set-x-readout-hook</b> <i>pane fn</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for SET-X-READOUT-HOOK -->
+
+
+<!-- Entry for SET-Y-READOUT-HOOK -->
+
+<p><br>[Function]<br><a class=none name='set-y-readout-hook'><b>set-y-readout-hook</b> <i>pane fn</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for SET-Y-READOUT-HOOK -->
+
+
+<!-- Entry for TVSCL -->
+
+<p><br>[Function]<br><a class=none name='tvscl'><b>tvscl</b> <i>pane arr <tt>&amp;rest</tt> args</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Display an image array of z-values in the specified pane.
+   This is distinct from plotting an image with user specified
+   X and Y values. TVSCL always uses implicit pixel coordinates
+   for its X and Y values.
+
+</blockquote>
+
+<!-- End of entry for TVSCL -->
+
+
+<!-- Entry for WAIT-UNTIL-FINISHED -->
+
+<p><br>[Macro]<br><a class=none name='wait-until-finished'><b>wait-until-finished</b> <i>(pane <tt>&amp;key</tt> mbox timeout) declaration* statement*</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WAIT-UNTIL-FINISHED -->
+
+
+<!-- Entry for WCLOSE -->
+
+<p><br>[Function]<br><a class=none name='wclose'><b>wclose</b> <i>name</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WCLOSE -->
+
+
+<!-- Entry for WINDOW -->
+
+<p><br>[Function]<br><a class=none name='window'><b>window</b> <i>name <tt>&amp;key</tt> title background foreground width height xsize ysize x y xpos ypos best-width best-height best-x best-y visible-min-width visible-min-height visible-max-width visible-max-height cursor full-crosshair window-styles <tt>&amp;allow-other-keys</tt></i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WINDOW -->
+
+
+<!-- Entry for WITH-DEFAULT-ARGS -->
+
+<p><br>[Macro]<br><a class=none name='with-default-args'><b>with-default-args</b> <i>(<tt>&amp;rest</tt> args) declaration* statement*</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WITH-DEFAULT-ARGS -->
+
+
+<!-- Entry for WITH-DELAYED-UPDATE -->
+
+<p><br>[Macro]<br><a class=none name='with-delayed-update'><b>with-delayed-update</b> <i>(pane) declaration* statement*</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WITH-DELAYED-UPDATE -->
+
+
+<!-- Entry for WSET -->
+
+<p><br>[Function]<br><a class=none name='wset'><b>wset</b> <i>name <tt>&amp;rest</tt> args <tt>&amp;key</tt> clear <tt>&amp;allow-other-keys</tt></i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WSET -->
+
+
+<!-- Entry for WSHOW -->
+
+<p><br>[Function]<br><a class=none name='wshow'><b>wshow</b> <i>name <tt>&amp;rest</tt> args <tt>&amp;key</tt> clear <tt>&amp;allow-other-keys</tt></i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for WSHOW -->
+
+
+<br>&nbsp;<br><h3><a class=none name="ack">Acknowledgements</a></h3>
+
+<p>
+This documentation was prepared with a locally modified version of Edi Weitz's <a href="http://weitz.de/documentation-template/">DOCUMENTATION-TEMPLATE</a>.
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.
+</p>
+</body>
+</html>

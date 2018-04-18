@@ -1,0 +1,577 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="cludg.css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<title>
+plotter-windows</title>
+</head>
+<body>
+<div id="navbar">
+<table cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+<colgroup span="3">
+<col width="0*"/>
+<col width="0*"/>
+<col width="1*"/>
+</colgroup>
+<tr>
+<td align="left" valign="baseline">
+<a href="plotter-callbacks.html">
+Prev:&nbsp;plotter-callbacks.lisp</a>
+<br/>
+<a href="plotter-histogram.html">
+Next:&nbsp;plotter-histogram.lisp</a>
+</td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td align="left" valign="baseline">
+<span class="upchain">
+<b>
+plotter-windows.lisp</b>
+<br/>
+<a href="index.html">
+Table of Contents</a>
+</span>
+&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+</div>
+<div class="cludg-doc-body">
+<h2>
+plotter-windows.lisp
+</h2>
+<table style="width: 100%;" class="external-summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="3">
+External symbol summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3544">
+plotter:wclose</a>
+</td>
+<td class="summary">
+name</td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3541">
+plotter:window</a>
+</td>
+<td class="summary">
+name <em>&amp;key</em> (title (format nil &quot;~A&quot; name)) (background #(:gray 1)) (foreground
+                                                                  #(:gray
+                                                                    0)) (width
+                                                                         400) (height
+                                                                               300) (xsize
+                                                                                     width) (ysize
+                                                                                             height) x y (xpos
+                                                                                                          x) (ypos
+                                                                                                              y) (best-width
+                                                                                                                  xsize) (best-height
+                                                                                                                          ysize) (best-x
+                                                                                                                                  xpos) (best-y
+                                                                                                                                         ypos) (visible-min-width
+                                                                                                                                                (/ xsize
+                                                                                                                                                   2)) (visible-min-height
+                                                                                                                                                        (/ ysize
+                                                                                                                                                           2)) (visible-max-width
+                                                                                                                                                                (* xsize
+                                                                                                                                                                   2)) (visible-max-height
+                                                                                                                                                                        (* ysize
+                                                                                                                                                                           2)) (cursor
+                                                                                                                                                                                (or *cross-cursor*
+                                                                                                                                                                                    :crosshair)) full-crosshair (window-styles
+                                                                                                                                                                                                                 '(:internal-borderless)) <em>&amp;allow-other-keys</em></td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3542">
+plotter:wset</a>
+</td>
+<td class="summary">
+name <em>&amp;rest</em> args <em>&amp;key</em> clear <em>&amp;allow-other-keys</em></td>
+<td class="summary-type">
+Function</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3543">
+plotter:wshow</a>
+</td>
+<td class="summary">
+name <em>&amp;rest</em> args <em>&amp;key</em> clear <em>&amp;allow-other-keys</em></td>
+<td class="summary-type">
+Function</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Class summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3536">
+&lt;plotter-window&gt;</a>
+</td>
+<td class="summary">
+inherits from <em class="cl">interface</em></td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Method summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3539">
+display-cursor-readout</a>
+</td>
+<td class="summary">
+(intf &lt;plotter-window&gt;) name x y</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3537">
+drawing-area</a>
+</td>
+<td class="summary">
+&lt;plotter-window&gt;</td>
+</tr>
+</table>
+<table style="width: 100%;" class="summary-table">
+<tr class="table-heading-color">
+<th class="summary" colspan="2">
+Function summary</th>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3535">
+find-named-plotter-pane</a>
+</td>
+<td class="summary">
+name</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3534">
+locate-plotter-window</a>
+</td>
+<td class="summary">
+name</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3540">
+make-plotter-window</a>
+</td>
+<td class="summary">
+<em>&amp;key</em> (name 0) (title &quot;Plot&quot;) (fg :black) (bg :white) (foreground fg) (background
+                                                                      bg) (xsize
+                                                                           400) (ysize
+                                                                                 300) xpos ypos (best-width
+                                                                                                 xsize) (best-height
+                                                                                                         ysize) (best-x
+                                                                                                                 xpos) (best-y
+                                                                                                                        ypos) (visible-min-width
+                                                                                                                               (/ xsize
+                                                                                                                                  2)) (visible-min-height
+                                                                                                                                       (/ ysize
+                                                                                                                                          2)) (visible-max-width
+                                                                                                                                               (* xsize
+                                                                                                                                                  2)) (visible-max-height
+                                                                                                                                                       (* ysize
+                                                                                                                                                          2)) cursor full-crosshair window-styles</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3544">
+wclose</a>
+</td>
+<td class="summary">
+name</td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3541">
+window</a>
+</td>
+<td class="summary">
+name <em>&amp;key</em> (title (format nil &quot;~A&quot; name)) (background #(:gray 1)) (foreground
+                                                                  #(:gray
+                                                                    0)) (width
+                                                                         400) (height
+                                                                               300) (xsize
+                                                                                     width) (ysize
+                                                                                             height) x y (xpos
+                                                                                                          x) (ypos
+                                                                                                              y) (best-width
+                                                                                                                  xsize) (best-height
+                                                                                                                          ysize) (best-x
+                                                                                                                                  xpos) (best-y
+                                                                                                                                         ypos) (visible-min-width
+                                                                                                                                                (/ xsize
+                                                                                                                                                   2)) (visible-min-height
+                                                                                                                                                        (/ ysize
+                                                                                                                                                           2)) (visible-max-width
+                                                                                                                                                                (* xsize
+                                                                                                                                                                   2)) (visible-max-height
+                                                                                                                                                                        (* ysize
+                                                                                                                                                                           2)) (cursor
+                                                                                                                                                                                (or *cross-cursor*
+                                                                                                                                                                                    :crosshair)) full-crosshair (window-styles
+                                                                                                                                                                                                                 '(:internal-borderless)) <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3542">
+wset</a>
+</td>
+<td class="summary">
+name <em>&amp;rest</em> args <em>&amp;key</em> clear <em>&amp;allow-other-keys</em></td>
+</tr>
+<tr class="table-row-color">
+<td class="summary-name">
+<a href="plotter-windows.html#_g3543">
+wshow</a>
+</td>
+<td class="summary">
+name <em>&amp;rest</em> args <em>&amp;key</em> clear <em>&amp;allow-other-keys</em></td>
+</tr>
+</table>
+<div class="defclass">
+<div class="defunsignatures">
+<a id="_g3536">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+&lt;plotter-window&gt;&nbsp;&nbsp;</td>
+<td class="lambda-list">
+inherits from <em class="cl">interface</em></td>
+<td class="symbol-type">
+&nbsp;[Class]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="defclass-initargs">
+<div>
+<div>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+:drawing-area&nbsp;&nbsp;</td>
+<td class="lambda-list">
+</td>
+<td class="symbol-type">
+&nbsp;[Initarg]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="defclass-slots-doc">
+</div>
+<div class="defclass-generics">
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3537">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+drawing-area&nbsp;&nbsp;</td>
+<td class="lambda-list">
+&lt;plotter-window&gt;</td>
+<td class="symbol-type">
+&nbsp;[Generic&nbsp;function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+<div class="doc-body">
+<p>
+Returns and (with setf) changes the drawing-area of the specified &lt;plotter-window&gt; 
+ </p>
+</div>
+</div>
+</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3539">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+display-cursor-readout&nbsp;&nbsp;</td>
+<td class="lambda-list">
+(intf &lt;plotter-window&gt;) name x y</td>
+<td class="symbol-type">
+&nbsp;[Method]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3535">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+find-named-plotter-pane&nbsp;&nbsp;</td>
+<td class="lambda-list">
+name</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3534">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+locate-plotter-window&nbsp;&nbsp;</td>
+<td class="lambda-list">
+name</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3540">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+make-plotter-window&nbsp;&nbsp;</td>
+<td class="lambda-list">
+<em>&amp;key</em> (name 0) (title &quot;Plot&quot;) (fg :black) (bg :white) (foreground fg) (background
+                                                                      bg) (xsize
+                                                                           400) (ysize
+                                                                                 300) xpos ypos (best-width
+                                                                                                 xsize) (best-height
+                                                                                                         ysize) (best-x
+                                                                                                                 xpos) (best-y
+                                                                                                                        ypos) (visible-min-width
+                                                                                                                               (/ xsize
+                                                                                                                                  2)) (visible-min-height
+                                                                                                                                       (/ ysize
+                                                                                                                                          2)) (visible-max-width
+                                                                                                                                               (* xsize
+                                                                                                                                                  2)) (visible-max-height
+                                                                                                                                                       (* ysize
+                                                                                                                                                          2)) cursor full-crosshair window-styles</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3544">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+wclose&nbsp;&nbsp;</td>
+<td class="lambda-list">
+name</td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3541">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+window&nbsp;&nbsp;</td>
+<td class="lambda-list">
+name <em>&amp;key</em> (title (format nil &quot;~A&quot; name)) (background #(:gray 1)) (foreground
+                                                                  #(:gray
+                                                                    0)) (width
+                                                                         400) (height
+                                                                               300) (xsize
+                                                                                     width) (ysize
+                                                                                             height) x y (xpos
+                                                                                                          x) (ypos
+                                                                                                              y) (best-width
+                                                                                                                  xsize) (best-height
+                                                                                                                          ysize) (best-x
+                                                                                                                                  xpos) (best-y
+                                                                                                                                         ypos) (visible-min-width
+                                                                                                                                                (/ xsize
+                                                                                                                                                   2)) (visible-min-height
+                                                                                                                                                        (/ ysize
+                                                                                                                                                           2)) (visible-max-width
+                                                                                                                                                                (* xsize
+                                                                                                                                                                   2)) (visible-max-height
+                                                                                                                                                                        (* ysize
+                                                                                                                                                                           2)) (cursor
+                                                                                                                                                                                (or *cross-cursor*
+                                                                                                                                                                                    :crosshair)) full-crosshair (window-styles
+                                                                                                                                                                                                                 '(:internal-borderless)) <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3542">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+wset&nbsp;&nbsp;</td>
+<td class="lambda-list">
+name <em>&amp;rest</em> args <em>&amp;key</em> clear <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+<div class="defun">
+<div class="defunsignatures">
+<a id="_g3543">
+</a>
+<table cellpadding="0" cellspacing="0" width="100%">
+<colgroup span="3">
+<col width="0*"/>
+<col width="1*"/>
+<col width="0*"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="symbol-name">
+wshow&nbsp;&nbsp;</td>
+<td class="lambda-list">
+name <em>&amp;rest</em> args <em>&amp;key</em> clear <em>&amp;allow-other-keys</em></td>
+<td class="symbol-type">
+&nbsp;[Function]</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="doc-package">
+Package: PLOTTER</div>
+</div>
+</div>
+<div class="cludg-footer">
+Generated by a locally modified version of<a href="mailto:ihatchondo@common-lisp.net" lang="en">
+CLDOC</a>
+- 2008-08-08 19:11:58<br/>
+This document is Copyright (C) 2008 by SpectroDynamics, LLC. All rights reserved.</div>
+</body>
+</html>
