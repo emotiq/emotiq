@@ -1,3 +1,5 @@
+;;;; Simple wallet; unencrypted for now
+
 (in-package emotiq/wallet)
 
 (defclass wallet ()
