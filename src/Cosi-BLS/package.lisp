@@ -100,7 +100,12 @@
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
-  (:use :common-lisp :cosi :crypto/modular-arith)
+  (:use
+   :common-lisp
+   :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :hash)
   (:import-from :edwards-ecc
    :ed-add 
    :ed-sub 
