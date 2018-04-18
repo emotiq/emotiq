@@ -106,6 +106,7 @@
    :vec-repr
    :edec
    :pbc)
+  (:shadow :block)
   (:import-from :ecc-crypto-b571
    :random-between)
   (:export
@@ -147,6 +148,7 @@
    :vec-repr
    :hash
    :cosi/proofs)
+  (:shadow :block)
   (:import-from :edwards-ecc
    :ed-add 
    :ed-sub 
