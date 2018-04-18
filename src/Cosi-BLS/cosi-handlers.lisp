@@ -731,7 +731,7 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
-    (=bind (v-lst r-lst)
+    (=bind (ans)
         (par
           (=values 
            ;; Here is where we decide whether to lend our signature. But
@@ -746,28 +746,29 @@ TXIN follow transaction which produced the spent TXOUT. Check for cycles."
                                 msg
                                 seq-id)
                    subs))
-      (destructuring-bind (sig bits) v-lst ;; from validation effort
-        (labels ((fold-answer (sub resp)
-                   (cond
-                    ((null resp)
-                     ;; no response from node, or bad subtree
-                     (pr (format nil "No signing: ~A" (node-ip sub)))
-                     (mark-node-no-response node sub))
-                    
-                    (t
-                     (destructuring-bind (sub-sig sub-bits) resp
-                       (if (pbc:check-message sub-sig)
-                           (setf sig  (if sig
-                                          (pbc:combine-signatures sig sub-sig)
-                                        sub-sig)
-                                 bits (logior bits sub-bits))
-                         ;; else
-                         (mark-node-corrupted node sub))
-                       ))
-                    )))
-          (mapc #'fold-answer subs r-lst) ;; gather results from subs
-          (send reply-to :signed seq-id sig bits))
-        ))))
+      (destructuring-bind (v-lst r-lst) ans
+        (destructuring-bind (sig bits) v-lst ;; from validation effort
+          (labels ((fold-answer (sub resp)
+                     (cond
+                      ((null resp)
+                       ;; no response from node, or bad subtree
+                       (pr (format nil "No signing: ~A" (node-ip sub)))
+                       (mark-node-no-response node sub))
+                      
+                      (t
+                       (destructuring-bind (sub-sig sub-bits) resp
+                         (if (pbc:check-message sub-sig)
+                             (setf sig  (if sig
+                                            (pbc:combine-signatures sig sub-sig)
+                                          sub-sig)
+                                   bits (logior bits sub-bits))
+                           ;; else
+                           (mark-node-corrupted node sub))
+                         ))
+                      )))
+            (mapc #'fold-answer subs r-lst) ;; gather results from subs
+            (send reply-to :signed seq-id sig bits))
+          )))))
 
 (defun node-cosi-notary-signing (node reply-to consensus-stage msg seq-id)
   ;; Compute a collective BLS signature on the message. This process
