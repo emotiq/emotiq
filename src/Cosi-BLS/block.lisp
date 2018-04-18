@@ -174,11 +174,23 @@
 
 
 (defun get-txid-out-id (transaction)
-  "Get the identifier of TRANSACTION to hash at the leaves of the merkle
-   tree. In Bitcoin this is the TXID of each transaction, a hex string of length
-   64. Here, it is H(PubKey, PedComm)."
-  (error "not yet implemented: (get-txid-out-id ~a)" ; fixme!!
-         transaction))
+  "Get the identifier of TRANSACTION an octet vector of length 32, which can be
+   used to hash the transactions leaves of the merkle tree to produce the
+   block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
+   a superset thereof."
+  (vec-repr:bev-vec (hash:hash-val (hash-transaction transaction))))
+
+;; In Bitcoin this is known as the TXID of the transaction.
+
+
+
+(defun hash-transaction (transaction)
+  "Produce a hash for TRANSACTION, including the pair (PubKey, PedComm).
+   The resulting hash's octet vector is usable as a transaction ID."
+  (hash/256d transaction))
+
+;; Consider storing the ID in the transaction later.  Consider later
+;; switching to Bitcoin's "Hash160", i.e., RIPEMD160(SHA256(Tx))).
 
 
 
