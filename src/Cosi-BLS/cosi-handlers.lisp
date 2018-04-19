@@ -517,7 +517,7 @@ topo-sorted partial order"
       hd)))
       
 ;; ----------------------------------------------------------------------
-#|
+
 (defun #1=check-block-transactions (tlst)
   "TLST is list of transactions from current pending block. Return nil
 if invalid block.
@@ -633,7 +633,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (remhash del-key *utxo-table*)))
     ;; return verdict
     valid-p))
-|#
+
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
