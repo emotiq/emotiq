@@ -1,4 +1,4 @@
-;;;; Simple wallet; unencrypted for now.
+;;;; Simple wallet; unencrypted for now!
 
 (in-package emotiq/wallet)
 
