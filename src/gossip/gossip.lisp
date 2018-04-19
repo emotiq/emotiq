@@ -789,7 +789,7 @@ are in place between nodes.
   
 #+lispworks
 (defun remove-nth (n list)
-  "Return a copy of a LIST, with NTH element removed."
+  "Returns nth item and new list (copy)."
   (let ((newlist (loop for i in list
         for idx from 0
         unless (= idx n)
