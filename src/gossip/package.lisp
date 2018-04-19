@@ -18,4 +18,6 @@
    #:listify-nodes
    #:set-protocol-style
    #:get-protocol-style
-   #:random-node))
+   #:random-node
+   #:gossip-node
+   #:proxy-gossip-node))
