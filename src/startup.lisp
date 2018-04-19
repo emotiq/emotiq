@@ -2,7 +2,6 @@
 
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
-  (pbc::need-pairing) ;; initializes init-pairing, not exported (no use for it in future systems)
   (pbc:init-pairing)
   (let ((context (start-blockchain-context)))
     (with-blockchain-context (context)

@@ -98,97 +98,6 @@
                 :convert-int-to-nbytesv)
   (:export))
 
-;; from cosi-construction
-(defpackage :cosi-simgen
-  (:use :common-lisp :cosi :crypto/modular-arith)
-  (:import-from :edwards-ecc
-   :ed-add 
-   :ed-sub 
-   :ed-mul 
-   :ed-div 
-   :ed-affine
-   :ed-nth-pt
-   :*ed-r*
-   :*ed-q*
-   :ed-neutral-point
-   :ed-pt=
-   :with-ed-curve
-   :ed-compress-pt
-   :ed-decompress-pt
-   :ed-validate-point
-   :ed-random-pair
-   :make-ecc-pt)
-  (:import-from :ecc-crypto-b571
-   :random-between
-   :convert-int-to-nbytesv
-   :convert-bytes-to-int)
-  (:import-from :actors
-   :=bind
-   :=values
-   :=defun
-   :=lambda
-   :=funcall
-   :=apply
-   :pmapcar
-   :smapc
-   :spawn
-   :current-actor
-   :recv
-   :become
-   :do-nothing
-   :make-actor
-   :set-executive-pool
-   :with-borrowed-mailbox
-   :pr)
-  (:export
-   :generate-tree
-   :reconstruct-tree
-   :forwarding))
-
-(defpackage :cosi-keying
-  (:use
-   :common-lisp
-   :ecc-crypto-b571
-   :crypto/modular-arith)
-  (:export
-   :need-integer-form
-   :published-form
-   :cosi-sign
-   :cosi-validate
-   :cosi-validate-signed-message
-   :make-random-keypair
-   :make-deterministic-keypair
-   :make-public-subkey
-   :make-secret-subkey
-   :validate-pkey
-
-   :convert-int-to-wordlist
-   :convert-wordlist-to-int
-   
-   :add-key-to-blockchain
-   :populate-pkey-database
-   :refresh-pkey-database
-   ))
-
-(defpackage :cosi-blkdef
-  (:use
-   :common-lisp)
-  (:import-from :ecc-crypto-b571
-   :sha3/256-buffers)
-  (:import-from :edwards-ecc
-   :ed-convert-int-to-lev)
-  (:export
-   :add-key-to-block
-   :add-transaction-to-block
-   :get-block-keys
-   :get-block-transactions
-   :publish-block
-   :goback
-   ))
-
-(defpackage :cosi-test
-  (:use :cl))
-
 (defpackage :cosi/proofs
   (:use
    :common-lisp
@@ -234,5 +143,105 @@
    :validator-keys-joining :validator-keys-leaving
    :create-block :hash-block :serialize-block 
    :compute-merkle-root-hash))
+
+;; from cosi-construction
+(defpackage :cosi-simgen
+  (:use
+   :common-lisp
+   :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :hash
+   :cosi/proofs)
+  (:shadow :block)
+  (:import-from :edwards-ecc
+   :ed-add 
+   :ed-sub 
+   :ed-mul 
+   :ed-div 
+   :ed-affine
+   :ed-nth-pt
+   :*ed-r*
+   :*ed-q*
+   :ed-neutral-point
+   :ed-pt=
+   :with-ed-curve
+   :ed-compress-pt
+   :ed-decompress-pt
+   :ed-validate-point
+   :ed-random-pair
+   :make-ecc-pt)
+  (:import-from :ecc-crypto-b571
+   :random-between
+   :convert-int-to-nbytesv
+   :convert-bytes-to-int)
+  (:import-from :actors
+   :=bind
+   :=values
+   :=defun
+   :=lambda
+   :=funcall
+   :=apply
+   :pmapcar
+   :smapc
+   :spawn
+   :current-actor
+   :recv
+   :become
+   :par
+   :do-nothing
+   :make-actor
+   :set-executive-pool
+   :with-borrowed-mailbox
+   :pr)
+  (:export
+   :generate-tree
+   :reconstruct-tree
+   :forwarding)
+  (:export :block))
+
+(defpackage :cosi-keying
+  (:use
+   :common-lisp
+   :ecc-crypto-b571
+   :crypto/modular-arith)
+  (:export
+   :need-integer-form
+   :published-form
+   :cosi-sign
+   :cosi-validate
+   :cosi-validate-signed-message
+   :make-random-keypair
+   :make-deterministic-keypair
+   :make-public-subkey
+   :make-secret-subkey
+   :validate-pkey
+
+   :convert-int-to-wordlist
+   :convert-wordlist-to-int
+   
+   :add-key-to-blockchain
+   :populate-pkey-database
+   :refresh-pkey-database
+   ))
+
+(defpackage :cosi-blkdef
+  (:use
+   :common-lisp)
+  (:import-from :ecc-crypto-b571
+   :sha3/256-buffers)
+  (:import-from :edwards-ecc
+   :ed-convert-int-to-lev)
+  (:export
+   :add-key-to-block
+   :add-transaction-to-block
+   :get-block-keys
+   :get-block-transactions
+   :publish-block
+   :goback
+   ))
+
+(defpackage :cosi-test
+  (:use :cl))
 
 
