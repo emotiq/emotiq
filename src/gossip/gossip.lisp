@@ -153,6 +153,17 @@ are in place between nodes.
 ;; Ex: Don't include SIR messages
 ;; (setf *log-filter* (log-exclude "SIR"))
 
+(defun aws-p ()
+  "Returns true if we're running on an AWS EC2 instance.
+   Always runs quickly."
+  ; https://serverfault.com/questions/462903/how-to-know-if-a-machine-is-an-ec2-instance
+  (and (probe-file "/sys/hypervisor/uuid")
+       (with-open-file (s "/sys/hypervisor/uuid")
+         (let ((line (read-line s nil nil nil)))
+           (and line
+                (> (length line) 3)
+                (equalp "ec2" (subseq line 0 3)))))))
+
 #+IGNORE
 (defun new-uid ()
   (incf *last-uid*))
@@ -167,10 +178,13 @@ are in place between nodes.
 (defun generate-new-monotonic-id ()
   (incf *last-uid*))
 
+#+LISPWORKS
+(cffi:defcfun ("getpid" unix-getpid) :int)
+
 #+NOTYET ; would like to use this but getpid is CCL-specific
 (defun new-uid ()
   (encode-uid #+OPENMCL (ccl::primary-ip-interface-address) ; 32 bits
-              (logand #xFFFF #+OPENMCL (ccl::getpid)) ; 16 bits
+              (logand #xFFFF #+OPENMCL (ccl::getpid) #+LISPWORKS (unix-getpid)) ; 16 bits
               (logand #xFFFF (generate-new-monotonic-id)))) ; 32 bits
 
 (defun new-uid ()
@@ -1578,6 +1592,7 @@ gets sent back, and everything will be copacetic.
          (proxy nil))
     (when proxy-subtable
            (setf proxy (gethash real-uid proxy-subtable)))
+    (when proxy (kvs:relate-unique! *nodes* (uid proxy) proxy)) ; because we might have cleared *nodes* during testing
     (unless proxy
       ; make one and memoize it
       (setf proxy (make-proxy-node mode
@@ -1702,7 +1717,7 @@ gets sent back, and everything will be copacetic.
    Returns a keyword if some kind of error."
   (handler-case (usocket:socket-connect nil nil
                         :protocol :datagram
-                        :local-host "127.0.0.1"
+                        :local-host 0
                         :local-port port)
   (USOCKET:ADDRESS-IN-USE-ERROR ()
                                 :ADDRESS-IN-USE)))
@@ -1765,6 +1780,9 @@ gets sent back, and everything will be copacetic.
   (declare (ignore srcuid))
   (error "Bug: Cannot transmit to a local node!"))
 
+
+
+#+IGNORE
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
@@ -1783,6 +1801,21 @@ gets sent back, and everything will be copacetic.
              (ac::pr :socket-send-error (real-address node) packet))))
         (t
          (maybe-log node :CANNOT-TRANSMIT "no socket"))))
+
+(defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
+  "Send message across network.
+   srcuid is that of the (real) local gossip-node that sent message to this node."
+  (cond (*udp-gossip-socket*
+         (maybe-log node :TRANSMIT msg)
+         (let* ((packet (loenc:encode (list (real-uid node) srcuid msg)))
+                (nb (length packet)))
+           (when (> nb cosi-simgen::*max-buffer-length*)
+             (error "Packet too large for UDP transmission"))
+           (cosi-simgen::internal-send-socket (real-address node) (real-port node) packet)
+           ))
+        (t
+         (maybe-log node :CANNOT-TRANSMIT "no socket"))))
+
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
   "Send message across network.
@@ -1885,8 +1918,12 @@ gets sent back, and everything will be copacetic.
 ; ON CLIENT MACHINE
 ; (clrhash *nodes*)
 ; (run-gossip-sim)
-#+TEST
+#+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+#+TEST-AMAZON
+(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
+
+
 #+TEST ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node

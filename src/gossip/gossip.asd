@@ -6,6 +6,7 @@
   :maintainer "Shannon Spires <svs@emotiq.ch>"
  ; :licence "BSD 3-clause"
   :depends-on (:uiop
+               #+LISPWORKS :CFFI
                :mpcompat
                :key-value-store
                :actors ; should be loaded by cosi-BLS
