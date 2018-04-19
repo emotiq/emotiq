@@ -25,7 +25,8 @@
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
 (defparameter *gossip-port* 65002 "Gossip network port")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
-(defparameter *shutdown-msg* (coerce #(115 104 117 116 100 111 119 110) '(ARRAY (UNSIGNED-BYTE 8))) "shutdown")
+#-lispworks(defparameter *shutdown-msg* (coerce #(115 104 117 116 100 111 119 110) '(ARRAY (UNSIGNED-BYTE 8))) "shutdown")
+#+lispworks(defparameter *shutdown-msg* (coerce #(115 104 117 116 100 111 119 110) '(ARRAY (integer 0 *))) "shutdown")
 
 (defun shutdown-msg-len ()
   (length *shutdown-msg*))
@@ -772,6 +773,7 @@ are in place between nodes.
   "Retrieves the upstream source uid for a given soluid on this node"
   (kvs:lookup-key (message-cache node) soluid))
 
+#-lispworks
 (defun remove-nth (n list)
   "Remove nth item of list.
   Returns nth item and new list.
@@ -785,6 +787,15 @@ are in place between nodes.
                   (nthcdr (1+ n) list))
             (values item list))))))
   
+#+lispworks
+(defun remove-nth (n list)
+  "Return a copy of a LIST, with NTH element removed."
+  (let ((newlist (loop for i in list
+        for idx from 0
+        unless (= idx n)
+        collect i)))
+    (values (nth n list) newlist)))
+
 (defun make-random-generator (list)
   "Returns a thunk that returns another random member of list
   every time it's called. Never generates same member twice
