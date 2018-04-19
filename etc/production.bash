@@ -138,6 +138,14 @@ tar xf libs.tar
 cp ${etc}/emotiq.bash.${kind} ${production_dir}/emotiq.bash
 cd ${lib}
 rm *
-# < /test >
 
-# cp ${???}/*.so* ${production_dir}
+cd ${production_dir}
+case ${kind} in
+    linux) 
+	tar cfj ${kind}.emotiq.bz2 em* *.so*
+	;;
+    macos) 
+	tar cfj ${kind}.emotiq.bz2 em* *dylib*
+	;;
+esac
+

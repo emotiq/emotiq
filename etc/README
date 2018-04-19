@@ -40,9 +40,15 @@ This script results in:
 
 The resulting files are all placed in one directory emotiq/var/local/production-{linux,mac}.
 
-The listed files can be copied (or tar'ed) to another machine, into an empty directory.
+On linux, all the .so's and the binary (emotiq) and the script (emotiq.bash) are put into emotiq/var/local/production-linux/linux.emotiq.bz2.  The production-linux directory will contain:
 
-The binary is run by "bash emotiq.bash".  Certain older Mac's fail with a register dump in libgmp.
+emotiq       emotiq.linux.bz2  libgmp.la  libgmp.so.10      libLispPBCIntf.so  libpbc.la  libpbc.so.1      libs.tar
+emotiq.bash  libgmp.a          libgmp.so  libgmp.so.10.3.2  libpbc.a           libpbc.so  libpbc.so.1.0.0
+
+
+The .bz2  can be copied to another machine, into an empty directory and untar'ed.
+
+The binary is run with the command line "bash emotiq.bash".  Certain older Mac's may fail with a register dump. A build from my Mac Mini (2012) does not run on my Mac Airbook (late 2010).  If the binary is built on the Airbook, it runs OK on the airbook.  Theory: there is something different in the configuration created by ./configure running on the airbook.  This is being investigated... (ticket #156925019 in PT).
 
 The binary always calls the Lisp function "start".
 
