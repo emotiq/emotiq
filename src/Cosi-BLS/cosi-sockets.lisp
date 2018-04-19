@@ -168,10 +168,10 @@ THE SOFTWARE.
             ;; ------------------
             (apply 'send true-dest msg)))
         ))))
-    
-(defun port-router (buf)
-  (let ((handler (load-time-value
-                  (make-actor 'port-routing-handler))))
+
+(let ((handler (load-time-value
+                (make-actor 'port-routing-handler))))
+  (defun port-router (buf)
     (send handler buf)))
 
 (defun shutdown-server (&optional (port *cosi-port*))
@@ -339,7 +339,7 @@ THE SOFTWARE.
                            :local-port port)))
       (udp-cosi-server-receive-next async-io-state)
       (multiple-value-bind (ip port)
-          (comm:async-io-state-address async-io-state);; returns address,port
+          (comm:async-io-state-address async-io-state)  ;; returns address,port
         (declare (ignore ip))
         port)))
       

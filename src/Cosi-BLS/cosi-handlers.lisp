@@ -45,6 +45,9 @@ THE SOFTWARE.
      (:cosi-sign-commit (reply-to msg)
       (node-compute-cosi node reply-to :commit msg))
 
+     (:cosi-sign (reply-to msg)
+      (node-compute-cosi node reply-to :notary msg))
+     
      (:new-transaction (reply-to msg)
       (node-check-transaction node reply-to msg))
      
@@ -67,7 +70,14 @@ THE SOFTWARE.
      ;; internal comms between Cosi nodes
      
      (:signing (reply-to consensus-stage msg seq)
-      (node-cosi-signing node reply-to consensus-stage msg seq))
+      (case consensus-stage
+        (:notary 
+         (node-cosi-notary-signing node reply-to
+                                   consensus-stage msg seq))
+        (otherwise
+         (node-cosi-signing node reply-to
+                            consensus-stage msg seq))
+        ))
 
      ;; -----------------------------------
      ;; for sim and debug
@@ -304,30 +314,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   "Just ignore invalid messages"
   nil)
 
-(defmethod node-check-transaction (node reply-to (msg cosi/proofs:transaction))
+(defmethod node-check-transaction (node reply-to (msg transaction))
   (check-transaction-math msg))
-
-(defun check-transaction-math (tx)
-  "TX is a transaction. Check that every TXIN and TXOUT has a valid
-range proof, and that the sum of TXIN equals the sum of TXOUT. In any
-event record the transaction in a cache log to speed up later block
-validation. If transaction was valid record itself as the value
-corresponding to its hash as key, otherwise record a nil.
-
-Also record the TXOUTS as unspent.
-
-Return nil if transaction is invalid."
-  (let ((key  (hash:hash/256 tx)))
-    (multiple-value-bind (v present-p) (lookup-transaction key)
-      (cond (present-p  v)  ;; return nil or non-nil as valid
-            (t 
-             (let ((valid-p (cosi/proofs:validate-transaction tx)))
-               (cache-transaction key (and valid-p tx))
-               (when valid-p
-                 (dolist (txout (cosi/proofs:trans-txouts tx))
-                   (record-new-utx (cosi/proofs:txout-hashlock)))
-                 t))) ;; indicate valid transaction
-            ))))
 
 ;; -------------------------------
 ;; testing-version transaction cache
@@ -344,59 +332,308 @@ Return nil if transaction is invalid."
 ;; -------------------------------
 ;; testing-version TXOUT log
 
-(defvar *txout-log*  (make-hash-table
-                    :test 'equalp))
+(defvar *utxo-table*  (make-hash-table
+                      :test 'equalp))
 
 (defun record-new-utx (key)
-  "KEY is Hash(P,C) of TXOUT"
+  "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
+they will be added to utxo-table"
   (multiple-value-bind (x present-p)
-      (gethash key *txout-log*)
+      (gethash key *utxo-table*)
     (declare (ignore x))
     (when present-p
       (error "Shouldn't Happen: Effective Hash Collision!!!"))
-    (setf (gethash key *txout-log*) :spendable)))
+    (setf (gethash key *utxo-table*) :spendable)))
 
 ;; -------------------------------------------------------------------
+;; Code to check incoming transactions for self-validity, not
+;; inter-transactional validity like double-spend
 
-(defun check-block-transactions (tlst)
-  "TLST is list of transactions from current pending block. Return nil
-if invalid block."
-  (let ((valid-p (and (every 'check-transaction-math tlst)
-                      ;; now we have checked the math on all
-                      ;; transactions, recorded the transactions in a
-                      ;; log, and have now seen all TXOUT and recorded
-                      ;; them in another log.
-                      ;;
-                      ;; So check TXINS to be sure no double spending,
-                      ;; and no spending of unseen TXOUTS
-                      (every 'check-double-spend tlst))))
-    (unless valid-p
-      ;; remove all TX that were invalid - valid one's might show up
-      ;; again in another attempt to form a block. And remove all
-      ;; TXOUT that were spawned by invalid TX.
-      (dolist (tx tlst)
-        (let ((key (hash:hash/256 tx))) 
-          (unless (gethash key *trans-cache*) ;; remove TX if was invalid
-            (remhash key *trans-cache*)
-            (dolist (txout (cosi/proofs:trans-txouts tx)) ;; remove its spawned TXOUTs
-              (remhash (cosi/proofs:txout-hashlock txout) *txout-log*)))
-          )))
-    valid-p))
+(defun txin-keys (tx)
+  (mapcar (um:compose 'int 'txin-hashlock) (trans-txins tx)))
 
-(defun check-double-spend (tx)
+(defun txout-keys (tx)
+  (mapcar (um:compose 'int 'txout-hashlock) (trans-txouts tx)))
+
+(defun check-transaction-math (tx)
+  "TX is a transaction. Check that no TXIN refers to one of the TXOUT.
+Check that every TXIN and TXOUT has a valid range proof, and that the
+sum of TXIN equals the sum of TXOUT.
+
+If passes these checks, record the transaction and its hash in a pair
+in a cache log to speed up later block validation.
+
+Return nil if transaction is invalid."
+  (let* ((key        (hash/256 tx))
+         (txout-keys (txout-keys tx)))
+    (when (and (notany (lambda (txin)
+                         ;; can't be spending an output you are just
+                         ;; now creating
+                         (find txin txout-keys))
+                       (txin-keys tx))
+               ;; now do the math
+               (validate-transaction tx))
+      (cache-transaction key (list key tx)))
+    ))     
+
+;; --------------------------------------------------------------------
+;; Code to assemble a block - must do full validity checking,
+;; including double-spend checks
+
+(defun partial-order (t1 t2)
+  "Return T if inputs follow outputs"
+  (let ((txouts1 (txout-keys t1))
+        (txins2  (txin-keys  t2)))
+    (some (lambda (txin)
+            (member txin txouts1))
+          txins2)))
+
+(defstruct txrec
+  txpair txkey ins outs)
+
+(defun topo-sort (tlst)
+  "Topological partial ordering of transactions. TXOUT generators need
+to precede TXIN consumers.
+
+TLST is a list of pairs (k v) with k being the hash of the
+transaction, and v being the transaction itself."
+  ;; first, compute lists of keys just once
+  (let ((txrecs (mapcar (lambda (pair)
+                          (destructuring-bind (k tx) pair
+                            (make-txrec
+                             :txkey  k
+                             :txpair pair
+                             :ins    (txin-keys tx)
+                             :outs   (txout-keys tx))))
+                        tlst)))
+    (labels ((depends-on (a b)
+               ;; return true if a depends on b
+               (let ((ins  (txrec-ins a))
+                     (outs (txrec-outs b)))
+               (some (um:rcurry 'member outs) ins)))
+             
+             (depends-on-some (a lst)
+               ;; true if a depends on some element of lst
+               (some (um:curry #'depends-on a) lst)))
+      
+      (mapcar 'txrec-txpair ;; convert back to incoming pairs
+              (um:accum acc
+                (um:nlet-tail outer ((lst txrecs))
+                  (when lst
+                    (let ((rem (um:nlet-tail iter ((lst  lst)
+                                                   (rest nil))
+                                 (if (endp lst)
+                                     rest
+                                   (let ((hd (car lst))
+                                         (tl (cdr lst)))
+                                     (cond ((depends-on hd hd)
+                                            ;; if we depend on our own outputs,
+                                            ;; then invalid TX
+                                            (remhash (txrec-txkey hd) *trans-cache*)
+                                            (iter tl rest))
+                                           
+                                           ((depends-on-some hd (append tl rest))
+                                            ;; try next TX
+                                            (iter tl (cons hd rest)))
+                                           
+                                           (t
+                                            ;; found a TX with no dependencies on rest of list
+                                            (acc hd)
+                                            (iter tl rest))
+                                           ))
+                                   ))))
+                      (if (= (length lst) (length rem))
+                          ;; no progress made - must be interdependencies
+                          (dolist (rec rem)
+                            ;; discard TX with circular dependencies and quit
+                            (remhash (txrec-txkey rec) *trans-cache*))
+                        ;; else -- try for more
+                        (outer rem))
+                      ))))))))
+
+(defun check-double-spend (tx-pair)
   "TX is transaction in current pending block.  Check every TXIN to be
 sure no double-spending, nor referencing unknown TXOUT. Return nil if
 invalid TX."
-  (labels ((txin-ok (txin)
-             (let ((key (cosi/proofs:txin-hashlock txin)))
-               (multiple-value-bind (v present-p)
-                   (gethash key *txout-log*)
-                 (when (and present-p
-                            (eq v :spendable))
-                   (setf (gethash key *txout-log*) tx)) ;; record where TXOUT was spent
-                 ))))
-    (every #'txin-ok (cosi/proofs:trans-txins tx))))
-    
+  (destructuring-bind (txkey tx) tx-pair
+    (labels ((txin-ok (txin)
+               (let ((key (txin-hashlock txin)))
+                 ;; if not in UTXO table as :SPENDABLE, then it is invalid
+                 (when (eq :spendable (gethash key *utxo-table*))
+                   (setf (gethash key *utxo-table*) tx-pair)))))
+      (cond ((every #'txin-ok (trans-txins tx))
+             (dolist (txout (trans-txouts tx))
+               (record-new-utx (txout-hashlock txout)))
+             t)
+            
+            (t
+             ;; remove transaction from mempool
+             (remhash txkey *trans-cache*)
+             (dolist (txin (trans-txins tx))
+               (let ((key (txin-hashlock txin)))
+                 (when (eq tx-pair (gethash key *utxo-table*)) ;; unspend all
+                   (setf (gethash key *utxo-table*) :spendable))
+                 ))
+             nil)
+            ))))
+
+(defun get-candidate-transactions ()
+  "Scan available TXs for numerically valid, spend-valid, and return
+topo-sorted partial order"
+  (let ((txs  nil))
+    (maphash (lambda (k v)
+               (push (list k v) txs))
+             *trans-cache*)
+    (let ((trimmed (topo-sort txs)))
+      (dolist (tx (set-difference txs trimmed
+                                  :key 'car))
+        ;; remove invalid transactions whose inputs refer to future
+        ;; outupts
+        (remhash (car tx) *trans-cache*))
+      ;; checking for double spending also creates additional UTXO's.
+      (um:accum acc
+        (dolist (tx trimmed)
+          (when (check-double-spend tx)
+            (acc tx))))
+      )))
+               
+(defvar *max-transactions*  16)  ;; max nbr TX per block
+
+(defun get-transactions-for-new-block ()
+  (let ((tx-pairs (get-candidate-transactions)))
+    (multiple-value-bind (hd tl)
+        (um:split *max-transactions* tx-pairs)
+      (dolist (tx-pair tl)
+        ;; put these back in the pond for next round
+        (destructuring-bind (k tx) tx-pair
+          (declare (ignore k))
+          (dolist (txin (trans-txins tx))
+            (let ((key (txin-hashlock txin)))
+              (when (eql tx-pair (gethash key *utxo-table*))
+                (setf (gethash key *utxo-table*) :spendable))))
+          (dolist (txout (trans-txouts tx))
+            (remhash (txout-hashlock txout) *utxo-table*))))
+      ;; now hd represents the actual transactions going into the next block
+      hd)))
+      
+;; ----------------------------------------------------------------------
+
+(defun #1=check-block-transactions (tlst)
+  "TLST is list of transactions from current pending block. Return nil
+if invalid block.
+
+List of TX should already have been topologically sorted so that input
+UTXO's were created in earlier transactions or earlier blocks in the
+blockchain.
+
+Check that there are no forward references in spend position, then
+check that each TXIN and TXOUT is mathematically sound."
+  ;; check for forward references in spend position
+  (um:nlet-tail iter ((lst tlst))
+    (when lst
+      (let ((hd  (car lst))
+            (tl  (cdr lst)))
+        (when tl
+          (let ((txins (txin-keys hd)))
+            (labels ((dependent-on (tx)
+                       (let ((txouts (txout-keys tx)))
+                         (some (lambda (txin)
+                                 (member txin txouts))
+                               txins))))
+              (when (some #'dependent-on lst)
+                (return-from #1# nil))
+              ))))))
+  (dolist (tx tlst)
+    (let ((txkey (int (hash/256 tx))))
+      (dolist (txin (trans-txins tx))
+        (let* ((key  (txin-hashlock txin))
+               (utxo (gethash key *utxo-table*)))
+          (unless (eql :SPENDABLE utxo)
+            (return-from #1# nil))
+          (setf (gethash key *utxo-table*) tx))) ;; mark as spend in this TX
+      ;; now check for valid transaction math
+      (unless (check-transaction-math tx)
+        (return-from #1# nil))
+      ;; add TXOUTS to UTX table
+      (dolist (txout (trans-txouts tx))
+        (setf (gethash (txout-hashlock txout) *utxo-table*) :SPENDABLE))
+          
+          (cond ((null utxo)
+                 ;; not in the UTXO table - invalid spend attempt
+                 (return-from #1# nil))
+
+                ((eql :SPENDABLE utxo)
+                 (setf (gethash key *utxo-table*) tx))
+
+
+
+  
+  (multiple-value-bind (valid-p tlst trimmed) (topo-sort tlst)
+    (setf valid-p (um:nlet-tail iter ((ts      trimmed)
+                                      (valid-p valid-p))
+                    ;; doing it this way allows us to scan all transactions
+                    ;; and accumulate the mempool transactions, even if the block
+                    ;; gets marked invalid this time around.
+                    (if (endp ts)
+                        valid-p
+                      (let ((tx (first ts)))
+                        (iter (rest ts)
+                              (and (check-transaction-math tx)
+                                   ;; Now we have checked the math on
+                                   ;; all elements of the transaction,
+                                   ;; and recorded the transaction in
+                                   ;; a log.
+                                   ;;
+                                   ;; So check TXINS to be sure no
+                                   ;; double spending, and no spending
+                                   ;; of unseen TXOUTS. Then record
+                                   ;; TXOUTS in the UTXO log.
+                                   (check-double-spend tx)
+                                   valid-p))
+                        ))))
+    (unless valid-p
+      ;; remove all TX that were invalid - valid one's might show up
+      ;; again in another attempt to form a block. 
+      ;;
+      ;; Even though we have a trimmed list of TX some of the original
+      ;; TX might have been recorded as they arrived. So we need to
+      ;; clean up the ones that haven't passed the dependency ordering check.
+      (dolist (tx (set-difference tlst trimmed))
+        (let ((key (hash/256 tx)))
+          (remhash key *trans-cache*)))
+      ;; Then among the trimmed TX we need to back out their spending,
+      ;; and remove their TXOUT till next time around.
+      ;;
+      ;; Also, remove any invalid TX from *trans-cache* so won't be
+      ;; picked up later.
+      (dolist (tx trimmed)
+        (let ((key (hash/256 tx)))
+          (if (gethash key *trans-cache*) ;; non-nil means math was okay
+              (progn
+                ;; was ostensibly valid, so leave in the trans-cache
+                ;; for next time around
+                (dolist (txin (trans-txins tx))
+                  (let ((key (txin-hashlock txin)))
+                    (when (eq tx (gethash key *utxo-table*)) ;; spent by this TX?
+                      (setf (gethash key *utxo-table*) :spendable)))) ;; unspend it
+                (dolist (txout (trans-txouts tx)) ;; remove utxos created in this TX
+                  (remhash (txout-hashlock txout) *utxo-table*)))
+            ;; else - was invalid math, just remove it so doesn't get
+            ;; picked up later
+            (remhash key *trans-cache*))
+          )))
+
+    ;; clean up utxo-table to show only unpsent utxos
+    (let ((del-keys nil))
+      (maphash (lambda (k v)
+                 (unless (eq v :spendable)
+                   (push k del-keys)))
+               *utxo-table*)
+      (dolist (del-key del-keys)
+        (remhash del-key *utxo-table*)))
+    ;; return verdict
+    valid-p))
+
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
@@ -550,9 +787,16 @@ invalid TX."
 ;; each different type of Cosi network... For now, just act as notary
 ;; service - sign anything.
 
+(defun notary-validate-cosi-message (node consensus-stage msg)
+  (declare (ignore node consensus-stage msg))
+  t)
+
+;; ------------------------------------------------------------------------
+
 (defvar *byz-thresh*  0)  ;; established at bootstrap time - consensus threshold
 (defvar *blockchain*  (make-hash-table
                        :test 'equalp))
+(defvar *block*  nil)  ;; next block being assembled
 
 (defun signed-message (msg)
   (NYI "signed-message"))
@@ -560,8 +804,8 @@ invalid TX."
 (defun signed-bitmap (msg)
   (NYI "signed-bitmap"))
 
-(defun block-hash (blk)
-  (NYI "block-hash"))
+(defun compute-block-hash (blk)
+  (NYI "compute-block-hash"))
 
 (defun get-block-transactions (blk)
   (NYI "get-block-transactions"))
@@ -580,7 +824,7 @@ invalid TX."
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
      (when (and (pbc:check-message (signed-message msg))
                 (>= (logcount (signed-bitmap msg)) *byz-thresh*))
-       (let ((key (block-hash (pbc:signed-message-msg msg))))
+       (let ((key (compute-block-hash (pbc:signed-message-msg msg))))
          (setf (gethash key *blockchain*) msg))))
     ))
 
@@ -588,8 +832,8 @@ invalid TX."
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
-    (=bind (v-lst r-lst)
-        (ac:par
+    (=bind (ans)
+        (par
           (=values 
            ;; Here is where we decide whether to lend our signature. But
            ;; even if we don't, we stil give others in the group a chance
@@ -598,17 +842,63 @@ invalid TX."
                (list (pbc:sign-message msg (node-pkey node) (node-skey node))
                      (node-bitmap node))
              (list nil 0)))
+          ;; ... and here is where we have all the subnodes in our
+          ;; group do the same, recursively down the Cosi tree.
           (pmapcar (sub-signing (node-real-ip node)
                                 consensus-stage
                                 msg
                                 seq-id)
                    subs))
-      (destructuring-bind (sig bits) v-lst ;; from validation effort
+      (destructuring-bind ((sig bits) r-lst) ans
         (labels ((fold-answer (sub resp)
                    (cond
                     ((null resp)
                      ;; no response from node, or bad subtree
-                     (pr (format nil "No signing: ~A" sub))
+                     (pr (format nil "No signing: ~A" (node-ip sub)))
+                     (mark-node-no-response node sub))
+                    
+                    (t
+                     (destructuring-bind (sub-sig sub-bits) resp
+                       (if (pbc:check-message sub-sig)
+                           (setf sig  (if sig
+                                          (pbc:combine-signatures sig sub-sig)
+                                        sub-sig)
+                                 bits (logior bits sub-bits))
+                         ;; else
+                         (mark-node-corrupted node sub))
+                       ))
+                    )))
+          (mapc #'fold-answer subs r-lst) ;; gather results from subs
+          (send reply-to :signed seq-id sig bits))
+        ))))
+
+(defun node-cosi-notary-signing (node reply-to consensus-stage msg seq-id)
+  "This code is for simple testing. It will disappear shortly. Don't
+bother factoring it with NODE-COSI-SIGNING."
+  ;; Compute a collective BLS signature on the message. This process
+  ;; is tree-recursivde.
+  (let* ((subs (remove-if 'node-bad (group-subs node))))
+    (=bind (ans)
+        (par
+          (=values 
+           ;; Here is where we decide whether to lend our signature. But
+           ;; even if we don't, we stil give others in the group a chance
+           ;; to decide for themselves
+           (if (notary-validate-cosi-message node consensus-stage msg)
+               (list (pbc:sign-message msg (node-pkey node) (node-skey node))
+                     (node-bitmap node))
+             (list nil 0)))
+          (pmapcar (sub-signing (node-real-ip node)
+                                consensus-stage
+                                msg
+                                seq-id)
+                   subs))
+      (destructuring-bind ((sig bits) r-lst) ans
+        (labels ((fold-answer (sub resp)
+                   (cond
+                    ((null resp)
+                     ;; no response from node, or bad subtree
+                     (pr (format nil "No signing: ~A" (node-ip sub)))
                      (mark-node-no-response node sub))
                     
                     (t
