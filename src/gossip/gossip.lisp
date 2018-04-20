@@ -313,7 +313,7 @@ are in place between nodes.
 
 (defun make-timeout (&rest args)
   (let ((timeout (apply 'make-instance 'timeout args)))
-    (if (null (solicitation-uid timeout)) (break))
+    (when (null (solicitation-uid timeout)) (error "No solicitation-uid on timeout"))
     timeout))
 
 (defmethod copy-message :around ((msg reply))
@@ -795,7 +795,10 @@ are in place between nodes.
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
-    (if (null destactor) (break))
+    (when (null destactor)
+      (if (null destnode)
+          (error "Cannot find node for ~D" destuid)
+          (error "Cannot find actor for node ~S" destnode)))
     (ac:send destactor
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
@@ -1717,7 +1720,7 @@ gets sent back, and everything will be copacetic.
    Returns a keyword if some kind of error."
   (handler-case (usocket:socket-connect nil nil
                         :protocol :datagram
-                        :local-host 0
+                        :local-host 0 ; must be 0, not "localhost", in order to receive on all IP addresses of all interfaces
                         :local-port port)
   (USOCKET:ADDRESS-IN-USE-ERROR ()
                                 :ADDRESS-IN-USE)))
