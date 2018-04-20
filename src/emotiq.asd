@@ -41,9 +41,13 @@
   :depends-on (emotiq/blockchain
                crypto-pairings
                core-crypto
+               cosi-bls
                randhound
                gossip)
   :components ((:module source
                 :pathname "./"
                 :serial t
-                :components ((:file "startup")))))
+                :components ((:file "startup")
+                             (:file "main")
+			     (:file "Randhound/election")))))
+
