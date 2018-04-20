@@ -20,4 +20,5 @@
    #:get-protocol-style
    #:random-node
    #:gossip-node
-   #:proxy-gossip-node))
+   #:proxy-gossip-node
+   #:eripa))
