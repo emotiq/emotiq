@@ -359,7 +359,7 @@ are in place between nodes.
     new-msg))
 
 (defclass gossip-mixin (uid-mixin)
-  ((address :initarg :address :initform nil :accessor address
+  ((address :initarg :address :initform (eripa) :accessor address
             :documentation "Network address (e.g. IP) of node.")
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
@@ -1257,13 +1257,17 @@ are in place between nodes.
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))))
 
+(defmethod initialize-reply-cache ((kind (eql :count-alive)) (thisnode gossip-node) soluid msgargs)
+  (declare (ignore msgargs))
+  (kvs:relate-unique! (reply-cache thisnode) soluid 1)) ; thisnode itself is 1 live node
+
 (defmethod initialize-reply-cache ((kind (eql :list-alive)) (thisnode gossip-node) soluid msgargs)
   (declare (ignore msgargs))
   (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))))
 
-(defmethod initialize-reply-cache ((kind (eql :count-alive)) (thisnode gossip-node) soluid msgargs)
+(defmethod initialize-reply-cache ((kind (eql :list-addresses)) (thisnode gossip-node) soluid msgargs)
   (declare (ignore msgargs))
-  (kvs:relate-unique! (reply-cache thisnode) soluid 1)) ; thisnode itself is 1 live node
+  (kvs:relate-unique! (reply-cache thisnode) soluid (list (address thisnode))))
 
 (defmethod initialize-reply-cache ((kind (eql :find-max)) (thisnode gossip-node) soluid msgargs)
   (let* ((key (first msgargs))
@@ -1275,14 +1279,19 @@ are in place between nodes.
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     (kvs:relate-unique! (reply-cache thisnode) soluid myvalue)))
 
+;;;; Count-Alive
+
+(defmethod count-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
+  (generic-srr-handler msg thisnode srcuid))
+
 ;;;; List-Alive
 
 (defmethod list-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
-;;;; Count-Alive
+;;;; List-Addresses
 
-(defmethod count-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
+(defmethod list-addresses ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
 ;;;; Gossip-lookup-key
@@ -1501,19 +1510,18 @@ gets sent back, and everything will be copacetic.
       (set-previous-reply node soluid srcuid new-reply)
       t)))
 
+(defmethod coalescer ((kind (eql :COUNT-ALIVE)))
+  "Proper coalescer for :count-alive responses."
+  '+)
+
 (defmethod coalescer ((kind (eql :LIST-ALIVE)))
   "Proper coalescer for :list-alive responses. Might
    want to add a call to remove-duplicates here if we start
-   doing a less deterministic gossip protocol (one not guaranteed to fully cover the graph,
-   and also not guaranteed not to contain redundancies)."
+   using a gossip protocol not guaranteed to ignore redundancies)."
   'append)
 
-(defmethod coalescer ((kind (eql :COUNT-ALIVE)))
-  "Proper coalescer for :count-alive responses. Might
-   want to add a call to remove-duplicates here if we start
-   doing a less deterministic gossip protocol (one not guaranteed to fully cover the graph,
-   and also not guaranteed not to contain redundancies)."
-  '+)
+(defmethod coalescer ((kind (eql :LIST-ADDRESSES)))
+  'append)
 
 (defmethod coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
   "Proper coalescer for :GOSSIP-LOOKUP-KEY responses."
@@ -1986,7 +1994,6 @@ gets sent back, and everything will be copacetic.
 #+TEST
 (setf localnode (make-node
   :UID 200
-  :ADDRESS 'NIL
   :NEIGHBORS nil))
 ; (run-gossip-sim)
 
@@ -2003,10 +2010,10 @@ gets sent back, and everything will be copacetic.
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
   :UID 201
-  :ADDRESS 'NIL
   :NEIGHBORS (list (uid rnode))))
 ; (solicit-wait localnode :count-alive)
 ; (solicit-wait localnode :list-alive)
+; (solicit-wait localnode :list-addresses)
 ; (solicit localnode :gossip-relate-unique :foo :bar)
 ; (solicit-wait localnode :gossip-lookup-key :foo)
 
