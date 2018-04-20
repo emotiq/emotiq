@@ -18,6 +18,7 @@
 
 (in-package :gossip)
 
+(defparameter *default-uid-style* :short ":short or :long. :short is shorter; :long is more comparable with other emotiq code")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one.
@@ -28,20 +29,19 @@
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 (defvar *actual-udp-gossip-port* nil "Local gossip UDP network port actually in use")
 (defvar *actual-tcp-gossip-port* nil "Local gossip TCP network port actually in use")
-(defvar *udp-gossip-socket* nil "Local passive open UDP gossip socket, if any")
-(defvar *tcp-gossip-socket* nil "Local passive open TCP gossip socket, if any")
+(defvar *udp-gossip-socket* nil "Local passive UDP gossip socket, if any")
+(defvar *tcp-gossip-socket* nil "Local passive TCP gossip socket, if any")
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
 (defparameter *shutdown-msg* (make-array 8 :element-type '(UNSIGNED-BYTE 8) :initial-contents #(115 104 117 116 100 111 119 110)) "shutdown")
-(defun shutdown-msg-len ()
-  (length *shutdown-msg*))
+(defun shutdown-msg-len () (length *shutdown-msg*))
 (defvar *udp-proxy-table* (make-hash-table) "Hash table of all UDP proxies on this machine")
 (defvar *tcp-proxy-table* (make-hash-table) "Hash table of all TCP proxies on this machine")
 
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
 
-(defvar *debug* 4 "true to show debugging information while handling gossip requests.")
+(defvar *debug* 4 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
 (defun debug-level (&optional level)
   (when *debug*
@@ -93,7 +93,7 @@ are in place between nodes.
 |#
 
 (defparameter *gossip-absorb-errors* t "True for normal use; nil for debugging")
-(defvar *last-uid* 0 "Simple counter for making UIDs")
+(defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *delay-interim-replies* t "True to delay interim replies.
   Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
@@ -166,32 +166,62 @@ are in place between nodes.
                 (> (length line) 3)
                 (equalp "ec2" (subseq line 0 3)))))))
 
-#+IGNORE
-(defun new-uid ()
-  (incf *last-uid*))
+(defun eripa-via-network-lookup ()
+  "Returns ERIPA for current process via http lookup at external site"
+  (let ((dq (with-output-to-string (s)
+              (cond ((aws-p)
+                     (http-fetch "http://169.254.169.254/latest/meta-data/public-ipv4" s))
+                    (t (http-fetch "http://api.ipify.org/" s))))))
+    (when (and (stringp dq)
+               (> (length dq) 0))
+      (values (usocket::host-to-hbo dq)
+              dq))))
 
-#+NOTYET
+(defun externally-routable-ip-address ()
+  "Returns ERIPA for current process"
+  ; add mechanisms to get this from command-line args or environment variables which should take precedence
+  ;   over network lookup
+  (eripa-via-network-lookup))
+
+(defparameter *eripa* nil "Cached EXTERNALLY-ROUTABLE-IP-ADDRESS")
+
+(defun eripa ()
+  "Return externally-routable ip address of this machine. This is the primary user function.
+   Caches result for quick repeated use."
+  (or *eripa*
+      (setf *eripa* (externally-routable-ip-address))))
+
 (defun encode-uid (machine-id process-id numeric-id)
   (logior (ash machine-id 48)
           (ash process-id 32)
           numeric-id))
 
-#+IGNORE
 (defun generate-new-monotonic-id ()
   (incf *last-uid*))
 
 #+LISPWORKS
-(cffi:defcfun ("getpid" unix-getpid) :int)
+(progn
+  (fli:define-c-typedef pid_t :int)
+  (fli:define-foreign-function getpid ()
+    :result-type pid_t))
 
-#+NOTYET ; would like to use this but getpid is CCL-specific
-(defun new-uid ()
-  (encode-uid #+OPENMCL (ccl::primary-ip-interface-address) ; 32 bits
-              (logand #xFFFF #+OPENMCL (ccl::getpid) #+LISPWORKS (unix-getpid)) ; 16 bits
-              (logand #xFFFF (generate-new-monotonic-id)))) ; 32 bits
+; Somewhat shorter than the longer uuid version, (80 bits vs. 128) and more useful for simulating with
+;   two processes on the same machine because it uses PID as part of the ID. Should still work
+;   fine even in real (not simulated) systems.
+(defun short-uid ()
+  (encode-uid (logand #xFFFFFFFF (eripa)) ; 32 bits
+              (logand #xFFFF #+OPENMCL (ccl::getpid) #+LISPWORKS (getpid)) ; 16 bits
+              (logand #xFFFFFFFF (generate-new-monotonic-id)))) ; 32 bits
 
-(defun new-uid ()
+(defun long-uid ()
   (uuid::uuid-to-integer (uuid::make-v1-uuid)))
 
+(defun new-uid (&optional (style *default-uid-style*))
+  "Generate a new UID of the given style"
+  (case style
+    (:long  (long-uid))
+    (:short (short-uid))))
+                   
 (defun uid? (thing)
   (integerp thing))
 
