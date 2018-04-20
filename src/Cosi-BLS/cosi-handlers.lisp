@@ -530,20 +530,17 @@ blockchain.
 Check that there are no forward references in spend position, then
 check that each TXIN and TXOUT is mathematically sound."
   (dolist (tx tlst)
-    (let ((txkey (int (hash/256 tx))))
-      (dolist (txin (trans-txins tx))
-        (let* ((key  (txin-hashlock txin))
-               (utxo (gethash key *utxo-table*)))
-          (unless (eql :SPENDABLE utxo)
-            (return-from #1# nil)) ;; caller must back out the changes made so far...
-          (setf (gethash key *utxo-table*) tx))) ;; mark as spend in this TX
-      ;; now check for valid transaction math
-      (unless (check-transaction-math tx)
-        (return-from #1# nil))
-      ;; add TXOUTS to UTX table
-      (dolist (txout (trans-txouts tx))
-        (setf (gethash (txout-hashlock txout) *utxo-table*) :SPENDABLE))
-      ))
+    (dolist (txin (trans-txins tx))
+      (let ((key  (txin-hashlock txin)))
+        (unless (eql :SPENDABLE (gethash key *utxo-table*))
+          (return-from #1# nil)) ;; caller must back out the changes made so far...
+        (setf (gethash key *utxo-table*) tx))) ;; mark as spend in this TX
+    ;; now check for valid transaction math
+    (unless (check-transaction-math tx)
+      (return-from #1# nil))
+    ;; add TXOUTS to UTX table
+    (dolist (txout (trans-txouts tx))
+      (setf (gethash (txout-hashlock txout) *utxo-table*) :SPENDABLE)))
   t) ;; tell caller everything ok
 
 ;; --------------------------------------------------------------------
