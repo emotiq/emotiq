@@ -766,7 +766,7 @@ check that each TXIN and TXOUT is mathematically sound."
            ;; Here is where we decide whether to lend our signature. But
            ;; even if we don't, we stil give others in the group a chance
            ;; to decide for themselves
-           (if (or (eql node *leader-node*)
+           (if (or (eql node *top-node*)
                    (validate-cosi-message node consensus-stage msg))
                (list (pbc:sign-message msg (node-pkey node) (node-skey node))
                      (node-bitmap node))
