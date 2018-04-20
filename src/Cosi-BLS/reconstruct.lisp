@@ -48,6 +48,8 @@
 (defvar *blockchain* nil) ;; linear list of chain-block records
 (defvar *witnesses*  nil) ;; linear list of witeness pkeys
 
+#|
+ ;; This version is for witness delta lists. See below for plain witness lists
 (defun reconstruct-blockchain ()
   ;; reset state to beginning
   (setf *blockchain* nil
@@ -98,5 +100,34 @@
             ))
         )))
   (setf *blockchain* (nreverse *blockchain*)))
-                  
-            
+|#
+;; ---------------------------------------------------------------------------
+;; This version is for plain witness lists in each block
+
+(defun reconstruct-blockchain ()
+  ;; reset state to beginning
+  (setf *blockchain*
+        (um:accum acc
+          ;; fetch entire chain back to genesis block
+          (um:nlet-tail iter ((blk  (get-most-recent-block)))
+            (when blk
+              ;; check that blkid = Hash(blk)
+              (assert (int= (block-hash blk)
+                            (hash-block blk)))
+              (acc blk)
+              (iter (get-block (block-prev blk))))))
+        *witnesses*  (and *blockchain*
+                          (block-witnesses (car *blockchain*)))
+        )
+  ;; reconstruct the outstanding utxo's
+  (clrhash *trans-cache*)
+  (clrhash *utxo-table*)
+  (dolist (blk (reverse *blockchain*))
+    (dolist (tx (block-transactions blk))
+      (dolist (txin (reverse (trans-txins tx)))
+        (let ((key (txins-hashlock txin)))
+          (assert (eql :spendable (gethash key *utxo-table*)))
+          (remhash key *utxo-table*)))
+      (dolist (txout (trans-txouts tx))
+        (setf (gethash (txout-hashlock txout) *utxo-table*) :spendable))
+      )))
