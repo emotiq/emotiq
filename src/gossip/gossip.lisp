@@ -1645,7 +1645,7 @@ gets sent back, and everything will be copacetic.
   (destructuring-bind (destuid srcuid msg)
                       (loenc:decode raw-message-buffer)
     (when (debug-level 1)
-      (debug-log :INCOMING-UDP msg :FROM rem-address :TO destuid))
+      (debug-log :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
     (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
       ;ensure a local node of type proxy-gossip-node exists on this machine with
       ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
@@ -1801,12 +1801,37 @@ gets sent back, and everything will be copacetic.
                  ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
                  (start-gossip-server mode (1+ port) (1+ try-count))))))))
 
+#+IGNORE
+ (defun internal-send-socket (ip port packet)
+    (let ((nb (length packet)))
+      (when (> nb cosi-simgen::*max-buffer-length*)
+        (error "Packet too large for UDP transmission"))
+      ; can't just use the listener socket here because then you get EADDRNOTAVAIL errors
+      (let ((socket (usocket:socket-connect ip port
+                                           ; :local-host (eripa)
+                                            :local-port *actual-udp-gossip-port*
+                                            :protocol :datagram)))
+        ;; (pr :sock-send (length packet) real-ip packet)
+        (unless (eql nb (usocket:socket-send socket packet nb))
+          (ac::pr :socket-send-error ip packet))
+        (usocket:socket-close socket)
+        )))
+
+(defun internal-send-socket (ip port packet)
+    (let ((nb (length packet)))
+      (when (> nb cosi-simgen::*max-buffer-length*)
+        (error "Packet too large for UDP transmission"))
+      (let ((socket *udp-gossip-socket*))
+        ;; (pr :sock-send (length packet) real-ip packet)
+        (unless (eql nb (usocket:socket-send socket packet nb :host ip :port port))
+          (ac::pr :socket-send-error ip packet)))))
+
 (defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *nominal-gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
     (progn
       (sleep .5)
-      (cosi-simgen::internal-send-socket "127.0.0.1" port *shutdown-msg*)
+      (internal-send-socket "127.0.0.1" port *shutdown-msg*)
       (sleep .5)
       (process-kill process)
       (when (and *udp-gossip-socket*
@@ -1861,7 +1886,7 @@ gets sent back, and everything will be copacetic.
                 (nb (length packet)))
            (when (> nb cosi-simgen::*max-buffer-length*)
              (error "Packet too large for UDP transmission"))
-           (cosi-simgen::internal-send-socket (real-address node) (real-port node) packet)
+           (internal-send-socket (real-address node) (real-port node) packet)
            ))
         (t
          (maybe-log node :CANNOT-TRANSMIT "no socket"))))
