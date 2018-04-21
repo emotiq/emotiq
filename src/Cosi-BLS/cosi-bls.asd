@@ -44,7 +44,8 @@ THE SOFTWARE.
                         :depends-on (package)
                         :pathname "./"
                         :serial t
-                        :components ((:file "cosi-blkdef")
+                        :components (#+CLOZURE (:file "clozure")
+                                     (:file "cosi-blkdef")
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
