@@ -8,8 +8,6 @@
 ;;; No more process-run-function because actors take care of that.
 ;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
 
-;;; New mechanism: Interim replies instead of carefully-timed timeouts.
-
 ;;;; TODO:
 ;;;; Change things such that when *use-all-neighbors* is an integer, if a node gets an active ignore back from
 ;;;;  neighbor X, it should pick another neighbor if it has more available.
@@ -1289,7 +1287,7 @@ are in place between nodes.
 (defmethod list-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
-;;;; List-Addresses
+;;;; List-Addresses. Every node reports its address. Useful if every node is on a different machine.
 
 (defmethod list-addresses ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
@@ -1834,6 +1832,11 @@ gets sent back, and everything will be copacetic.
         (unless (eql nb (usocket:socket-send socket packet nb :host ip :port port))
           (ac::pr :socket-send-error ip packet)))))
 
+(defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
+  (declare (ignore port))
+  (shutdown-gossip-server :UDP)
+  (shutdown-gossip-server :TCP))
+
 (defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *nominal-gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
@@ -1936,18 +1939,16 @@ gets sent back, and everything will be copacetic.
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg gossip-msg node srcuid))
 
-(defun run-gossip-sim ()
+(defun run-gossip-sim (&optional (protocol :UDP))
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
-  (shutdown-gossip-server :udp)
-  ;(shutdown-gossip-server :tcp)
+  (shutdown-gossip-server t)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   (sleep .5)
-  (start-gossip-server :UDP)
-  ;(start-gossip-server :TCP)
+  (start-gossip-server protocol)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
