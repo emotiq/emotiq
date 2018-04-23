@@ -280,7 +280,7 @@ are in place between nodes.
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
              :documentation "Number of hops this message has traversed.")
-   (forward? :initarg :forward? :initform t :accessor forward?
+   (forward? :initarg :forward? :initform *use-all-neighbors* :accessor forward?
              :documentation "Normally true, which means this message should be forwarded to neighbors
              of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
              just reply immediately.
@@ -306,6 +306,7 @@ are in place between nodes.
                    :uid (uid msg)
                    :timestamp (timestamp msg)
                    :hopcount (hopcount msg)
+                   :forward (forward? msg)
                    :kind (kind msg)
                    :args (args msg))))
     new-msg))
@@ -315,6 +316,11 @@ are in place between nodes.
              :documentation "Nil for no reply expected. :UPSTREAM or :GOSSIP or :NEIGHBORCAST indicate
              replies should happen by one of those mechanisms, or a UID to request a point-to-point reply to
              a specific node.")))
+
+(defmethod copy-message :around ((msg solicitation))
+  (let ((new-msg (call-next-method)))
+    (setf (reply-to new-msg) (reply-to msg))
+    new-msg))
 
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
@@ -829,10 +835,9 @@ are in place between nodes.
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
    before #'neighbors connectivity has been established."
-  ; Also need to establish a mechanism here to turn OFF forwarding. Every node should just reply
-  ;  to srcuid and not forward, because it's effectively an out-of-band broadcast message.
-  ;  Probably need a field in message object to do this.
-  (let ((nodes (listify-nodes)))
+  (let ((no-forward-msg (copy-message msg))
+        (nodes (listify-nodes)))
+    (setf (forward? no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
     (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
     (forward msg srcuid nodes)))
 
@@ -1014,7 +1019,7 @@ are in place between nodes.
                     (when was-present?
                       ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
                       (maybe-log node :STOP-WAITING msg srcuid))
-                    (when (not (neighborcast? msg)) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
+                    (unless (neighborcast? msg) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
 
