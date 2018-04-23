@@ -326,9 +326,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defun cache-transaction (key val)
   (setf (gethash key *trans-cache*) val))
 
-(defun lookup-transaction (key)
-  (gethash key *trans-cache*))
-
 ;; -------------------------------
 ;; testing-version TXOUT log
 
@@ -719,13 +716,16 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun get-block-transactions (blk)
   (NYI "get-block-transactions"))
 
-(defun validate-cosi-message (node consensus-stage msg)
+(defun block-witnesses (blk)
+  (NYI "block-witnesses"))
+
+(defun validate-cosi-message (node consensus-stage blk)
   (declare (ignore node)) ;; for now, in sim as notary
   (ecase consensus-stage
     (:prepare
-     ;; msg is a pending block
+     ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (let ((txs  (get-block-transactions msg)))
+     (let ((txs  (get-block-transactions blk)))
        (or (check-block-transactions txs)
            ;; back out changes to *utxo-table*
            (dolist (tx txs)
@@ -741,11 +741,12 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (when (and (pbc:check-message (signed-message msg))
-                (>= (logcount (signed-bitmap msg)) *byz-thresh*))
-       (let* ((blk (pbc:signed-message-msg msg))
+     (when (and (pbc:check-message (signed-message blk))
+                (> (logcount (signed-bitmap blk))
+                   (* 2/3 (length (block-witnesses blk)))))
+       (let* ((blk (pbc:signed-message-msg blk))
               (key (compute-block-hash blk)))
-         (setf (gethash key *blockchain*) msg))
+         (setf (gethash key *blockchain*) blk))
        ;; clear out *trans-cache* and spent utxos
        (dolist (tx (get-block-transactions blk))
          (let ((key (hash/256 tx)))
@@ -756,7 +757,7 @@ check that each TXIN and TXOUT is mathematically sound."
        ))
     ))
 
-(defun node-cosi-signing (node reply-to consensus-stage msg seq-id)
+(defun node-cosi-signing (node reply-to consensus-stage blk seq-id)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((subs (remove-if 'node-bad (group-subs node))))
@@ -767,15 +768,15 @@ check that each TXIN and TXOUT is mathematically sound."
            ;; even if we don't, we stil give others in the group a chance
            ;; to decide for themselves
            (if (or (eql node *top-node*)
-                   (validate-cosi-message node consensus-stage msg))
-               (list (pbc:sign-message msg (node-pkey node) (node-skey node))
+                   (validate-cosi-message node consensus-stage blk))
+               (list (pbc:sign-message blk (node-pkey node) (node-skey node))
                      (node-bitmap node))
              (list nil 0)))
           ;; ... and here is where we have all the subnodes in our
           ;; group do the same, recursively down the Cosi tree.
           (pmapcar (sub-signing (node-real-ip node)
                                 consensus-stage
-                                msg
+                                blk
                                 seq-id)
                    subs))
       (destructuring-bind ((sig bits) r-lst) ans
@@ -855,10 +856,7 @@ bother factoring it with NODE-COSI-SIGNING."
         (self (current-actor)))
     (ac:self-call :signing self consensus-stage msg sess)
     (labels
-        ((unknown-message (msg)
-           (error "Unknown message: ~A" msg))
-         
-         (wait-signing ()
+        ((wait-signing ()
            (recv
              ((list :signed seq sig bits)
               (cond
@@ -876,11 +874,55 @@ bother factoring it with NODE-COSI-SIGNING."
                   (wait-signing))
                )) ;; end of message pattern
              ;; ---------------------------------
-             (msg ;; other messages during commitment phase
-                  (unknown-message msg))
+             :TIMEOUT 30
+             :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
              )))
       (wait-signing)
       )))
+
+(defun leader-exec ()
+  (let* ((new-block (make-block
+                     :list-of-witnesses  *node-bit-tbl*
+                     :prev-block         (block-hash (first *blockchain*))
+                     :transactions       (get-transactions-for-new-block)))
+         (self      (current-actor)))
+    (ac:self-call :cosi-sign-prepare self new-block)
+    (labels
+        ((wait-prep-signing ()
+           (recv
+             ((list :signature sig bits)
+              (setf (block-signature new-block)        (pbc:signed-message-sig  sig)
+                    (block-signature-pkey new-block)   (pbc:signed-message-pkey sig)
+                    (block-signature-bitmap new-block) bits
+                    (block-hash new-block)             (hash/256 (list
+                                                                  (block-prev-block-hash new-block)
+                                                                  (block-witnesses new-block)
+                                                                  (block-transactions new-block)
+                                                                  (block-signature new-block)
+                                                                  (block-signature-pkey new-block)
+                                                                  (block-signature-bitmap new-block))))
+              (ac:self-call :cosi-sign-commit self new-block)
+              (labels ((wait-cmt-signing ()
+                         (recv
+                           ((list* :signature _)
+                            ;; block has been committed to blockchain
+                            (print "Block committed to blockchain"))
+
+                           ((list :corrupt-cosi-network)
+                            (print "Corrupt Cosi network"))
+
+                           ((list :timeout-cosi-network)
+                            (print "Timeout waiting for commitment multisignature"))
+                           )))
+                (wait-cmt-signing)))
+
+             ((list :corrupt-cosi-network)
+              (print "Corrupt Cosi network"))
+
+             ((list :timeout-cosi-network)
+              (print "Timeout waiting for prepare multisignature"))
+             )))
+      (wait-prep-signing))))
 
 #|
 ;; FOR TESTING!!!
