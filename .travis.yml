@@ -13,7 +13,7 @@ env:
 
   matrix:
     - LISP=lispworks-bin
-    - LISP=ccl-bin
+    - LISP=ccl-bin/1.11.5
 # Uncomment to enable the build farm resource to be spent on
 # implementations that might actually produce useful results.
 #    - LISP=sbcl-bin
@@ -33,7 +33,7 @@ install:
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
                :replace t :prompt nil)
             (ql-dist:install-dist 
-              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
+              "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
                :prompt nil)
             (uiop:quit 0)'
 
