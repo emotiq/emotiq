@@ -396,7 +396,8 @@ are in place between nodes.
    (local-kvs :initarg :local-kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor local-kvs
         :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
-              :documentation "List of UIDs of direct neighbors of this node")
+              :documentation "List of UIDs of direct neighbors of this node. This is the mechanism that establishes
+              the connectivity of the node graph.")
    (timers :initarg :timers :initform nil :accessor timers
             :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
@@ -444,13 +445,7 @@ are in place between nodes.
       (:gossip
        (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
-         (deliver-gossip-msg gossip-msg node srcuid)))
-      (:echo
-       ; we expect node to be nil in this case, but it's actually
-       ;   irrelevant. We could just as well use an actor attached to a node
-       ;   for echoing if we wanted to.
-       (destructuring-bind (srcuid destuid gossip-msg) (cdr actor-msg)
-         (send-msg gossip-msg destuid srcuid))))))
+         (deliver-gossip-msg gossip-msg node srcuid))))))
 
 #+OBSOLETE
 (defmethod gossip-dispatcher ((node proxy-gossip-node) &rest actor-msg)
@@ -484,21 +479,6 @@ are in place between nodes.
     :fn 
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
-
-(defparameter *echo-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
-
-#+OBSOLETE
-(defmethod echo-msg ((msg gossip-message-mixin) srcuid)
-  "Cause a message to be echoed back to myself.
-  An actor can send a message to itself while forcing itself to first yield and
-  handle other messages before handling the one herein."
-  (unless *echo-actor*
-    (setf *echo-actor* (make-gossip-actor nil)))
-  (ac:send *echo-actor*
-           :echo ; actor-verb
-           srcuid  ; source node
-           srcuid  ; destuid = srcuid because we're echoing
-           msg))
 
 (defun make-node (&rest args)
   "Makes a new node"
@@ -825,6 +805,14 @@ are in place between nodes.
     (write-string logstring *standard-output*)
     logmsg))
   
+(defmethod send-msg ((msg gossip-message-mixin) (destuid (eql 0)) srcuid)
+  "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
+   This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
+   before #'neighbors connectivity has been established."
+  (let ((nodes (listify-nodes)))
+    (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
+    (forward msg srcuid nodes)))
+
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
@@ -1107,8 +1095,7 @@ are in place between nodes.
 
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. This is strictly a message handler; it's not a function
-  a node actor should call. The sender of this message will be thisnode itself, via
-  the *echo-actor*."
+  a node actor should call. The sender of this message will be thisnode itself"
   (declare (ignore srcuid))
   ; srcuid will usually (always) be that of thisnode, but we're not checking for that
   ;   because it doesn't matter if it's not true. For now.
@@ -1381,7 +1368,7 @@ are in place between nodes.
 
 #|
 DISCUSSION:
-send-interim-reply needs to be delayed, and I don't know how to do this with actors.
+send-interim-reply needs to be delayed.
 interim-replies don't resolve anything in the gossip model; they just provide (sometimes valuable)
 partial information to the ultimate solicitor. However, if things are moving along properly,
 a huge flurry of almost content-free interim-replies doesn't accomplish anything except to
@@ -1398,6 +1385,8 @@ delay.
 because the original will take care of it. However, do reset the clock to make it execute 1 second
 from now, rather than 1 second from whatever time the original request set up.
 
+REMAINDER OF DISCUSSION IS OBSOLETE. WE SOLVE THE PROBLEM WITH SEND-SELF NOW.
+
 There are a couple of tricky issues here I don't know how to solve:
 -- How to create a local "back-burner" queue on an actor. Conceivably this could just be another slot
 on an actor, and #'next-message could be made to look at it last. Or possibly it could be put on the
@@ -1412,6 +1401,10 @@ Can an actor be on the *actor-ready-queue* more than once? I would hope so. But 
 really contain actors per se; it just contains lexical closures, all of which are associated with some
 actor. However, the way #'send works is that it never re-adds an actor's run closure to the queue if the
 actor is already busy.
+
+FUNDAMENTAL MISUNDERSTANDING ABOVE: An actor must *never* be on the ready queue more than once because then
+it could be executed by two processes concurrently, and that's *never* allowed. All atomicity guarantees of
+the actor model would dissolve under such a scenario.
 
 I suppose the simplest solution is to just make a timer for this, but the resolution of the timers
 is 1 second and that's almost too coarse-grained for the job.
@@ -1457,9 +1450,7 @@ gets sent back, and everything will be copacetic.
               :kind :maybe-sir
               :args (list soluid reply-kind))))
     (maybe-log thisnode :ECHO-MAYBE-SIR nil)
-    (send-self msg)
-    ;(echo-msg msg (uid thisnode))
-    ))
+    (send-self msg)))
 
 (defun later-reply? (new old)
   "Returns true if old is nil or new has a higher uid"
@@ -1617,7 +1608,8 @@ gets sent back, and everything will be copacetic.
 
 (defun ensure-proxy-node (mode real-address real-port real-uid)
   "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
-   Returns newly-created or old proxy-gossip-node."
+   Returns newly-created or old proxy-gossip-node.
+   Found or newly-created proxy will be added to *nodes* database for this process."
   (let* ((key (if (and (integerp real-address)
                        (null real-port))
                   real-address ; means port is already folded into real-address
@@ -1928,7 +1920,6 @@ gets sent back, and everything will be copacetic.
 |#
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
-  "Actor version. Does not launch a new thread because actor infrastructure will already have done that."
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
