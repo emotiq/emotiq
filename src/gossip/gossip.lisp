@@ -9,7 +9,7 @@
 ;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
 
 ;;;; TODO:
-;;;; Change things such that when *use-all-neighbors* is an integer, if a node gets an active ignore back from
+;;;; Change things such that when forward? is an integer, if a node gets an active ignore back from
 ;;;;  neighbor X, it should pick another neighbor if it has more available.
 
 ;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
@@ -19,8 +19,11 @@
 (defparameter *default-uid-style* :short ":short or :long. :short is shorter; :long is more comparable with other emotiq code")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-(defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one.
+
+;;;; DEPRECATE
+(defparameter *use-all-neighbors* 1 "True to broadcast to all neighbors; nil for none (no forwarding).
                                        Can be an integer to pick up to n neighbors.")
+;;;; DEPRECATE
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
 (defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
    in an effort to find an unused local port")
@@ -50,12 +53,13 @@
       t)))
 
 ; Typical cases:
-; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage case.
-; Case 2: *use-all-neighbors* = false and *active-ignores* = true. The more common gossip case.
-; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary.
-; Case 4: *use-all-neighbors* = false and *active-ignores* = false. Lots of timeouts. Poor results.
+; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
+; Case 2: *use-all-neighbors* = 1 and *active-ignores* = true. The more common gossip case.
+; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary. NOW A FORBIDDEN CASE.
+; Case 4: *use-all-neighbors* = 1 and *active-ignores* = false. Lots of timeouts. Poor results. NOW A FORBIDDEN CASE.
 
-(defun set-protocol-style (kind &optional n)
+;;; DEPRECATE. Use forward? slot on messages for this now.
+(defun set-protocol-style (kind &optional (n 1))
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
       There's no guarantee this will reach all nodes. But it's quicker and more realistic.
@@ -64,7 +68,7 @@
   (case kind
     (:gossip (setf *use-all-neighbors* n
                    *active-ignores* t))  ; must be true when *use-all-neighbors* is nil. Otherwise there will be timeouts.
-    (:neighborcast   (setf *use-all-neighbors* t
+    (:neighborcast  (setf *use-all-neighbors* t
                    *active-ignores* nil)))
   kind)
 
@@ -72,11 +76,13 @@
   "Get style of protocol. See set-protocol-style."
   (cond ((and (null *use-all-neighbors*)
               *active-ignores*)
-         :gossip)
+         :noforward) ; use 0 neighbors means "no forward" which is generally counterproductive except during bootstrapping
         ((and (integerp *use-all-neighbors*)
               *active-ignores*)
-         (values :gossip *use-all-neighbors*))
-        ((and *use-all-neighbors*
+         (if (zerop *use-all-neighbors*)
+             (values :noforward)
+             (values :gossip *use-all-neighbors*)))
+        ((and (eql t *use-all-neighbors*)
               (null *active-ignores*))
          :neighborcast)
         (t :unknown)))
@@ -274,10 +280,21 @@ are in place between nodes.
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
              :documentation "Number of hops this message has traversed.")
+   (forward? :initarg :forward? :initform t :accessor forward?
+             :documentation "Normally true, which means this message should be forwarded to neighbors
+             of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
+             just reply immediately.
+             It can be an integer n, which means to forward to up to n random neighbors. (This is traditional
+             gossip protocol.)
+             It can also simply be T, which means to forward to all neighbors. (This is neighborcast protocol.)")
    (kind :initarg :kind :initform nil :accessor kind
          :documentation "The verb of the message, indicating what action to take.")
    (args :initarg :args :initform nil :accessor args
          :documentation "Payload of the message. Arguments to kind.")))
+
+(defmethod neighborcast? ((msg gossip-message-mixin))
+  "True if message is requesting neighborcast protocol"
+  (eql t (forward? msg)))
 
 (defgeneric copy-message (msg)
   (:documentation "Copies a message object verbatim. Mainly for simulation mode
@@ -294,7 +311,10 @@ are in place between nodes.
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
-  ())
+  ((reply-to :initarg :reply-to :initform nil :accessor reply-to
+             :documentation "Nil for no reply expected. :UPSTREAM or :GOSSIP or :NEIGHBORCAST indicate
+             replies should happen by one of those mechanisms, or a UID to request a point-to-point reply to
+             a specific node.")))
 
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
@@ -809,6 +829,9 @@ are in place between nodes.
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
    before #'neighbors connectivity has been established."
+  ; Also need to establish a mechanism here to turn OFF forwarding. Every node should just reply
+  ;  to srcuid and not forward, because it's effectively an out-of-band broadcast message.
+  ;  Probably need a field in message object to do this.
   (let ((nodes (listify-nodes)))
     (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
     (forward msg srcuid nodes)))
@@ -915,26 +938,26 @@ are in place between nodes.
         (multiple-value-setq (item list) (remove-nth n list))
         item))))
 
-(defun use-some-neighbors (neighbors)
+(defun use-some-neighbors (neighbors howmany)
   "Pick a few random neighbors based on value of *use-all-neighbors*"
   (when neighbors
     (let ((len (length neighbors)))
-      (cond ((integerp *use-all-neighbors*)
-             (if (< *use-all-neighbors* 1)
+      (cond ((integerp howmany)
+             (if (< howmany 1)
                  nil ; if zero or less, return nil. Degenerate case.
-                 (if (>= *use-all-neighbors* len)
+                 (if (>= howmany len)
                      neighbors ; just use them all
                      (let ((fn (make-random-generator neighbors)))
-                       (loop for i below *use-all-neighbors* collect
+                       (loop for i below howmany collect
                          (funcall fn))))))
-            (*use-all-neighbors* ; if true but not integer, just use them all
+            (howmany ; if true but not integer, just use them all
              neighbors)
-            (t ; false, so treat it as 1
-             (list (nth (random len) neighbors)))))))
+            (t
+             nil)))))
 
-(defmethod get-downstream ((node gossip-node) srcuid)
+(defmethod get-downstream ((node gossip-node) srcuid howmany)
   (let ((all-neighbors (remove srcuid (neighbors node))))
-    (use-some-neighbors all-neighbors)))
+    (use-some-neighbors all-neighbors howmany)))
 
 (defun send-active-ignore (to from kind soluid failure-reason)
   "Actively send a reply message to srcuid telling it we're ignoring it."
@@ -991,7 +1014,7 @@ are in place between nodes.
                     (when was-present?
                       ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
                       (maybe-log node :STOP-WAITING msg srcuid))
-                    (when *active-ignores* ; now actively tell X we're ignoring it
+                    (when (not (neighborcast? msg)) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
 
@@ -1115,7 +1138,7 @@ are in place between nodes.
   (let ((content (first (args msg))))
     (declare (ignore content))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
 
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
@@ -1127,7 +1150,7 @@ are in place between nodes.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
 
 (defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
@@ -1139,7 +1162,7 @@ are in place between nodes.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate-unique (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
 
 (defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
@@ -1151,7 +1174,7 @@ are in place between nodes.
   (let ((key (first (args msg))))
     (kvs:remove-key! (local-kvs thisnode) key)
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
 
 (defmethod gossip-tally ((msg solicitation) thisnode srcuid)
   "Increment the value of a given key by an increment amount.
@@ -1161,7 +1184,7 @@ are in place between nodes.
         (increment (second (args msg))))
     (setf (local-kvs thisnode) (kvs:tally (local-kvs thisnode) key increment))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
 
 ;;; TODO: add this to key-value-store
 (defmethod tally-nondestructive ((store list) key amount &key (test #'equal))
@@ -1195,7 +1218,7 @@ are in place between nodes.
   "Generic handler for solicitations requiring replies (SRRs)"
   (let* ((kind (kind msg))
          (soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid)) ; don't forward to the source of this solicitation
+         (downstream (get-downstream thisnode srcuid (forward? msg))) ; don't forward to the source of this solicitation
          (timer nil)
          (cleanup (make-timeout-handler thisnode msg kind)))
     (initialize-reply-cache kind thisnode soluid (args msg))
@@ -1321,13 +1344,13 @@ are in place between nodes.
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid))
+  ;(forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))
   ; wait a finite time for all replies
   )
 
 (defmethod find-node-with-address ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to reverse DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid))
+  ;(forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))
   ; wait a finite time for all replies
   )
 
