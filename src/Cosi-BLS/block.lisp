@@ -118,6 +118,8 @@
     prev-block-hash
     merkle-root-hash
     block-timestamp
+    public-keys-of-witnesses
+    witness-bitmap
     block-signature)
   "These slots are serialized and then hashed. The hash is stored as
    the prev-block-hash on a newer block on a blockchain.")
