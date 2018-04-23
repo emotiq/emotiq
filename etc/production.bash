@@ -47,14 +47,14 @@ case ${uname_s} in
         MAKETARGET=makefile.linux
 	deliveryscript=deliv-linux.bash
 	production_dir=${prefix}/production-linux
-	kind=linux
+	arch=linux
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
 	deliveryscript=deliv-macos.bash
 	production_dir=${prefix}/production-macos
-	kind=macos
+	arch=macos
         echo Using ${MAKETARGET}
         ;;
     *)
@@ -65,7 +65,7 @@ case ${uname_s} in
 esac
 
 # directory for final binary
-delivery=${prefix}/production-${kind}
+delivery=${prefix}/production-${arch}
 mkdir -p ${delivery}
 
 if [ ! -f ${gmp_tbz} ]
@@ -135,17 +135,17 @@ cd ${production_dir}
 mv ${lib}/libs.tar ${production_dir}
 tar xf libs.tar
 # now, all dll's and emotiq are in ${production_dir}
-cp ${etc}/emotiq.bash.${kind} ${production_dir}/emotiq.bash
+cp ${etc}/emotiq.bash.${arch} ${production_dir}/emotiq.bash
 cd ${lib}
 rm *
 
 cd ${production_dir}
-case ${kind} in
+case ${arch} in
     linux) 
-	tar cfj ${kind}.emotiq.bz2 em* *.so*
+	tar cfj ${arch}.emotiq.bz2 em* *.so*
 	;;
     macos) 
-	tar cfj ${kind}.emotiq.bz2 em* *dylib*
+	tar cfj ${arch}.emotiq.bz2 em* *dylib*
 	;;
 esac
 
