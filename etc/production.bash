@@ -15,6 +15,7 @@
 
 # debug
 set -x
+version=`date --iso-8601=seconds`
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -142,10 +143,10 @@ rm *
 cd ${production_dir}
 case ${arch} in
     linux) 
-	tar cfj ${arch}.emotiq.bz2 em* *.so*
+	tar cfj emotiq-${version}-${arch}.bz2 em* *.so*
 	;;
     macos) 
-	tar cfj ${arch}.emotiq.bz2 em* *dylib*
+	tar cfj emotiq-${version}-${arch}.bz2 em* *dylib*
 	;;
 esac
 
