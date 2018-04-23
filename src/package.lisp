@@ -41,6 +41,12 @@
    #:production-p
    #:main
    #:start))
+   
+(defpackage emotiq/cli
+  (:use #:cl)
+  (:export
+   #:main
+   #:spawn-cli))
 
 (defpackage emotiq/wallet
   (:use #:cl)
@@ -48,9 +54,8 @@
    #:emotiq-wallet-path
 
    #:wallet-serialize #:wallet-deserialize
+
+   #:create-wallet
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
-   
-
-

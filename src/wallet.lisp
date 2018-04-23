@@ -42,6 +42,16 @@
         (o path :direction :input :element-type '(unsigned-byte 8))
       (lisp-object-encoder:deserialize o))))
 
+(defun create-wallet (&key
+                        (path (emotiq-wallet-path))
+                        (force nil force-p))
+  (when (and (probe-file path)
+             (not force))
+    (format *standard-output* "Not overwriting wallet keys at '~a'." path)
+    (return-from create-wallet nil))
+  (let ((wallet (make-wallet)))
+    (wallet-serialize wallet :path path)))
+
 #+(or)
 (defun aes256-key (passphrase salt)
   (let ((kdf
