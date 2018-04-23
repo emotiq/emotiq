@@ -881,11 +881,9 @@ bother factoring it with NODE-COSI-SIGNING."
       )))
 
 (defun leader-exec ()
-  (let* ((new-block (make-block
-                     :list-of-witnesses  *node-bit-tbl*
-                     :prev-block         (block-hash (first *blockchain*))
-                     :transactions       (get-transactions-for-new-block)))
-         (self      (current-actor)))
+  (let ((new-block (create-block *epoch* (block-hash (first *blockchain*))
+                                 (get-transactions-for-new-block)))
+        (self      (current-actor)))
     (ac:self-call :cosi-sign-prepare self new-block)
     (labels
         ((wait-prep-signing ()
@@ -893,14 +891,8 @@ bother factoring it with NODE-COSI-SIGNING."
              ((list :signature sig bits)
               (setf (block-signature new-block)        (pbc:signed-message-sig  sig)
                     (block-signature-pkey new-block)   (pbc:signed-message-pkey sig)
-                    (block-signature-bitmap new-block) bits
-                    (block-hash new-block)             (hash/256 (list
-                                                                  (block-prev-block-hash new-block)
-                                                                  (block-witnesses new-block)
-                                                                  (block-transactions new-block)
-                                                                  (block-signature new-block)
-                                                                  (block-signature-pkey new-block)
-                                                                  (block-signature-bitmap new-block))))
+                    (block-signature-bitmap new-block) bits)
+              (hash-block new-block)
               (ac:self-call :cosi-sign-commit self new-block)
               (labels ((wait-cmt-signing ()
                          (recv
