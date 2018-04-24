@@ -27,10 +27,12 @@ pbc_tar=${dist}/pbc-0.5.14.tar
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
+	gmpflags=
         MAKETARGET=makefile.linux
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
+	gmpflags=--host=core2-apple-darwin17.5.0
         MAKETARGET=makefile.osx
         echo Using ${MAKETARGET}
         ;;

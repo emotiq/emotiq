@@ -1,23 +1,9 @@
 #!/usr/bin/env bash
-#
-
-# this script is for building the 'production' version in ../var/local/production-{linux,macos}
-
-#  Assuming the proper development tools are in place, make the
-#  libraries needed, and produce a shared object suitable for loading
-#  the code for Pair Based Curves (PBC).
-#
-# Linux
-#   apt-get install gcc make g++ flex bison
-# MacOS
-#   XCode needs to be installed
-
-
 # debug
 set -x
+bash build-crypto-pairings.bash
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 BASE=${DIR}/..
 # where the tarballs should be
 CRYPTO=${BASE}/src/Crypto
@@ -48,18 +34,10 @@ case ${uname_s} in
     Linux*)
 	deliveryscript=deliv-linux.bash
 	arch=linux
-	gmpflags=
-        echo Using ${MAKETARGET}
         ;;
     Darwin*)
 	deliveryscript=deliv-macos.bash
 	arch=macos
-	gmpflags=--host=core2-apple-darwin17.5.0
-        echo Using ${MAKETARGET}
-        ;;
-    *)
-        echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
-
         ;;
 esac
 
@@ -85,53 +63,6 @@ case ${uname_s} in
 esac
 
 
-if [ ! -f ${gmp_tbz} ]
-then
-    echo the file ${gmp_tbz} does not exist
-    exit 1
-fi
-if [ ! -f ${pbc_tar} ]
-then
-    echo the file ${pbc_tar} does not exist
-    exit 1
-fi
-
-# PBC depends on GMP, so build GMP first
-
-mkdir -p ${src}
-
-cd ${src} \
-    && tar -xjv -f ${gmp_tbz} \
-    && cd ${gmp} \
-    && ./configure --prefix=${prefix} \
-    && make \
-    && make install
-
-if [ ! -d ${lib_dir} ]; then
-    echo the directory ${lib_dir} does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-if [ ! -d ${inc} ]; then
-    echo the directory /${inc}/ does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-export CFLAGS=-I${inc}
-export CPPFLAGS=-I${inc}
-export CXXFLAGS=-I${inc}
-export LDFLAGS=-L${lib_dir}
-
-cd ${src} \
-    && tar -xv -f ${pbc_tar} \
-    && cd ${pbc} \
-    && ./configure ${gmpflags} --prefix=${prefix} \
-    && make \
-    && make install
-
-cd ${pbcintf} && \
-    make --makefile=makefile.${arch} PREFIX=${prefix}
-
 cd ${etcdeliver}  # redundant?
 bash ${etcdeliver}/${deliveryscript}
 
@@ -147,10 +78,11 @@ tar xf libs.tar
 cp ${etc}/emotiq.bash.${arch} ${production_dir}/emotiq.bash
 # now, all dll's and emotiq are in ${production_dir}
 
+# this seems stupid, but I don't know enough about tar's options to make it include the subdir name
+cd ${tar_dir}
 tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
 # remove libs to avoid possibly incorrect loading
 # no, don't remove, rm -rf ${lib_dir}
 
-mv emotiq-${version}-${arch}.bz2 ${tar_dir}
 rm -rf ${production_dir}
 # leaving only ${tar_dir} containing the bz2.
