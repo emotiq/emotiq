@@ -89,7 +89,7 @@ THE SOFTWARE.
        (leader-exec node))
 
       (:genesis-utxo (utxo)
-       (record-new-utx (txout-hashlock utxo)))
+       (record-new-utxo (bev (txout-hashlock utxo))))
       
       (:answer (&rest msg)
        ;; for round-trip testing
@@ -381,22 +381,34 @@ Later it may become an ADS structure"
 ;; -------------------------------
 ;; testing-version transaction cache
 
-(defun cache-transaction (key val)
-  (setf (gethash (int key) *mempool*) val))
+(defmethod cache-transaction ((key bev) val)
+  (setf (gethash (bev-vec key) *mempool*) val))
+
+(defmethod remove-tx-from-mempool ((key bev))
+  (remhash (bev-vec key) *mempool*))
 
 ;; -------------------------------
 ;; testing-version TXOUT log
 
-(defun record-new-utx (key)
+(defmethod lookup-utxo  ((key bev))
+  (gethash (bev-vec key) *utxo-table*))
+
+(defmethod record-new-utxo ((key bev) &optional (val :spendable))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
-  (let ((key (int key)))
+  (let ((vkey (bev-vec key)))
     (multiple-value-bind (x present-p)
-        (gethash key *utxo-table*)
+        (gethash vkey *utxo-table*)
       (declare (ignore x))
       (when present-p
         (error "Shouldn't Happen: Effective Hash Collision!!!"))
-      (setf (gethash key *utxo-table*) :spendable))))
+      (setf (gethash vkey *utxo-table*) val))))
+
+(defmethod record-utxo ((key bev) val)
+  (setf (gethash (bev-vec key) *utxo-table*) val))
+
+(defmethod remove-utxo ((key bev))
+  (remhash (bev-vec key) *utxo-table*))
 
 ;; -------------------------------------------------------------------
 ;; Code to check incoming transactions for self-validity, not
@@ -417,7 +429,7 @@ If passes these checks, record the transaction and its hash in a pair
 in a cache log to speed up later block validation.
 
 Return nil if transaction is invalid."
-  (let* ((key        (hash/256 tx))
+  (let* ((key        (bev (hash/256 tx)))
          (txout-keys (txout-keys tx)))
     (when (and (notany (lambda (txin)
                          ;; can't be spending an output you are just
@@ -483,7 +495,7 @@ transaction, and v being the transaction itself."
                                      (cond ((depends-on hd hd)
                                             ;; if we depend on our own outputs,
                                             ;; then invalid TX
-                                            (remhash (int (txrec-txkey hd)) *mempool*)
+                                            (remove-tx-from-mempool (bev (txrec-txkey hd)))
                                             (iter tl rest))
                                            
                                            ((depends-on-some hd (append tl rest))
@@ -500,7 +512,7 @@ transaction, and v being the transaction itself."
                           ;; no progress made - must be interdependencies
                           (dolist (rec rem)
                             ;; discard TX with circular dependencies and quit
-                            (remhash (int (txrec-txkey rec)) *mempool*))
+                            (remove-tx-from-mempool (bev (txrec-txkey rec))))
                         ;; else -- try for more
                         (outer rem))
                       ))))))))
@@ -511,23 +523,22 @@ sure no double-spending, nor referencing unknown TXOUT. Return nil if
 invalid TX."
   (destructuring-bind (txkey tx) tx-pair
     (labels ((txin-ok (txin)
-               (let ((key (int (txin-hashlock txin))))
+               (let ((key (bev (txin-hashlock txin))))
                  ;; if not in UTXO table as :SPENDABLE, then it is invalid
-                 (when (eq :spendable (gethash key *utxo-table*))
-                   (setf (gethash key *utxo-table*) tx-pair)))))
+                 (when (eq :spendable (lookup-utxo key))
+                   (record-utxo key tx-pair)))))
       (cond ((every #'txin-ok (trans-txins tx))
              (dolist (txout (trans-txouts tx))
-               (record-new-utx (txout-hashlock txout)))
+               (record-new-utxo (bev (txout-hashlock txout))))
              t)
             
             (t
              ;; remove transaction from mempool
-             (remhash (int txkey) *mempool*)
+             (remove-tx-from-mempool (bev txkey))
              (dolist (txin (trans-txins tx))
-               (let ((key  (int (txin-hashlock txin))))
-                 (when (eq tx-pair (gethash key *utxo-table*)) ;; unspend all
-                   (setf (gethash key *utxo-table*) :spendable))
-                 ))
+               (let ((key  (bev (txin-hashlock txin))))
+                 (when (eq tx-pair (lookup-utxo key)) ;; unspend all
+                   (record-utxo key :spendable))))
              nil)
             ))))
 
@@ -536,14 +547,17 @@ invalid TX."
 topo-sorted partial order"
   (let ((txs  nil))
     (maphash (lambda (k v)
-               (push (list k v) txs))
+               (push (list (make-instance 'bev
+                            :vec k)
+                           v)
+                     txs))
              *mempool*)
     (let ((trimmed (topo-sort txs)))
       (dolist (tx (set-difference txs trimmed
                                   :key 'car))
         ;; remove invalid transactions whose inputs refer to future
         ;; outupts
-        (remhash (car tx) *mempool*))
+        (remove-tx-from-mempool (car tx)))
       ;; checking for double spending also creates additional UTXO's.
       (um:accum acc
         (dolist (tx trimmed)
@@ -561,11 +575,12 @@ topo-sorted partial order"
         (destructuring-bind (k tx) tx-pair
           (declare (ignore k))
           (dolist (txin (trans-txins tx))
-            (let ((key  (int (txin-hashlock txin))))
-              (when (eql tx-pair (gethash key *utxo-table*))
-                (setf (gethash key *utxo-table*) :spendable))))
+            (let ((key  (bev (txin-hashlock txin))))
+              (when (eql tx-pair (lookup-utxo key))
+                (record-utxo key :spendable))))
           (dolist (txout (trans-txouts tx))
-            (remhash (int (txout-hashlock txout)) *utxo-table*))))
+            (remove-utxo (bev (txout-hashlock txout))))
+          ))
       ;; now hd represents the actual transactions going into the next block
       hd)))
       
@@ -584,16 +599,16 @@ Check that there are no forward references in spend position, then
 check that each TXIN and TXOUT is mathematically sound."
   (dolist (tx tlst)
     (dolist (txin (trans-txins tx))
-      (let ((key  (int (txin-hashlock txin))))
-        (unless (eql :SPENDABLE (gethash key *utxo-table*))
+      (let ((key  (bev (txin-hashlock txin))))
+        (unless (eql :SPENDABLE (lookup-utxo key))
           (return-from #1# nil)) ;; caller must back out the changes made so far...
-        (setf (gethash key *utxo-table*) tx))) ;; mark as spend in this TX
+        (record-utxo key tx)))   ;; mark as spend in this TX
     ;; now check for valid transaction math
     (unless (check-transaction-math tx)
       (return-from #1# nil))
     ;; add TXOUTS to UTX table
     (dolist (txout (trans-txouts tx))
-      (setf (gethash (int (txout-hashlock txout)) *utxo-table*) :SPENDABLE)))
+      (record-new-utxo (bev (txout-hashlock txout)))))
   t) ;; tell caller everything ok
 
 ;; --------------------------------------------------------------------
@@ -777,11 +792,11 @@ check that each TXIN and TXOUT is mathematically sound."
            ;; back out changes to *utxo-table*
            (dolist (tx txs)
              (dolist (txin (trans-txins tx))
-               (let ((key (int (txin-hashlock txin))))
-                 (when (eql tx (gethash key *utxo-table*))
-                   (setf (gethash key *utxo-table*) :SPENDABLE))))
+               (let ((key (bev (txin-hashlock txin))))
+                 (when (eql tx (lookup-utxo key))
+                   (record-utxo key :SPENDABLE))))
              (dolist (txout (trans-txouts tx))
-               (remhash (int (txout-hashlock txout)) *utxo-table*))
+               (remove-utxo (bev (txout-hashlock txout))))
              nil))))
 
     (:commit
@@ -800,11 +815,11 @@ check that each TXIN and TXOUT is mathematically sound."
        (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
        ;; clear out *mempool* and spent utxos
        (dolist (tx (get-block-transactions blk))
-         (let ((key (int (hash/256 tx))))
-           (remhash key *mempool*))
+         (let ((key (bev (hash/256 tx))))
+           (remove-tx-from-mempool key))
          (dolist (txin (trans-txins tx))
-           (remhash (int (txin-hashlock txin)) *utxo-table*)))
-       t ;; return true to validate
+           (remove-utxo (bev (txin-hashlock txin)))))
+       t ;; return true to validate-
        ))
     ))
 
@@ -1124,6 +1139,7 @@ bother factoring it with NODE-COSI-SIGNING."
            (print "Construct Genesis transaction")
            (multiple-value-bind (utxog secrg)
                (make-txout 1000 pkey)
+             (declare (ignore secrg))
              (send-genesis-to-all (setf *genesis* utxog))
 
              (let ((minfo (decrypt-txout-info utxog skey)))
