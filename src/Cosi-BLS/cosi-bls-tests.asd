@@ -10,6 +10,7 @@
                (:module tests
                 :pathname "t/"
                 :depends-on (package)
-                :components ((:file "cosi-tests")))))
+                :components ((:file "cosi-tests")
+                             (:file "ranges")))))
 
   
