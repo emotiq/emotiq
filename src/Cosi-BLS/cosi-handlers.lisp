@@ -1014,9 +1014,10 @@ bother factoring it with NODE-COSI-SIGNING."
                              ;; ---------------------------------
                              ((list :new-transaction msg)
                               ;; allow processing of new transactions while we wait
-                              (node-check-transaction msg)
-                              (wait-cmt-signing))
-                             )))
+                              (let ((*current-node* node))
+                                (node-check-transaction msg)
+                                (wait-cmt-signing))
+                              ))))
                   (wait-cmt-signing))))
              
              ((list :answer (list :corrupt-cosi-network))
