@@ -393,7 +393,7 @@ Later it may become an ADS structure"
 (defmethod lookup-utxo  ((key bev))
   (gethash (bev-vec key) *utxo-table*))
 
-(defmethod record-new-utxo ((key bev) &optional (val :spendable))
+(defmethod record-new-utxo ((key bev))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
   (let ((vkey (bev-vec key)))
@@ -402,7 +402,7 @@ they will be added to utxo-table"
       (declare (ignore x))
       (when present-p
         (error "Shouldn't Happen: Effective Hash Collision!!!"))
-      (setf (gethash vkey *utxo-table*) val))))
+      (setf (gethash vkey *utxo-table*) :spendable))))
 
 (defmethod record-utxo ((key bev) val)
   (setf (gethash (bev-vec key) *utxo-table*) val))
