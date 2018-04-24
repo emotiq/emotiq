@@ -53,6 +53,8 @@ install:
 script:
   - systems=":emotiq/blockchain
              :crypto-pairings/t
+             :cosi-bls-tests
+             :gossip-tests
              :core-crypto";
       systems=${systems} bash etc/test-harness.bash
       
