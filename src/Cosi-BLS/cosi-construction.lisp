@@ -92,6 +92,20 @@ THE SOFTWARE.
              :initarg  :stake
              :initform 0)
    ;; -------------------------------------
+   ;; pseudo-globals per node
+   (blockchain     :accessor node-blockchain
+                   :initform nil)
+   (blockchain-tbl :accessor node-blockchain-tbl
+                   :initform (make-hash-table
+                              :test 'equalp))
+   (mempool        :accessor  node-mempool
+                   :initform  (make-hash-table
+                               :test 'equalp))
+   (utxo-table     :accessor  node-utxo-table
+                   :initform  (make-hash-table
+                               :test 'equalp))
+   
+   ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
              :initarg  :real-ip)
    (byz      :accessor node-byz      ;; Byzantine misbehav type
