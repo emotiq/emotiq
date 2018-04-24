@@ -31,7 +31,7 @@
 
             (print "Find UTX for Mary")
             (let* ((utxm   (find-txout-for-pkey-hash (hash/256 pkeym) trans))
-                   (minfo  (decrypt-txout-info (txout-encr utxm) skeym)))
+                   (minfo  (decrypt-txout-info utxm skeym)))
 
               (print "Construct 2nd transaction")
               (multiple-value-bind (utxin info)  ;; spend side
