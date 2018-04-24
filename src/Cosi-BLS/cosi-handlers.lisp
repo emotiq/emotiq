@@ -367,7 +367,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defun get-block-transactions (blk)
   "Right now it is a simple partially ordered list of transactions.
 Later it may become an ADS structure"
-  (bc-block-transactions blk))
+  (mapcar 'cadr (bc-block-transactions blk)))
 
 ;; --------------------------------------------------------------------
 
@@ -387,6 +387,20 @@ Later it may become an ADS structure"
 (defmethod remove-tx-from-mempool ((key bev))
   (remhash (bev-vec key) *mempool*))
 
+(defun cleanup-mempool (txs)
+  "Undo changes to mempool and utxo database resulting from these
+transactions."
+  (dolist (tx txs)
+    (let ((key (bev (hash/256 tx))))
+      (cache-transaction key tx))
+    (dolist (txin (trans-txins tx))
+      (let ((key (bev (txin-hashlock txin))))
+        (when (eql tx (lookup-utxo key))
+          (record-utxo key :spendable))))
+    (dolist (txout (trans-txouts tx))
+      (remove-utxo (bev (txout-hashlock txout))))
+    ))
+      
 ;; -------------------------------
 ;; testing-version TXOUT log
 
@@ -781,6 +795,13 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------------------------------------------------
 
+(defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode
+
+(defun check-byz-threshold (bits blk)
+  (or *in-simulatinon-always-byz-ok*
+      (> (logcount bits)
+         (* 2/3 (length (bc-block-witnesses blk))))))
+
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
     (:prepare
@@ -804,8 +825,7 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (when (and (> (logcount (bc-block-signature-bitmap blk))
-                   (* 2/3 (length (bc-block-witnesses blk))))
+     (when (and (check-byz-threshold (bc-block-signature-bitmap blk) blk)
                 (or (int= (node-pkey node) *leader*)
                     (and (int= (bc-block-hash blk)
                                (compute-block-hash blk))
@@ -852,6 +872,8 @@ check that each TXIN and TXOUT is mathematically sound."
                    subs))
       (let ((*current-node* node))
         (destructuring-bind ((sig bits) r-lst) ans
+          (unless sig
+            (cleanup-mempool (get-block-transactions blk)))
           (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
@@ -983,9 +1005,7 @@ bother factoring it with NODE-COSI-SIGNING."
            (recv
              ((list :answer (list :signature sig bits))
               (let ((*current-node* node))
-                (cond ((or t
-                           (> (logcount bits)
-                              (* 2/3 (length (bc-block-witnesses new-block)))))
+                (cond ((check-byz-threshold bits new-block)
                        (setf (bc-block-signature        new-block) (base58 (pbc:signed-message-sig  sig))
                              (bc-block-signature-pkey   new-block) (base58 (pbc:signed-message-pkey sig))
                              (bc-block-signature-bitmap new-block) (base58 bits)
@@ -996,14 +1016,13 @@ bother factoring it with NODE-COSI-SIGNING."
                                   (recv
                                     ((list :answer (list* :signature _ bits))
                                      (send *dly-instr* :plt)
-                                     (cond ((or t
-                                                (> (logcount bits)
-                                                   (length (bc-block-witnesses new-block))))
+                                     (cond ((check-byz-threshold bits new-block)
                                             (inspect new-block)
                                             (print "Block committed to blockchain"))
                                            
                                            (t
-                                          (print "Failed to get sufficient signatures during commit phase"))
+                                            (cleanup-mempool (get-block-transactions new-block))
+                                            (print "Failed to get sufficient signatures during commit phase"))
                                            ))
                                     
                                     ((list :answer (list :corrupt-cosi-network))
@@ -1022,6 +1041,7 @@ bother factoring it with NODE-COSI-SIGNING."
                       
                       (t
                        ;; failed to gain a Byzantine threshold of signatures...
+                       (cleanup-mempool (get-block-transactions new-block))
                        (print "Failed to get sufficient signatures duiring prepare phase"))
                       )))
               
