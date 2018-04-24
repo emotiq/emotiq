@@ -332,7 +332,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
   signature-bitmap)
 
 (defvar *protocol-version* #x100)
-(defvar *epoch*            0)
 (defvar *election-proof*   nil)
 (defvar *leader*           nil)
 
@@ -717,8 +716,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun reset-blockchain ()
   "For debug..."
-  (setf *epoch* 0
-        *leader* (node-pkey *top-node*))
+  (setf *leader* (node-pkey *top-node*))
   (reset-nodes))
            
 ;; -------------------------------------------------------------------
@@ -971,7 +969,9 @@ bother factoring it with NODE-COSI-SIGNING."
   (print "Assemble new block")
   (let ((new-block (make-bc-block
                     :protocol-version *protocol-version*
-                    :epoch            (incf *epoch*)
+                    :epoch            (if *blockchain*
+                                          (1+ (bc-block-epoch (first *blockchain*)))
+                                        0)
                     :timestamp        (uuid:make-v1-uuid)
                     :prev-block-hash  (and *blockchain*
                                            (bc-block-hash (first *blockchain*)))
