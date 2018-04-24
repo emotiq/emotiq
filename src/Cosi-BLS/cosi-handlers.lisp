@@ -387,19 +387,16 @@ Later it may become an ADS structure"
 (defmethod remove-tx-from-mempool ((key bev))
   (remhash (bev-vec key) *mempool*))
 
+(defmethod remove-tx-from-mempool ((tx transaction))
+  (remove-tx-from-mempool (bev (hash/256 tx))))
+
 (defun cleanup-mempool (txs)
   "Undo changes to mempool and utxo database resulting from these
 transactions."
   (dolist (tx txs)
     (let ((key (bev (hash/256 tx))))
       (cache-transaction key tx))
-    (dolist (txin (trans-txins tx))
-      (let ((key (bev (txin-hashlock txin))))
-        (when (eql tx (lookup-utxo key))
-          (record-utxo key :spendable))))
-    (dolist (txout (trans-txouts tx))
-      (remove-utxo (bev (txout-hashlock txout))))
-    ))
+    (unspend-utxos tx)))
       
 ;; -------------------------------
 ;; testing-version TXOUT log
@@ -418,11 +415,31 @@ they will be added to utxo-table"
         (error "Shouldn't Happen: Effective Hash Collision!!!"))
       (setf (gethash vkey *utxo-table*) :spendable))))
 
+(defmethod record-new-utxo ((txout txout))
+  (record-new-utxo (bev (txout-hashlock txout))))
+
+
 (defmethod record-utxo ((key bev) val)
   (setf (gethash (bev-vec key) *utxo-table*) val))
 
+
 (defmethod remove-utxo ((key bev))
   (remhash (bev-vec key) *utxo-table*))
+
+(defmethod remove-utxo ((txin txin))
+  (remove-utxo (bev (txin-hashlock txin))))
+
+(defmethod remove-utxo ((txout txout))
+  (remove-utxo (bev (txout-hashlock txout))))
+
+
+(defmethod unspend-utxos ((tx transaction))
+  (dolist (txin (trans-txins tx))
+    (let ((key (bev (txin-hashlock txin))))
+      (when (eql tx (lookup-utxo key))
+        (record-utxo key :spendable))))
+  (dolist (txout (trans-txouts tx))
+    (remove-utxo txout)))
 
 ;; -------------------------------------------------------------------
 ;; Code to check incoming transactions for self-validity, not
@@ -459,16 +476,8 @@ Return nil if transaction is invalid."
 ;; Code to assemble a block - must do full validity checking,
 ;; including double-spend checks
 
-(defun partial-order (t1 t2)
-  "Return T if inputs follow outputs"
-  (let ((txouts1 (txout-keys t1))
-        (txins2  (txin-keys  t2)))
-    (some (lambda (txin)
-            (member txin txouts1))
-          txins2)))
-
 (defstruct txrec
-  txpair txkey ins outs)
+  tx txkey ins outs)
 
 (defun topo-sort (tlst)
   "Topological partial ordering of transactions. TXOUT generators need
@@ -478,13 +487,12 @@ TLST is a list of pairs (k v) with k being the hash of the
 transaction, and v being the transaction itself."
   ;; first, compute lists of keys just once
   (print "Topological sorting")
-  (let ((txrecs (mapcar (lambda (pair)
-                          (destructuring-bind (k tx) pair
-                            (make-txrec
-                             :txkey  k
-                             :txpair pair
-                             :ins    (txin-keys tx)
-                             :outs   (txout-keys tx))))
+  (let ((txrecs (mapcar (lambda (tx)
+                          (make-txrec
+                           :tx     tx
+                           :txkey  (bev (hash/256 tx))
+                           :ins    (txin-keys tx)
+                           :outs   (txout-keys tx)))
                         tlst)))
     (labels ((depends-on (a b)
                ;; return true if a depends on b
@@ -496,7 +504,7 @@ transaction, and v being the transaction itself."
                ;; true if a depends on some element of lst
                (some (um:curry #'depends-on a) lst)))
       
-      (mapcar 'txrec-txpair ;; convert back to incoming pairs
+      (mapcar 'txrec-tx ;; convert back to incoming tx
               (um:accum acc
                 (um:nlet-tail outer ((lst txrecs))
                   (when lst
@@ -509,7 +517,7 @@ transaction, and v being the transaction itself."
                                      (cond ((depends-on hd hd)
                                             ;; if we depend on our own outputs,
                                             ;; then invalid TX
-                                            (remove-tx-from-mempool (bev (txrec-txkey hd)))
+                                            (remove-tx-from-mempool (txrec-txkey hd))
                                             (iter tl rest))
                                            
                                            ((depends-on-some hd (append tl rest))
@@ -526,57 +534,50 @@ transaction, and v being the transaction itself."
                           ;; no progress made - must be interdependencies
                           (dolist (rec rem)
                             ;; discard TX with circular dependencies and quit
-                            (remove-tx-from-mempool (bev (txrec-txkey rec))))
+                            (remove-tx-from-mempool (txrec-txkey rec)))
                         ;; else -- try for more
                         (outer rem))
                       ))))))))
 
-(defun check-double-spend (tx-pair)
+(defun check-double-spend (tx)
   "TX is transaction in current pending block.  Check every TXIN to be
 sure no double-spending, nor referencing unknown TXOUT. Return nil if
 invalid TX."
-  (destructuring-bind (txkey tx) tx-pair
-    (labels ((txin-ok (txin)
-               (let ((key (bev (txin-hashlock txin))))
-                 ;; if not in UTXO table as :SPENDABLE, then it is invalid
-                 (when (eq :spendable (lookup-utxo key))
-                   (record-utxo key tx-pair)))))
-      (cond ((every #'txin-ok (trans-txins tx))
-             (dolist (txout (trans-txouts tx))
-               (record-new-utxo (bev (txout-hashlock txout))))
-             t)
-            
-            (t
-             ;; remove transaction from mempool
-             (remove-tx-from-mempool (bev txkey))
-             (dolist (txin (trans-txins tx))
-               (let ((key  (bev (txin-hashlock txin))))
-                 (when (eq tx-pair (lookup-utxo key)) ;; unspend all
-                   (record-utxo key :spendable))))
-             nil)
-            ))))
+  (labels ((txin-ok (txin)
+             (let ((key (bev (txin-hashlock txin))))
+               ;; if not in UTXO table as :SPENDABLE, then it is invalid
+               (when (eq :spendable (lookup-utxo key))
+                 (record-utxo key tx)))))
+    (cond ((every #'txin-ok (trans-txins tx))
+           (dolist (txout (trans-txouts tx))
+             (record-new-utxo (bev (txout-hashlock txout))))
+           t)
+          
+          (t
+           ;; remove transaction from mempool
+           (remove-tx-from-mempool tx)
+           (unspend-utxos tx)
+           nil)
+          )))
 
 (defun get-candidate-transactions ()
   "Scan available TXs for numerically valid, spend-valid, and return
 topo-sorted partial order"
   (let ((txs  nil))
-    (maphash (lambda (k v)
-               (push (list (make-instance 'bev
-                            :vec k)
-                           v)
-                     txs))
+    (maphash (lambda (k tx)
+               (declare (ignore k))
+               (push tx txs))
              *mempool*)
     (let ((trimmed (topo-sort txs)))
-      (dolist (tx (set-difference txs trimmed
-                                  :key 'car))
+      (dolist (tx (set-difference txs trimmed))
         ;; remove invalid transactions whose inputs refer to future
         ;; outupts
-        (remove-tx-from-mempool (car tx)))
+        (remove-tx-from-mempool tx))
       ;; checking for double spending also creates additional UTXO's.
       (um:accum acc
         (dolist (tx trimmed)
           (when (check-double-spend tx)
-            (acc tx))))
+            (acc tx)))) ;; accumulate just the TX, not the key too
       )))
                
 (defun get-transactions-for-new-block ()
@@ -584,17 +585,9 @@ topo-sorted partial order"
     (print "Trimming transactions")
     (multiple-value-bind (hd tl)
         (um:split *max-transactions* tx-pairs)
-      (dolist (tx-pair tl)
+      (dolist (tx tl)
         ;; put these back in the pond for next round
-        (destructuring-bind (k tx) tx-pair
-          (declare (ignore k))
-          (dolist (txin (trans-txins tx))
-            (let ((key  (bev (txin-hashlock txin))))
-              (when (eql tx-pair (lookup-utxo key))
-                (record-utxo key :spendable))))
-          (dolist (txout (trans-txouts tx))
-            (remove-utxo (bev (txout-hashlock txout))))
-          ))
+        (unspend-utxos tx))
       ;; now hd represents the actual transactions going into the next block
       hd)))
       
@@ -622,7 +615,7 @@ check that each TXIN and TXOUT is mathematically sound."
       (return-from #1# nil))
     ;; add TXOUTS to UTX table
     (dolist (txout (trans-txouts tx))
-      (record-new-utxo (bev (txout-hashlock txout)))))
+      (record-new-utxo txout)))
   t) ;; tell caller everything ok
 
 ;; --------------------------------------------------------------------
@@ -813,37 +806,34 @@ check that each TXIN and TXOUT is mathematically sound."
                ;; back out changes to *utxo-table*
                (progn
                  (dolist (tx txs)
-                   (dolist (txin (trans-txins tx))
-                     (let ((key (bev (txin-hashlock txin))))
-                       (when (eql tx (lookup-utxo key))
-                         (record-utxo key :SPENDABLE))))
-                   (dolist (txout (trans-txouts tx))
-                     (remove-utxo (bev (txout-hashlock txout))))
-                   nil))))))
+                   (unspend-utxos tx))
+                 nil)))))
 
     (:commit
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (when (and (check-byz-threshold (bc-block-signature-bitmap blk) blk)
-                (or (int= (node-pkey node) *leader*)
-                    (and (int= (bc-block-hash blk)
-                               (compute-block-hash blk))
-                         (pbc:check-message (make-instance 'pbc:signed-message
-                                                           :msg  (signature-hash-message  blk)
-                                                           :pkey (bc-block-signature-pkey blk)
-                                                           :sig  (bc-block-signature      blk)))
-                         )))
-       (push blk *blockchain*)
-       (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
-       ;; clear out *mempool* and spent utxos
-       (dolist (tx (get-block-transactions blk))
-         (let ((key (bev (hash/256 tx))))
-           (remove-tx-from-mempool key))
-         (dolist (txin (trans-txins tx))
-           (remove-utxo (bev (txin-hashlock txin)))))
-       t ;; return true to validate
-       ))
+     (let ((signed (check-byz-threshold (bc-block-signature-bitmap blk) blk)))
+       (unless signed
+         (cleanup-mempool (get-block-transactions blk)))
+       (when (and signed
+                  (or (int= (node-pkey node) *leader*)
+                      (and (int= (bc-block-hash blk)
+                                 (compute-block-hash blk))
+                           (pbc:check-message (make-instance 'pbc:signed-message
+                                                             :msg  (signature-hash-message  blk)
+                                                             :pkey (bc-block-signature-pkey blk)
+                                                             :sig  (bc-block-signature      blk)))
+                           )))
+         (push blk *blockchain*)
+         (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
+         ;; clear out *mempool* and spent utxos
+         (dolist (tx (get-block-transactions blk))
+           (remove-tx-from-mempool tx)
+           (dolist (txin (trans-txins tx))
+             (remove-utxo txin)))
+         t ;; return true to validate
+         )))
     ))
 
 (defun node-cosi-signing (node reply-to consensus-stage blk seq-id)
@@ -872,8 +862,6 @@ check that each TXIN and TXOUT is mathematically sound."
                    subs))
       (let ((*current-node* node))
         (destructuring-bind ((sig bits) r-lst) ans
-          (unless sig
-            (cleanup-mempool (get-block-transactions blk)))
           (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
@@ -1005,52 +993,44 @@ bother factoring it with NODE-COSI-SIGNING."
            (recv
              ((list :answer (list :signature sig bits))
               (let ((*current-node* node))
-                (cond ((check-byz-threshold bits new-block)
-                       (setf (bc-block-signature        new-block) (base58 (pbc:signed-message-sig  sig))
-                             (bc-block-signature-pkey   new-block) (base58 (pbc:signed-message-pkey sig))
-                             (bc-block-signature-bitmap new-block) (base58 bits)
-                             (bc-block-hash             new-block) (base58 (compute-block-hash new-block)))
-                       (ac:self-call :cosi-sign-commit self new-block)
-                       (print "Waiting for Cosi commit")
-                       (labels ((wait-cmt-signing ()
-                                  (recv
-                                    ((list :answer (list* :signature _ bits))
-                                     (send *dly-instr* :plt)
-                                     (cond ((check-byz-threshold bits new-block)
-                                            (inspect new-block)
-                                            (print "Block committed to blockchain"))
-                                           
-                                           (t
-                                            (cleanup-mempool (get-block-transactions new-block))
-                                            (print "Failed to get sufficient signatures during commit phase"))
-                                           ))
+                (setf (bc-block-signature        new-block) (base58 (pbc:signed-message-sig  sig))
+                      (bc-block-signature-pkey   new-block) (base58 (pbc:signed-message-pkey sig))
+                      (bc-block-signature-bitmap new-block) (base58 bits)
+                      (bc-block-hash             new-block) (base58 (compute-block-hash new-block)))
+                (ac:self-call :cosi-sign-commit self new-block)
+                (print "Waiting for Cosi commit")
+                (labels ((wait-cmt-signing ()
+                           (recv
+                             ((list :answer (list* :signature _ bits))
+                              (send *dly-instr* :plt)
+                              (cond ((check-byz-threshold bits new-block)
+                                     (inspect new-block)
+                                     (print "Block committed to blockchain"))
                                     
-                                    ((list :answer (list :corrupt-cosi-network))
-                                     (print "Corrupt Cosi network"))
-                                    
-                                    ((list :answer (list :timeout-cosi-network))
-                                     (print "Timeout waiting for commitment multisignature"))
-                                    
-                                    ;; ---------------------------------
-                                    ((list :new-transaction msg)
-                                     ;; allow processing of new transactions while we wait
-                                     (node-check-transaction msg)
-                                     (wait-cmt-signing))
-                                    )))
-                         (wait-cmt-signing)))
-                      
-                      (t
-                       ;; failed to gain a Byzantine threshold of signatures...
-                       (cleanup-mempool (get-block-transactions new-block))
-                       (print "Failed to get sufficient signatures duiring prepare phase"))
-                      )))
-              
+                                    (t
+                                     (print "Failed to get sufficient signatures during commit phase"))
+                                    ))
+                             
+                             ((list :answer (list :corrupt-cosi-network))
+                              (print "Corrupt Cosi network"))
+                             
+                             ((list :answer (list :timeout-cosi-network))
+                              (print "Timeout waiting for commitment multisignature"))
+                             
+                             ;; ---------------------------------
+                             ((list :new-transaction msg)
+                              ;; allow processing of new transactions while we wait
+                              (node-check-transaction msg)
+                              (wait-cmt-signing))
+                             )))
+                  (wait-cmt-signing))))
+             
              ((list :answer (list :corrupt-cosi-network))
               (print "Corrupt Cosi network"))
-
+             
              ((list :answer (list :timeout-cosi-network))
               (print "Timeout waiting for prepare multisignature"))
-
+             
              ;; ---------------------------------
              ((list :new-transaction msg)
               ;; allow processing of new transactions while we wait
