@@ -342,7 +342,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
-
+(defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
 
 (defun signature-hash-message (blk)
   (list
@@ -367,7 +367,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defun get-block-transactions (blk)
   "Right now it is a simple partially ordered list of transactions.
 Later it may become an ADS structure"
-  (mapcar 'cadr (bc-block-transactions blk)))
+  (bc-block-transactions blk))
 
 ;; --------------------------------------------------------------------
 
@@ -788,8 +788,6 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------------------------------------------------
 
-(defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode
-
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
       (> (logcount bits)
@@ -980,11 +978,7 @@ bother factoring it with NODE-COSI-SIGNING."
                     :election-proof   (base58 *election-proof*)
                     :leader-pkey      (base58 *leader*)
                     :witnesses        (map 'vector (um:compose 'base58 'node-pkey) *node-bit-tbl*)
-                    :transactions     (mapcar (lambda (pair)
-                                                (destructuring-bind (k v) pair
-                                                  (list (base58 k)
-                                                        v)))
-                                              (get-transactions-for-new-block))))
+                    :transactions     (get-transactions-for-new-block)))
         (self      (current-actor)))
     (ac:self-call :cosi-sign-prepare self new-block)
     (print "Waiting for Cosi prepare")
