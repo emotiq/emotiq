@@ -77,7 +77,7 @@ mkdir -p ${src}
 cd ${src} \
     && tar -xjv -f ${gmp_tbz} \
     && cd ${gmp} \
-    && ./configure --prefix=${prefix} \
+    && ./configure ${gmpflags} --prefix=${prefix} \
     && make \
     && make install
 
