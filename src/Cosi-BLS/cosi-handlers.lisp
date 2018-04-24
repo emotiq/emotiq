@@ -963,6 +963,8 @@ bother factoring it with NODE-COSI-SIGNING."
       (wait-signing)
       )))
 
+;; ------------------------------------------------------------------------------------------------
+
 (defun leader-exec (node)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
@@ -1035,6 +1037,7 @@ bother factoring it with NODE-COSI-SIGNING."
              )))
       (wait-prep-signing))))
 
+;; -------------------------------------------------------------------------------------
 #|
 ;; FOR TESTING!!!
 
