@@ -15,7 +15,6 @@
 
 # debug
 set -x
-version=`date --iso-8601=seconds | tr [:] [_]`
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -52,13 +51,17 @@ case ${uname_s} in
 	deliveryscript=deliv-linux.bash
 	arch=linux
 	libs="libgmp.so libgmp.so.10 libgmp.so.10.3.2 libLispPBCIntf.so libpbc.so libpbc.so.1 libpbc.so.1.0.0"
+	gmpflags=
+	version=`/bin/date/date --iso-8601=seconds | tr [:] [_]`
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
 	deliveryscript=deliv-macos.bash
 	arch=macos
-	libs=
+	libs="libLispPBCIntf.dylib libgmp.10.dylib libgmp.dylib libpbc.1.dylib libpbc.dylib"
+	gmpflags=--host=core2-apple-darwin17.5.0
+	version=`/bin/date "+%Y%m%d%H%M%S"`
         echo Using ${MAKETARGET}
         ;;
     *)
@@ -66,90 +69,5 @@ case ${uname_s} in
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
 
         ;;
-esac
-
-# directory for final binary
-delivery=${prefix}/production
-mkdir -p ${delivery}
-
-if [ ! -f ${gmp_tbz} ]
-then
-    echo the file ${gmp_tbz} does not exist
-    exit 1
-fi
-if [ ! -f ${pbc_tar} ]
-then
-    echo the file ${pbc_tar} does not exist
-    exit 1
-fi
-
-# Should not be necessary…
-# if [ -d ${LIB} ]
-# then
-#     rm -rf ${LIB}
-# fi
-
-# PBC depends on GMP, so build GMP first
-
-mkdir -p ${src}
-
-cd ${src} \
-    && tar -xjv -f ${gmp_tbz} \
-    && cd ${gmp} \
-    && ./configure --prefix=${prefix} \
-    && make \
-    && make install
-
-if [ ! -d ${lib} ]; then
-    echo the directory ${lib} does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-if [ ! -d ${inc} ]; then
-    echo the directory /${inc}/ does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-export CFLAGS=-I${inc}
-export CPPFLAGS=-I${inc}
-export CXXFLAGS=-I${inc}
-export LDFLAGS=-L${lib}
-
-cd ${src} \
-    && tar -xv -f ${pbc_tar} \
-    && cd ${pbc} \
-    && ./configure --prefix=${prefix} \
-    && make \
-    && make install
-
-cd ${pbcintf} && \
-    make --makefile=${MAKETARGET}.production PREFIX=${prefix}
-
-cd ${etcdeliver}  # redundant?
-bash ${etcdeliver}/${deliveryscript}
-
-mkdir -p ${production_dir}
-cd ${etcdeliver}  # redundant?
-mv emotiq ${production_dir}
-# < test >
-# for testing - we must use tar to preserve hard links
-cd ${lib}
-tar cf libs.tar ${libs}
-cd ${production_dir}
-mv ${lib}/libs.tar ${production_dir}
-tar xf libs.tar
-# now, all dll's and emotiq are in ${production_dir}
-cp ${etc}/emotiq.bash.${arch} ${production_dir}/emotiq.bash
-cd ${lib}
-rm *
-
-cd ${production_dir}
-case ${arch} in
-    linux) 
-	tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
-	;;
-    macos) 
-	tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
-	;;
 esac
 
