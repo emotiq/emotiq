@@ -782,35 +782,37 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; ------------------------------------------------------------------------
 
 (defun validate-cosi-message (node consensus-stage blk)
-  (declare (ignore node)) ;; for now, in sim as notary
   (ecase consensus-stage
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (let ((txs  (get-block-transactions blk)))
-       (or (check-block-transactions txs)
-           ;; back out changes to *utxo-table*
-           (dolist (tx txs)
-             (dolist (txin (trans-txins tx))
-               (let ((key (bev (txin-hashlock txin))))
-                 (when (eql tx (lookup-utxo key))
-                   (record-utxo key :SPENDABLE))))
-             (dolist (txout (trans-txouts tx))
-               (remove-utxo (bev (txout-hashlock txout))))
-             nil))))
+     (or (int= (node-pkey node) *leader*)
+         (let ((txs  (get-block-transactions blk)))
+           (or (check-block-transactions txs)
+               ;; back out changes to *utxo-table*
+               (progn
+                 (dolist (tx txs)
+                   (dolist (txin (trans-txins tx))
+                     (let ((key (bev (txin-hashlock txin))))
+                       (when (eql tx (lookup-utxo key))
+                         (record-utxo key :SPENDABLE))))
+                   (dolist (txout (trans-txouts tx))
+                     (remove-utxo (bev (txout-hashlock txout))))
+                   nil))))))
 
     (:commit
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (when (and (int= (bc-block-hash blk)
-                      (compute-block-hash blk))
-                (pbc:check-message (make-instance 'pbc:signed-message
-                                                  :msg  (signature-hash-message  blk)
-                                                  :pkey (bc-block-signature-pkey blk)
-                                                  :sig  (bc-block-signature      blk)))
-                (> (logcount (bc-block-signature-bitmap blk))
-                   (* 2/3 (length (bc-block-witnesses blk)))))
+     (when (or (int= (node-pkey node) *leader*)
+               (and (int= (bc-block-hash blk)
+                          (compute-block-hash blk))
+                    (pbc:check-message (make-instance 'pbc:signed-message
+                                                      :msg  (signature-hash-message  blk)
+                                                      :pkey (bc-block-signature-pkey blk)
+                                                      :sig  (bc-block-signature      blk)))
+                    (> (logcount (bc-block-signature-bitmap blk))
+                       (* 2/3 (length (bc-block-witnesses blk))))))
        (push blk *blockchain*)
        (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
        ;; clear out *mempool* and spent utxos
@@ -819,7 +821,7 @@ check that each TXIN and TXOUT is mathematically sound."
            (remove-tx-from-mempool key))
          (dolist (txin (trans-txins tx))
            (remove-utxo (bev (txin-hashlock txin)))))
-       t ;; return true to validate-
+       t ;; return true to validate
        ))
     ))
 
@@ -834,8 +836,7 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
              ;; to decide for themselves
-             (if (or (int= (node-pkey node) *leader*)
-                     (validate-cosi-message node consensus-stage blk))
+             (if (validate-cosi-message node consensus-stage blk)
                  (list (pbc:sign-message (signature-hash-message blk)
                                          (node-pkey node)
                                          (node-skey node))
