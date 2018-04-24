@@ -1,4 +1,3 @@
-
 (defpackage :cosi-tests
   (:use :cl
    :lisp-unit
@@ -6,6 +5,10 @@
    :range-proofs
    :hash
    :vec-repr
-   :pbc))
+   :pbc)
+  (:shadowing-import-from :cosi/proofs
+                          :block))
+
+                          
 
   
