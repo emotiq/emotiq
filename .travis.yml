@@ -13,9 +13,9 @@ env:
 
   matrix:
     - LISP=lispworks-bin
+    - LISP=ccl-bin/1.11.5
 # Uncomment to enable the build farm resource to be spent on
 # implementations that might actually produce useful results.
-#    - LISP=ccl-bin
 #    - LISP=sbcl-bin
 #    - LISP=abcl-bin
 # Non-binary distributions need to be built from source, which
@@ -33,7 +33,7 @@ install:
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
                :replace t :prompt nil)
             (ql-dist:install-dist 
-              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
+              "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
                :prompt nil)
             (uiop:quit 0)'
 
@@ -50,48 +50,10 @@ install:
 # FAILURE "non-zero status"
 #   (uiop:quit (not (zerop status))
 #
-#   The current implementation returns the bit representation of '-1'
-#   shifted by the zero-based index of the failing test.
 script:
-  - ros -e "(loop
-              :for i :upfrom 0
-              :for 
-                  (system dependencies) 
-              :in 
-                  '((:emotiq/blockchain :emotiq-test))
-              :doing 
-                 (ql:quickload dependencies)
-              :unless 
-                 (asdf:test-system system)
-              :return 
-                 (uiop:quit (ash -1 i))
-              :finally 
-                 (uiop:quit 0))"
-  - ros -e "(loop
-              :for i :upfrom 1
-              :for 
-                  (system dependencies) 
-              :in 
-                  '((:crypto-pairings :crypto-pairings/t))
-              :doing 
-                 (ql:quickload dependencies)
-              :unless 
-                 (asdf:test-system system)
-              :return 
-                 (uiop:quit (ash -1 i))
-              :finally 
-                 (uiop:quit 0))"
-  - ros -e "(loop
-              :for i :upfrom 2
-              :for 
-                  (system dependencies) 
-              :in 
-                  '((:core-crypto :core-crypto)) 
-              :doing 
-                 (ql:quickload dependencies)
-              :unless 
-                 (asdf:test-system system)
-              :return 
-                 (uiop:quit (ash -1 i))
-              :finally 
-                 (uiop:quit 0))"
+  - systems=":emotiq/blockchain
+             :crypto-pairings/t
+             :core-crypto";
+      systems=${systems} bash etc/test-harness.bash
+      
+  
