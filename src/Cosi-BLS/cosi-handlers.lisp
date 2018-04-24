@@ -804,15 +804,16 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (when (or (int= (node-pkey node) *leader*)
-               (and (int= (bc-block-hash blk)
-                          (compute-block-hash blk))
-                    (pbc:check-message (make-instance 'pbc:signed-message
-                                                      :msg  (signature-hash-message  blk)
-                                                      :pkey (bc-block-signature-pkey blk)
-                                                      :sig  (bc-block-signature      blk)))
-                    (> (logcount (bc-block-signature-bitmap blk))
-                       (* 2/3 (length (bc-block-witnesses blk))))))
+     (when (and (> (logcount (bc-block-signature-bitmap blk))
+                   (* 2/3 (length (bc-block-witnesses blk))))
+                (or (int= (node-pkey node) *leader*)
+                    (and (int= (bc-block-hash blk)
+                               (compute-block-hash blk))
+                         (pbc:check-message (make-instance 'pbc:signed-message
+                                                           :msg  (signature-hash-message  blk)
+                                                           :pkey (bc-block-signature-pkey blk)
+                                                           :sig  (bc-block-signature      blk)))
+                         )))
        (push blk *blockchain*)
        (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
        ;; clear out *mempool* and spent utxos
