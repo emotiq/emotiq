@@ -15,6 +15,7 @@
 
 # debug
 set -x
+version=`date --iso-8601=seconds | tr [:] [_]`
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -41,20 +42,23 @@ pbc=${src}/pbc-0.5.14
 lib=${prefix}/lib
 inc=${prefix}/include
 
+emotiqfiles=emotiq emotiq.bash
+production_dir=${prefix}/production
+
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
         MAKETARGET=makefile.linux
 	deliveryscript=deliv-linux.bash
-	production_dir=${prefix}/production-linux
-	kind=linux
+	arch=linux
+	libs="libgmp.so libgmp.so.10 libgmp.so.10.3.2 libLispPBCIntf.so libpbc.so libpbc.so.1 libpbc.so.1.0.0"
         echo Using ${MAKETARGET}
         ;;
     Darwin*)
         MAKETARGET=makefile.osx
 	deliveryscript=deliv-macos.bash
-	production_dir=${prefix}/production-macos
-	kind=macos
+	arch=macos
+	libs=
         echo Using ${MAKETARGET}
         ;;
     *)
@@ -65,7 +69,7 @@ case ${uname_s} in
 esac
 
 # directory for final binary
-delivery=${prefix}/production-${kind}
+delivery=${prefix}/production
 mkdir -p ${delivery}
 
 if [ ! -f ${gmp_tbz} ]
@@ -130,14 +134,22 @@ mv emotiq ${production_dir}
 # < test >
 # for testing - we must use tar to preserve hard links
 cd ${lib}
-tar cf libs.tar *
+tar cf libs.tar ${libs}
 cd ${production_dir}
 mv ${lib}/libs.tar ${production_dir}
 tar xf libs.tar
 # now, all dll's and emotiq are in ${production_dir}
-cp ${etc}/emotiq.bash.${kind} ${production_dir}/emotiq.bash
+cp ${etc}/emotiq.bash.${arch} ${production_dir}/emotiq.bash
 cd ${lib}
 rm *
-# < /test >
 
-# cp ${???}/*.so* ${production_dir}
+cd ${production_dir}
+case ${arch} in
+    linux) 
+	tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
+	;;
+    macos) 
+	tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
+	;;
+esac
+
