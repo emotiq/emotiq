@@ -4,6 +4,12 @@ set -x
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=${DIR}/..
+var=${BASE}/var
+
+if [ ${var} ]
+then
+    rm -rf ${var}
+fi
 
 uname_s=$(uname -s)
 case ${uname_s} in
@@ -19,7 +25,7 @@ case ${uname_s} in
         ;;
 esac
 
-source ${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
+. ${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
 
 # where the tarballs should be
 CRYPTO=${BASE}/src/Crypto
@@ -34,7 +40,6 @@ gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
 pbc_tar=${dist}/pbc-0.5.14.tar
 
 # where make install will install stuff
-var=${BASE}/var
 src=${var}/src
 prefix=${var}/local
 gmp=${src}/gmp-6.1.2
@@ -44,11 +49,6 @@ lib=${prefix}/lib
 inc=${prefix}/include
 
 version=`/bin/date "+%Y%m%d%H%M%S"`
-
-if [ ${var} ]
-then
-    rm -rf ${var}
-fi
 
 tar_dir=${prefix}/production
 tdir=emtq-${version}-${arch}
@@ -72,17 +72,15 @@ case ${uname_s} in
 esac
 
 
-source ${etcdeliver}/${deliveryscript}
+cd ${etc}
+. ${etcdeliver}/${deliveryscript}
 
-mv ${etcdeliver}/emotiq ${production_dir}
-echo "done delivery"
-exit 0
+mv ${etc}/emotiq ${production_dir}
 
 # we use tar to preserve hard links (this can be rewritten)
 cd ${lib_dir}
 tar cf libs.tar ${libswoprefix}
 mv ${lib_dir}/libs.tar ${production_dir}
-
 
 cd ${production_dir}
 tar xf libs.tar
@@ -98,3 +96,5 @@ tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
 
 rm -rf ${production_dir}
 # leaving only ${tar_dir} containing the bz2.
+
+
