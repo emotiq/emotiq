@@ -28,16 +28,16 @@ uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
 	gmpflags=
-        MAKETARGET=makefile.linux
-        echo Using ${MAKETARGET}
+        maketarget=makefile.linux
+        echo Using ${maketarget}
         ;;
     Darwin*)
 	gmpflags=--host=core2-apple-darwin17.5.0
-        MAKETARGET=makefile.osx
-        echo Using ${MAKETARGET}
+        maketarget=makefile.osx${MAKESUFFIX}
+        echo Using ${maketarget}
         ;;
     *)
-        MAKETARGET=makefile.linux
+        maketarget=makefile.linux
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
 
         ;;
@@ -104,6 +104,6 @@ cd ${src} \
     && make install
 
 cd ${pbcintf} && \
-    make --makefile=${MAKETARGET} PREFIX=${prefix}
+    make --makefile=${maketarget} PREFIX=${prefix}
 
 

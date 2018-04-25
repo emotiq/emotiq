@@ -11,9 +11,15 @@
 				       genesis-block)))))
 
 (defun message-running-state (&optional how-started-message?)
-  (format *standard-output* "~%Running ~a in ~a~%"
+  (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"
           (or how-started-message? "interactively")
-          (if (production-p) "production" "development")))
+          (if (production-p) "production" "development")
+	  (argv)))
+
+
+(defun argv ()
+#+lispworks system:*line-arguments-list*)
+  
 
 (defun start ()
   ;; This is for running in the binary command line only. For now, if we're

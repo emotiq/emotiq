@@ -1,10 +1,26 @@
 #!/usr/bin/env bash
 # debug
 set -x
-bash build-crypto-pairings.bash
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=${DIR}/..
+
+uname_s=$(uname -s)
+case ${uname_s} in
+    Linux*)
+	deliveryscript=deliv-linux.bash
+	makesuffix=
+	arch=linux
+        ;;
+    Darwin*)
+	deliveryscript=deliv-macos.bash
+	makesuffix=".production"
+	arch=macos
+        ;;
+esac
+
+source ${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
+
 # where the tarballs should be
 CRYPTO=${BASE}/src/Crypto
 dist=${CRYPTO}/PBC-Intf
@@ -29,17 +45,10 @@ inc=${prefix}/include
 
 version=`/bin/date "+%Y%m%d%H%M%S"`
 
-uname_s=$(uname -s)
-case ${uname_s} in
-    Linux*)
-	deliveryscript=deliv-linux.bash
-	arch=linux
-        ;;
-    Darwin*)
-	deliveryscript=deliv-macos.bash
-	arch=macos
-        ;;
-esac
+if [ ${var} ]
+then
+    rm -rf ${var}
+fi
 
 tar_dir=${prefix}/production
 tdir=emtq-${version}-${arch}
@@ -63,14 +72,17 @@ case ${uname_s} in
 esac
 
 
-cd ${etcdeliver}  # redundant?
-bash ${etcdeliver}/${deliveryscript}
+source ${etcdeliver}/${deliveryscript}
 
-mv emotiq ${production_dir}
-# we use tar to preserve hard links (can this be rewritten?)
+mv ${etcdeliver}/emotiq ${production_dir}
+echo "done delivery"
+exit 0
+
+# we use tar to preserve hard links (this can be rewritten)
 cd ${lib_dir}
 tar cf libs.tar ${libswoprefix}
 mv ${lib_dir}/libs.tar ${production_dir}
+
 
 cd ${production_dir}
 tar xf libs.tar
