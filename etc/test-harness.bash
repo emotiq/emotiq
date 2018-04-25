@@ -25,6 +25,9 @@ systems=${systems:-":emotiq/blockchain
                     :crypto-pairings/t
                     :core-crypto"}
 
+echo Test harness invoked using implementation:
+echo $(${lisp} --eval '(format t "~&~a~&~a~&" (lisp-implementation-type)(lisp-implementation-version))')
+
 for system in ${systems}; do
     echo "Invoking ASDF:TEST-SYTEM on ${system}..."
     ${lisp} \
