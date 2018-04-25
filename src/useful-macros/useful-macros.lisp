@@ -1251,14 +1251,16 @@ THE SOFTWARE.
 |#      
 
 (defun drop (n seq)
-  (if (consp seq)
-      (nthcdr n seq)
-    (subseq seq n)))
+  (when seq
+    (if (consp seq)
+        (nthcdr n seq)
+      (subseq seq n))))
 
 (defun take (n seq)
-  (if (consp seq)
-      (subseq seq 0 (and (nthcdr n seq) n))
-    (subseq seq 0 (min n (length seq)))))
+  (when seq
+    (if (consp seq)
+        (subseq seq 0 (and (nthcdr n seq) n))
+      (subseq seq 0 (min n (length seq))))))
 
 (defun lastn (n lst)
   (nreverse (take n (reverse lst))))
