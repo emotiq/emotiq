@@ -12,7 +12,7 @@ env:
     - secure: "gQ087RnmcCZ9YPIjv87pQ0EUWG9SCimHoHRfqNlZKP9h30BQvuGGRmvJUUbn6A0NIUv4XkiavTyUFm23YixDpWsNIhFoX1ozEUDoVfMBtyW1ut8K95E40nA0u94CUP37TjP6qhUPSnk6b3EO1kPWKCfBjsD9Gr0uR4i/LfZQguAdCJVlYSvgwCncwyATsVxWMh1pw80kcj90bxL8GIjdp3BqBkmpNSqjTmpxl/9QvjfMXZfHGoWHckJqGWuHzK5FWiSEJOB8g1DLt7ZYIpNGKEtyRj780T8BV3CT14S4cChhtOZRaETWw8OkG1GoJNRkdISPHRrFkZ4b9WiwQAJHAMk/LvAu9MIs3cDesA/nUHXvuabC47JgsSvrXsGnHvbD22eJsVf1/elcidB5gG8+PtG4Pft9ZpbwPxG4cBQhnIx83LpZhmRmDyF3b7Go2os0KMyseNQ0QRM9nzLXELpPXaeoK5iDIUpM4QrYtLfWaJQJ7dQcbdAJo8iI6VtQ//8EyAmEeQoZcacnhm/QnE6Urvjj66zkSct6po/bxW6hjWzQ7ScGlXqYOgUVYYVvmkpVuw/STtqcb66CXWKM+iZIh1vW/Afui/KM1T3tklRUkkpxuYDl4NvBnWLpOQIdrRkhvHwn6SVpqGsWHEFP9w7coZAP4wMQNjMQtbIjkcnQy1g="
 
   matrix:
-    - LISP=lispworks-bin
+#    - LISP=lispworks-bin
     - LISP=ccl-bin/1.11.5
 # Uncomment to enable the build farm resource to be spent on
 # implementations that might actually produce useful results.
@@ -51,11 +51,8 @@ install:
 #   (uiop:quit (not (zerop status))
 #
 script:
-  - systems=":emotiq/blockchain
-             :crypto-pairings/t
-             :cosi-bls-tests
-             :gossip-tests
-             :core-crypto";
+  - systems=":cosi-bls-tests
+             :gossip-tests";
       systems=${systems} bash etc/test-harness.bash
       
   
