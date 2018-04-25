@@ -29,7 +29,8 @@ echo Test harness invoked using implementation:
 echo $(${lisp} --eval '(format t "~&~a~&~a~&" (lisp-implementation-type)(lisp-implementation-version))')
 
 for system in ${systems}; do
-    echo "Invoking ASDF:TEST-SYTEM on ${system}..."
+    rm -rf ~/.cache/common-lisp/
+    echo "==>Invoking ASDF:TEST-SYSTEM on ${system}..."
     ${lisp} \
         --load ${DIR}/test-harness.lisp \
         --eval "(test-harness:test-system ${system})"
@@ -38,5 +39,6 @@ for system in ${systems}; do
         echo "ASDF:TEST-SYSTEM failed for ${system}"
         exit $status
     fi
+    echo "<==ASDF:TEST-SYSTEM on ${system} succeeded."
 done
                                       
