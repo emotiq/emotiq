@@ -51,6 +51,7 @@ install:
 #   (uiop:quit (not (zerop status))
 #
 script:
+  - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
   - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
   - systems=":cosi-bls-tests
              :gossip-tests";
