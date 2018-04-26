@@ -98,4 +98,4 @@ script:
               :finally
                  (uiop:quit 0))"
 
-- etc/production.bash
+  - etc/production.bash
