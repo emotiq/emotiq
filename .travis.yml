@@ -51,6 +51,7 @@ install:
 #   (uiop:quit (not (zerop status))
 #
 script:
+  - ros -e "(asdf:load-system :cosi-bls)"
   - systems=":cosi-bls-tests
              :gossip-tests";
       systems=${systems} bash etc/test-harness.bash
