@@ -30,10 +30,14 @@
                                    "create-wallet")
                      (emotiq/wallet:create-wallet))
                     ((string-equal (first input)
+                                   "open")
+                     (emotiq/wallet:open-wallet))
+                    ((string-equal (first input)
                                    "help")
                      (format *standard-output* "~&Available commands are~&~
 ~tquit~&~
 ~tcreate-wallet~&~
+~topen~&~
 ~thelp~&"))
                     (t 
                      (format *standard-output* "~&Unrecognized command '~{~a~}'.~&Try 'help'.~&" input))))))))

@@ -18,7 +18,7 @@
 
 (defun emotiq/user/root ()
   #+linux
-  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
+  (merge-pathnames "~/.emotiq/" (user-homedir-pathname))
   #+darwin
   (merge-pathnames "Emotiq/"
                    (merge-pathnames "Library/Application Support/"
@@ -35,22 +35,29 @@
     (lisp-object-encoder:serialize wallet o)))
     
 (defun wallet-deserialize (&key (path (emotiq-wallet-path)))
-  (let ((path (emotiq-wallet-path)))
-    (unless (probe-file path)
-      (error "No wallet found at ~a." path))
-    (with-open-file
-        (o path :direction :input :element-type '(unsigned-byte 8))
-      (lisp-object-encoder:deserialize o))))
+  (unless (probe-file path)
+    (error "No wallet found at ~a." path))
+  (with-open-file
+      (o path :direction :input :element-type '(unsigned-byte 8))
+    (lisp-object-encoder:deserialize o)))
 
 (defun create-wallet (&key
                         (path (emotiq-wallet-path))
-                        (force nil force-p))
+                        (force nil))
   (when (and (probe-file path)
              (not force))
     (format *standard-output* "Not overwriting wallet keys at '~a'." path)
     (return-from create-wallet nil))
   (let ((wallet (make-wallet)))
     (wallet-serialize wallet :path path)))
+
+(defun open-wallet (&key
+                        (path (emotiq-wallet-path)))
+  (unless (probe-file path)
+    (format *standard-output* "Wallet has not been create (use create-wallet) '~a'." path)
+    (return-from open-wallet nil))
+  (let ((wallet (wallet-deserialize)))
+    (declare (ignore wallet))))
 
 #+(or)
 (defun aes256-key (passphrase salt)

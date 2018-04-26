@@ -45,7 +45,7 @@
                 :components ((:file "startup")))))
 
 (defsystem "emotiq/wallet"
-  :depends-on (emotiq
+  :depends-on (emotiq/startup
                ironclad
                lisp-object-encoder
                cosi-bls)

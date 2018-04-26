@@ -56,6 +56,7 @@
    #:wallet-serialize #:wallet-deserialize
 
    #:create-wallet
+   #:open-wallet
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
