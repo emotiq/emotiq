@@ -59,6 +59,14 @@
   (let ((wallet (wallet-deserialize)))
     (declare (ignore wallet))))
 
+(defun see-genesis () ;; triviality for debug, not exported
+  (let ((context (emotiq::start-blockchain-context)))
+    (emotiq:with-blockchain-context (context)
+			     (let ((genesis-block (emotiq::make-genesis-block)))
+			       (format *standard-output*
+				       "~&Here is the first transaction of the genesis block:~%  ~a~%"
+				       genesis-block)))))
+
 #+(or)
 (defun aes256-key (passphrase salt)
   (let ((kdf

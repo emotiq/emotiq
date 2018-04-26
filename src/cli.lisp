@@ -33,6 +33,9 @@
                                    "open")
                      (emotiq/wallet:open-wallet))
                     ((string-equal (first input)
+                                   "see")
+                     (emotiq/wallet::see-genesis))
+                    ((string-equal (first input)
                                    "help")
                      (format *standard-output* "~&Available commands are~&~
 ~tquit~&~
