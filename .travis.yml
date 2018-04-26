@@ -1,6 +1,8 @@
 language: common-lisp
 # Attempt to run as more efficient container
 sudo: false
+os:
+  - linux
 
 env:
   global:
@@ -29,16 +31,16 @@ install:
   - curl -L https://raw.githubusercontent.com/emotiq/roswell/mte-lispworks/scripts/install-for-ci.sh | sh
   - sudo apt-get install openssl pgpgpg wget bash gcc make g++ flex bison
 # Pin quicklisp to known version; install emotiq dist
-  - ros -e '(ql-dist:install-dist 
-              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt" 
+  - ros -e '(ql-dist:install-dist
+              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
                :replace t :prompt nil)
-            (ql-dist:install-dist 
+            (ql-dist:install-dist
               "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
                :prompt nil)
             (uiop:quit 0)'
 
 # Add/remove test converage here
-# 
+#
 # <https://en.wikipedia.org/wiki/Exit_status#POSIX>
 # <https://books.google.at/books?id=kIxQAAAAMAAJ&q=software+tools+kernighan+and+plough&dq=software+tools+kernighan+and+plough&hl=en&sa=X&ved=0ahUKEwiC-v_I7_DZAhUKWSwKHXI7C7wQ6AEIKzAA>
 #
@@ -46,7 +48,7 @@ install:
 #
 # SUCCESS "zero"
 #   (uiop:quit 0)
-# 
+#
 # FAILURE "non-zero status"
 #   (uiop:quit (not (zerop status))
 #
@@ -55,43 +57,45 @@ install:
 script:
   - ros -e "(loop
               :for i :upfrom 0
-              :for 
-                  (system dependencies) 
-              :in 
+              :for
+                  (system dependencies)
+              :in
                   '((:emotiq/blockchain :emotiq-test))
-              :doing 
+              :doing
                  (ql:quickload dependencies)
-              :unless 
+              :unless
                  (asdf:test-system system)
-              :return 
+              :return
                  (uiop:quit (ash -1 i))
-              :finally 
+              :finally
                  (uiop:quit 0))"
   - ros -e "(loop
               :for i :upfrom 1
-              :for 
-                  (system dependencies) 
-              :in 
+              :for
+                  (system dependencies)
+              :in
                   '((:crypto-pairings :crypto-pairings/t))
-              :doing 
+              :doing
                  (ql:quickload dependencies)
-              :unless 
+              :unless
                  (asdf:test-system system)
-              :return 
+              :return
                  (uiop:quit (ash -1 i))
-              :finally 
+              :finally
                  (uiop:quit 0))"
   - ros -e "(loop
               :for i :upfrom 2
-              :for 
-                  (system dependencies) 
-              :in 
-                  '((:core-crypto :core-crypto)) 
-              :doing 
+              :for
+                  (system dependencies)
+              :in
+                  '((:core-crypto :core-crypto))
+              :doing
                  (ql:quickload dependencies)
-              :unless 
+              :unless
                  (asdf:test-system system)
-              :return 
+              :return
                  (uiop:quit (ash -1 i))
-              :finally 
+              :finally
                  (uiop:quit 0))"
+
+- etc/production.bash

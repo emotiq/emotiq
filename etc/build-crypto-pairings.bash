@@ -16,94 +16,26 @@ set -x
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE=${DIR}/..
-# where the tarballs should be
-CRYPTO=${BASE}/src/Crypto
-dist=${CRYPTO}/PBC-Intf
-# pbc intf files are in the same place
-pbcintf=${dist}
-gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
-pbc_tar=${dist}/pbc-0.5.14.tar
+VAR=${BASE}/var
+
 
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
-	gmpflags=
-        maketarget=makefile.linux
-        echo Using ${maketarget}
+        echo Building for Linux
+        libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/release-0.1/libLispPBCIntf-linux.tgz
         ;;
     Darwin*)
-	gmpflags=--host=core2-apple-darwin17.5.0
-        maketarget=makefile.osx${MAKESUFFIX}
-        echo Using ${maketarget}
+        echo Building for macOS
+        libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/release-0.1/libLispPBCIntf-osx.tgz
         ;;
     *)
         maketarget=makefile.linux
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
-
+        exit 127
         ;;
 esac
 
-# where make install will install stuff
-var=${BASE}/var
-src=${var}/src
-prefix=${var}/local
-gmp=${src}/gmp-6.1.2
-pbc=${src}/pbc-0.5.14
+mkdir -p ${VAR}/local
 
-lib=${prefix}/lib
-inc=${prefix}/include
-
-if [ ! -f ${gmp_tbz} ]
-then
-    echo the file ${gmp_tbz} does not exist
-    exit 1
-fi
-if [ ! -f ${pbc_tar} ]
-then
-    echo the file ${pbc_tar} does not exist
-    exit 1
-fi
-
-# Should not be necessary…
-# if [ -d ${LIB} ]
-# then
-#     rm -rf ${LIB}
-# fi
-
-# PBC depends on GMP, so build GMP first
-
-mkdir -p ${src}
-
-cd ${src} \
-    && tar -xjv -f ${gmp_tbz} \
-    && cd ${gmp} \
-    && ./configure ${gmpflags} --prefix=${prefix} \
-    && make \
-    && make install
-
-if [ ! -d ${lib} ]; then
-    echo the directory ${lib} does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-if [ ! -d ${inc} ]; then
-    echo the directory /${inc}/ does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-export CFLAGS=-I${inc}
-export CPPFLAGS=-I${inc}
-export CXXFLAGS=-I${inc}
-export LDFLAGS=-L${lib}
-
-cd ${src} \
-    && tar -xv -f ${pbc_tar} \
-    && cd ${pbc} \
-    && ./configure --prefix=${prefix} \
-    && make \
-    && make install
-
-cd ${pbcintf} && \
-    make --makefile=${maketarget} PREFIX=${prefix}
-
-
+(cd ${VAR}/local && wget -O - ${libs_url} | tar xvfz -)
