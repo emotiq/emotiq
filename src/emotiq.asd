@@ -61,3 +61,12 @@
   :components ((:module source
                 :pathname "./"
                 :components ((:file "cli")))))
+
+(defsystem "emotiq/pt"
+  :depends-on (emotiq/cli)
+  :components ((:module source
+                :pathname "./"
+                :components (
+                             (:file "bctest")
+                             (:file "main")))))
+

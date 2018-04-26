@@ -40,7 +40,13 @@
   (:export
    #:production-p
    #:main
-   #:start))
+   #:start)
+  (:export
+   #:enode)
+  (:export ;; testing
+   #:enode
+   #:set-owner
+   #:print-balance))
    
 (defpackage emotiq/cli
   (:use #:cl)
@@ -60,3 +66,4 @@
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
+

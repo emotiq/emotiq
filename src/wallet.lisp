@@ -67,6 +67,16 @@
 				       "~&Here is the first transaction of the genesis block:~%  ~a~%"
 				       genesis-block)))))
 
+(defun test1()
+  (let ((bc (emotiq:start-blockchain-context)))
+    (emotiq:with-blockchain-context (bc)
+      (format t "blocks: ~a ~a~%" (emotiq:genesis-block) (emotiq:last-block))
+      (format t "~s~%" (if (eq (emotiq:genesis-block) (emotiq:last-block))
+                           "EQUAL"
+                         "NOT-EQUAL")))))
+
+
+
 #+(or)
 (defun aes256-key (passphrase salt)
   (let ((kdf
