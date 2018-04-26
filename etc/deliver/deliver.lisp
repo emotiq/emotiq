@@ -1,6 +1,7 @@
 (in-package "CL-USER")
 (load-all-patches)
-(load "~/quicklisp/setup.lisp")
+;; QuickLisp should be properly configured by now
+;; (load "~/quicklisp/setup.lisp")
 
 (ql:quickload :emotiq/startup)
 
