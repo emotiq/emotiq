@@ -30,10 +30,6 @@ env:
 #    - LISP=clisp
 #    - LISP=clasp
 
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y \
-
 install:
   - ci/install-lispworks.sh
 # Pin quicklisp to known version; install emotiq dist
