@@ -118,4 +118,6 @@ cat >resave.lisp <<EOF
             :environment nil)
 EOF
 
+mkdir -p ~/bin
+
 xvfb-run $PREFIX/lispworks-7-1-0-amd64-linux -build resave.lisp
