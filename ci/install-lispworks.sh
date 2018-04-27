@@ -77,7 +77,7 @@ else
     awscli \
     wget
 
-  aws s3 $LISPWORKS_BASE_URI/$LWTAR.gpg .
+  aws s3 cp $LISPWORKS_BASE_URI/$LWTAR.gpg .
 
   if test ! -f $LWTAR.gpg; then
     echo "Failure retrieving s3://emotiq-ci-supplements/lispworks/$LWTAR.gpg"
