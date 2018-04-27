@@ -121,3 +121,25 @@ EOF
 mkdir -p ~/bin
 
 xvfb-run $PREFIX/lispworks-7-1-0-amd64-linux -build resave.lisp
+cp ci/lwpro-wrapper.sh ~/bin/ros
+chmod +x ~/bin/ros
+
+echo "Installing Quicklisp"
+wget -O /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+ros -l /tmp/quicklisp.lisp -e '(quicklisp-quickstart:install)'
+
+cat >~/.lispworks <<EOF
+  ;;; The following lines added by ql:add-to-init-file:
+  #-quicklisp
+  (let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+    (when (probe-file quicklisp-init)
+      (load quicklisp-init)))
+EOF
+
+ros -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
+                (lisp-implementation-type)
+                (lisp-implementation-version)
+                #+asdf(asdf:asdf-version) #-asdf "not required")' || exit 1
+
+
+# ros -l ci/deps.lisp
