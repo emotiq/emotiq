@@ -43,3 +43,24 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "startup")))))
+
+(defsystem "emotiq/wallet"
+  :depends-on (emotiq
+               ironclad
+               lisp-object-encoder
+               cosi-bls)
+  :in-order-to ((test-op (test-op "emotiq-wallet-test")))
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "wallet")))))
+
+(defsystem "emotiq/cli"
+  :depends-on (emotiq/wallet
+               cl-ppcre
+               bordeaux-threads)
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "cli")))))
+
+
+

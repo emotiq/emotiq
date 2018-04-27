@@ -1000,6 +1000,7 @@ bother factoring it with NODE-COSI-SIGNING."
                              ((list :answer (list* :signature _ bits))
                               (send *dly-instr* :plt)
                               (cond ((check-byz-threshold bits new-block)
+                                     #+(or)
                                      (inspect new-block)
                                      (print "Block committed to blockchain"))
                                     
