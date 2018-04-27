@@ -6,12 +6,15 @@ os:
 
 env:
   global:
-    - PATH=~/.roswell/bin:$PATH
-    - ROSWELL_INSTALL_DIR=$HOME/.roswell
-    - secure: "jT0RfQZ2wuv2nxCBS364lc1PrnO+5gyvZgAkpUyyRik80pxUpSUEUPehTKUX+j7QrOzszw55MRlKnR88vZ/mzDP2o/ogCjdLFdTJMFY60twex0Zog1+h993XtQrhMXb+XcJDd1FBptgJQN3/O+B+1PYk1rdWgik9kvNfNRfsehr6ueuwgZhGVtQJYe0+5wyWCnLSsdzy4odPjhNk3IDieqNNPj/NgihDmPRU7MRN8W6bn4NxY8nfTzhvT/6waLbP32CQUmH/dso3GAYK9sxo/kNtq6vUgiK5Zcs/t50uTydSqRrdxeOehuRPH5IE6rubqYXNt1IrKLsRbJDjLjyyx1VwBRO3WzCUmnc6YiLxfYs53wWz7+6YI9u+XUobfR+Jv8DbzB1hDVs2ZRbGtALROqIR8R5DzsAoa8sePyJinczDkoj1iw/kvfpTjXZ9ooGxvBXJGud8GU1NWTT908hOCaeu6b+F934SnaifnyVT8yxmPS481mLkltdQrmQSez/rTShKw2GxWu3/4AeCiYuyflZ3GcCX4zt1X2z0VdKrxW+S7/PPeExmA03Dms/JbNTwXUsbbHnrCEY0EZ9ZbVTN3eUe47BdtzPeWuBWzS91owMQFUkc+mFL5wiuMkhqhi+syu59CfaWFr/qEvlxJf1sqnRgbYrrHMwB/GfqHwIIF00="
-    - secure: "JXq5XzAyhao/mHPyTHp2nQdcKkCbcq3Q7NReCZc11WWOYcbMYBGJJhiOBOOPgwZpJmSoI3U55iRb+RTsv9ogUZAthAJX9B7GFhNday+Wmh2I4w4oRkfPCuYoJE7Pu0db4VjvOcht3J0scZ0meejITMJF3tsnN8o4hq4pnryaR+vCqxz1Wh+QB1yF680el7u4JFeGKwss6GzVGhOpIMVUBFf6bOFZPe3mZtsqxEaLD+nCym7m1dc1CUJR2GXbuac9VJz1ZNn8LAqypNs8vKl5F0vF6EIi6zbKz6HXweseV2AshP4/8EotR52ayHM73AYtczqYlU+R7aUFlMZxHWMmpENXm/Nl2I4Li/iA5IwUM4EQyGtZml68Jt4s9J0uyK24tCDAGcqrXe29htvcO4NNGMDQQnsFC+xJpC5nbveBzs9L7VyAVzhW4G4aKv2BcHKDelmp20xtWMoYrlLf1DgmUeL6SdKGorPnNUi6pVwvP0fB58+iOMyQgajnncdQ+Lgz9srK+haybfcNMvCJb4Fyfly8/lqahYE/LIPFDwrmZfR3oitzxFNUS9eQDWyThnaPQ0sbRhCoUAzJhicKR7wi/4e1w98rAdbMkpHpQdQofwloR0R4qmdrR3qUjMv8f/77PRXSCj7kLwVHAZCaOa5S6wE3t02zvpe5aUUr99RI6CA="
-    - secure: "MJQD4YXkM7fAk9OK1VLOdqb4NxDKDTOwh6+NJWtHRmNfHW7kabgrkUbsTLyR/urSFWbFmXjrBEYUiIhDmavBrqhhydLR4LGZQ8bouu5VAYFg4N6XQll5CG0wduS6aXIutq83oy9i/QCtzUjQqjyXaztMnfPv7HqnP53FEvX5GiyuLvSr9wZZQzsyFFEY19ptX3vfWxuEsH9+NizlrxLmAKBuzJoowpt2c1N52zqpK+GGumX+kr+nPvkPHspc9XerNdGG5Mf/vZyLMTSKWMUqEh+ZZ9ipzVBLnbjvMQnU5AH0qWDhwuwIEIPTWoTlqtkKnawXqPnfAXl++A66PZxbxn2KDLE9gY55ClbZUoEq9u3Tal+kWtgeaTqYbuO6Kz3RCtdI6w3wtXLAPl5ktBLbOrAP9t2Sr5gctgEYawSbA29ARYdaBzbUAL2zakhXh3mpXmwLIIdjonsVgi/irA6iNKGnV7iKh5jnSWTR2szGblHfM8BaFf23aD6fEgGy6SqifCiSF+GdildrPrvMVpIjOH7CsojiBt9M2ZiV2pp4QpyE5olNZANa2bdsSKW+ZyFz+H0k2Gw5ReUP0mNyhSxUFZ1ASjyQwOr8aHlJ1+uLuXLNM/KfqmJ7tfqpqqXpTYpeHok7cIB96oSPT6l5fe0cktBgbWfX0cS4ipvLm2uoDk0="
-    - secure: "gQ087RnmcCZ9YPIjv87pQ0EUWG9SCimHoHRfqNlZKP9h30BQvuGGRmvJUUbn6A0NIUv4XkiavTyUFm23YixDpWsNIhFoX1ozEUDoVfMBtyW1ut8K95E40nA0u94CUP37TjP6qhUPSnk6b3EO1kPWKCfBjsD9Gr0uR4i/LfZQguAdCJVlYSvgwCncwyATsVxWMh1pw80kcj90bxL8GIjdp3BqBkmpNSqjTmpxl/9QvjfMXZfHGoWHckJqGWuHzK5FWiSEJOB8g1DLt7ZYIpNGKEtyRj780T8BV3CT14S4cChhtOZRaETWw8OkG1GoJNRkdISPHRrFkZ4b9WiwQAJHAMk/LvAu9MIs3cDesA/nUHXvuabC47JgsSvrXsGnHvbD22eJsVf1/elcidB5gG8+PtG4Pft9ZpbwPxG4cBQhnIx83LpZhmRmDyF3b7Go2os0KMyseNQ0QRM9nzLXELpPXaeoK5iDIUpM4QrYtLfWaJQJ7dQcbdAJo8iI6VtQ//8EyAmEeQoZcacnhm/QnE6Urvjj66zkSct6po/bxW6hjWzQ7ScGlXqYOgUVYYVvmkpVuw/STtqcb66CXWKM+iZIh1vW/Afui/KM1T3tklRUkkpxuYDl4NvBnWLpOQIdrRkhvHwn6SVpqGsWHEFP9w7coZAP4wMQNjMQtbIjkcnQy1g="
+    - PATH=~/bin:$PATH
+    - secure: "Fgk0yVWs6aZANkSnqn95yecHSc4ceefgj1tQT7WVmW5LeRAYW2hbmFCmG3YkkD0eIE8wZ0ct+gNPXBouyXEBsF6nKtqb/OTTGL/v2R80EtIEsq3U+O1sCM6yUYy+J+X6SuT3iHjJXP+u4J1oUtnDX4Z5u0u8KmreUqgZctnP6IAmbc74SXv+hlksND1OvpY3MYEymRe6kyoFmJtwWCwDRSKXGtc5O4bDXFp/NHsvSxDVMd5ld2LWSwo2fWYM3xg83P8tZUS7dQs93Px6DTFsQZ1VsisVTxSDlZS79ua9BkouMyywwsKVNg0jp2085HVCFc07kdPPYB21pM/Y42LF0829PUnfC47p+mMLz/xWsIQP7cz2NbSxgDFcddSPRH6YCdx9hbjY1DLwI4kofESybUuv4A3KQdhxzKSmuop0g6ZQCZDeEwV0v3HkNI+X4yRwM9KnVHDGldIp1Ws2EXKu87hPhaX5KNFWB4SEWHdMUkUE0kl3lsqIEoPDLfa5pBZVt9uRxKH0zTh76ZbpJ2gSoIYrp5PoTicHByUuf1i7mI/XQOcsnFfANw/PLsFoICkBIy1pejKK/kBNQx2ToXfbDlJLZ8SX4ay59yOiq0xM683y4/2EhsWOHF83iOFTp6qAzy0eJqwuq/g92YX6+oSRLRcc47aiuhN+pDixyYl729k="
+    - secure: "RP390nWNqobflf7Y7dXeVR3pky31QDOSNZShihPt5HIfwqimbulLw15nqblhz5Fon/j4k8zlO4Swdl7/mZYpUhCq8ioT+lkcn/ZnFiADBOiRDdA5Jaa+PMQBpykbZhmmwZlnl0ZAs1lFiQuv2iusGKvQnk/w20+6lIdmT4UCzkdTcPOnUFvgaIGjbV1lFn02yc3exMrI0eyx53BFoWAiNYMFaINyIxZ6dY6AVzpf8VMmYcEgKEe2NB3Y3VfqRME522a7ISNury87NtACju0/jhKTuF5pse3KmzFXI/wpYgD7hE7++DiUcjMzBnRiAT725wLkN0wsq0k4eGghdKGLTVfoyYF+XtyP9OaUryuyou+I0B8ta8HkSwgUBdNmJ2Fs8ksM7KLgHBMyAcHZoNn9ar9VhQa3UN+8SE+6P520ZHQrhbY9Nd4BYFbDDanNs+ZD25cRYiysk+lJjIhpTBphuiI6nN4KG2HzfAx0FJwGGUETFN8NnwI+9E5Z6OMm+dKLHjukTIvHGFHNjWt2dAMz9zWqRt7cdnuz5HLEDlsEfvtLWYuiwvMljjrZ34b/4rganwKHxWvKACCam0JekOZ/DafiQ1eNF+ONZLv+UnhWaaBAb7dflG50NWWlfI8gYsCzUBE6f0tKFNs/jr7Y/aI6sErxxvmpp+ehpTorWcE0coo="
+    - secure: "D24+cFhP2hCQPo+0dxDwS39f77Mdyt9PMiuhP/kQlE6XIGnsk/1nCHiAJagztvDmkK9ayU96OfFy4OQRuD3ysxNB+VVYEMG3cUEa2QY8NQOLI/mMc1ea7CrgZCm/R7pdMEZmGILAqwEM2ohqoM/oHtfW4obdItSeCI1AtY9U9/c0uc2S8CJ3HWXyeoSTwgGrrlKNihRewYcqNd2nNqaUXUy3r+gXujNAKQD5fOaqjTS/yHBzYPCbspneFwrsyvugBLC06wO0o7XkKuTr9sAy64RAT14pjgsI3oVsWvzfkzyOMTfCruLEKj4NFxoPKH9QdzpQuPTdUCd1GN3xSrptMctNkYy7wxBr9BOJRp1etaranA8/yRj9wYRKnI3iz2CvQNHdRP4Z82nRma5zAoqddx0eLupygRsTSj5OGkTmjMOHHOWz8192ygc6oQYBTxcqSZgqrg995TILfnmO2LATOJ6gvzuHsOm3imdVdTHSi/IE4kV5i9Wr3QL1QnqXAPuM+oV/WDMyy7t4x3Tczq1LLR92rVpJ4FDiAbKAI6B/RGatBOtVd0Vn3nk0l5Cx1pbXbRynDr2EAAb7qQDjEL+046oXFQ0bw0v7nbGqVy08BeepV4M+xntJw/fFDfNT9oD7ibWM7pl9HH7oTaB6xHyKNl1eGPb81BpMTQB8ERTpfXM="
+    - secure: "F+n+ehmvkE5iAI+ubN4G0yX/D+nrYVMXHRplyl1csM94fXlImElzDiNU/Wu14oxhvdPvAlctCKBiF3+ebS1YWEH3c6vCEDEjVCeKQ0fisse50zbQsBQqG0aUgCUIXbi5sLxgz39ZlC/SStqCUI6ZTs3vYPss/jtE6D2/mWFFlFweGHqglM4WPnB6ttuiAMHLLmH4jrlASrrv9NG1C+nO28j7Vik1IZOhnO4uW493PUPMQ0TKtHHYjsOlK/56A5n4IaRAye6Cx+MVlyscSAxwzWA+TZbxaUv7qBJpzQeWf5IoIuoT4oPeiUg5+2ocm+RgQu0KZ4WUYNiUTH+vYD1EkqxQw7CJ9RyoasABSRsdeYP1pQI/8EzCweC3HoTqwZTGlo5lF+x4zaPATk/pVnHxYsbP199XUYLAcAphzqBzYFYF99S61DcOEoUBQCrVExF0rXVZ1CD5h4asxiYqZ5TV4GHb1jEsvwKTcVFHxLlAHG2s+/Ogd3HzmVrsJvXlNGPwasUmZ5HmqxCLP12BKsSJvrJ/+wk12pGY8tGe9QnvuAKVMw0av+Ge4BsQ6IjAVYl/HbAMAmYc0kPxMUkxksZ1nI1i8059KDtTcVURpXbO8ZjBEuZmKMkP0X/am+tG+TfanLP+uCt/T+JQsqayg2s7P5xskF7VG24/5924afMQGYQ="
+    - secure: "IBv9Mal4F4r5DuQEYMLF7PVbq0D/BYOU830qxhSJlgbfiVaNSW9IuNrCCauAgp/ByvIzJMD09pwQUFsV9/pfPQGBHrRbvOGtqVhF53oQF4V4SGXKOeWNgDp9KPf9ZwreI/f/39fIjPiwtAzI32wO3t0GPMz3G2pzBB94zTb4DDJJhIVhlu3UBCK2SlBfY5i0uhOFdGUUdWnQUGdMpXMGDmYP+zxw8BQt+XR8e4Fq4ArsBk+EllD6NADv2OCpoo9BtfUmVe2YAwGE0oCjWMfPjp1ZY4TjD832DtHewOgTeb92+oFNzLr84c42ntF3HcmaNXYFQrQBl51NZfmcg9J0xITX1MFxHube/mFagCdMZOR5mR0ccHUOMfLee12sqhPfhMSDmALzkUDrmzNRTTkZp1mGMq+DwVjaCsjkfu4sBqJRGagTRBGLkNs5rCkHYAdAGIpZGM938QQbme7T1bYOkEoDlromG7cEanngNxPIxopj6VJ05erIJxwiWXmj2vgKRMYUL8MKAXD0qhg5k+aCohLkWpYRDz9fVwItThJL0oka23srO7mjBw4WnRyTl3cWfzg6+EUdUIqeQK+fQBB+MUklLgNSLIJ8Sf07DpdKXCGGDEgAIh+nHYyBStfBDslkVbG5o5CgIWOU+Sf77bB388J/mccjhjCgpFJXDR/MjMA="
+    - secure: "JXz7KpxoiTp9wHCaWKarw7R2V373D9SzMIl56SJUKIbBU0DKfqiNWMc6iU6+TJSJSBy/6Jgwkt9Jb0nEMMUYWZMDWCfPhLpQWEg16Rs99ypPI8Mp3NGPCYMA19F+eOuFoxw9WISxlCi415IpvhTBLsHEXAFYv2yLmsx9TQSQY9wq2wJjqRa7XW2SM4yisdGj2xbBAgC0UrhFJU+ucWTVNhGxYJpfORy9/V44zN8ZMvuCWUQTpfP9W6Qs7Xdc7b58iTI0RnN+QEMRXOSwLIgSs+LMXF7iJbI/ulMQ8GNORNwG7JNFDdBibGB1nES4um6GZNEn+wHiNMO72UCYeSQ7CLzj4MJwgNZSCt11Wzfz6DI4+TkYFMcD4Is7DNAjDvA95R6hAINDO63R+KMVCY+4Xm5vj9wTL14Cp9k8i5CQW1elf6NPLTvomOZuKplghZLjc0J9Fnvp73dD97uLTFjS+THCujwhOTCb1s/LmVBodWmHK+3PEPA/iLau3OLqJ2tCICK1tOMgWxYdIKMW7E3WVA4OlQjJDMzbMBqrA11x2LcgbS12MlzGTeHniMPUHNwxShSQW/8zsSpMNJ91aAXhBK0bF6S4v0/lH3w15dgFHTowxZ1GDOc4zSer9JCKhygjbQer3NzlNa5aAQ15x+zNZGOf8x+hhST002+zQeqp5/s="
+    - secure: "rLja6v2c33yio6Q1MCEAjwKTbefCsHY8KdYtkR/cMAwB/w45+XEn8dwnfuGGPiVIdthmwM8gzWKOl9y5M189V1LluXQEZsf05cTJlpWaaks/Cr3uUvNP0onDYfXTAiNZCTBbIyq/MvJ4LYXrBiKvbbJ2HDb43ii0oCpTgt/gzUE3gesCm4Agf/YlUishONtpUh6RkP/kG7iwyifY0E6beHObRbzi5AzBx+3aH8aHKp3IOZHHqmORlTEURWHVxCc43mMgXiUHTlMnzxj2EyUy1IoG/OHSKnQqxq+JrFzhdjmF9IydpG8+QOFMMw/ufG8fN9+VXOr6wrScQi6SxKcejUZ78bed5AvtgvaniHR4sVeWDFdTjuJv4xpl1OmrQ0I3qVhTm3IVj4yKcCpnWgW7gBZITtLPMwc8LolVXW3QVQY1zGZnzhVtIt7O0YsI7JXR8Gy+FHwEWfRoRoOPUo59NDP9jDoO6D4L3BxJelg+3jJH7KkRt9QBmrYshap8kcsIjSEBEu7VJfZ3oimIp0CSP4Gm4FhevJg044/X9OxfI3r6K5nBYjI4kW3o31cxDGQ1r4cgunBGdOmVHTsqhmTkMA/RLowSqA5rLU/P58WL+BWrIElNFsoIcgVVHRteca7kIEkBD0AfR3T3x1AKo6SSE2mGGkUCw/AW2JWLQXcBqoQ="
+
 
   matrix:
     - LISP=lispworks-bin
@@ -28,16 +31,15 @@ env:
 #    - LISP=clasp
 
 install:
-  - curl -L https://raw.githubusercontent.com/emotiq/roswell/mte-lispworks/scripts/install-for-ci.sh | sh
-  - sudo apt-get install openssl pgpgpg wget bash gcc make g++ flex bison
+  - ci/install-lispworks.sh
 # Pin quicklisp to known version; install emotiq dist
-  - ros -e '(ql-dist:install-dist
-              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
-               :replace t :prompt nil)
-            (ql-dist:install-dist
-              "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
-               :prompt nil)
-            (uiop:quit 0)'
+  # - ros -e '(ql-dist:install-dist
+  #             "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
+  #              :replace t :prompt nil)
+  #           (ql-dist:install-dist
+  #             "http://s3.eu-central-1.amazonaws.com/mte.dev/emotiq.txt"
+  #              :prompt nil)
+  #           (uiop:quit 0)'
 
 # Add/remove test converage here
 #
@@ -55,47 +57,48 @@ install:
 #   The current implementation returns the bit representation of '-1'
 #   shifted by the zero-based index of the failing test.
 script:
-  - ros -e "(loop
-              :for i :upfrom 0
-              :for
-                  (system dependencies)
-              :in
-                  '((:emotiq/blockchain :emotiq-test))
-              :doing
-                 (ql:quickload dependencies)
-              :unless
-                 (asdf:test-system system)
-              :return
-                 (uiop:quit (ash -1 i))
-              :finally
-                 (uiop:quit 0))"
-  - ros -e "(loop
-              :for i :upfrom 1
-              :for
-                  (system dependencies)
-              :in
-                  '((:crypto-pairings :crypto-pairings/t))
-              :doing
-                 (ql:quickload dependencies)
-              :unless
-                 (asdf:test-system system)
-              :return
-                 (uiop:quit (ash -1 i))
-              :finally
-                 (uiop:quit 0))"
-  - ros -e "(loop
-              :for i :upfrom 2
-              :for
-                  (system dependencies)
-              :in
-                  '((:core-crypto :core-crypto))
-              :doing
-                 (ql:quickload dependencies)
-              :unless
-                 (asdf:test-system system)
-              :return
-                 (uiop:quit (ash -1 i))
-              :finally
-                 (uiop:quit 0))"
-
-  - etc/production.bash
+  - echo Test goes here...
+  # - ros -e "(loop
+  #             :for i :upfrom 0
+  #             :for
+  #                 (system dependencies)
+  #             :in
+  #                 '((:emotiq/blockchain :emotiq-test))
+  #             :doing
+  #                (ql:quickload dependencies)
+  #             :unless
+  #                (asdf:test-system system)
+  #             :return
+  #                (uiop:quit (ash -1 i))
+  #             :finally
+  #                (uiop:quit 0))"
+  # - ros -e "(loop
+  #             :for i :upfrom 1
+  #             :for
+  #                 (system dependencies)
+  #             :in
+  #                 '((:crypto-pairings :crypto-pairings/t))
+  #             :doing
+  #                (ql:quickload dependencies)
+  #             :unless
+  #                (asdf:test-system system)
+  #             :return
+  #                (uiop:quit (ash -1 i))
+  #             :finally
+  #                (uiop:quit 0))"
+  # - ros -e "(loop
+  #             :for i :upfrom 2
+  #             :for
+  #                 (system dependencies)
+  #             :in
+  #                 '((:core-crypto :core-crypto))
+  #             :doing
+  #                (ql:quickload dependencies)
+  #             :unless
+  #                (asdf:test-system system)
+  #             :return
+  #                (uiop:quit (ash -1 i))
+  #             :finally
+  #                (uiop:quit 0))"
+  #
+  # - etc/production.bash
