@@ -49,7 +49,7 @@ elif test ! -f "/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`; then
   echo "**********************************************************"
 else
   echo Installing LispWorks from `pwd` in $PREFIX
-  apt-get update && sudo apt-get install -y \
+  sudo apt-get update && sudo apt-get install -y \
     autoconf \
     build-essential \
     libcurl3-dev \
@@ -76,7 +76,7 @@ else
     xfonts-cyrillic \
     awscli \
     wget
-    
+
   aws s3 $LISPWORKS_BASE_URI/$LWTAR.gpg .
 
   if test ! -f $LWTAR.gpg; then
