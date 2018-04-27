@@ -802,15 +802,9 @@ THE SOFTWARE.
          (tail-parm    (when has-rest
                          (nthcdr (1+ has-rest) parms))))
     ;; ooftah...
-    #+:LISPWORKS
     `(progn
        (defmacro ,name ,parms
          `(,',f %sk ,,@prefix-parms ,@,@tail-parm))
-       (defun ,f (%sk ,@parms) ,@body))
-    #-:LISPWORKS
-    `(progn
-       (defmacro ,name ,parms
-         `(,',f %sk ,,@prefix-parms ,,@tail-parm))
        (defun ,f (%sk ,@parms) ,@body))
     ))
 
