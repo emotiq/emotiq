@@ -801,18 +801,11 @@ THE SOFTWARE.
          (prefix-parms (subseq parms 0 has-rest))
          (tail-parm    (when has-rest
                          (nthcdr (1+ has-rest) parms))))
-    ;; ooftah...
-    #+:LISPWORKS
+    ;;; Beware:  Here there be dragons! (ccl)
     `(progn
        (defmacro ,name ,parms
          `(,',f %sk ,,@prefix-parms ,@,@tail-parm))
-       (defun ,f (%sk ,@parms) ,@body))
-    #-:LISPWORKS
-    `(progn
-       (defmacro ,name ,parms
-         `(,',f %sk ,,@prefix-parms ,,@tail-parm))
-       (defun ,f (%sk ,@parms) ,@body))
-    ))
+       (defun ,f (%sk ,@parms) ,@body))))
 
 (defmacro =bind (parms expr &body body)
   ;;
@@ -959,7 +952,8 @@ THE SOFTWARE.
   ;; suitable for application by PMAPCAR or PFIRST
   `(,pfn (=lambda (fn)
            (=funcall fn))
-         (list ,@(mapcar #`(=lambda () ,a1) clauses))))
+         (list ,@(mapcar (lambda (arg) `(=lambda () ,arg))
+                         clauses))))
 
 (defmacro par (&rest clauses)
   ;; PAR - perform clauses in parallel
