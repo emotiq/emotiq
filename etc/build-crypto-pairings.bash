@@ -27,15 +27,17 @@ pbc_tar=${dist}/pbc-0.5.14.tar
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
-        MAKETARGET=makefile.linux
-        echo Using ${MAKETARGET}
+	gmpflags=
+        maketarget=makefile.linux
+        echo Using ${maketarget}
         ;;
     Darwin*)
-        MAKETARGET=makefile.osx
-        echo Using ${MAKETARGET}
+	gmpflags=--host=core2-apple-darwin17.5.0
+        maketarget=makefile.osx${MAKESUFFIX}
+        echo Using ${maketarget}
         ;;
     *)
-        MAKETARGET=makefile.linux
+        maketarget=makefile.linux
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
 
         ;;
@@ -75,7 +77,7 @@ mkdir -p ${src}
 cd ${src} \
     && tar -xjv -f ${gmp_tbz} \
     && cd ${gmp} \
-    && ./configure --prefix=${prefix} \
+    && ./configure ${gmpflags} --prefix=${prefix} \
     && make \
     && make install
 
@@ -102,6 +104,6 @@ cd ${src} \
     && make install
 
 cd ${pbcintf} && \
-    make --makefile=${MAKETARGET} PREFIX=${prefix}
+    make --makefile=${maketarget} PREFIX=${prefix}
 
 
