@@ -51,6 +51,10 @@ THE SOFTWARE.
 (defstruct ed-proj-pt
   x y z)
 
+(defmethod make-load-form ((point ed-proj-pt) &optional env)
+  (declare (ignore env))
+  (make-load-form-saving-slots point))
+
 #|
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'make-ecc-pt)

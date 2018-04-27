@@ -38,7 +38,6 @@ THE SOFTWARE.
                 #+:COM.RAL (:file "crypto-le")
                 (:file "kdf")
                 (:file "gf-571")
-                (:file "mod-math")
                 (:file "modular-arith")
                 (:file "edwards")
                 (:file "ecc-B571")
