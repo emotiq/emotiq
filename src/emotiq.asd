@@ -70,3 +70,11 @@
                              (:file "bctest")
                              (:file "main")))))
 
+(defsystem "emotiq/sim"
+  :depends-on (emotiq/cli)
+  :components ((:module source
+                :pathname "./"
+                :components (
+                             (:file "Cosi-BLS/cosi-sim")
+                             (:file "main")))))
+

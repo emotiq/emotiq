@@ -621,9 +621,19 @@ THE SOFTWARE.
        (or (and (integerp ans)
                 ans)
            4))))
+  #+(AND :LISPWORKS :LINUX)
+  (load-time-value
+   (with-open-stream (s (sys:open-pipe "nproc"))
+     (let ((ans (ignore-errors (parse-integer (read-line s nil nil)))))
+       (or (and (integerp ans)
+                ans)
+           4))))
   #+:CLOZURE
   (ccl:cpu-count)
-  #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
+  #-(or :CLOZURE
+        (AND :LISPWORKS :MACOSX)
+        (AND :LISPWORKS :LINUX))
+  4)
 
 ;; ----------------------------------------------------------------
 ;; Ready Queue
