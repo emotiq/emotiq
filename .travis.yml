@@ -57,10 +57,10 @@ install:
 #   The current implementation returns the bit representation of '-1'
 #   shifted by the zero-based index of the failing test.
 script:
-  - ci/lwpro-wrapper.sh -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
+  - ci/lwpro-wrapper.sh -e (format t "~&~A ~A up and running! (ASDF ~A)~2%"
                   (lisp-implementation-type)
                   (lisp-implementation-version)
-                  #+asdf(asdf:asdf-version) #-asdf "not required")' || exit 1
+                  \#+asdf(asdf:asdf-version) #-asdf "not required") || exit 1
 
   # - ros -e "(loop
   #             :for i :upfrom 0
