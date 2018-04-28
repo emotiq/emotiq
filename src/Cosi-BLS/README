@@ -13,6 +13,8 @@ change *local-nodes* in cosi-construction.lisp (1st in list is the main node)
 should print a string containing IP
 
 > (cosi-generate)
+-- after this step cosi-simgen::*ip-node-tbl* and cosi-simgen::*node-bit-tbl* have non-empty values and
+-- may be inspected
 
 under LW it brings up a window ("container") that shows a tree of faked nodes (red are real nodes, black are faked)
 
@@ -30,3 +32,4 @@ output to Output-Browser (LW) should be
 "Construct 2nd transaction" 
 
 (output is done with CL:PRINT)
+

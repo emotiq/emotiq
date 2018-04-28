@@ -1,0 +1,36 @@
+@startuml
+
+Actor Sim
+
+ref over "*top-node*"
+
+(ql:quickload :emotiq/sim)
+(in-package :cosi-simgen)
+(cosi-init)
+(cosi-generate)
+after this step cosi-simgen::*ip-node-tbl* and cosi-simgen::*node-bit-tbl* have non-empty values and may be inspected
+(init-sim)
+(tst)
+(tst-blk)
+
+end ref
+
+Sim -> "*top-node*" : ":make-block"
+== cosi-handlers.lisp (node-dispatcher self (:make-block))  ==
+== cosi-handlers.lisp (sim and debug) leader-exec ==
+"*top-node*" -> "*dly-instr*" : << noop >>
+"*top-node*" -> "*dly-instr*" : << noop >>
+ref over "*top-node*"
+
+make-bc-block
+calls (get-transactions-for-new-block)
+  calls (get-candidate-transactions)
+        grab all txns from *mempool*
+	topo-sort, remove txns from mempool that refer to future
+	check dbl spend, accumulate only good txns
+	return txns
+  split on *max-transactions* --> tl, unspend all tl, --> hd is now all txns going into new block
+end ref
+
+@enduml
+

@@ -1,0 +1,9 @@
+- specialize Cosi-BLS/transaction.lisp/make-txout for uncloaked version(s)  (now, it is creates a cloaked txn if the second arg is non-nil (i.e. a pbc:public-key)
+
+- make-txout will raise a Lisp error ("No applicable methods") if 1st arg is not an integer and 2nd arg is not nil or a pbc:public-key
+
+- txout (cloaked) and uncloadked-txout are defclassed in src/Cosi-BLS/transaction.lisp as two separate classes although they share some common fields - do we want to create a txout super-class?
+
+- validate-txin is specialized on receiving a txin, otherwise it fails
+
+- get-transactions-for-new-block refers to "tx-pairs", but it no longer gets pairs - need to change variable name

@@ -38,6 +38,7 @@ THE SOFTWARE.
 
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
+    (print "in node-dispatcher")
     (um:dcase msg
       ;; ----------------------------
       ;; user accessible entry points - directed to leader node
@@ -86,6 +87,7 @@ THE SOFTWARE.
       ;; for sim and debug
       
       (:make-block ()
+       (print "receiving :make-block")
        (leader-exec node))
 
       (:genesis-utxo (utxo)
@@ -1182,7 +1184,10 @@ bother factoring it with NODE-COSI-SIGNING."
                      )))))))
        ;; ------------------------------------------------------------------------
        
-       (send *top-node* :make-block)
+       (print "sending :make-block")
+       (format t " to topnode ~a~%" (node-ip *top-node*))
+       (send (node-self *top-node*) :make-block)
+       (print "done sending :make-block")
        ))))
 
 ;; -------------------------------------------------------------
