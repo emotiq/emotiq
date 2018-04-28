@@ -26,7 +26,7 @@ systems=${systems:-":emotiq/blockchain
                     :core-crypto"}
 
 echo Test harness invoked using implementation:
-echo $(${lisp} --eval '(format t "~&~a~&~a~&" (lisp-implementation-type)(lisp-implementation-version))')
+echo $(${lisp} --eval '(format t "~&~a~&~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')
 
 for system in ${systems}; do
     rm -rf ~/.cache/common-lisp/
