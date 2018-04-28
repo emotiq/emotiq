@@ -306,7 +306,7 @@ are in place between nodes.
                    :uid (uid msg)
                    :timestamp (timestamp msg)
                    :hopcount (hopcount msg)
-                   :forward (forward? msg)
+                   :forward? (forward? msg)
                    :kind (kind msg)
                    :args (args msg))))
     new-msg))
