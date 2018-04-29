@@ -58,6 +58,7 @@ install:
 #   shifted by the zero-based index of the failing test.
 script:
   - ros -l ci/deps.lisp
+  - etc/production.bash
 
   # - ros -e "(loop
   #             :for i :upfrom 0
