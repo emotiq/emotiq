@@ -77,15 +77,15 @@ else
     awscli \
     wget
 
-  aws s3 cp $LISPWORKS_BASE_URI/$LWTAR.gpg .
+  aws s3 cp $LISPWORKS_BASE_URI/$LWTAR.gpg /tmp/$LWTAR.gpg
 
-  if test ! -f $LWTAR.gpg; then
+  if test ! -f /tmp/$LWTAR.gpg; then
     echo "Failure retrieving s3://emotiq-ci-supplements/lispworks/$LWTAR.gpg"
     exit 127
   fi
 
-  gpg -d --passphrase $LISPWORKS_TAR_KEY --batch lw71-amd64-linux-patched.tar.gz.gpg > lw71-amd64-linux-patched.tar.gz
-  if test ! -f $LWTAR; then
+  gpg -d --passphrase $LISPWORKS_TAR_KEY --batch /tmp/$LWTAR.gpg > /tmp/$LWTAR
+  if test ! -f /tmp/$LWTAR; then
     echo "Failure decrypting $LWTAR"
     exit 127
   fi
@@ -93,9 +93,9 @@ else
   if mkdir -p $PREFIX; then
     FILELIST=/tmp/lw-files-$$
     if test $VERBOSE = 1; then
-      gzip -d < $LWTAR | ( cd $PREFIX; tar xfv - | tee $FILELIST)
+      gzip -d < /tmp/$LWTAR | ( cd $PREFIX; tar xfv - | tee $FILELIST)
     else
-      gzip -d < $LWTAR | ( cd $PREFIX; tar xfv - > $FILELIST)
+      gzip -d < /tmp/$LWTAR | ( cd $PREFIX; tar xfv - > $FILELIST)
     fi
     touch $PREFIX/$LWLICFILE
     chmod a+w $PREFIX/$LWLICFILE
@@ -109,7 +109,7 @@ fi
 
 $PREFIX/lispworks-7-1-0-amd64-linux --lwlicenseserial $LISPWORKS_SERIAL --lwlicensekey $LISPWORKS_LICENSE
 
-cat >resave.lisp <<EOF
+cat >/tmp/resave.lisp <<EOF
 (in-package "CL-USER")
 (load-all-patches)
 (save-image "~/bin/lwpro"
@@ -120,13 +120,21 @@ EOF
 
 mkdir -p ~/bin
 
-xvfb-run $PREFIX/lispworks-7-1-0-amd64-linux -build resave.lisp
+xvfb-run $PREFIX/lispworks-7-1-0-amd64-linux -build /tmp/resave.lisp
 cp ci/lwpro-wrapper.sh ~/bin/ros
 chmod +x ~/bin/ros
 
+# Setup ASDF searh path
+
+DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE=${DIR}/..
+
+mkdir -p ~/.config/common-lisp/source-registry.conf.d/
+echo "(:tree \"$BASE\")" >~/.config/common-lisp/source-registry.conf.d/emotiq.conf
+
 echo "Installing Quicklisp"
 wget -O /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
-ros -l /tmp/quicklisp.lisp -e '(quicklisp-quickstart:install)'
+~/bin/ros -l /tmp/quicklisp.lisp -e '(quicklisp-quickstart:install)'
 
 cat >~/.lispworks <<EOF
   ;;; The following lines added by ql:add-to-init-file:
@@ -136,7 +144,7 @@ cat >~/.lispworks <<EOF
       (load quicklisp-init)))
 EOF
 
-ros -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
+~/bin/ros -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
                 (lisp-implementation-type)
                 (lisp-implementation-version)
                 #+asdf(asdf:asdf-version) #-asdf "not required")' || exit 1
