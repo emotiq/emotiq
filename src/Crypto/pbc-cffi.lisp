@@ -885,6 +885,7 @@ library."
 
 (defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   "Check bare-bones BLS Signature"
+  (need-pairing)
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sbuf *g1-size*  sig)
                        (hbuf nhash      hash)
