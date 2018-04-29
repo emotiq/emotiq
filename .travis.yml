@@ -60,49 +60,47 @@ install:
 #   shifted by the zero-based index of the failing test.
 script:
   - ros -l ci/deps.lisp
-  - etc/production.bash
+  - ros -e "(loop
+              :for i :upfrom 0
+              :for
+                  (system dependencies)
+              :in
+                  '((:emotiq/blockchain :emotiq-test))
+              :doing
+                 (ql:quickload dependencies)
+              :unless
+                 (asdf:test-system system)
+              :return
+                 (uiop:quit (ash -1 i))
+              :finally
+                 (uiop:quit 0))"
+  - ros -e "(loop
+              :for i :upfrom 1
+              :for
+                  (system dependencies)
+              :in
+                  '((:crypto-pairings :crypto-pairings/t))
+              :doing
+                 (ql:quickload dependencies)
+              :unless
+                 (asdf:test-system system)
+              :return
+                 (uiop:quit (ash -1 i))
+              :finally
+                 (uiop:quit 0))"
+  - ros -e "(loop
+              :for i :upfrom 2
+              :for
+                  (system dependencies)
+              :in
+                  '((:core-crypto :core-crypto))
+              :doing
+                 (ql:quickload dependencies)
+              :unless
+                 (asdf:test-system system)
+              :return
+                 (uiop:quit (ash -1 i))
+              :finally
+                 (uiop:quit 0))"
 
-  # - ros -e "(loop
-  #             :for i :upfrom 0
-  #             :for
-  #                 (system dependencies)
-  #             :in
-  #                 '((:emotiq/blockchain :emotiq-test))
-  #             :doing
-  #                (ql:quickload dependencies)
-  #             :unless
-  #                (asdf:test-system system)
-  #             :return
-  #                (uiop:quit (ash -1 i))
-  #             :finally
-  #                (uiop:quit 0))"
-  # - ros -e "(loop
-  #             :for i :upfrom 1
-  #             :for
-  #                 (system dependencies)
-  #             :in
-  #                 '((:crypto-pairings :crypto-pairings/t))
-  #             :doing
-  #                (ql:quickload dependencies)
-  #             :unless
-  #                (asdf:test-system system)
-  #             :return
-  #                (uiop:quit (ash -1 i))
-  #             :finally
-  #                (uiop:quit 0))"
-  # - ros -e "(loop
-  #             :for i :upfrom 2
-  #             :for
-  #                 (system dependencies)
-  #             :in
-  #                 '((:core-crypto :core-crypto))
-  #             :doing
-  #                (ql:quickload dependencies)
-  #             :unless
-  #                (asdf:test-system system)
-  #             :return
-  #                (uiop:quit (ash -1 i))
-  #             :finally
-  #                (uiop:quit 0))"
-  #
-  # - etc/production.bash
+  - etc/production.bash
