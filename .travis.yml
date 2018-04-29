@@ -105,4 +105,4 @@ script:
                  (uiop:quit 0))"
 
 
-  - if [[ "$LISP" == "lispwork-bin" ]]; then etc/production.sh    ; fi
+  - if [[ "$LISP" == "lispworks-bin" ]]; then etc/production.sh    ; fi
