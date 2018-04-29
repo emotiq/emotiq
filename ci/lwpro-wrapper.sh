@@ -26,7 +26,7 @@ while test $# -gt 0; do
   esac
 done
 
-~/bin/lwpro <$tmpfile
+~/bin/lwpro $@ <$tmpfile
 
 if test $? -eq 0 ; then
   rm $tmpfile
