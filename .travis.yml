@@ -19,6 +19,7 @@ env:
 
   matrix:
     - LISP=lispworks-bin
+    - LISP=ccl-bin/1.11.5
 # Uncomment to enable the build farm resource to be spent on
 # implementations that might actually produce useful results.
 #    - LISP=ccl-bin
@@ -32,7 +33,7 @@ env:
 #    - LISP=clasp
 
 install:
-  - ci/install-lispworks.sh
+  - ci/install-lisp.sh
 
 # Pin quicklisp to known version; install emotiq dist
   # - ros -e '(ql-dist:install-dist
@@ -103,4 +104,5 @@ script:
               :finally
                  (uiop:quit 0))"
 
-  - etc/production.bash
+
+  - if [[ "$LISP" == "lispwork-bin" ]]; then etc/production.sh    ; fi
