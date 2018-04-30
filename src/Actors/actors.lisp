@@ -794,6 +794,7 @@ THE SOFTWARE.
   ;; define an anonymous CPS function
   `#'(lambda (%sk ,@parms) ,@body))
 
+#|
 (defmacro =defun (name parms &body body)
   ;; define a named CPS function
   (let* ((f            (symb '= name))
@@ -805,6 +806,19 @@ THE SOFTWARE.
     `(progn
        (defmacro ,name ,parms
          `(,',f %sk ,,@prefix-parms ,@,@tail-parm))
+       (defun ,f (%sk ,@parms) ,@body))))
+|#
+(defmacro =defun (name parms &body body)
+  ;; define a named CPS function
+  (let* ((f        (symb '= name))
+         (has-rest (find '&rest parms))
+         (lister   (if has-rest
+                       'list*
+                     'list))
+         (args     (remove '&rest parms)))
+    `(progn
+       (defmacro ,name ,parms
+         (,lister ',f '%sk ,@args))
        (defun ,f (%sk ,@parms) ,@body))))
 
 (defmacro =bind (parms expr &body body)
