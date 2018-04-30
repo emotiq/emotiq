@@ -113,18 +113,27 @@ script:
 
 jobs:
   include:
-    - stage: deploy
-      env:
-      - LISP=lispworks-bin
-      os:
-      - linux
-      - osx
+    - env: LISP=lispworks-bin
+      os: linux
+      stage: deploy
       script: etc/production.bash
       deploy:
         provider: releases
         api_key:
-          secure: "JBClYRQCttTSlVQAuuUlMVMQUmc4Vyp+/jga8VwoFQuaCIY6V//T8wAcvQ92Tx07rIhPNs71FOPNKf7rWronhaGGPN8LHd6cXEuGtple0uBGyFlLgQTL3+xXLTx6goZ0sZXw/QDtKlTK/YlZ0aljXkvqpg2cTaHv99ShI6Gk2bsyLgTWvp0TU1OHbYRKFdvxQGZnDyl3BzQLLaGPX+GMGyM1mqUJL+5kFUnJk4vdc+yB+W/WCPCp/sd1C0kDmC2aUJAbqK4RkTBuATj1lKphWNsiq7IXWLXXB6IpyG9GoPP/2v2mlpKGzdBSRq/TLekJjBocf1nxsMgQ/5awz+GDaA+4eyTALEoSm9JjiXeP68uTDYENHdizodQixEnqIzLlxnfarz6p5kCkcabyTzbEbnSGJwEBxmOrRYUx7Kg1RilAJVqmI7VQEeIpi8OrEDAB2H/F7/UDShmoiE1UdxW3NzvwxYtMabnY4m3ZntJrqF9UIOCtj9HAQYFUS2NmkxDroEp4yCfXkUflIT0NB99JSSICdtDcNTtUnAJWTzu/JzWhTzHS24fqJVlv3wRpvat1hY42aJX70/qOK4Sx7P0+zVZKKDFmN7FvsrcFMurbsK5T3eEGv9N9H0eSPQ8iuhGgsrhqn3Fv5GsaadPMOCqobi5gGaqP1MBbe6N47/gZC2A="
-        file: "var/production/emotiq-$(cat var/production/version.txt)-${TRAVIS_OS_NAME:-unknown}.bz2"
+          secure: "O4vQSliHmXERI2Hl2l3gLWZ4vR3aAFSfsk+sraBOz74u7uoc1t3ztJMluZ5INNbx2KOE2lLxND/NETAQkj5PCzdrYd2Aar6goG1ePLtzwd3wdzKa9RyIEEek586dATIhdMKH4+HeddfhE2uOE4eaHLXmMMtoiX5KEyZmUAK2tTjjvSQAVVl2RV7Dzoa5EjmjXgt1mRY3AJ4Erap3/Q4Iw0A5ZZXOl4HOx6j0ufph3y5GsnMU1k9giEo0jfM54o1LOfwsVW7Tv/EpGn0Qz1VgM+aFnPTBiEr4lLuYf12f+LJNOGugwV3Rv3TLDlPwnL76zBzvw4wJo+NtV2ysu+jhwHSigBGjqR55wdom6OrizUmCCyvgZdf3JlkKNvqbqJgsQiWeyG2oVjlGz9z+eGJ92k/7SrhYLBzOszKNIrZPMr3y4saCwZyOYKwMbsHiRkPOm3xy2po+jB9Lq7gt2dd8c/FENk/Bcug1wf3Cjr/4+s+P1BnHQcHzrfsd4zGfDKXDmkF2/iCWd4QnedlyuwWoAE0IsVpdZ/yP3tm899Rg8xXrbTQRzBK9M+gDZp2uYw4fZwV2yuM/SR5zGeXcIOnC4+5c8p51sLgdTq1IAWKiqSOEQfKlpqsnwnpOuXOcvK25ewu0d99W86N4QW/+FHiO/+1EMjRpoYAcy1DthTfkXWY="
+        file: "var/production/emotiq-$(cat var/production/version.txt)-linux.bz2"
+        skip_cleanup: true
+        on:
+          tags: true
+    - env: LISP=lispworks-bin
+      os: osx
+      stage: deploy
+      script: etc/production.bash
+      deploy:
+        provider: releases
+        api_key:
+          secure: "O4vQSliHmXERI2Hl2l3gLWZ4vR3aAFSfsk+sraBOz74u7uoc1t3ztJMluZ5INNbx2KOE2lLxND/NETAQkj5PCzdrYd2Aar6goG1ePLtzwd3wdzKa9RyIEEek586dATIhdMKH4+HeddfhE2uOE4eaHLXmMMtoiX5KEyZmUAK2tTjjvSQAVVl2RV7Dzoa5EjmjXgt1mRY3AJ4Erap3/Q4Iw0A5ZZXOl4HOx6j0ufph3y5GsnMU1k9giEo0jfM54o1LOfwsVW7Tv/EpGn0Qz1VgM+aFnPTBiEr4lLuYf12f+LJNOGugwV3Rv3TLDlPwnL76zBzvw4wJo+NtV2ysu+jhwHSigBGjqR55wdom6OrizUmCCyvgZdf3JlkKNvqbqJgsQiWeyG2oVjlGz9z+eGJ92k/7SrhYLBzOszKNIrZPMr3y4saCwZyOYKwMbsHiRkPOm3xy2po+jB9Lq7gt2dd8c/FENk/Bcug1wf3Cjr/4+s+P1BnHQcHzrfsd4zGfDKXDmkF2/iCWd4QnedlyuwWoAE0IsVpdZ/yP3tm899Rg8xXrbTQRzBK9M+gDZp2uYw4fZwV2yuM/SR5zGeXcIOnC4+5c8p51sLgdTq1IAWKiqSOEQfKlpqsnwnpOuXOcvK25ewu0d99W86N4QW/+FHiO/+1EMjRpoYAcy1DthTfkXWY="
+        file: "var/production/emotiq-$(cat var/production/version.txt)-macos.bz2"
         skip_cleanup: true
         on:
           tags: true
