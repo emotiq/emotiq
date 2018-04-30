@@ -109,5 +109,22 @@ script:
               :finally
                  (uiop:quit 0))"
 
+  # - if [[ "$LISP" == "lispworks-bin" ]]; then etc/production.bash    ; fi
 
-  - if [[ "$LISP" == "lispworks-bin" ]]; then etc/production.bash    ; fi
+jobs:
+  include:
+    - stage: deploy
+      env:
+      - LISP=lispworks-bin
+      os:
+      - linux
+      - osx
+      script: etc/production.bash
+      deploy:
+        provider: releases
+        api_key:
+          secure: "JBClYRQCttTSlVQAuuUlMVMQUmc4Vyp+/jga8VwoFQuaCIY6V//T8wAcvQ92Tx07rIhPNs71FOPNKf7rWronhaGGPN8LHd6cXEuGtple0uBGyFlLgQTL3+xXLTx6goZ0sZXw/QDtKlTK/YlZ0aljXkvqpg2cTaHv99ShI6Gk2bsyLgTWvp0TU1OHbYRKFdvxQGZnDyl3BzQLLaGPX+GMGyM1mqUJL+5kFUnJk4vdc+yB+W/WCPCp/sd1C0kDmC2aUJAbqK4RkTBuATj1lKphWNsiq7IXWLXXB6IpyG9GoPP/2v2mlpKGzdBSRq/TLekJjBocf1nxsMgQ/5awz+GDaA+4eyTALEoSm9JjiXeP68uTDYENHdizodQixEnqIzLlxnfarz6p5kCkcabyTzbEbnSGJwEBxmOrRYUx7Kg1RilAJVqmI7VQEeIpi8OrEDAB2H/F7/UDShmoiE1UdxW3NzvwxYtMabnY4m3ZntJrqF9UIOCtj9HAQYFUS2NmkxDroEp4yCfXkUflIT0NB99JSSICdtDcNTtUnAJWTzu/JzWhTzHS24fqJVlv3wRpvat1hY42aJX70/qOK4Sx7P0+zVZKKDFmN7FvsrcFMurbsK5T3eEGv9N9H0eSPQ8iuhGgsrhqn3Fv5GsaadPMOCqobi5gGaqP1MBbe6N47/gZC2A="
+        file: "var/production/emotiq-$(cat var/production/version.txt)-${TRAVIS_OS_NAME:-unknown}.bz2"
+        skip_cleanup: true
+        on:
+          tags: true

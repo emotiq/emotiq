@@ -50,10 +50,13 @@ inc=${prefix}/include
 
 version=`/bin/date "+%Y%m%d%H%M%S"`
 
+
 tar_dir=${prefix}/production
 tdir=emtq-${version}-${arch}
 production_dir=${tar_dir}/${tdir}
 mkdir -p ${production_dir}
+
+echo -n $version > ${production_dir}/version.txt
 
 lib_dir=${prefix}/lib
 mkdir -p ${lib_dir}
