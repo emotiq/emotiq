@@ -2,7 +2,7 @@
 
 case ${LISP} in
     lispworks*)
-        ci/install-lispworks.sh
+        ci/install-lispworks-$TRAVIS_OS_NAME.sh
         ;;
     ccl*)
         ci/install-ccl.sh

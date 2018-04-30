@@ -11,17 +11,16 @@
 #     export LISPWORKS_SERIAL={hidden}
 #     export LISPWORKS_LICENSE=[hidden]
 #
-
+set -x
 
 FILE="/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`
 touch $FILE
 chmod 600 $FILE
 
-PREFIX=~/LispWorks
+PREFIX=$HOME
 VERBOSE=0
 FILELIST=
-LWTAR=lw71-amd64-linux-patched.tar.gz
-DOCTAR=lwdoc71-x86-linux.tar.gz
+LWTAR=lw71-amd64-macos-patched.tar.gz
 LWLICFILE=lib/7-1-0-0/config/lwlicense
 
 while test $# -gt 0; do
@@ -49,32 +48,10 @@ elif test ! -f "/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`; then
   echo "**********************************************************"
 else
   echo Installing LispWorks from `pwd` in $PREFIX
-  sudo apt-get update && sudo apt-get install -y \
-    autoconf \
-    build-essential \
-    libcurl3-dev \
-    libglib2.0-0 \
-    libgtk2.0-0 \
-    curl \
-    git-core \
-    openssl \
-    pgpgpg \
-    wget \
-    bash \
-    gcc \
-    make \
-    g++ \
-    gpgv2 \
-    flex \
-    bison \
-    vim-nox \
-    xorg \
-    xvfb \
-    xfonts-100dpi \
-    xfonts-75dpi \
-    xfonts-scalable \
-    xfonts-cyrillic \
+
+  brew update && brew install \
     awscli \
+    gpg2 \
     wget
 
   aws s3 cp $LISPWORKS_BASE_URI/$LWTAR.gpg /tmp/$LWTAR.gpg
@@ -97,17 +74,17 @@ else
     else
       gzip -d < /tmp/$LWTAR | ( cd $PREFIX; tar xfv - > $FILELIST)
     fi
-    touch $PREFIX/$LWLICFILE
-    chmod a+w $PREFIX/$LWLICFILE
-    LWFILE="/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`
-    rm "$LWFILE"
+#    touch $PREFIX/$LWLICFILE
+#    chmod a+w $PREFIX/$LWLICFILE
+#    LWFILE="/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`
+#    rm "$LWFILE"
     UIDGID=`id -u`:`id -g`
     for FILE in `cat $FILELIST`; do chown $UIDGID $PREFIX/$FILE; done
     rm $FILELIST
   fi
 fi
 
-$PREFIX/lispworks-7-1-0-amd64-linux --lwlicenseserial $LISPWORKS_SERIAL --lwlicensekey $LISPWORKS_LICENSE
+"$PREFIX/LispWorks 7.1 (64-bit)/LispWorks (64-bit).app/Contents/MacOS/lispworks-7-1-0-amd64-darwin" --lwlicenseserial $LISPWORKS_SERIAL_OSX --lwlicensekey $LISPWORKS_LICENSE_OSX
 
 cat >/tmp/resave.lisp <<EOF
 (in-package "CL-USER")
@@ -120,7 +97,7 @@ EOF
 
 mkdir -p ~/bin
 
-xvfb-run $PREFIX/lispworks-7-1-0-amd64-linux -build /tmp/resave.lisp
+"$PREFIX/LispWorks 7.1 (64-bit)/LispWorks (64-bit).app/Contents/MacOS/lispworks-7-1-0-amd64-darwin" -build /tmp/resave.lisp
 cp ci/lwpro-wrapper.sh ~/bin/ros
 chmod +x ~/bin/ros
 
@@ -150,4 +127,4 @@ EOF
                 #+asdf(asdf:asdf-version) #-asdf "not required")' || exit 1
 
 
-# ros -l ci/deps.lisp
+# ~/bin/ros -l ci/deps.lisp
