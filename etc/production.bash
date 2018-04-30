@@ -74,6 +74,10 @@ esac
 
 cd ${etc}
 . ${etcdeliver}/${deliveryscript}
+if [ $? -ne 0 ] ; then
+  echo 'Build failure!'
+  exit 127
+fi
 
 mv ${etc}/emotiq ${production_dir}
 
@@ -96,5 +100,3 @@ tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
 
 rm -rf ${production_dir}
 # leaving only ${tar_dir} containing the bz2.
-
-
