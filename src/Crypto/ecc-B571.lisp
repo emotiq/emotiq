@@ -292,22 +292,25 @@ THE SOFTWARE.
     ))
     
 (defun ecc-basic-div (pt n)
-  (ecc-basic-mul pt (inv-mod *ecc-r* n)))
+  (with-mod *ecc-r*
+    (ecc-basic-mul pt (m/ n))))
 
 ;; -----------------------------------------------------------------
 ;; safe version of ecc-mul
 
 (defun ecc-mul (pt n)
-  (let* ((alpha     (gf-random-k*))
-         (gf-alpha  (gfinv alpha))
-         (n*alpha   (* n alpha))
-         (inv-alpha (inv-mod *ecc-r* alpha)))
-    (ecc-basic-mul
-     (ecc-basic-mul pt n*alpha :alpha gf-alpha)
-     inv-alpha)))
+  (with-mod *ecc-r*
+    (let* ((alpha     (gf-random-k*))
+           (gf-alpha  (gfinv alpha))
+           (n*alpha   (* n alpha))
+           (inv-alpha (m/ alpha)))
+      (ecc-basic-mul
+       (ecc-basic-mul pt n*alpha :alpha gf-alpha)
+       inv-alpha))))
 
 (defun ecc-div (pt n)
-  (ecc-mul pt (inv-mod *ecc-r* n)))
+  (with-mod *ecc-r*
+    (ecc-mul pt (m/ n))))
 
 (defun ecc-halve (pt)
   (optima:match pt
@@ -405,21 +408,21 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------
 
 (defun ecc-make-lagrange-interpolator (shares)
-  (labels ((lprod (x xs)
-             (reduce (lambda (prod x2)
-                       (mult-mod *ecc-r* prod (sub-mod *ecc-r* x2 x)))
-                     xs
-                     :initial-value 1)))
-    (lambda (x0)
-      (labels ((term (sum share)
-                 (um:bind* ((:struct-accessors crypto-share (x y) share)
-                            (xs (mapcar 'crypto-share-x (remove share shares))))
-                   (ecc-add sum
-                            (ecc-mul y (div-mod *ecc-r*
-                                                (lprod x0 xs)
-                                                (lprod x xs)) )) )))
-        (reduce #'term shares
-                :initial-value (ecc-infinity) )))))
+  (with-mod *ecc-r*
+    (labels ((lprod (x xs)
+               (reduce (lambda (prod x2)
+                         (m* prod (m- x2 x)))
+                       xs
+                       :initial-value 1)))
+      (lambda (x0)
+        (labels ((term (sum share)
+                   (um:bind* ((:struct-accessors crypto-share (x y) share)
+                              (xs (mapcar 'crypto-share-x (remove share shares))))
+                     (ecc-add sum
+                              (ecc-mul y (m/ (lprod x0 xs)
+                                             (lprod x xs)) )) )))
+          (reduce #'term shares
+                  :initial-value (ecc-infinity) ))))))
 
 (defun ecc-solve-lagrange (shares &optional (x 0))
   (let ((fn (ecc-make-lagrange-interpolator shares)))

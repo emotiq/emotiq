@@ -26,6 +26,32 @@ THE SOFTWARE.
 
 (in-package :cl-user)
 
+(defpackage :cached-var
+  (:use :common-lisp)
+  (:export
+   :def-cached-var
+   :get-cached-symbol-data))
+
+(defpackage :crypto/modular-arith
+  (:use :common-lisp
+   :cached-var)
+  (:export
+   :with-mod
+   :reset-blinders
+   :m^
+   :msqrt
+   :m+
+   :m-
+   :m*
+   :m/
+   :minv
+   :mmod
+   :mchi
+   :quadratic-residue-p
+   :m!
+   ))
+
+#|
 (defpackage :crypto-mod-math
   (:use :common-lisp)
   (:export
@@ -39,6 +65,7 @@ THE SOFTWARE.
    :div-mod
    :quadratic-residue-p
    ))
+|#
 
 (defpackage vec-repr
   (:use :common-lisp)
@@ -83,7 +110,9 @@ THE SOFTWARE.
    ))
 
 (defpackage :ecc-crypto-b571
-  (:use :common-lisp :crypto-mod-math)
+  (:use :common-lisp
+   :crypto/modular-arith
+   :cached-var)
   (:nicknames :ecc)
   (:export
    :ctr-hash-prng
@@ -100,8 +129,6 @@ THE SOFTWARE.
    :sha3-buffers
    :sha3/256-buffers
    
-   :def-cached-var
-
    :encode-bytes-to-base64
    :decode-bytes-from-base64
 
@@ -111,8 +138,6 @@ THE SOFTWARE.
    :decode-object-from-base58
    :encode-bytes-to-base58
    :decode-bytes-from-base58
-
-   :get-cached-symbol-data
    ))
 
 (defpackage :primes
@@ -138,31 +163,12 @@ THE SOFTWARE.
    #:decompose
    ))
 
-(defpackage :crypto/modular-arith
-  (:use :common-lisp)
-  (:import-from :ecc-crypto-b571
-   :get-cached-symbol-data)
-  (:export
-   :with-mod
-   :reset-blinders
-   :m^
-   :msqrt
-   :m+
-   :m-
-   :m*
-   :m/
-   :minv
-   :mmod
-   :mchi
-   :quadratic-residue-p
-   :m!
-   ))
-
 (defpackage :edwards-ecc
   (:nicknames :edec)
   (:use :common-lisp
    :ecc-crypto-b571
    :crypto/modular-arith
+   :cached-var
    :vec-repr
    :hash)
   (:import-from :ecc-crypto-b571
@@ -173,8 +179,7 @@ THE SOFTWARE.
                 :convert-lev-to-int
 		:ctr-drbg-int
 		:sha3-buffers
-		:random-between
-                :get-cached-symbol-data)
+		:random-between)
   (:export
    :ed-curve
    :with-ed-curve
@@ -262,7 +267,8 @@ THE SOFTWARE.
 (defpackage :core-crypto
   (:use :common-lisp
    :crypto/modular-arith
-   :edwards-ecc)
+   :edwards-ecc
+   :cached-var)
   (:import-from :ecc-crypto-b571
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
@@ -271,8 +277,7 @@ THE SOFTWARE.
    :sha3/256-buffers
    :ctr-drbg
    :ctr-drbg-int
-   :random-between
-   :get-cached-symbol-data)
+   :random-between)
   (:export
    ;; from crypto/modular-arith
    :with-mod
@@ -335,6 +340,5 @@ THE SOFTWARE.
    :ctr-drbg
    :ctr-drbg-int
    :random-between
-   :get-cached-symbol-data
    ))
    

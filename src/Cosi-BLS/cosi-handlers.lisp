@@ -963,6 +963,8 @@ bother factoring it with NODE-COSI-SIGNING."
       (wait-signing)
       )))
 
+;; ------------------------------------------------------------------------------------------------
+
 (defun leader-exec (node)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
@@ -995,7 +997,7 @@ bother factoring it with NODE-COSI-SIGNING."
                 (print "Waiting for Cosi commit")
                 (labels ((wait-cmt-signing ()
                            (recv
-                             ((list :answer (list* :signature _ bits))
+                             ((list :answer (list :signature _ bits))
                               (send *dly-instr* :plt)
                               (cond ((check-byz-threshold bits new-block)
                                      #+(or)
@@ -1036,6 +1038,7 @@ bother factoring it with NODE-COSI-SIGNING."
              )))
       (wait-prep-signing))))
 
+;; -------------------------------------------------------------------------------------
 #|
 ;; FOR TESTING!!!
 
