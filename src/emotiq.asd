@@ -45,7 +45,7 @@
                 :components ((:file "startup")))))
 
 (defsystem "emotiq/wallet"
-  :depends-on (emotiq
+  :depends-on (emotiq/startup
                ironclad
                lisp-object-encoder
                cosi-bls)
@@ -62,5 +62,12 @@
                 :pathname "./"
                 :components ((:file "cli")))))
 
-
+(defsystem "emotiq/sim"
+  :depends-on (emotiq/cli)
+  :components ((:module source
+                :pathname "./"
+                :components (
+                             (:file "Cosi-BLS/cosi-sim")
+                             (:file "bctest")
+                             (:file "main")))))
 

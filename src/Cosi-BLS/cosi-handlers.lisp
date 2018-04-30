@@ -38,17 +38,21 @@ THE SOFTWARE.
 
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
+    (format t "in node-dispatcher for ~a~%" (node-ip node))
     (um:dcase msg
       ;; ----------------------------
       ;; user accessible entry points - directed to leader node
       
       (:cosi-sign-prepare (reply-to msg)
+(format t ":cosi-sign-prepare~%")
        (node-compute-cosi node reply-to :prepare msg))
       
       (:cosi-sign-commit (reply-to msg)
+(format t ":cosi-sign-commit~%")
        (node-compute-cosi node reply-to :commit msg))
       
       (:cosi-sign (reply-to msg)
+(format t ":cosi-sign~%")
        (node-compute-cosi node reply-to :notary msg))
       
       (:new-transaction (msg)
@@ -86,6 +90,7 @@ THE SOFTWARE.
       ;; for sim and debug
       
       (:make-block ()
+       (print "receiving :make-block")
        (leader-exec node))
 
       (:genesis-utxo (utxo)
@@ -986,6 +991,7 @@ bother factoring it with NODE-COSI-SIGNING."
         ((wait-prep-signing ()
            (recv
              ((list :answer (list :signature sig bits))
+              (pr "got :answer :signature in wait-prep-signing")
               (let ((*current-node* node))
                 (setf (bc-block-signature        new-block) (base58 (pbc:signed-message-sig  sig))
                       (bc-block-signature-pkey   new-block) (base58 (pbc:signed-message-pkey sig))
@@ -996,6 +1002,7 @@ bother factoring it with NODE-COSI-SIGNING."
                 (labels ((wait-cmt-signing ()
                            (recv
                              ((list :answer (list* :signature _ bits))
+                              (pr "got :answer in wait-cmt-signing")
                               (send *dly-instr* :plt)
                               (cond ((check-byz-threshold bits new-block)
                                      #+(or)
@@ -1014,6 +1021,7 @@ bother factoring it with NODE-COSI-SIGNING."
                              
                              ;; ---------------------------------
                              ((list :new-transaction msg)
+                              (pr "got :new-transaction in wait-cmt-signing")
                               ;; allow processing of new transactions while we wait
                               (let ((*current-node* node))
                                 (node-check-transaction msg)
@@ -1029,6 +1037,7 @@ bother factoring it with NODE-COSI-SIGNING."
              
              ;; ---------------------------------
              ((list :new-transaction msg)
+              (pr "got :new-transaction in wait-prep-signing")
               ;; allow processing of new transactions while we wait
               (let ((*current-node* node))
                 (node-check-transaction msg)
@@ -1182,15 +1191,16 @@ bother factoring it with NODE-COSI-SIGNING."
                      )))))))
        ;; ------------------------------------------------------------------------
        
-       (send *top-node* :make-block)
+       (send (node-self *top-node*) :make-block)
+
        ))))
 
 ;; -------------------------------------------------------------
 
-(defvar *arroyo*     "10.0.1.2")
-(defvar *dachshund*  "10.0.1.3")
-(defvar *malachite*  "10.0.1.6")
-(defvar *rambo*      "10.0.1.13")
+;;; (defvar *arroyo*     "10.0.1.2")
+;;; (defvar *dachshund*  "10.0.1.3")
+;;; (defvar *malachite*  "10.0.1.6")
+;;; (defvar *rambo*      "10.0.1.13")
 
 (defmethod damage ((ip string) t/f)
   (damage (gethash ip *ip-node-tbl*) t/f))

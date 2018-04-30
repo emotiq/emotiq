@@ -1,0 +1,35 @@
+To get the simulator to work on a single machine:
+
+> (ql:quickload :emotiq/sim)
+
+change addresses in cosi-sim.lisp
+ensure that there is a directory Cosi-BLS/config/
+change *local-nodes* in cosi-construction.lisp (1st in list is the main node)
+
+> (in-package :cosi-simgen)
+
+> (cosi-init)
+
+should print a string containing IP
+
+> (cosi-generate)
+-- after this step cosi-simgen::*ip-node-tbl* and cosi-simgen::*node-bit-tbl* have non-empty values and
+-- may be inspected
+
+under LW it brings up a window ("container") that shows a tree of faked nodes (red are real nodes, black are faked)
+
+> (init-sim)
+
+> (tst)
+> (tst-blk)
+
+output to Output-Browser (LW) should be
+
+
+
+"Construct Genesis transaction" 
+"Find UTX for Mary" 
+"Construct 2nd transaction" 
+
+(output is done with CL:PRINT)
+

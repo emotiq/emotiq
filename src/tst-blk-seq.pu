@@ -1,0 +1,136 @@
+@startuml
+
+Actor Sim
+
+ref over "*top-node*"
+
+(ql:quickload :emotiq/sim)
+(in-package :cosi-simgen)
+(cosi-init)
+(cosi-generate)
+after this step cosi-simgen::*ip-node-tbl* and cosi-simgen::*node-bit-tbl* have non-empty values and may be inspected
+(init-sim)
+(tst)
+(tst-blk)
+
+end ref
+
+== start simulated test ==
+
+ref over Sim
+  call (tst-blk)
+    (reset-blockchain)
+
+    make keys for genesis
+    make keys for Mary
+    
+    make a utxo/secrets pair for 1000 -> [(cloaked 1000), secrg               ]
+                                          ^^^utxo^^^^^^   ^^cloaking secrets^^
+    send this utxo [(cloaked 1000)] to all Nodes (don't send cloaking secrets),
+        they put the utxo into their UTXO table
+
+    "Mary takes the 750, from genesis utxo"...
+    uncloak uxto amount using genesis privkey
+    a utxin/secrets pair is created using the uncloaked 750
+    
+
+    make a utxin/secrets pair for Mary receiving 750 from genesis UTXO
+      Mary's-info <- decrypt "utxo" (above, from genesis)
+    make UTXO1 { 750 -> Mary's pubkey, cloaking secrets1 }
+    make UTXO2 { 250 -> genesis pubkey, cloaking secrets2 }
+    make TXN1 {
+
+    
+end ref
+
+
+Sim -> "*top-node*" : ":make-block"
+== cosi-handlers.lisp (node-dispatcher self (:make-block))  ==
+
+== Leader: cosi-handlers.lisp (sim and debug) leader-exec ==
+
+"*top-node*" -> "*dly-instr*" : << noop >>
+"*top-node*" -> "*dly-instr*" : << noop >>
+
+ref over "*top-node*"
+
+make-bc-block {
+calls (get-transactions-for-new-block)
+  calls (get-candidate-transactions)
+        grab all txns from *mempool*
+	topo-sort, remove txns from mempool that refer to future
+	check dbl spend, accumulate only good txns
+	return txns
+  split on *max-transactions* --> tl (tail), unspend all tl,
+    --> hd (head) is now all txns going into new block, return it
+}
+
+
+leader-exec {
+   self-calls ":cosi-sign-prepare"
+}
+
+":cosi-sign-prepare" {
+   calls node-compute-cosi (... stage ...)
+}
+
+node-compute-cosi (state) {
+    wait-signing
+}
+
+
+leader-exec {
+  self-call :cosi-sign-prepare
+}
+
+:cosi-sign-prepare {
+   calls node-compute-cosi(... :prepare ...)
+   wait for (:wait-prep-signing)
+}
+
+node-compute-cosi (... stage ...)
+   self-call :signing (... stage ...)
+   wait-signing (... stage ...) {
+     reacts to :signed (either replies :signature or :corrupt-cosi-network (if
+       message doesn't check out)
+     reacts to any other messages by tail-calling wait-signing (i.e. ignore the
+       message, it is probably a late arrival)
+     reacts to :new-transaction by checking the tx math and caching the tx (into 
+       *mempool*)
+     reacts to TIMEOUT by replying (to reply-to) with :timout-cosi-network 
+   }
+
+end ref
+
+== Signing (Leader) ==
+
+ref over "*top-node*"
+
+:signing(... stage ...) {
+  if (stage == :notary) {
+    call node-cosi-notary-signing(... stage ...) ...
+        ;; Compute a collective BLS signature on the message. This process
+        ;; is tree-recusive.
+	-- testing only - to be removed
+
+  } else {
+    call node-cosi-signing(... stage ...)
+      ;; Compute a collective BLS signature on the message. This process
+      ;; is tree-recusive.
+      2 main steps:
+      0. remove bad nodes (node-bad)
+      1. decide to sign, parallel mapcar tells all subs to consider signing
+      2. gather results fronm subs and send reply :signed when done
+  }
+}
+
+end ref
+"*top-node*" -> "Sub-nodes" : << ":signing" and ":prepare" >>
+
+@enduml
+
+don't know:
+- number of stages in CoSi
+- how the code advances the stage
+- what code sends a blk to the chain
+- how to see every message received

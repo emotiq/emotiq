@@ -83,6 +83,8 @@ the simple commitment to the uncloaked value"
                     :encr      encr)
      gam)))
 
+;-- TODO: if we are going to switch between cloaked and uncloaked, we might need to further specialize
+;-- this function...
 (defmethod make-txout ((amt integer) (pkey pbc:public-key))
   "Make a cloaked TXOUT with value proof"
   (multiple-value-bind (prf gamma)

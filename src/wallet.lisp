@@ -18,7 +18,7 @@
 
 (defun emotiq/user/root ()
   #+linux
-  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
+  (merge-pathnames "~/.emotiq/" (user-homedir-pathname))
   #+darwin
   (merge-pathnames "Emotiq/"
                    (merge-pathnames "Library/Application Support/"
@@ -35,22 +35,47 @@
     (lisp-object-encoder:serialize wallet o)))
     
 (defun wallet-deserialize (&key (path (emotiq-wallet-path)))
-  (let ((path (emotiq-wallet-path)))
-    (unless (probe-file path)
-      (error "No wallet found at ~a." path))
-    (with-open-file
-        (o path :direction :input :element-type '(unsigned-byte 8))
-      (lisp-object-encoder:deserialize o))))
+  (unless (probe-file path)
+    (error "No wallet found at ~a." path))
+  (with-open-file
+      (o path :direction :input :element-type '(unsigned-byte 8))
+    (lisp-object-encoder:deserialize o)))
 
 (defun create-wallet (&key
                         (path (emotiq-wallet-path))
-                        (force nil force-p))
+                        (force nil))
   (when (and (probe-file path)
              (not force))
     (format *standard-output* "Not overwriting wallet keys at '~a'." path)
     (return-from create-wallet nil))
   (let ((wallet (make-wallet)))
     (wallet-serialize wallet :path path)))
+
+(defun open-wallet (&key
+                        (path (emotiq-wallet-path)))
+  (unless (probe-file path)
+    (format *standard-output* "Wallet has not been create (use create-wallet) '~a'." path)
+    (return-from open-wallet nil))
+  (let ((wallet (wallet-deserialize)))
+    (declare (ignore wallet))))
+
+(defun see-genesis () ;; triviality for debug, not exported
+  (let ((context (emotiq::start-blockchain-context)))
+    (emotiq:with-blockchain-context (context)
+			     (let ((genesis-block (emotiq::make-genesis-block)))
+			       (format *standard-output*
+				       "~&Here is the first transaction of the genesis block:~%  ~a~%"
+				       genesis-block)))))
+
+(defun test1()
+  (let ((bc (emotiq:start-blockchain-context)))
+    (emotiq:with-blockchain-context (bc)
+      (format t "blocks: ~a ~a~%" (emotiq:genesis-block) (emotiq:last-block))
+      (format t "~s~%" (if (eq (emotiq:genesis-block) (emotiq:last-block))
+                           "EQUAL"
+                         "NOT-EQUAL")))))
+
+
 
 #+(or)
 (defun aes256-key (passphrase salt)
