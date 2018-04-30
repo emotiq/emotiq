@@ -360,7 +360,7 @@ had just been used in the last transaction."
 (defparameter *pkey* nil)
 (defparameter *skey* nil)
 
-(defun set-owner (str)
+(defun emotiq:set-owner (str)
   (if (string= "alice" str)
       (setf *pkey-hash* *alice-pkey-hash*
             *pkey* *alice-pkey*
@@ -371,7 +371,7 @@ had just been used in the last transaction."
             *skey* *bob-skey*)
       (format t "bad name ~a~%"))))
 
-(defun print-balance ()
+(defun emotiq:print-balance ()
   (emotiq:with-blockchain-context (*test-blockchain-context*)
     (let ((balance-amount (emotiq:get-balance *pkey-hash*)))
       (format t "~a~%"

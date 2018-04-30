@@ -613,6 +613,8 @@ THE SOFTWARE.
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
 (defvar *maximum-age*        3)   ;; how long before watchdog should bark
+
+;;   #+(AND :LISPWORKS :LINUX) ;; need private-patch for linux (similar patch to mac)
 (defvar *nbr-execs*               ;; should match the number of CPU Cores
   #+(AND :LISPWORKS :MACOSX)
   (load-time-value
@@ -621,13 +623,12 @@ THE SOFTWARE.
        (or (and (integerp ans)
                 ans)
            4))))
-;;   #+(AND :LISPWORKS :LINUX) ;; need private-patch for linux (similar patch to mac)
   #+:CLOZURE
   (ccl:cpu-count)
    #-(or :CLOZURE
-         (AND :LISPWORKS :MACOSX)
-         (AND :LISPWORKS :LINUX))
-   1)
+         (AND :LISPWORKS :MACOSX))
+   4)
+
 
 ;; ----------------------------------------------------------------
 ;; Ready Queue

@@ -62,19 +62,12 @@
                 :pathname "./"
                 :components ((:file "cli")))))
 
-(defsystem "emotiq/pt"
-  :depends-on (emotiq/cli)
-  :components ((:module source
-                :pathname "./"
-                :components (
-                             (:file "bctest")
-                             (:file "main")))))
-
 (defsystem "emotiq/sim"
   :depends-on (emotiq/cli)
   :components ((:module source
                 :pathname "./"
                 :components (
                              (:file "Cosi-BLS/cosi-sim")
+                             (:file "bctest")
                              (:file "main")))))
 

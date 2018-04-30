@@ -77,7 +77,7 @@
        
        ;; -------------------------------------------------------------
        ;; manufacture two transactions and send to all nodes
-;-- very simple test - send genesis to everyone and then send two txns to everyone
+;-- very simple test - send genesis UTXO to everyone and then send two txns to everyone
 
        (if *trans1*
 ;-- test == if *trans1* already exists, then we assume that *genesis* and *trans2* exist
@@ -88,7 +88,7 @@
 ;-- saves time during testing (no need to generate the test transactions
 
            (progn
-;-- N.B. this does not create a genesis block (a la BitCoin), but a genesis UTXO,
+;-- N.B. this does not create a genesis block, but a genesis UTXO,
 ;-- which contains "less infomation" than a full transaction
 ;-- each Node has a utxo-table (see (defclass node ...) in src/Cosi-BLS/cosi-construction.lisp)
 ;-- a special message :genesis-utxo is used
