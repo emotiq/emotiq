@@ -56,7 +56,7 @@ tdir=emtq-${version}-${arch}
 production_dir=${tar_dir}/${tdir}
 mkdir -p ${production_dir}
 
-echo -n $version > ${production_dir}/version.txt
+echo -n $version > ${tar_dir}/version.txt
 
 lib_dir=${prefix}/lib
 mkdir -p ${lib_dir}

@@ -39,6 +39,7 @@ env:
 
 install:
   - ci/install-lisp.sh
+  - ros -l ci/deps.lisp
 
 # Pin quicklisp to known version; install emotiq dist
   # - ros -e '(ql-dist:install-dist
@@ -65,7 +66,6 @@ install:
 #   The current implementation returns the bit representation of '-1'
 #   shifted by the zero-based index of the failing test.
 script:
-  - ros -l ci/deps.lisp
   - ros -e "(loop
               :for i :upfrom 0
               :for
