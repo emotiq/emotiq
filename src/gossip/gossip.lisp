@@ -8,8 +8,10 @@
 ;;; No more process-run-function because actors take care of that.
 ;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
 
+;;; New mechanism: Interim replies instead of carefully-timed timeouts.
+
 ;;;; TODO:
-;;;; Change things such that when forward? is an integer, if a node gets an active ignore back from
+;;;; Change things such that when *use-all-neighbors* is an integer, if a node gets an active ignore back from
 ;;;;  neighbor X, it should pick another neighbor if it has more available.
 
 ;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
@@ -19,11 +21,8 @@
 (defparameter *default-uid-style* :short ":short or :long. :short is shorter; :long is more comparable with other emotiq code")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-
-;;;; DEPRECATE
-(defparameter *use-all-neighbors* 1 "True to broadcast to all neighbors; nil for none (no forwarding).
+(defparameter *use-all-neighbors* nil "True to broadcast to all neighbors; nil to randomly pick just one.
                                        Can be an integer to pick up to n neighbors.")
-;;;; DEPRECATE
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
 (defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
    in an effort to find an unused local port")
@@ -53,13 +52,12 @@
       t)))
 
 ; Typical cases:
-; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
-; Case 2: *use-all-neighbors* = 1 and *active-ignores* = true. The more common gossip case.
-; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary. NOW A FORBIDDEN CASE.
-; Case 4: *use-all-neighbors* = 1 and *active-ignores* = false. Lots of timeouts. Poor results. NOW A FORBIDDEN CASE.
+; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage case.
+; Case 2: *use-all-neighbors* = false and *active-ignores* = true. The more common gossip case.
+; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary.
+; Case 4: *use-all-neighbors* = false and *active-ignores* = false. Lots of timeouts. Poor results.
 
-;;; DEPRECATE. Use forward? slot on messages for this now.
-(defun set-protocol-style (kind &optional (n 1))
+(defun set-protocol-style (kind &optional n)
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
       There's no guarantee this will reach all nodes. But it's quicker and more realistic.
@@ -68,7 +66,7 @@
   (case kind
     (:gossip (setf *use-all-neighbors* n
                    *active-ignores* t))  ; must be true when *use-all-neighbors* is nil. Otherwise there will be timeouts.
-    (:neighborcast  (setf *use-all-neighbors* t
+    (:neighborcast   (setf *use-all-neighbors* t
                    *active-ignores* nil)))
   kind)
 
@@ -76,13 +74,11 @@
   "Get style of protocol. See set-protocol-style."
   (cond ((and (null *use-all-neighbors*)
               *active-ignores*)
-         :noforward) ; use 0 neighbors means "no forward" which is generally counterproductive except during bootstrapping
+         :gossip)
         ((and (integerp *use-all-neighbors*)
               *active-ignores*)
-         (if (zerop *use-all-neighbors*)
-             (values :noforward)
-             (values :gossip *use-all-neighbors*)))
-        ((and (eql t *use-all-neighbors*)
+         (values :gossip *use-all-neighbors*))
+        ((and *use-all-neighbors*
               (null *active-ignores*))
          :neighborcast)
         (t :unknown)))
@@ -280,21 +276,10 @@ are in place between nodes.
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
              :documentation "Number of hops this message has traversed.")
-   (forward? :initarg :forward? :initform *use-all-neighbors* :accessor forward?
-             :documentation "Normally true, which means this message should be forwarded to neighbors
-             of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
-             just reply immediately.
-             It can be an integer n, which means to forward to up to n random neighbors. (This is traditional
-             gossip protocol.)
-             It can also simply be T, which means to forward to all neighbors. (This is neighborcast protocol.)")
    (kind :initarg :kind :initform nil :accessor kind
          :documentation "The verb of the message, indicating what action to take.")
    (args :initarg :args :initform nil :accessor args
          :documentation "Payload of the message. Arguments to kind.")))
-
-(defmethod neighborcast? ((msg gossip-message-mixin))
-  "True if message is requesting neighborcast protocol"
-  (eql t (forward? msg)))
 
 (defgeneric copy-message (msg)
   (:documentation "Copies a message object verbatim. Mainly for simulation mode
@@ -306,21 +291,12 @@ are in place between nodes.
                    :uid (uid msg)
                    :timestamp (timestamp msg)
                    :hopcount (hopcount msg)
-                   :forward (forward? msg)
                    :kind (kind msg)
                    :args (args msg))))
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
-  ((reply-to :initarg :reply-to :initform nil :accessor reply-to
-             :documentation "Nil for no reply expected. :UPSTREAM or :GOSSIP or :NEIGHBORCAST indicate
-             replies should happen by one of those mechanisms, or a UID to request a point-to-point reply to
-             a specific node.")))
-
-(defmethod copy-message :around ((msg solicitation))
-  (let ((new-msg (call-next-method)))
-    (setf (reply-to new-msg) (reply-to msg))
-    new-msg))
+  ())
 
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
@@ -422,8 +398,7 @@ are in place between nodes.
    (local-kvs :initarg :local-kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor local-kvs
         :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
    (neighbors :initarg :neighbors :initform nil :accessor neighbors
-              :documentation "List of UIDs of direct neighbors of this node. This is the mechanism that establishes
-              the connectivity of the node graph.")
+              :documentation "List of UIDs of direct neighbors of this node")
    (timers :initarg :timers :initform nil :accessor timers
             :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
@@ -471,7 +446,13 @@ are in place between nodes.
       (:gossip
        (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
-         (deliver-gossip-msg gossip-msg node srcuid))))))
+         (deliver-gossip-msg gossip-msg node srcuid)))
+      (:echo
+       ; we expect node to be nil in this case, but it's actually
+       ;   irrelevant. We could just as well use an actor attached to a node
+       ;   for echoing if we wanted to.
+       (destructuring-bind (srcuid destuid gossip-msg) (cdr actor-msg)
+         (send-msg gossip-msg destuid srcuid))))))
 
 #+OBSOLETE
 (defmethod gossip-dispatcher ((node proxy-gossip-node) &rest actor-msg)
@@ -505,6 +486,21 @@ are in place between nodes.
     :fn 
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
+
+(defparameter *echo-actor* nil "An actor whose sole purpose is to bounce messages to other nodes.")
+
+#+OBSOLETE
+(defmethod echo-msg ((msg gossip-message-mixin) srcuid)
+  "Cause a message to be echoed back to myself.
+  An actor can send a message to itself while forcing itself to first yield and
+  handle other messages before handling the one herein."
+  (unless *echo-actor*
+    (setf *echo-actor* (make-gossip-actor nil)))
+  (ac:send *echo-actor*
+           :echo ; actor-verb
+           srcuid  ; source node
+           srcuid  ; destuid = srcuid because we're echoing
+           msg))
 
 (defun make-node (&rest args)
   "Makes a new node"
@@ -831,16 +827,6 @@ are in place between nodes.
     (write-string logstring *standard-output*)
     logmsg))
   
-(defmethod send-msg ((msg gossip-message-mixin) (destuid (eql 0)) srcuid)
-  "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
-   This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
-   before #'neighbors connectivity has been established."
-  (let ((no-forward-msg (copy-message msg))
-        (nodes (listify-nodes)))
-    (setf (forward? no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
-    (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
-    (forward msg srcuid nodes)))
-
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
          (destactor (when destnode (actor destnode))))
@@ -943,26 +929,26 @@ are in place between nodes.
         (multiple-value-setq (item list) (remove-nth n list))
         item))))
 
-(defun use-some-neighbors (neighbors howmany)
+(defun use-some-neighbors (neighbors)
   "Pick a few random neighbors based on value of *use-all-neighbors*"
   (when neighbors
     (let ((len (length neighbors)))
-      (cond ((integerp howmany)
-             (if (< howmany 1)
+      (cond ((integerp *use-all-neighbors*)
+             (if (< *use-all-neighbors* 1)
                  nil ; if zero or less, return nil. Degenerate case.
-                 (if (>= howmany len)
+                 (if (>= *use-all-neighbors* len)
                      neighbors ; just use them all
                      (let ((fn (make-random-generator neighbors)))
-                       (loop for i below howmany collect
+                       (loop for i below *use-all-neighbors* collect
                          (funcall fn))))))
-            (howmany ; if true but not integer, just use them all
+            (*use-all-neighbors* ; if true but not integer, just use them all
              neighbors)
-            (t
-             nil)))))
+            (t ; false, so treat it as 1
+             (list (nth (random len) neighbors)))))))
 
-(defmethod get-downstream ((node gossip-node) srcuid howmany)
+(defmethod get-downstream ((node gossip-node) srcuid)
   (let ((all-neighbors (remove srcuid (neighbors node))))
-    (use-some-neighbors all-neighbors howmany)))
+    (use-some-neighbors all-neighbors)))
 
 (defun send-active-ignore (to from kind soluid failure-reason)
   "Actively send a reply message to srcuid telling it we're ignoring it."
@@ -1019,7 +1005,7 @@ are in place between nodes.
                     (when was-present?
                       ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
                       (maybe-log node :STOP-WAITING msg srcuid))
-                    (unless (neighborcast? msg) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
+                    (when *active-ignores* ; now actively tell X we're ignoring it
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
 
@@ -1123,7 +1109,8 @@ are in place between nodes.
 
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. This is strictly a message handler; it's not a function
-  a node actor should call. The sender of this message will be thisnode itself"
+  a node actor should call. The sender of this message will be thisnode itself, via
+  the *echo-actor*."
   (declare (ignore srcuid))
   ; srcuid will usually (always) be that of thisnode, but we're not checking for that
   ;   because it doesn't matter if it's not true. For now.
@@ -1143,7 +1130,7 @@ are in place between nodes.
   (let ((content (first (args msg))))
     (declare (ignore content))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid))))
 
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
@@ -1155,7 +1142,7 @@ are in place between nodes.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid))))
 
 (defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
@@ -1167,7 +1154,7 @@ are in place between nodes.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate-unique (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid))))
 
 (defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
@@ -1179,7 +1166,7 @@ are in place between nodes.
   (let ((key (first (args msg))))
     (kvs:remove-key! (local-kvs thisnode) key)
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid))))
 
 (defmethod gossip-tally ((msg solicitation) thisnode srcuid)
   "Increment the value of a given key by an increment amount.
@@ -1189,7 +1176,7 @@ are in place between nodes.
         (increment (second (args msg))))
     (setf (local-kvs thisnode) (kvs:tally (local-kvs thisnode) key increment))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid))))
 
 ;;; TODO: add this to key-value-store
 (defmethod tally-nondestructive ((store list) key amount &key (test #'equal))
@@ -1223,7 +1210,7 @@ are in place between nodes.
   "Generic handler for solicitations requiring replies (SRRs)"
   (let* ((kind (kind msg))
          (soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid (forward? msg))) ; don't forward to the source of this solicitation
+         (downstream (get-downstream thisnode srcuid)) ; don't forward to the source of this solicitation
          (timer nil)
          (cleanup (make-timeout-handler thisnode msg kind)))
     (initialize-reply-cache kind thisnode soluid (args msg))
@@ -1302,7 +1289,7 @@ are in place between nodes.
 (defmethod list-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
 
-;;;; List-Addresses. Every node reports its address. Useful if every node is on a different machine.
+;;;; List-Addresses
 
 (defmethod list-addresses ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   (generic-srr-handler msg thisnode srcuid))
@@ -1349,13 +1336,13 @@ are in place between nodes.
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))
+  ;(forward msg thisnode (get-downstream thisnode srcuid))
   ; wait a finite time for all replies
   )
 
 (defmethod find-node-with-address ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to reverse DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))
+  ;(forward msg thisnode (get-downstream thisnode srcuid))
   ; wait a finite time for all replies
   )
 
@@ -1396,7 +1383,7 @@ are in place between nodes.
 
 #|
 DISCUSSION:
-send-interim-reply needs to be delayed.
+send-interim-reply needs to be delayed, and I don't know how to do this with actors.
 interim-replies don't resolve anything in the gossip model; they just provide (sometimes valuable)
 partial information to the ultimate solicitor. However, if things are moving along properly,
 a huge flurry of almost content-free interim-replies doesn't accomplish anything except to
@@ -1413,8 +1400,6 @@ delay.
 because the original will take care of it. However, do reset the clock to make it execute 1 second
 from now, rather than 1 second from whatever time the original request set up.
 
-REMAINDER OF DISCUSSION IS OBSOLETE. WE SOLVE THE PROBLEM WITH SEND-SELF NOW.
-
 There are a couple of tricky issues here I don't know how to solve:
 -- How to create a local "back-burner" queue on an actor. Conceivably this could just be another slot
 on an actor, and #'next-message could be made to look at it last. Or possibly it could be put on the
@@ -1429,10 +1414,6 @@ Can an actor be on the *actor-ready-queue* more than once? I would hope so. But 
 really contain actors per se; it just contains lexical closures, all of which are associated with some
 actor. However, the way #'send works is that it never re-adds an actor's run closure to the queue if the
 actor is already busy.
-
-FUNDAMENTAL MISUNDERSTANDING ABOVE: An actor must *never* be on the ready queue more than once because then
-it could be executed by two processes concurrently, and that's *never* allowed. All atomicity guarantees of
-the actor model would dissolve under such a scenario.
 
 I suppose the simplest solution is to just make a timer for this, but the resolution of the timers
 is 1 second and that's almost too coarse-grained for the job.
@@ -1478,7 +1459,9 @@ gets sent back, and everything will be copacetic.
               :kind :maybe-sir
               :args (list soluid reply-kind))))
     (maybe-log thisnode :ECHO-MAYBE-SIR nil)
-    (send-self msg)))
+    (send-self msg)
+    ;(echo-msg msg (uid thisnode))
+    ))
 
 (defun later-reply? (new old)
   "Returns true if old is nil or new has a higher uid"
@@ -1636,8 +1619,7 @@ gets sent back, and everything will be copacetic.
 
 (defun ensure-proxy-node (mode real-address real-port real-uid)
   "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
-   Returns newly-created or old proxy-gossip-node.
-   Found or newly-created proxy will be added to *nodes* database for this process."
+   Returns newly-created or old proxy-gossip-node."
   (let* ((key (if (and (integerp real-address)
                        (null real-port))
                   real-address ; means port is already folded into real-address
@@ -1852,11 +1834,6 @@ gets sent back, and everything will be copacetic.
         (unless (eql nb (usocket:socket-send socket packet nb :host ip :port port))
           (ac::pr :socket-send-error ip packet)))))
 
-(defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
-  (declare (ignore port))
-  (shutdown-gossip-server :UDP)
-  (shutdown-gossip-server :TCP))
-
 (defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *nominal-gossip-port*))
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
@@ -1948,6 +1925,7 @@ gets sent back, and everything will be copacetic.
 |#
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
+  "Actor version. Does not launch a new thread because actor infrastructure will already have done that."
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
@@ -1958,16 +1936,18 @@ gets sent back, and everything will be copacetic.
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg gossip-msg node srcuid))
 
-(defun run-gossip-sim (&optional (protocol :UDP))
+(defun run-gossip-sim ()
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
-  (shutdown-gossip-server t)
+  (shutdown-gossip-server :udp)
+  ;(shutdown-gossip-server :tcp)
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log))
   (sleep .5)
-  (start-gossip-server protocol)
+  (start-gossip-server :UDP)
+  ;(start-gossip-server :TCP)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)

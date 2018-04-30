@@ -6,7 +6,7 @@
   :maintainer "Shannon Spires <svs@emotiq.ch>"
  ; :licence "BSD 3-clause"
   :depends-on (:quicklisp
-               :uiop
+	       :uiop
                :mpcompat
                :key-value-store
                :actors ; should be loaded by cosi-BLS
@@ -15,5 +15,4 @@
   :components ((:file "package")
                (:file "gossip")
                (:file "http-fetch")
-               (:file "graphviz")
-               (:file "gossip-startup")))
+               (:file "graphviz")))
