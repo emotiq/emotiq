@@ -98,7 +98,7 @@
       )))
 
 ; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
-; (let ((*print-failures* t))  (run-tests :all))
+; (let ((*print-failures* t)) (run-tests :all))
 
 (defun make-test-network ()
   "Interesting graph of 10 nodes."
