@@ -239,15 +239,6 @@ are in place between nodes.
        (print-unreadable-object (thing stream :type t :identity t)
           (when uid (princ uid stream)))))
 
-;;; Should add this to actors.
-(defun ac::send-self (&rest msg)
-  "Different from self-call. This one just adds the message to the end of my own mailbox,
-   rather than executing it immediately. It's guaranteed to be found before (current-actor)
-   finishes executing, but if there are any messages ahead of it, they'll be executed first."
-  (uiop:if-let (self (ac:current-actor))
-    (let ((mbox (ac::actor-mailbox self)))
-      (ac::deposit-message mbox msg))))
-
 ;;; Should move these to mpcompat
 (defun all-processes ()
   #+Allegro   mp:*all-processes*
@@ -280,7 +271,7 @@ are in place between nodes.
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
              :documentation "Number of hops this message has traversed.")
-   (forward? :initarg :forward? :initform *use-all-neighbors* :accessor forward?
+   (forward? :initarg :forward :initform *use-all-neighbors* :accessor forward?
              :documentation "Normally true, which means this message should be forwarded to neighbors
              of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
              just reply immediately.
@@ -855,13 +846,14 @@ are in place between nodes.
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
-    (node actor)))
+    (values (node actor) actor)))
 
 (defmethod send-self ((msg gossip-message-mixin))
   "Send a gossip message to the current node, if any.
-   Should only be called from within a gossip-actor's code; otherwise nothing happens."
-  (uiop:if-let (node (current-node))
-    (ac::send-self :gossip (uid node) msg)))
+  Should only be called from within a gossip-actor's code; otherwise nothing happens."
+  (multiple-value-bind (node actor) (current-node)
+    (when node ; actor will always be true too
+      (ac:send actor :gossip (uid node) msg))))
 
 ;  TODO: Might want to also check hopcount and reject message where hopcount is too large.
 ;        Might want to not accept maybe-sir messages at all if their soluid is expired.
