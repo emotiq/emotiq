@@ -997,7 +997,7 @@ bother factoring it with NODE-COSI-SIGNING."
                 (print "Waiting for Cosi commit")
                 (labels ((wait-cmt-signing ()
                            (recv
-                             ((list :answer (list* :signature _ bits))
+                             ((list :answer (list :signature _ bits))
                               (send *dly-instr* :plt)
                               (cond ((check-byz-threshold bits new-block)
                                      #+(or)
