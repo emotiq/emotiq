@@ -1,0 +1,20 @@
+
+to build and run:
+
+> (ql:quickload :emotiq/node)
+> (emotiq:node)
+
+You should see an "emotiq>" prompt, at which you can type 'help'.
+
+
+
+To get the simulator to work on a single machine:
+
+change the IP address in node-sim.lisp
+
+> (ql:quickload :emotiq/sim)
+> (cosi-simgen:enode)
+
+On LispWorks, open an Output-Browser to see the output.  Other lisps, the output ends up
+being displayed where PRINT displays.
+

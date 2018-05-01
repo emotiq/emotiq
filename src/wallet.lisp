@@ -18,7 +18,7 @@
 
 (defun emotiq/user/root ()
   #+linux
-  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
+  (merge-pathnames ".emotiq/" (user-homedir-pathname))
   #+darwin
   (merge-pathnames "Emotiq/"
                    (merge-pathnames "Library/Application Support/"
