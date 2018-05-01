@@ -6,6 +6,8 @@
   (:use :cl)
   (:export
    #:*nodes*
+   #:*log-filter*
+   #:make-graph
    #:solicit
    #:solicit-wait
    #:solicit-progress
@@ -15,4 +17,8 @@
    #:make-node
    #:listify-nodes
    #:set-protocol-style
-   #:get-protocol-style))
+   #:get-protocol-style
+   #:random-node
+   #:gossip-node
+   #:proxy-gossip-node
+   #:eripa))

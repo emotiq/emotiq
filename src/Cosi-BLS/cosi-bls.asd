@@ -44,32 +44,13 @@ THE SOFTWARE.
                         :depends-on (package)
                         :pathname "./"
                         :serial t
-                        :components ((:file "cosi-blkdef")
+                        :components (#+CLOZURE (:file "clozure")
+                                     (:file "cosi-blkdef")
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
                                      (:file "range-proofs")
                                      (:file "transaction")
-                                     (:file "block")
                                      (:file "cosi-handlers")))))
 
-(defsystem "cosi-bls/test/allegro"
-  :description "Allegro specific CAS timing code from dbm."
-  :depends-on (cosi-bls)
-  :components ((:module source
-                        :pathname "./"
-                        :components ((:file "test-cas")))))
                         
-(defsystem "cosi-bls-tests"
-  :depends-on (lisp-unit
-               cosi-bls)
-  :perform  (test-op (o s)
-                     (symbol-call :lisp-unit :run-tests
-                                  :all :cosi-tests))
-  :components ((:module package
-                :pathname "t/"
-                :components ((:file "package")))
-               (:module tests
-                :pathname "t/"
-                :components ((:file "cosi-tests")))))
-  

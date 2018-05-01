@@ -30,6 +30,8 @@ THE SOFTWARE.
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
   :components  ((:file "ecc-package")
+                (:file "cached-var")
+                (:file "modular-arith")
                 (:file "utilities")
                 (:file "vec-repr")
                 (:file "hash")
@@ -38,8 +40,6 @@ THE SOFTWARE.
                 #+:COM.RAL (:file "crypto-le")
                 (:file "kdf")
                 (:file "gf-571")
-                (:file "mod-math")
-                (:file "modular-arith")
                 (:file "edwards")
                 (:file "ecc-B571")
                 (:file "curve-gen")

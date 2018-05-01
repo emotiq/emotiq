@@ -2,7 +2,7 @@
 *.64xfasl
 *.64ufasl
 *~
-var
+var/**
 src/Crypto-writeup/Crypto-writeup.aux
 src/Crypto-writeup/Crypto-writeup.log
 src/Crypto-writeup/Crypto-writeup.out

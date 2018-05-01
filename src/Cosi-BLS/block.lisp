@@ -21,37 +21,44 @@
       ;; height: "Position of block in the chain, an integer."
       )
 
-   (prev-block
-    :accessor prev-block
-    :documentation "Previous block (nil for genesis block).")
+   (block-hash
+    :accessor block-hash
+    :documentation "Hash of this block.")
    (prev-block-hash
     :accessor prev-block-hash
     :documentation "Hash of previous block (nil for genesis block).")
-
-   (merkle-root-hash
-    :accessor merkle-root-hash
-    :documentation "Merkle root hash of block-transactions.")
 
    (block-timestamp
     :accessor block-timestamp
     :documentation 
       "Approximate creation time in seconds since Unix epoch.")
 
-   (public-keys-of-witnesses
-    :accessor public-keys-of-witnesses
-    :documentation
-    "Sequence of public keys of validators 1:1 w/witness-bitmap slot.")
-   (witness-bitmap
-    :initform 0
-    :documentation 
-    "Use methods ith-witness-signed-p and set-ith-witness-signed-p; do not
-     access directly. Internally, the bitmap is represented as a bignum. Each
-     position of the bitmap corresponds to a vector index, its state tells you
-     whether that particular potential witness signed.")
    (block-signature
     :accessor block-signature
     :documentation
     "A signature over the whole block authorizing all transactions.")
+   (block-signature-pkey
+    :accessor block-signature-pkey
+    :documentation
+    "Public key for block-signature")
+   (block-signature-bitmap
+    :accessor block-signature-bitmap
+    :initform 0
+    :documentation 
+    "Use methods ith-witness-signed-p and set-ith-witness-signed-p OR,
+     to access directly, supply a bitmap represented by an
+     integer (potentially a bignum), where each position of the bitmap
+     corresponds to a vector index, such that its state tells you
+     whether that particular potential witness signed.")
+
+   (public-keys-of-witnesses
+    :accessor public-keys-of-witnesses
+    :documentation
+    "Sequence of public keys of validators 1:1 w/witness-bitmap slot.")
+
+   (merkle-root-hash
+    :accessor merkle-root-hash
+    :documentation "Merkle root hash of block-transactions.")
 
    ;; Transactions is generally what's considered the main contents of a block
    ;; whereas the rest of the above comprises what's known as the 'block header'
@@ -84,7 +91,6 @@
 
 (defun create-block (epoch prev-block transactions)
   (let ((block (make-instance 'block :epoch epoch)))
-    (setf (prev-block block) prev-block)
     (setf (prev-block-hash block) 
           (if (null prev-block)
               nil
@@ -97,18 +103,20 @@
     block))
 
 
-
-(defun hash/256d (&rest hashables)
-  "Double sha-256-hash HASHABLES, returning a hash:hash/256 hash value
-   representing a 32 raw-byte vector. This is the hash function
-   Bitcoin uses for hashing nodes of a merkle tree and for computing
-   the hash of a block."
-  (hash:hash/256 (apply #'hash:hash/256 hashables)))
-
+(defun hash-256 (&rest hashables)
+  "This is the hashing used in our block in a merkle tree, linking
+   transaction outputs and inputs, and hashing the block header. This
+   uses SHA-3 for hashing; therefore, we do not use double hashing as
+   in Bitcoin."
+  (apply #'hash:hash/256 hashables))
 
 
 (defun hash-block (block)
-  (apply #'hash/256d (serialize-block-octets block)))
+  "Applies hash-256 to result of serialize-block-octets, q.v."
+  ;; Ends up doing the equivalent of
+  ;;
+  ;;   (hash-256  #<bv 1>  #<bv 2>  ...  #<bv N>)
+  (apply #'hash-256 (serialize-block-octets block)))
 
 
 
@@ -116,13 +124,16 @@
   '(protocol-version 
     epoch
     prev-block-hash
-    merkle-root-hash
     block-timestamp
-    public-keys-of-witnesses
-    witness-bitmap
-    block-signature)
+
+    block-signature
+    block-signature-pkey
+    block-signature-bitmap
+
+    merkle-root-hash)
   "These slots are serialized and then hashed. The hash is stored as
-   the prev-block-hash on a newer block on a blockchain.")
+   the block-hash on the current block and the prev-block-hash on a
+   newer block on the blockchain.")
 
 
 
@@ -169,16 +180,17 @@
 (defun hash-transaction (transaction)
   "Produce a hash for TRANSACTION, including the pair (PubKey, PedComm).
    The resulting hash's octet vector is usable as a transaction ID."
-  (hash/256d transaction))
+  (hash-256 transaction))
 
 
 
 (defun compute-merkle (nodes)
   "Compute merkle root hash on nonempty list of hashables NODES."
-  (assert (not (null nodes)) () "NODES must not be null.")
   (cond
+    ((null nodes)                       ; empty blocks permitted
+     (hash-256 '()))
     ((null (rest nodes))                ; just 1
-     (hash/256d (first nodes)))
+     (hash-256 (first nodes)))
     (t (compute-merkle-pairs nodes))))
 
 
@@ -188,12 +200,12 @@
    objects."
   (if (null (rest (rest nodes)))
       ;; 2 left
-      (hash/256d (first nodes) (second nodes))
+      (hash-256 (first nodes) (second nodes))
       ;; three or more:
       (loop for (a b . rest?) on nodes by #'cddr
             when (and (null rest?) (null b))
               do (setq b a) ; odd-length row case: duplicate last row item
-            collect (hash/256d a b)
+            collect (hash-256 a b)
               into row
             finally (return (compute-merkle-pairs row)))))
 

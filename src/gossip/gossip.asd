@@ -5,7 +5,8 @@
   :version "0.1"
   :maintainer "Shannon Spires <svs@emotiq.ch>"
  ; :licence "BSD 3-clause"
-  :depends-on (:uiop
+  :depends-on (:quicklisp
+	       :uiop
                :mpcompat
                :key-value-store
                :actors ; should be loaded by cosi-BLS
@@ -13,4 +14,5 @@
   :serial t
   :components ((:file "package")
                (:file "gossip")
+               (:file "http-fetch")
                (:file "graphviz")))

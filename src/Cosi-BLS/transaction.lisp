@@ -96,7 +96,7 @@ the simple commitment to the uncloaked value"
                       :hashpkey  (hash:hash/256 pkey)     ;; for recipient to locate tokens
                       :hashlock  (make-hashlock prf pkey) ;; the UTX ID
                       :prf       prf                      ;; value proof
-                      :encr      (pbc:ibe-encrypt info pkey :txin-info))
+                      :encr      (pbc:ibe-encrypt info pkey :spend-amount))
        info))))
 
 (defmethod make-txout ((amt integer) (pkey null))
@@ -241,7 +241,7 @@ correction factor gamadj on curve H for the overall transaction."
           
           (print "Find UTX for Mary")
           (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
-                 (minfo  (decrypt-txout-info (txout-encr utxm) skeym)))
+                 (minfo  (decrypt-txout-info utxm skeym)))
             (inspect minfo)
             
             (print "Construct 2nd transaction")

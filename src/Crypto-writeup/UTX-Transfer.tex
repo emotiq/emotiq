@@ -79,5 +79,41 @@ The transaction must also include Pedersen commitment proofs on all the quantiti
 
 In order for recipients to locate their new UTX, we can store the them along with encrypted vital quantities, in the blockchain blocks, tagged by the hash of the public key used in forming the directed commitments. Only the recipient knows what to look for. The actual public key is never shown until, just once, at the start of a new spend transaction involving that UTX.
 
+\subsection{Bulletproofs}
+
+Bulletproofs are used to provide range checks on token amounts involved in transactions. Every token amount mentioned in a transaction is accompanied by its own Bulletproof. 
+
+A Bulleproof includes an uncloaked Pedersen commitment 
+$$C = \gamma \, A + x \, B$$
+ as one of its items, along with a recursively structured short proof of every bit value in the binary encoding of amount $x$. The $\gamma$ blinding factor is randomly generated for each commitment.
+
+In order to produce a verifiable transaction, we take all of those Pedersen commitments, add them all up for the input side, and subtract all of the output side UTXO commitments. Then we add a correction factor in the $A$ curve to show a well recognized encoding of zero amount. 
+
+If the sum of the input amounts equals the sum of the output amounts, this process will produce a zero $B$ value. But the sum and difference of the $\gamma$ factors in each Pedersen commitment will likely not be zero, since they are randomly generated. So to that sum and difference of UTX commitments, we must add a correction factor that zeros out only the $A$ component, and carry that correction factor along in the transaction, so that anyone else can verify that the transaction sums to zero.
+
+If we set the correction factor
+
+$$\gamma_{corr} = \sum_{outs} \gamma_{out} - \sum_{ins} \gamma_{in}$$
+
+then we have, for any valid transaction,
+
+$$
+\begin{align}
+C_{trans} &= \sum_{ins} C_{in} - \sum_{outs} C_{out} + \gamma_{corr} \, A \\
+&= 0 \, A + 0 \, B \\
+&= \infty
+\end{align}
+$$
+
+When someone wishes to spend a UTXO arising from this process, they need to produce a signature on the hash of their public key and the Pedersen commitment for that UTXO. Only the recipient can do this, since a signature requires the corresponding private key. 
+
+But more than that, they need to start with the same Pedersen commitment value that the UTXO had when it was created. And they need to know the $\gamma$ value used in that commitment so that they too can produce a correction factor in the $A$ curve for the overall new transaction.
+
+Since the correction factor applies only to the $A$ curve, and there is no known relationship between $A$ and $B$, and likewise, there is no known relation between the amounts $x$ and the $\gamma$ factors used in each Pedersen commitment, this suffices as proof that the transaction is valid. 
+
+We need to know the value $\gamma$ used when the UTXO Pedersen commitment was created, in order to be able to compute the overall correction factor $\gamma_{corr}$ for the transaction we are creating to spend that UTX. 
+
+Knowing only the value of the Pedersen commitment, which anyone can see in plain sight, is not sufficient. And knowing only that commitment value tells you nothing about the $\gamma$ value that was used, even if you know the amount $x$ involved in that UTXO.
+
 \end{document}
 
