@@ -198,7 +198,9 @@
    :generate-tree
    :reconstruct-tree
    :forwarding)
-  (:export :block))
+  (:export :block)
+  (:export
+   #:node))
 
 (defpackage :cosi-keying
   (:use
@@ -239,7 +241,9 @@
    :get-block-transactions
    :publish-block
    :goback
-   ))
+   )
+  (:export
+   #:enode))
 
 (defpackage :cosi-test
   (:use :cl))

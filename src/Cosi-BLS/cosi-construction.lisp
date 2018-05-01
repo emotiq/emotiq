@@ -31,14 +31,37 @@ THE SOFTWARE.
 
 (declaim (optimize (debug 3)))
 
+
 ;; --------------------------------------------------------------------
 ;; Physical network
 
+#+(AND :COM.RAL :LISPWORKS)
 (defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
                          ("Malachite.local" . "10.0.1.6")
                          ("Dachshund.local" . "10.0.1.3")
                          ("Rambo"           . "10.0.1.13")
                          ("ChromeKote.local" . "10.0.1.36")))
+
+#+(AND :COM.RAL :LISPWORKS)
+(defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
+#+(AND :COM.RAL :LISPWORKS)
+(defvar *leader-node* (get-local-ipv4 "Simulator"))
+;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
+
+#-(AND :COM.RAL) (defparameter *local-nodes* nil)
+#-(AND :COM.RAL) (defparameter *real-nodes* nil)
+#-(AND :COM.RAL) (defparameter *leader-node* nil)
+
+(defun cosi-init (ipstring) 
+  (let ((mname (machine-instance)))
+    (setf *local-nodes*  (cons (cons mname ipstring) nil)
+          *real-nodes*  (list ipstring)
+          *leader-node*  (get-local-ipv4 mname))))
+
+(defun cosi-generate ()
+  (generate-tree :datafile *default-data-file* :keyfile *default-key-file* :nodes 10))
+    
+
 
 (defun get-local-ipv4 (node-name)
   (cdr (assoc node-name *local-nodes*
@@ -46,10 +69,6 @@ THE SOFTWARE.
   
 (defun get-my-ipv4 ()
   (get-local-ipv4 (machine-instance)))
-
-(defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "Arroyo.local"))
-;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
 
 (defvar *top-node*   nil) ;; current leader node
 (defvar *my-node*    nil) ;; which node my machine is on
