@@ -4,5 +4,7 @@ Gossip protocol allows messages to be ...
 
 Inline image test:
 
-![10-node network](10nodes2.svg "10-node network")
+<img src="10nodes2.svg" alt="10-node network" style-="display: block; width: 100%;">
+
+
 
