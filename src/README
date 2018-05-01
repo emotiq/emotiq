@@ -1,0 +1,6 @@
+to build and run:
+
+> (ql:quickload :emotiq/node)
+> (emotiq:node)
+
+You should see an "emotiq>" prompt, at which you can type 'help'.
