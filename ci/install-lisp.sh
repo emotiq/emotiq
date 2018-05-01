@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 
+uname_s=$(uname -s)
+case ${uname_s} in
+    Linux*)
+        OS_NAME=linux
+        ;;
+    Darwin*)
+        OS_NAME=osx
+        ;;
+    *)
+        echo Unknown OS \"$(uname_s)\". Terminating...
+        exit 127
+        ;;
+esac
+
 case ${LISP} in
     lispworks*)
-        ci/install-lispworks-$TRAVIS_OS_NAME.sh
+        ci/install-lispworks-$OS_NAME.sh
         rcfile="$HOME/.lispworks"
         ;;
     ccl*)

@@ -7,13 +7,13 @@ fi
 
 case ${LISP} in
     lispworks*)
-        lisp_cli='~/bin/lwpro'
+        lisp_cli="$HOME/bin/lwpro"
         ;;
     ccl*)
-        lisp_cli='~/bin/ccl'
+        lisp_cli="$HOME/bin/ccl"
         ;;
     sbcl*)
-        lisp_cli='/usr/local/bin/sbcl'
+        lisp_cli="/usr/local/bin/sbcl"
         ;;
     *)
         echo "Unknown Lisp dialect: $LISP"
