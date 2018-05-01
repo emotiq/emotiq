@@ -62,5 +62,10 @@
                 :pathname "./"
                 :components ((:file "cli")))))
 
+(defsystem "emotiq/node"  ;; a live node
+  :depends-on (emotiq/cli)
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "node")))))
 
 
