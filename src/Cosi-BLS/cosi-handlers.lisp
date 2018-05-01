@@ -1185,7 +1185,7 @@ bother factoring it with NODE-COSI-SIGNING."
                      )))))))
        ;; ------------------------------------------------------------------------
        
-       (send *top-node* :make-block)
+       (send (node-self *top-node*) :make-block)
        ))))
 
 ;; -------------------------------------------------------------
