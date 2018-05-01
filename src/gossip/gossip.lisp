@@ -16,7 +16,8 @@
 
 (in-package :gossip)
 
-(defparameter *default-uid-style* :short ":short or :long. :short is shorter; :long is more comparable with other emotiq code")
+(defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
+       :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 
@@ -107,10 +108,13 @@ are in place between nodes.
   "Returns a table that maps UIDs to objects"
   (kvs:make-store ':hashtable :test 'equal))
 
+;;; defglobal here makes running tests easier
 #+LISPWORKS
 (hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 #+CCL
 (ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
+
+(defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
 
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
@@ -197,11 +201,15 @@ are in place between nodes.
 (defun long-uid ()
   (uuid::uuid-to-integer (uuid::make-v1-uuid)))
 
+(defun new-tiny-uid ()
+  (incf *last-tiny-uid*))
+
 (defun new-uid (&optional (style *default-uid-style*))
   "Generate a new UID of the given style"
   (case style
     (:long  (long-uid))
-    (:short (short-uid))))
+    (:short (short-uid))
+    (:tiny  (new-tiny-uid))))
                    
 (defun uid? (thing)
   (integerp thing))
@@ -444,7 +452,7 @@ are in place between nodes.
 (defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
-    (ecase gossip-cmd
+    (case gossip-cmd
       (:gossip
        (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
@@ -1245,6 +1253,10 @@ dropped on the floor.
 
 ;; REPLY-NECESSARY methods. Three methods per message. The generic ones should handle most if not all cases.
 
+
+;; We assume that we must coalesce results any time we expect replies from downstream nodes, whether the message
+;;   says reply-to == :UPSTREAM or reply-to == (uid thisnode).
+;; But of course if there are NO downstream nodes, we cannot expect any replies by definition, so coalescence is not necessary.
 (defmethod generic-srr-handler ((msg solicitation) (thisnode gossip-node) srcuid)
   "Generic handler for solicitations requiring replies (SRRs)"
   (let* ((kind (kind msg))
@@ -1256,7 +1268,7 @@ dropped on the floor.
              "Set up node's reply-cache with initial-reply-value for this message"
              (kvs:relate-unique! (reply-cache thisnode) soluid (initial-reply-value kind thisnode (args msg))))
            
-           (potential-repliers? ()
+           (must-coalesce? ()
              "Returns true if we might expect repliers. (The only reason we wouldn't is
              if there are no downstream nodes to forward the message to.)
              If nil, there is no possibility of repliers."
@@ -1265,17 +1277,21 @@ dropped on the floor.
                       (eql (reply-to msg) (uid thisnode))))))
       ; Always initialize the reply cache--even if there are no downstream nodes--because we assume that if this
       ;   node could potentially be replied to, it itself is always considered a participant node of the message.
-      (when (potential-repliers?) (initialize-reply-cache))
-     ; (if (not (eql 495831281100387564650501 (uid thisnode))) (break))
-
-;;; It's possible for there to be a downstream but have no potential repliers. In that case
-;;; we need to go ahead and reply.
-
-
-;;; Is it possible to have potential-repliers? true but no downstream? Yes, the way the code is written now.
-;;; Need to rename potential-repliers? to be must-coalesce?
+      (when (must-coalesce?) (initialize-reply-cache))
+      ; (if (not (eql 495831281100387564650501 (uid thisnode))) (break))
+      
+      ;;; It's possible for there to be a downstream but have no potential repliers. In that case
+      ;;; we need to go ahead and reply.
+      
+      
+      ;;; Is it possible to have must-coalesce? true but no downstream? Yes, the way the code is written now. Makes no sense.
+      
+      ;;; It's never necessary to coalesce when there's no downstream, because there won't be anything TO coalesce in that case.
+      ;;; It MAY not be necessary to coalesce even when there IS a downstream (that's the case for direct replies where this node
+      ;;;   is not the node to reply to).
+      
       (cond (downstream
-             (cond ((potential-repliers?)
+             (cond ((must-coalesce?)
                     (prepare-repliers thisnode soluid downstream)
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
@@ -1286,14 +1302,10 @@ dropped on the floor.
                     (maybe-log thisnode :WAITING msg downstream))
                    (t ; just forward the message if there won't be an :UPSTREAM reply
                     (forward msg thisnode downstream)
-                    (when (uid? (reply-to msg)) ; Direct reply case. No cleanup necessary. Just reply directly.
-                      (send-final-reply thisnode (reply-to msg) soluid kind (initial-reply-value kind thisnode (args msg)))))))
-            (t ; No downstream. This is a leaf node.
-             (if (potential-repliers?)
-                 (funcall cleanup nil) ; cleanup, coalesce, and reply upstream.
-                 (when (uid? (reply-to msg)) ; Direct reply case. No cleanup necessary. Just reply directly.
-                   (send-final-reply thisnode (reply-to msg) soluid kind (initial-reply-value kind thisnode (args msg))))
-                 ))))))
+                    ; No cleanup necessary because even though we had a downstream, we never expected any replies.
+                    (send-final-reply thisnode (reply-to msg) soluid kind (initial-reply-value kind thisnode (args msg))))))
+            (t ; No downstream. This is a leaf node. No coalescence is possible, which implies no cleanup is necessary.
+             (send-final-reply thisnode (reply-to msg) soluid kind (initial-reply-value kind thisnode (args msg))))))))
 
 ; No node should ever receive an interim or final reply unless it was expecting one by virtue
 ;  of the original solicitation having a reply-to slot of :UPSTREAM or the UID of the node itself.
@@ -1325,67 +1337,30 @@ dropped on the floor.
 (defgeneric initial-reply-value (kind thisnode msgargs)
   (:documentation "Initial the reply-value for the given kind of message"))
 
-#+OBSOLETE
-(defgeneric initialize-reply-cache (kind thisnode soluid msgargs)
-  (:documentation "Initialize the reply-cache for the given kind of message"))
-
 (defmethod initial-reply-value ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) msgargs)
   (let* ((key (first msgargs))
          (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
     (list (cons myvalue 1))))
 
-#+OBSOLETE
-(defmethod initialize-reply-cache ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) soluid msgargs)
-  (let* ((key (first msgargs))
-         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid (list (cons myvalue 1)))))
-
 (defmethod initial-reply-value ((kind (eql :count-alive)) (thisnode gossip-node) msgargs)
   (declare (ignore msgargs))
   1)
-
-#+OBSOLETE
-(defmethod initialize-reply-cache ((kind (eql :count-alive)) (thisnode gossip-node) soluid msgargs)
-  (declare (ignore msgargs))
-  (kvs:relate-unique! (reply-cache thisnode) soluid 1)) ; thisnode itself is 1 live node
 
 (defmethod initial-reply-value ((kind (eql :list-alive)) (thisnode gossip-node) msgargs)
   (declare (ignore msgargs))
   (list (uid thisnode)))
 
-#+OBSOLETE
-(defmethod initialize-reply-cache ((kind (eql :list-alive)) (thisnode gossip-node) soluid msgargs)
-  (declare (ignore msgargs))
-  (kvs:relate-unique! (reply-cache thisnode) soluid (list (uid thisnode))))
-
 (defmethod initial-reply-value ((kind (eql :list-addresses)) (thisnode gossip-node) msgargs)
   (declare (ignore msgargs))
   (list (address thisnode)))
-
-#+OBSOLETE
-(defmethod initialize-reply-cache ((kind (eql :list-addresses)) (thisnode gossip-node) soluid msgargs)
-  (declare (ignore msgargs))
-  (kvs:relate-unique! (reply-cache thisnode) soluid (list (address thisnode))))
 
 (defmethod initial-reply-value ((kind (eql :find-max)) (thisnode gossip-node)  msgargs)
   (let ((key (first msgargs)))
     (kvs:lookup-key (local-kvs thisnode) key)))
 
-#+OBSOLETE
-(defmethod initialize-reply-cache ((kind (eql :find-max)) (thisnode gossip-node) soluid msgargs)
-  (let* ((key (first msgargs))
-         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid myvalue)))
-
 (defmethod initial-reply-value ((kind (eql :find-min)) (thisnode gossip-node) msgargs)
   (let ((key (first msgargs)))
     (kvs:lookup-key (local-kvs thisnode) key)))
-
-#+OBSOLETE
-(defmethod initialize-reply-cache ((kind (eql :find-min)) (thisnode gossip-node) soluid msgargs)
-  (let* ((key (first msgargs))
-         (myvalue (kvs:lookup-key (local-kvs thisnode) key)))
-    (kvs:relate-unique! (reply-cache thisnode) soluid myvalue)))
 
 (defmethod count-alive ((msg gossip-message-mixin) (thisnode gossip-node) srcuid)
   "Return total count of nodes that received the message."
@@ -1457,19 +1432,26 @@ dropped on the floor.
 (defun send-final-reply (srcnode destination soluid kind data)
   (let ((reply (make-final-reply :solicitation-uid soluid
                                  :kind kind
-                                 :args (list data))))
-    (cond ((uid? destination) ; should be a uid or T. Might be nil if there's a bug.
-           (maybe-log srcnode :SEND-FINAL-REPLY reply :to (briefname destination "node") data)
+                                 :args (list data)))
+        (where-to-send-reply (cond ((uid? destination)
+                                    destination)
+                                   ((eq :UPSTREAM destination)
+                                    (get-upstream-source srcnode soluid))
+                                   (t destination))))
+    (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
+           (maybe-log srcnode :SEND-FINAL-REPLY reply :to (briefname where-to-send-reply "node") data)
            (send-msg reply
-                     destination
+                     where-to-send-reply
                      (uid srcnode)))
           ; if no place left to reply to, just log the result.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
-          (t
+          ((functionp where-to-send-reply)
            (maybe-log srcnode :FINALREPLY (briefname soluid "sol") data)
-           (when (functionp destination)
-             (funcall destination reply))))))
+           (funcall where-to-send-reply reply))
+          ((null where-to-send-reply)
+           (maybe-log srcnode :NO-REPLY-DESTINATION (briefname soluid "sol") data))
+          (t (error "Invalid destination")))))
 
 (defun coalesce&replyupstream (thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or
@@ -1477,15 +1459,14 @@ dropped on the floor.
   Cleans up reply tables and reply upstream with final reply containing coalesced data.
   Assumes any timers have already been cleaned up."
   (let ((coalesced-data ;(kvs:lookup-key (reply-cache thisnode) soluid)) ; will already have been coalesced here
-         (coalesce thisnode reply-kind soluid)) ; won't have already been coalesced if we timed out!
-        (where-to-send-reply (get-upstream-source thisnode soluid)))
+         (coalesce thisnode reply-kind soluid))) ; won't have already been coalesced if we timed out!
     ; clean up reply tables.
     (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
     (kvs:remove-key (reply-cache thisnode) soluid)
     (kvs:remove-key (timers thisnode) soluid)
     (kvs:remove-key (timeout-handlers thisnode) soluid)
     ; must create a new reply here; cannot reuse an old one because its content has changed
-    (send-final-reply thisnode where-to-send-reply soluid reply-kind coalesced-data)
+    (send-final-reply thisnode :UPSTREAM soluid reply-kind coalesced-data)
     coalesced-data ; mostly for debugging
     ))
 
@@ -1778,6 +1759,7 @@ gets sent back, and everything will be copacetic.
       ;   on THIS machine.
       )))
 
+; TCP not done yet
 (defun parse-raw-message-tcp (stream)
   "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
@@ -1837,6 +1819,7 @@ gets sent back, and everything will be copacetic.
                 (incoming-message-handler-udp saf-buf rem-ip rem-port))))
         (usocket:socket-close socket))))
 
+; TCP not done yet
 (defmethod serve-gossip-port ((mode (eql :TCP)) listening-socket)
   "TCP gossip port server loop"
   (unwind-protect
@@ -1881,6 +1864,7 @@ gets sent back, and everything will be copacetic.
   (USOCKET:ADDRESS-IN-USE-ERROR ()
                                 :ADDRESS-IN-USE)))
 
+; TCP not done yet
 (defun open-passive-tcp-socket (port)
   "Open a passive tcp socket. Returns socket if successful.
   Returns a keyword if some kind of error."
@@ -1910,6 +1894,7 @@ gets sent back, and everything will be copacetic.
                    ; otherwise, assume process exists for serving UDP on some OTHER lisp image, which means we can retry
                    (start-gossip-server mode (1+ port) (1+ try-count)))))))))
 
+; TCP not done yet
 (defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*) (try-count 0))
   (unless (find-process *tcp-gossip-server-name*)
     (setf *shutting-down* nil)
@@ -1926,22 +1911,10 @@ gets sent back, and everything will be copacetic.
                  ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
                  (start-gossip-server mode (1+ port) (1+ try-count))))))))
 
-#+IGNORE
- (defun internal-send-socket (ip port packet)
-    (let ((nb (length packet)))
-      (when (> nb cosi-simgen::*max-buffer-length*)
-        (error "Packet too large for UDP transmission"))
-      ; can't just use the listener socket here because then you get EADDRNOTAVAIL errors
-      (let ((socket (usocket:socket-connect ip port
-                                           ; :local-host (eripa)
-                                            :local-port *actual-udp-gossip-port*
-                                            :protocol :datagram)))
-        ;; (pr :sock-send (length packet) real-ip packet)
-        (unless (eql nb (usocket:socket-send socket packet nb))
-          (ac::pr :socket-send-error ip packet))
-        (usocket:socket-close socket)
-        )))
-
+;;; This is different from cosi-simgen::internal-send-socket.
+;;; Don't create a new socket, and don't close it when we're done.
+;;; Rather, reuse the one we already have. This is critical to ensure the
+;;;   other end sees the proper port to respond to.
 (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
       (when (> nb cosi-simgen::*max-buffer-length*)
@@ -1964,9 +1937,7 @@ gets sent back, and everything will be copacetic.
       (internal-send-socket "127.0.0.1" port *shutdown-msg*)
       (sleep .5)
       (process-kill process)
-      (when (and *udp-gossip-socket*
-                 ;;; #+CCL (ccl::socket-connected *udp-gossip-socket*) ; won't work. usockets are not ccl sockets.
-                 )
+      (when *udp-gossip-socket*
         (usocket:socket-close *udp-gossip-socket*))
       (setf *udp-gossip-socket* nil
             *actual-udp-gossip-port* nil))))
@@ -1987,26 +1958,6 @@ gets sent back, and everything will be copacetic.
   (declare (ignore srcuid))
   (error "Bug: Cannot transmit to a local node!"))
 
-#+IGNORE
-(defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
-  "Send message across network.
-   srcuid is that of the (real) local gossip-node that sent message to this node."
-  (cond (*udp-gossip-socket*
-         (maybe-log node :TRANSMIT msg)
-         (let* ((packet (loenc:encode (list (real-uid node) srcuid msg)))
-                (nb (length packet)))
-           (when (> nb cosi-simgen::*max-buffer-length*)
-             (error "Packet too large for UDP transmission"))
-           (unless (eql nb (usocket:socket-send
-                            *udp-gossip-socket*
-                            packet
-                            nb
-                            :host (real-address node)
-                            :port (real-port node)))
-             (ac::pr :socket-send-error (real-address node) packet))))
-        (t
-         (maybe-log node :CANNOT-TRANSMIT "no socket"))))
-
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
@@ -2020,7 +1971,6 @@ gets sent back, and everything will be copacetic.
            ))
         (t
          (maybe-log node :CANNOT-TRANSMIT "no socket"))))
-
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
   "Send message across network.
@@ -2075,9 +2025,8 @@ gets sent back, and everything will be copacetic.
   (hash-table-count *nodes*))
 
 ; (make-graph 10)
-; (save-graph-to-file "~/gossip/10nodes.lisp")
-; (restore-graph-from-file "~/gossip/10nodes.lisp")
-; (restore-graph-from-file "~/gossip/10nodes2.lisp") ;;; best test network
+; (save-graph-to-file "tests/10nodes2.lisp")
+; (restore-graph-from-file "tests/10nodes2.lisp") ;;; best test network
 ; (make-graph 5)
 ; (save-graph-to-file "~/gossip/5nodes.lisp")
 ; (restore-graph-from-file "~/gossip/5nodes.lisp")
