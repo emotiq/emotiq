@@ -1,0 +1,6 @@
+To get the simulator to work on a single machine:
+
+change the IP address in node-sim.lisp
+
+> (ql:quickload :emotiq/sim)
+> cosi-simgen:enode 

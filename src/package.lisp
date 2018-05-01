@@ -62,9 +62,3 @@
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
 
-(defpackage emotiq/sim-gen
-  (:use #:cl)
-  (:export
-   #:node-sim))
-
-

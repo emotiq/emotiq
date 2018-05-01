@@ -198,7 +198,9 @@
    :generate-tree
    :reconstruct-tree
    :forwarding)
-  (:export :block))
+  (:export :block)
+  (:export
+   #:node-sim))
 
 (defpackage :cosi-keying
   (:use

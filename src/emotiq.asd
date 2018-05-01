@@ -68,4 +68,10 @@
                 :pathname "./"
                 :components ((:file "node")))))
 
+(defsystem "emotiq/sim"  ;; a simulated node
+  :depends-on (emotiq/cli)
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "node-sim")))))
+
 
