@@ -2,8 +2,8 @@
  
 (in-package :cosi-simgen)
 
-(defun node ()
-  (cosi-simgen::cosi-init "192.168.2.13") ;; change this address to suit your machine
+(defun node (&optional (ipstr "127.0.0.1"))
+  (cosi-simgen::cosi-init ipstr) ;; change this address to suit your machine
   (cosi-simgen::cosi-generate)
   (cosi-simgen::init-sim)
   (cosi-simgen::tst-blk)
