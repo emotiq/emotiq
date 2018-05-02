@@ -52,7 +52,7 @@ version=`/bin/date "+%Y%m%d%H%M%S"`
 
 
 tar_dir=${prefix}/production
-tdir=emtq-${version}-${arch}
+tdir=emotiq-${version}-${arch}
 production_dir=${tar_dir}/${tdir}
 mkdir -p ${production_dir}
 
@@ -97,7 +97,7 @@ cp ${etc}/emotiq.bash.${arch} ${production_dir}/emotiq.bash
 
 # this seems stupid, but I don't know enough about tar's options to make it include the subdir name
 cd ${tar_dir}
-tar cfj emotiq-${version}-${arch}.bz2 ${emotiqfiles} ${libs}
+tar cfj emotiq-${version}-${arch}.tar.bz2 ${emotiqfiles} ${libs}
 # remove libs to avoid possibly incorrect loading
 # no, don't remove, rm -rf ${lib_dir}
 
