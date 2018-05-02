@@ -44,12 +44,13 @@ while test $# -gt 0; do
 done
 
 $lisp_cli $@ <$tmpfile
+EXIT_CODE=$?
 
-if test $? -eq 0 ; then
+if test $EXIT_CODE -eq 0 ; then
   rm $tmpfile
   exit 0
 else
-  EXIT_CODE=$?
+  echo "Exit code: ${EXIT_CODE}"
   echo "Error in script. Check the source: $tmpfile"
   exit $EXIT_CODE
 fi
