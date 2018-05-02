@@ -1746,62 +1746,74 @@ gets sent back, and everything will be copacetic.
                                    :proxy-subtable proxy-subtable)))
     proxy))
 
-(defun parse-raw-message-udp (raw-message-buffer rem-address rem-port)
+(defun incoming-message-handler (msg srcuid destuid)
+  "Locally dispatch messages received from network"
+  ;; srcuid will be that of a proxy-gossip-node on receiver (this) machine
+  ;; destuid will be that of a true gossip-node on receiver (this) machine
+  (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
+  (send-msg msg destuid srcuid))
+
+(defun do-process-authenticated-packet (deserialize-fn body-fn)
+  "Handle decoding and authentication. If fails in either case just do nothing."
+  (let ((decoded (ignore-errors
+                   ;; might not be a valid serialization
+                   (funcall deserialize-fn))))
+    (when (and decoded
+               (ignore-errors
+                 ;; might not be a pbc:signed-message
+                 (pbc:check-message decoded)))
+      (funcall body-fn (pbc:signed-message-msg decoded)))))
+
+(defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
+  "Macro to simplify decoding and authentication"
+  `(do-process-authenticated-packet (lambda ()
+                                      ,deserializer)
+                                    (lambda (,packet-arg)
+                                      ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-authenticated-packet" 2)
+
+(defun incoming-message-handler-udp (raw-message-buffer rem-address rem-port)
   "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
   ;network message: (list (real-uid node) srcuid msg)
   ;                     uid  --^            ^-- source uid
   ;             on local machine            on destination machine
-  (destructuring-bind (destuid srcuid msg)
-                      (loenc:decode raw-message-buffer)
-    (when (debug-level 1)
-      (debug-log :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
-    (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
-      ;ensure a local node of type proxy-gossip-node exists on this machine with
-      ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-      (values msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
-      ;   on THIS machine.
-      )))
+  (with-authenticated-packet (packet)
+      (loenc:decode raw-message-buffer)
+    (destructuring-bind (destuid srcuid msg) packet ;; note: if not what we were expecting, then this will signal error
+      (when (debug-level 1)
+        (debug-log :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
+      (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
+          ;ensure a local node of type proxy-gossip-node exists on this machine with
+          ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
+        (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
+          ;   on THIS machine.
+        ))))
 
 ; TCP not done yet
-(defun parse-raw-message-tcp (stream)
+(defun incoming-message-handler-tcp (stream)
   "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
   ;network message: (list (real-uid node) srcuid msg)
   ;                    uid  --^            ^-- source uid
   ;             on local machine     on destination machine
-  (let ((rem-address (usocket:get-peer-address stream))
-        (rem-port    (usocket:get-peer-port stream)))
-    (destructuring-bind (destuid srcuid msg)
-                        (loenc:deserialize stream)
-      (when (debug-level 1)
-        (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
-      (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
+  (with-authenticated-packet (packet)
+      (loenc:deserialize stream)
+    (let ((rem-address (usocket:get-peer-address stream))
+          (rem-port    (usocket:get-peer-port stream)))
+      (destructuring-bind (destuid srcuid msg) packet ;; if not what we expected, this will signal error
+        (when (debug-level 1)
+          (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
+        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
         ;ensure a local node of type proxy-gossip-node exists on this machine with
         ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-        (values msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
+          (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
         ;   on THIS machine.
-        ))))
-
-(defun incoming-message-handler-udp (buf rem-ip rem-port)
-  "Locally dispatch messages received from network"
-  (multiple-value-bind (msg srcuid destuid)
-                       ; srcuid will be that of a proxy-gossip-node on receiver (this) machine
-                       ; destuid will be that of a true gossip-node on receiver (this) machine
-                       (parse-raw-message-udp buf rem-ip rem-port)
-    (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-    (send-msg msg destuid srcuid)))
-
-(defun incoming-message-handler-tcp (stream)
-  "Locally dispatch messages received from network"
-  (multiple-value-bind (msg srcuid destuid)
-                       ; srcuid will be that of a proxy-gossip-node on receiver (this) machine
-                       ; destuid will be that of a true gossip-node on receiver (this) machine
-                       (parse-raw-message-tcp stream)
-    (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-    (send-msg msg destuid srcuid)))
+          )))))
 
 (defmethod serve-gossip-port ((mode (eql :UDP)) socket)
   "UDP gossip port server loop"
@@ -1963,13 +1975,42 @@ gets sent back, and everything will be copacetic.
   (declare (ignore srcuid))
   (error "Bug: Cannot transmit to a local node!"))
 
+;; ------------------------------------------------------------------------------
+;; We need to authenticate all messages being sent over socket ports
+;; from this running Lisp image. Give us some signing keys to do so...
+
+(defclass lisp-authority ()
+  ((pkey  :reader  node-pkey
+          :initarg :pkey)
+   (skey  :reader  node-skey
+          :initarg :skey))
+  (:documentation "An authority root for signing messages being sent across socket ports"))
+
+(defun make-lisp-authority ()
+  (let ((k  (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid)))))
+    (make-instance 'lisp-authority
+                   :pkey  (pbc:keying-triple-pkey k)
+                   :skey  (pbc:keying-triple-skey k))))
+
+(defvar *this-lisp-image* (make-lisp-authority))
+
+(defun sign-message (msg)
+  "Sign and return an authenticated message packet. Packet includes
+original message."
+  (pbc:sign-message msg
+                    (node-pkey *this-lisp-image*)
+                    (node-skey *this-lisp-image*)))
+
+;; ------------------------------------------------------------------------------
+
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (cond (*udp-gossip-socket*
          (maybe-log node :TRANSMIT msg)
-         (let* ((packet (loenc:encode (list (real-uid node) srcuid msg)))
-                (nb (length packet)))
+         (let* ((payload (sign-message (list (real-uid node) srcuid msg)))
+                (packet  (loenc:encode payload))
+                (nb      (length packet)))
            (when (> nb cosi-simgen::*max-buffer-length*)
              (error "Packet too large for UDP transmission"))
            (internal-send-socket (real-address node) (real-port node) packet)
@@ -1982,7 +2023,10 @@ gets sent back, and everything will be copacetic.
   srcuid is that of the (real) local gossip-node that sent message to this node."
   (let ((stream (ensure-open-stream (real-address node) (real-port node))))
     (when (streamp stream)
-      (loenc:serialize (list (uid node) (real-uid node) srcuid msg) stream))))
+      (let ((payload (sign-message ;; (list (uid node) (real-uid node) srcuid msg)
+                                   ;; DBM - the above does not match recv expectations
+                                   (list (real-uid node) srcuid msg))))
+        (loenc:serialize payload stream)))))
 
 #|
 (defun ensure-open-stream (ip port)
