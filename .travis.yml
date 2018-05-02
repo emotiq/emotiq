@@ -38,7 +38,7 @@ env:
 
 install:
   - ci/install-lisp.sh
-  
+
 # Pin quicklisp to known version; install emotiq dist
   - ros -e '(ql-dist:install-dist
               "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
@@ -62,7 +62,7 @@ install:
 #   (uiop:quit (not (zerop status))
 #
 script:
-  - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
+  - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 127))"
   - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
   - systems=":cosi-bls-tests
              :gossip-tests";
