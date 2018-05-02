@@ -54,6 +54,7 @@ install:
 #
 script:
   - systems=":cosi-bls-tests
+             :crypto-pairings/t
              :gossip-tests";
       systems=${systems} bash etc/test-harness.bash
 
