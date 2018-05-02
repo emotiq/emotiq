@@ -2,8 +2,9 @@
 
 (in-package :gossip-tests)
 
+(defparameter *debug* nil "True if you want intermediate timings to print out and show inspector on failures")
+
 (eval-when (:load-toplevel :execute)
-  (set-protocol-style :neighborcast)
   (REMOVE-TESTS :ALL))
 
 (defun %aliveness (uid)
@@ -14,32 +15,46 @@
                     (solicit-wait uid :list-alive))))
 
 (defun %key-value (uid)
+  (gossip:archive-log)
   (solicit uid :gossip-relate-unique :foo :bar)
-  (sleep .5) ; give it time to work [solicit won't wait]
+  (sleep .1) ; give it time to work [solicit won't wait]
+  (when *debug* (format t "~%UID: ~D g-r-u Elapsed-time: ~S" uid (gossip:measure-timing :ACCEPTED)))
   (assert-equal
    '((:BAR . 10))
-   (solicit-wait uid :gossip-lookup-key :foo))
-  
+   (solicit-wait uid :gossip-lookup-key :foo)
+   (when *debug* (inspect gossip::*log*)))
+  (gossip:archive-log)
   (solicit uid :gossip-remove-key :foo)
-  (sleep .5)
+  (sleep .1)
+  (when *debug* (format t "~%UID: ~D g-r-k Elapsed-time: ~S" uid (gossip:measure-timing :ACCEPTED)))
+  (gossip:archive-log)
   (assert-equal
    '((NIL . 10))
    (solicit-wait uid :gossip-lookup-key :foo))
+  (gossip:archive-log)
   (solicit uid :gossip-tally :foo 1)
-  (sleep .5)
+  (sleep .1)
+  (when *debug* (format t "~%UID: ~D g-t1 Elapsed-time: ~S" uid (gossip:measure-timing :ACCEPTED)))
+  (gossip:archive-log)
   (assert-equal
    '((1 . 10))
-   (solicit-wait uid :gossip-lookup-key :foo))
+   (solicit-wait uid :gossip-lookup-key :foo)
+   (when *debug* (inspect gossip::*log*)))
+  (gossip:archive-log)
   (solicit uid :gossip-tally :foo 1)
-  (sleep .5)
+  (sleep .1)
+  (when *debug* (format t "~%UID: ~D g-t2 Elapsed-time: ~S" uid (gossip:measure-timing :ACCEPTED)))
+  (gossip:archive-log)
   (assert-equal
    '((2 . 10))
-   (solicit-wait uid :gossip-lookup-key :foo)))
+   (solicit-wait uid :gossip-lookup-key :foo)
+   (when *debug* (inspect gossip::*log*))))
 
 ; (let ((*print-failures* t)) (run-tests '(aliveness)))
 (define-test aliveness
-             "Test count-alive, list-alive, and key-value protocols"
+             "Test count-alive and list-alive"
   (let ((oldnodes *nodes*))
+    (set-protocol-style :neighborcast)
     (unwind-protect
         (progn
           (setf *nodes* (gossip::make-uid-mapper))
@@ -57,8 +72,9 @@
 
 ; (let ((*print-failures* t)) (run-tests '(key-value)))
 (define-test key-value
-             "Test count-alive, list-alive, and key-value protocols"
+             "Test key-value protocols"
   (let ((oldnodes *nodes*))
+    (set-protocol-style :neighborcast)
     (unwind-protect
         (progn
           (setf *nodes* (gossip::make-uid-mapper))
@@ -76,6 +92,7 @@
 
 (define-test partial-gossip "Test partial-gossip with parameter 2"
   (let ((oldnodes *nodes*))
+    (set-protocol-style :gossip 2)
     (unwind-protect
         (let ((results nil)
               (*log-filter* nil))
@@ -84,7 +101,6 @@
           (make-graph 100)
           (ac::kill-executives)
           (assert-eql 100 (run-gossip-sim))
-          (set-protocol-style :gossip 2)
           (dotimes (i 100)
             (push (solicit-wait (random-node) :count-alive) results))
           (setf results (mapcar (lambda (x) (if (numberp x) x nil)) results)) ; ensure :TIMEOUT doesn't appear in data
@@ -98,7 +114,7 @@
       )))
 
 ; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
-; (let ((*print-failures* t))  (run-tests :all))
+; (let ((*print-failures* t)) (run-tests :all))
 
 (defun make-test-network ()
   "Interesting graph of 10 nodes."

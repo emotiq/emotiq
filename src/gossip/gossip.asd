@@ -15,4 +15,5 @@
   :components ((:file "package")
                (:file "gossip")
                (:file "http-fetch")
-               (:file "graphviz")))
+               (:file "graphviz")
+               (:file "gossip-startup")))
