@@ -1979,27 +1979,17 @@ gets sent back, and everything will be copacetic.
 ;; We need to authenticate all messages being sent over socket ports
 ;; from this running Lisp image. Give us some signing keys to do so...
 
-(defclass lisp-authority ()
-  ((pkey  :reader  node-pkey
-          :initarg :pkey)
-   (skey  :reader  node-skey
-          :initarg :skey))
-  (:documentation "An authority root for signing messages being sent across socket ports"))
-
-(defun make-lisp-authority ()
-  (let ((k  (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid)))))
-    (make-instance 'lisp-authority
-                   :pkey  (pbc:keying-triple-pkey k)
-                   :skey  (pbc:keying-triple-skey k))))
-
-(defvar *this-lisp-image* (make-lisp-authority))
+(defvar *this-lisp-key*
+  (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid))))
 
 (defun sign-message (msg)
   "Sign and return an authenticated message packet. Packet includes
 original message."
+  (assert (pbc:check-public-key (pbc:keying-triple-pkey *this-lisp-key*)
+                                (pbc:keying-triple-sig  *this-lisp-key*)))
   (pbc:sign-message msg
-                    (node-pkey *this-lisp-image*)
-                    (node-skey *this-lisp-image*)))
+                    (pbc:keying-triple-pkey *this-lisp-key*)
+                    (pbc:keying-triple-skey *this-lisp-key*)))
 
 ;; ------------------------------------------------------------------------------
 
