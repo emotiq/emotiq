@@ -1190,9 +1190,13 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; -------------------------------------------------------------
 
+#+(AND :COM.RAL :LISPWORKS)
 (defvar *arroyo*     "10.0.1.2")
+#+(AND :COM.RAL :LISPWORKS)
 (defvar *dachshund*  "10.0.1.3")
+#+(AND :COM.RAL :LISPWORKS)
 (defvar *malachite*  "10.0.1.6")
+#+(AND :COM.RAL :LISPWORKS)
 (defvar *rambo*      "10.0.1.13")
 
 (defmethod damage ((ip string) t/f)

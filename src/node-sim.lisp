@@ -1,4 +1,4 @@
-;; top-level glue code for a simulation node - enode == Emotiq Node
+;; top-level glue code for a simulation node
  
 (in-package :cosi-simgen)
 
@@ -6,7 +6,8 @@
   (cosi-simgen::cosi-init ipstr) ;; change this address to suit your machine
   (cosi-simgen::cosi-generate)
   (cosi-simgen::init-sim)
-  (cosi-simgen::tst-blk)
+
+  (cosi-simgen::generate-genesis-block)
 
   (emotiq/cli::main)
 )
