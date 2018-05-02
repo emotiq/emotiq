@@ -21,4 +21,7 @@
    #:random-node
    #:gossip-node
    #:proxy-gossip-node
-   #:eripa))
+   #:eripa
+   #:archive-log
+   #:measure-timing
+   ))
