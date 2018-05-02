@@ -1753,6 +1753,13 @@ gets sent back, and everything will be copacetic.
   (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
   (send-msg msg destuid srcuid))
 
+;; ------------------------------------------------------------------------------
+;; Generic handling for expected authenticated messages. Check for
+;; valid deserialization, check deserialization is a
+;; pbc:signed-message, check for valid signature, then call user's
+;; handler with embedded authenticated message. If any failure along
+;; the way, just drop the message on the floor.
+
 (defun do-process-authenticated-packet (deserialize-fn body-fn)
   "Handle decoding and authentication. If fails in either case just do nothing."
   (let ((decoded (ignore-errors
@@ -1773,6 +1780,8 @@ gets sent back, and everything will be copacetic.
 
 #+:LISPWORKS
 (editor:setup-indent "with-authenticated-packet" 2)
+
+;; ------------------------------------------------------------------------------
 
 (defun incoming-message-handler-udp (raw-message-buffer rem-address rem-port)
   "Deserialize a raw message string, srcuid, and destuid.
