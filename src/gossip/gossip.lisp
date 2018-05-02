@@ -9,7 +9,7 @@
 ;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
 
 ;;;; TODO:
-;;;; Change things such that when forward? is an integer, if a node gets an active ignore back from
+;;;; Change things such that when forward-to is an integer, if a node gets an active ignore back from
 ;;;;  neighbor X, it should pick another neighbor if it has more available.
 
 ;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
@@ -59,7 +59,7 @@
 ; Case 3: *use-all-neighbors* = true and *active-ignores* = true. More messages than necessary. NOW A FORBIDDEN CASE.
 ; Case 4: *use-all-neighbors* = 1 and *active-ignores* = false. Lots of timeouts. Poor results. NOW A FORBIDDEN CASE.
 
-;;; DEPRECATE. Use forward? slot on messages for this now.
+;;; DEPRECATE. Use forward-to slot on messages for this now.
 (defun set-protocol-style (kind &optional (n 1))
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
@@ -99,6 +99,11 @@ are in place between nodes.
 
 (defparameter *gossip-absorb-errors* t "True for normal use; nil for debugging")
 (defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
+(defvar *uid-lock* (mpcompat:make-lock) "Lock for *last-uid*")
+
+(defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
+(defvar *tiny-uid-lock* (mpcompat:make-lock) "Lock for *last-tiny-uid*")
+
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *delay-interim-replies* t "True to delay interim replies.
   Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
@@ -113,8 +118,6 @@ are in place between nodes.
 (hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 #+CCL
 (ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
-
-(defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
 
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
@@ -181,8 +184,10 @@ are in place between nodes.
           (ash process-id 32)
           numeric-id))
 
+; Should do this with an actor gatekeeper, but I don't know how to wrap an actor around a read operation
 (defun generate-new-monotonic-id ()
-  (incf *last-uid*))
+    (mpcompat:with-lock (*uid-lock*)
+      (incf *last-uid*)))
 
 #+LISPWORKS
 (progn
@@ -201,8 +206,10 @@ are in place between nodes.
 (defun long-uid ()
   (uuid::uuid-to-integer (uuid::make-v1-uuid)))
 
+; Should do this with an actor gatekeeper, but I don't know how to wrap an actor around a read operation
 (defun new-tiny-uid ()
-  (incf *last-tiny-uid*))
+  (mpcompat:with-lock (*tiny-uid-lock*)
+    (incf *last-tiny-uid*)))
 
 (defun new-uid (&optional (style *default-uid-style*))
   "Generate a new UID of the given style"
@@ -276,7 +283,7 @@ are in place between nodes.
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
-  ((forward? :initarg :forward :initform *use-all-neighbors* :accessor forward?
+  ((forward-to :initarg :forward :initform *use-all-neighbors* :accessor forward-to
              :documentation "Normally true, which means this solicitation should be forwarded to neighbors
              of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
              just reply immediately.
@@ -293,11 +300,11 @@ are in place between nodes.
 
 (defmethod neighborcast? ((msg solicitation))
   "True if message is requesting neighborcast protocol"
-  (eql t (forward? msg)))
+  (eql t (forward-to msg)))
 
 (defmethod copy-message :around ((msg solicitation))
   (let ((new-msg (call-next-method)))
-    (setf (forward? new-msg) (forward? msg)
+    (setf (forward-to new-msg) (forward-to msg)
           (reply-to new-msg) (reply-to msg))
     new-msg))
 
@@ -457,16 +464,6 @@ are in place between nodes.
        (unless node (error "No node attached to this actor!"))
        (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
          (deliver-gossip-msg gossip-msg node srcuid))))))
-
-#+OBSOLETE
-(defmethod gossip-dispatcher ((node proxy-gossip-node) &rest actor-msg)
-  "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
-  (let ((gossip-cmd (first actor-msg)))
-    (ecase gossip-cmd
-      (:gossip ; no other kinds can go across the net. Unless we have a use for that in future.
-       (unless node (error "No node attached to this actor!"))
-       (destructuring-bind (srcuid gossip-msg) (cdr actor-msg)
-         (transmit-msg gossip-msg node srcuid))))))
 
 (defmethod make-gossip-actor ((node t))
   (make-instance 'gossip-actor
@@ -825,9 +822,6 @@ dropped on the floor.
                (briefname msg)
                args)))))
 
-(defun debug-log (&rest args)
-  (vector-push-extend args *log*))
-
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
 
@@ -837,14 +831,21 @@ dropped on the floor.
 
 (defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 
-(defvar *log* (new-log) "Log of simulated actions.")
+(defvar *log* (new-log) "Log of gossip actions.")
+(defvar *log-actor* (ac:make-actor (lambda (&rest logmsg) (vector-push-extend logmsg *log*)))
+  "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
 
 (defun default-logging-function (logcmd nodename msgname &rest args)
-  (let ((logmsg (if msgname
-                    (list* logcmd nodename msgname args)
-                    (list logcmd nodename))))
-    (vector-push-extend logmsg *log*)
+  (let* ((usec (usec::get-universal-time-usec)) ; important to do this before calling ac:send so it's most accurate
+         (logmsg (if msgname
+                    (list* usec logcmd nodename msgname args)
+                    (list usec logcmd nodename))))
+    (apply 'ac:send *log-actor* logmsg)
     logmsg))
+
+(defun debug-log (&rest args)
+  "Freeform version of default-logging-function"
+  (apply 'ac:send *log-actor* (cons (usec::get-universal-time-usec) args)))
 
 (defun interactive-logging-function (logcmd nodename msgname &rest args)
   "Use this logging function for interactive debugging. You'll probably only want to use this
@@ -866,7 +867,7 @@ dropped on the floor.
    before #'neighbors connectivity has been established."
   (let ((no-forward-msg (copy-message msg))
         (nodes (listify-nodes)))
-    (setf (forward? no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
+    (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
     (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
     (forward msg srcuid nodes)))
 
@@ -1106,11 +1107,11 @@ dropped on the floor.
   (let ((soluid (uid msg)))
     (lambda (timed-out-p)
       "Cleanup operations if timeout happens, or all expected replies come in. This won't hurt anything
-       if no cleanup was necessary, but it's a waste of time."
+      if no cleanup was necessary, but it's a waste of time."
       (let ((timer (kvs:lookup-key (timers node) soluid)))
         (cond (timed-out-p
                ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-               (maybe-log node :DONE-WAITING-TIMEOUT msg))
+               (maybe-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
               (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                (cond (timer
                       (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
@@ -1146,11 +1147,14 @@ dropped on the floor.
         (t ; log an error and do nothing
          (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
 
-(defmethod more-replies-expected? ((node gossip-node) soluid)
-  "Utility function. Can be called by message handlers."
+(defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
+  "Utility function. Can be called by message handlers.
+   If whichones is true, returns not just true but an actual list of expected repliers [or nil if none]."
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (when interim-table
-      (not (zerop (hash-table-count interim-table))))))
+      (if whichones
+          (loop for key being each hash-key of interim-table collect key)
+          (not (zerop (hash-table-count interim-table)))))))
 
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. The sender of this message will be thisnode itself"
@@ -1178,7 +1182,7 @@ dropped on the floor.
   (let ((content (first (args msg))))
     (declare (ignore content))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
@@ -1190,7 +1194,7 @@ dropped on the floor.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 (defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
@@ -1202,7 +1206,7 @@ dropped on the floor.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate-unique (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 (defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
@@ -1214,7 +1218,7 @@ dropped on the floor.
   (let ((key (first (args msg))))
     (kvs:remove-key! (local-kvs thisnode) key)
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 (defmethod gossip-tally ((msg solicitation) thisnode srcuid)
   "Increment the value of a given key by an increment amount.
@@ -1224,7 +1228,7 @@ dropped on the floor.
         (increment (second (args msg))))
     (setf (local-kvs thisnode) (kvs:tally (local-kvs thisnode) key increment))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 ;;; TODO: add this to key-value-store
 (defmethod tally-nondestructive ((store list) key amount &key (test #'equal))
@@ -1261,7 +1265,7 @@ dropped on the floor.
   "Generic handler for solicitations requiring replies (SRRs)"
   (let* ((kind (kind msg))
          (soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid (forward? msg))) ; don't forward to the source of this solicitation
+         (downstream (get-downstream thisnode srcuid (forward-to msg))) ; don't forward to the source of this solicitation
          (timer nil)
          (cleanup (make-timeout-handler thisnode msg kind)))
     (flet ((initialize-reply-cache ()
@@ -1415,13 +1419,13 @@ dropped on the floor.
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))
+  ;(forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))
   ; wait a finite time for all replies
   )
 
 (defmethod find-node-with-address ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to reverse DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid (forward? msg)))
+  ;(forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))
   ; wait a finite time for all replies
   )
 
@@ -1450,7 +1454,7 @@ dropped on the floor.
            (maybe-log srcnode :FINALREPLY (briefname soluid "sol") data)
            (funcall where-to-send-reply reply))
           ((null where-to-send-reply)
-           (maybe-log srcnode :NO-REPLY-DESTINATION (briefname soluid "sol") data))
+           (maybe-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
           (t (error "Invalid destination")))))
 
 (defun coalesce&replyupstream (thisnode reply-kind soluid)
@@ -1663,21 +1667,22 @@ gets sent back, and everything will be copacetic.
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
   "Actions to take when a replier should be canceled.
-  If no more repliers, must reply upstream with final reply.
-  If more repliers, reply upstream either immediately or after a yield period with an interim-reply."
+  If no more repliers, reply upstream with final reply.
+  If more repliers, reply upstream either immediately or after a yield period with an interim-reply.
+  Returns true if a [now-cancelled] reply had been expected from soluid/srcuid."
   (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
     (cond (no-more-repliers
            (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
-             (when timeout-handler ; will be nil for messages that don't expect a reply
-               (funcall timeout-handler nil))))
+             (if timeout-handler ; will be nil for messages that don't expect a reply
+               (funcall timeout-handler nil)
+               (maybe-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
           (t ; more repliers are expected
            ; functionally coalesce all known data and send it upstream as another interim reply
            (if *delay-interim-replies*
                (send-delayed-interim-reply thisnode reply-kind soluid)
                (let ((upstream-source (get-upstream-source thisnode soluid)))
                  (send-interim-reply thisnode reply-kind soluid upstream-source)))))
-    was-present?
-    ))
+    was-present?))
 
 ;;;; END OF REPLY SUPPORT ROUTINES
 
@@ -2007,14 +2012,19 @@ gets sent back, and everything will be copacetic.
   "This node is a standin for a remote node. Transmit message across network."
    (transmit-msg gossip-msg node srcuid))
 
+(defun archive-log ()
+  "Archive existing *log* and start a new one.
+   This function is not thread-safe, so don't call it if any actors might be using the log."
+  (vector-push-extend *log* *archived-logs*)
+  (setf *log* (new-log)))
+
 (defun run-gossip-sim (&optional (protocol :UDP))
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
   (shutdown-gossip-server t)
-  (vector-push-extend *log* *archived-logs*)
-  (setf *log* (new-log))
+  (archive-log)
   (sleep .5)
   (start-gossip-server protocol)
   (maphash (lambda (uid node)
@@ -2023,6 +2033,20 @@ gets sent back, and everything will be copacetic.
              (clear-caches node))
            *nodes*)
   (hash-table-count *nodes*))
+
+(defun measure-timing (logcmd &optional (log *log*))
+  "Returns maximum time elapsed between first log entry [of any type] and last of type logcmd.
+   It's a good idea to call #'archive-log before using this to ensure you start with a fresh log.
+   Assumes first element of every log entry is a timestamp with microsecond resolution."
+  (let ((lastpos (position logcmd log :from-end t :key 'second)))
+    (when lastpos
+      (/ (- (first (elt log lastpos))
+            (first (elt log 0)))
+         1e6))))
+; Ex:
+; (archive-log)
+; (solicit-wait <something>)
+; (measure-timing :finalreply)
 
 ; (make-graph 10)
 ; (save-graph-to-file "tests/10nodes2.lisp")
