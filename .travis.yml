@@ -23,18 +23,9 @@ env:
     - secure: "cy6upz+HzZpANMprrw4hLx0APyBGfcxSivPQxwC+MIwDIs96Z6ZTRYf0Ska+sHO8y4SqGn/TQSkiAr7bdWeX9N0C4n9nH3/cLP9DulJn0/C+uGhO4Kuw+uqIKuEBiuOIdJdvxI8snhRxjVgsswq8Pr/T80mj1rxCxn1Zy7uYuDdSm7ZyIz7IA6NdwJE3X2o2ysGl7cjce7MQtAQ41Qy5J6Xo2vODnpBERaIvW7C5FSAio1Y/717XYdz/2jKHHFGGkdZLku4iqlFE+ovE6zXzo3SWiJ50b/ErQm0gSNmV54IjG4+gp9pXLfH5U7MKnJ8i96r1l4QguCO98/YuEFtqmkOPqJzmxQZAm4KeKpJBrVPD/cGmzqXbznsY4b5WIJ1L2TyurseElhzCFbkKUGcPDl1JipUMGfi/zTjQGibMgml1JPdPVzIUxPmTYcFB+7zgVOc2+M3KX5nk8Rt7OC5kJ+vEVtDmjEjRAUWiZSGZKOJXkEVOmG7m0SULifwYjVGy3ap1htQe3AK+Y3Bv/Dy+0ULbcyhx4zwFDLlnZ+5Zq6IPN7RUQiXqqCYVopPU7Z3psjJjTY96BiPQWvNZUwlP0Uyhae/XIC8f0U/LZKHTCbR/JGnE6EVpbziU0mQ/RKgMZgcF0ca68CTAirqQ72DJqeoscVxKMBxF724oHAfgHfs="
 
   matrix:
-    - LISP=lispworks-bin
-    - LISP=ccl-bin/1.11.5
-# Uncomment to enable the build farm resource to be spent on
-# implementations that might actually produce useful results.
-#    - LISP=sbcl-bin
-#    - LISP=abcl-bin
-# Non-binary distributions need to be built from source, which
-# currently times out for the Travis CI builds we are currently paying
-# for.
-#    - LISP=ecl
-#    - LISP=clisp
-#    - LISP=clasp
+    - LISP=lispworks
+    - LISP=ccl
+    - LISP=sbcl
 
 install:
   - ci/install-lisp.sh
@@ -62,8 +53,6 @@ install:
 #   (uiop:quit (not (zerop status))
 #
 script:
-  - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
-  - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
   - systems=":cosi-bls-tests
              :gossip-tests";
       systems=${systems} bash etc/test-harness.bash
