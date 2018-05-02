@@ -641,6 +641,8 @@ we are done. Else re-probe with (X^2 + 1)."
                              y
                            (m- y))))
                 (or (ed-valid-point-p
+                     ;; Watch out! This multiply by cofactor is necessary
+                     ;; to prevent winding up in a small subgroup.
                      (ed-basic-mul (make-ecc-pt
                                     :x x
                                     :y y)

@@ -1082,5 +1082,35 @@ lock it to the recipient."
          (proofs (time (apply 'make-range-proofs 64 vals))))
     (assert (time (validate-range-proofs proofs)))
     proofs))
+
+(progn
+  (setf *bp-basis* nil)
+  (with-ed-curve :curve1174
+    ;; force init allocation of basis vectors
+    (let ((prf (make-range-proof 123456789)))
+      (time (loop repeat 10 do
+                  ;; (make-range-proof 123456789)
+                  (validate-range-proof prf)))
+      )))
+
+(let* ((bits '(251 382 414 521))
+       (gen  '(3.6 6.2 7.1 11))
+       (val  '(1.4 2.5 2.9 4.4)))
+  (plt:plot 'timings bits gen
+            :clear t
+            :ylog  t
+            :xrange '(200 600)
+            :yrange '(1 15)
+            :plot-joined t
+            :symbol :circle
+            :legend "Make BulletProof"
+            :title  "Timings for BulletProofs vs Curve Size"
+            :xtitle "Curve Size [bits]"
+            :ytitle "Time per BulletProof [sec]")
+  (plt:plot 'timings bits val
+            :color :red
+            :symbol :circle
+            :plot-joined t
+            :legend "Validate BulletProof"))
 |#
 
