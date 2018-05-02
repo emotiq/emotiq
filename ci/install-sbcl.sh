@@ -12,7 +12,7 @@ install_sbcl_linux() {
   (cd /tmp && \
     tar xvfj sbcl.bz2 && \
     cd sbcl-1.4.7-x86-64-linux && \
-    ./install.sh
+    sudo ./install.sh
   )
 }
 
