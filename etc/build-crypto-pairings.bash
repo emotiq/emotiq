@@ -16,18 +16,19 @@ set -x
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE=${DIR}/..
-VAR=${BASE}/var
-
+var=${BASE}/var
 
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
         echo Building for Linux
-        libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/release-0.1/libLispPBCIntf-linux.tgz
+        lib_suffix=linux
+        maketarget=makefile.linux
         ;;
     Darwin*)
         echo Building for macOS
-        libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/release-0.1/libLispPBCIntf-osx.tgz
+        lib_suffix=osx
+        maketarget=makefile.macos
         ;;
     *)
         maketarget=makefile.linux
@@ -36,6 +37,21 @@ case ${uname_s} in
         ;;
 esac
 
-mkdir -p ${VAR}/local
+libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/release-0.1.1/emotiq-external-libs-${lib_suffix}.tgz
 
-(cd ${VAR}/local && wget -O - ${libs_url} | tar xvfz -)
+mkdir -p ${var}/local
+
+(cd ${var}/local && wget -O - ${libs_url} | tar xvfz -)
+
+prefix=${var}/local
+lib=${prefix}/lib
+inc=${prefix}/include
+pbcintf=${BASE}/src/Crypto/PBC-Intf
+
+export CFLAGS=-I${inc}
+export CPPFLAGS=-I${inc}
+export CXXFLAGS=-I${inc}
+export LDFLAGS=-L${lib}
+
+cd ${pbcintf} && \
+    make --makefile=${maketarget} PREFIX=${prefix}
