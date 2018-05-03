@@ -34,6 +34,7 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------
 
+(defparameter *current-node*  nil)  ;; for sim = current node running
 
 (defun crash-recovery ()
   ;; just in case we need to re-make the Actors for the network
@@ -41,7 +42,6 @@ THE SOFTWARE.
              (declare (ignore k))
              (setf (node-self node) (make-node-dispatcher node)))
            *ip-node-tbl*))
-
 
 ;; -------------------------------------------------------
 ;; New leader node election... tree rearrangement
@@ -260,7 +260,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defvar *election-proof*   nil)
 (defvar *leader*           nil)
 
-(defvar *current-node*  nil)  ;; for sim = current node running
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
