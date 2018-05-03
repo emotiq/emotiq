@@ -132,7 +132,8 @@ the simple commitment to the uncloaked value"
 
 ;; ---------------------------------------------------------------------
 
-(defun make-transaction (txins gam-txins txouts txout-secrets fee)
+(defun make-transaction (txins gam-txins txouts txout-secrets
+                               &key (fee 0))
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
 some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
