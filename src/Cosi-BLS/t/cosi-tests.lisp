@@ -20,11 +20,12 @@
       (multiple-value-bind (utxo1 secr1) ;; sends
           (make-txout 750 pkeym)
         (multiple-value-bind (utxo2 secr2)
-            (make-txout 250 pkey)
+            (make-txout 240 pkey)
         
           (let ((trans (make-transaction `(,utxin) `(,info)
                                          `(,utxo1 ,utxo2)
-                                         `(,secr1 ,secr2))))
+                                         `(,secr1 ,secr2)
+                                         :fee 10)))
 
             (print "Validate transaction")
             (assert-true (validate-transaction trans)) ;; 7.6s MacBook Pro
@@ -42,11 +43,12 @@
                 (multiple-value-bind (utxo1 secr1) ;; sends
                     (make-txout 250 pkeym)
                   (multiple-value-bind (utxo2 secr2)
-                      (make-txout 500 pkey)
+                      (make-txout 490 pkey)
                   
                     (let ((trans (make-transaction `(,utxin) `(,info)
                                                    `(,utxo1 ,utxo2)
-                                                   `(,secr1 ,secr2))))
+                                                   `(,secr1 ,secr2)
+                                                   :fee 10)))
                       (print "Validate 2nd transaction")
                       (assert-true (validate-transaction trans))
                       )))))

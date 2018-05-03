@@ -775,6 +775,57 @@ check that each TXIN and TXOUT is mathematically sound."
         (wait))
       )))
 
+;; ------------------------------
+
+(defun gossip-neighborcast (node &rest msg)
+  "Gossip-neighborcast - send message to all nodes. Just a stub for now."
+  (declare (ignore node msg))
+  t)
+
+(=defun gossip-signing (node my-ip consensus-stage msg seq-id)
+  (cond ((int= (node-pkey node) *leader*)
+         ;; we are leader node, so fire off gossip spray and await answers
+         (let ((timeout  10
+                         ;; (* (node-load node) *default-timeout-period*)
+                         )
+               (ret-addr (make-return-addr my-ip))
+               (g-bits   0)
+               (g-sig    nil))
+
+           (print "Running Gossip Signing")
+           (gossip-neighborcast node :signing ret-addr consensus-stage msg seq-id)
+
+           (labels
+               ((=return (val)
+                  (unregister-return-addr ret-addr)
+                  (print "Return from Gossip Signing")
+                  (=values val))
+                
+                (wait ()
+                  (recv
+                    ((list :signed sub-seq sig bits)
+                     (when (and (eql sub-seq seq-id)
+                                sig
+                                (pbc:check-message sig))
+                       (setf g-bits (logior g-bits bits)
+                             g-sig  (if g-sig
+                                       (pbc:combine-signatures g-sig sig)
+                                     sig)))
+                     (wait))
+                    
+                    (_
+                     (wait))
+                    
+                    :TIMEOUT    timeout
+                    :ON-TIMEOUT (=return (list g-sig g-bits))
+                    )))
+             (wait))))
+
+        (t 
+         ;; else - not leader don't re-gossip request for signatures
+         (=values nil))
+        ))
+
 ;; -------------------------------------------------------
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
 ;; each different type of Cosi network... For now, just act as notary
@@ -855,9 +906,15 @@ check that each TXIN and TXOUT is mathematically sound."
                                 consensus-stage
                                 blk
                                 seq-id)
-                   subs))
+                   subs)
+          ;; gossip-mode group
+          (gossip-signing node
+                          (node-real-ip node)
+                          consensus-stage
+                          blk
+                          seq-id))
       (let ((*current-node* node))
-        (destructuring-bind ((sig bits) r-lst) ans
+        (destructuring-bind ((sig bits) r-lst g-ans) ans
           (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
@@ -867,7 +924,8 @@ check that each TXIN and TXOUT is mathematically sound."
                       
                       (t
                        (destructuring-bind (sub-sig sub-bits) resp
-                         (if (pbc:check-message sub-sig)
+                         (if (and sub-sig
+                                  (pbc:check-message sub-sig))
                              (setf sig  (if sig
                                             (pbc:combine-signatures sig sub-sig)
                                           sub-sig)
@@ -877,6 +935,7 @@ check that each TXIN and TXOUT is mathematically sound."
                          ))
                       )))
             (mapc #'fold-answer subs r-lst) ;; gather results from subs
+            (fold-answer node g-ans)
             (send reply-to :signed seq-id sig bits))
           )))))
 
@@ -911,7 +970,8 @@ bother factoring it with NODE-COSI-SIGNING."
                     
                     (t
                      (destructuring-bind (sub-sig sub-bits) resp
-                       (if (pbc:check-message sub-sig)
+                       (if (and sub-sig
+                                (pbc:check-message sub-sig))
                            (setf sig  (if sig
                                           (pbc:combine-signatures sig sub-sig)
                                         sub-sig)
@@ -1152,11 +1212,12 @@ bother factoring it with NODE-COSI-SIGNING."
                  (multiple-value-bind (utxo1 secr1) ;; sends
                      (make-txout 750 pkeym)
                    (multiple-value-bind (utxo2 secr2)
-                       (make-txout 250 pkey)
+                       (make-txout 240 pkey)
                      
                      (let ((trans (make-transaction `(,utxin) `(,info)
                                                     `(,utxo1 ,utxo2)
-                                                    `(,secr1 ,secr2))))
+                                                    `(,secr1 ,secr2)
+                                                    :fee 10)))
                        
                        ;; send TX to all nodes
                        (send-tx-to-all (setf *trans1* trans))
@@ -1174,11 +1235,12 @@ bother factoring it with NODE-COSI-SIGNING."
                            (multiple-value-bind (utxo1 secr1) ;; sends
                                (make-txout 250 pkeym)
                              (multiple-value-bind (utxo2 secr2)
-                                 (make-txout 500 pkey)
+                                 (make-txout 490 pkey)
                                
                                (let ((trans (make-transaction `(,utxin) `(,info)
                                                               `(,utxo1 ,utxo2)
-                                                              `(,secr1 ,secr2))))
+                                                              `(,secr1 ,secr2)
+                                                              :fee 10)))
                                  ;; send TX to all nodes
                                  (send-tx-to-all (setf *trans2* trans))
                                  ))))))
