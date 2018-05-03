@@ -1212,6 +1212,12 @@ Certification includes a BLS Signature on the public key."
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
 
+(defmethod add-sigs ((sig1 signature) (sig2 signature))
+  (change-class (mul-pts sig1 sig2) 'signature))
+
+(defmethod add-pkeys ((pkey1 public-key) (pkey2 public-key))
+  (change-class (mul-pts pkey1 pkey2) 'public-key))
+
 (defmethod combine-signatures ((sm1 signed-message) (sm2 signed-message))
   ;; BLS multi-signature is the product of the G1 and G2 elements
   ;; between them
@@ -1222,13 +1228,10 @@ Certification includes a BLS Signature on the public key."
                      (pkey2 signed-message-pkey)) sm2
       ;; no point combining signatures unless the message was the
       ;; same for both...
-      (unless (and (typep sig1 'signature)
-                   (typep sig2 'signature))
-        (error "Cannot combine subkey signatures"))
       (make-instance 'signed-message
                      :msg  msg1
-                     :sig  (change-class (mul-pts sig1 sig2)   'signature)
-                     :pkey (change-class (mul-pts pkey1 pkey2) 'public-key))
+                     :sig  (add-sigs sig1 sig2)
+                     :pkey (add-pkeys pkey1 pkey2))
       )))
 
 ;; ------------------------------------------------------
