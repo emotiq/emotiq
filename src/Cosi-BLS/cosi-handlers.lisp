@@ -777,32 +777,39 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------
 
+(defun gossip-neighborcast (node &rest msg)
+  "Gossip-neighborcast - send message to all nodes. Just a stub for now."
+  (declare (ignore node msg))
+  t)
+
 (=defun gossip-signing (node my-ip consensus-stage msg seq-id)
   (cond ((int= (node-pkey node) *leader*)
          ;; we are leader node, so fire off gossip spray and await answers
-         (let ((timeout  30
+         (let ((timeout  10
                          ;; (* (node-load node) *default-timeout-period*)
                          )
                (ret-addr (make-return-addr my-ip))
-               (gbits    0)
-               (gsig     nil))
-           
-           ;; uncomment when this gets resolved
-           ;; (gossip:neighborcast :signing ret-addr consensus-stage msg seq-id)
+               (g-bits   0)
+               (g-sig    nil))
+
+           (print "Running Gossip Signing")
+           (gossip-neighborcast node :signing ret-addr consensus-stage msg seq-id)
 
            (labels
                ((=return (val)
                   (unregister-return-addr ret-addr)
+                  (print "Return from Gossip Signing")
                   (=values val))
                 
                 (wait ()
                   (recv
                     ((list :signed sub-seq sig bits)
                      (when (and (eql sub-seq seq-id)
+                                sig
                                 (pbc:check-message sig))
-                       (setf gbits (logior gbits bits)
-                             gsig  (if gsig
-                                       (pbc:combine-signatures gsig sig)
+                       (setf g-bits (logior g-bits bits)
+                             g-sig  (if g-sig
+                                       (pbc:combine-signatures g-sig sig)
                                      sig)))
                      (wait))
                     
@@ -810,7 +817,7 @@ check that each TXIN and TXOUT is mathematically sound."
                      (wait))
                     
                     :TIMEOUT    timeout
-                    :ON-TIMEOUT (=return (list gsig gbits))
+                    :ON-TIMEOUT (=return (list g-sig g-bits))
                     )))
              (wait))))
 
@@ -917,7 +924,8 @@ check that each TXIN and TXOUT is mathematically sound."
                       
                       (t
                        (destructuring-bind (sub-sig sub-bits) resp
-                         (if (pbc:check-message sub-sig)
+                         (if (and sub-sig
+                                  (pbc:check-message sub-sig))
                              (setf sig  (if sig
                                             (pbc:combine-signatures sig sub-sig)
                                           sub-sig)
@@ -927,14 +935,7 @@ check that each TXIN and TXOUT is mathematically sound."
                          ))
                       )))
             (mapc #'fold-answer subs r-lst) ;; gather results from subs
-            (when g-ans
-              (destructuring-bind (g-sig g-bits) g-ans
-                (when (and g-sig
-                           (pbc:check-message g-sig))
-                  (setf sig (if sig
-                                (pbc:combine-signatures sig g-sig)
-                              g-sig)
-                        bits (logior bits g-bits)))))
+            (fold-answer node g-ans)
             (send reply-to :signed seq-id sig bits))
           )))))
 
@@ -969,7 +970,8 @@ bother factoring it with NODE-COSI-SIGNING."
                     
                     (t
                      (destructuring-bind (sub-sig sub-bits) resp
-                       (if (pbc:check-message sub-sig)
+                       (if (and sub-sig
+                                (pbc:check-message sub-sig))
                            (setf sig  (if sig
                                           (pbc:combine-signatures sig sub-sig)
                                         sub-sig)
