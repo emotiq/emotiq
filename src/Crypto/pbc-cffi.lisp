@@ -47,11 +47,14 @@ THE SOFTWARE.
    :secret-key
    :secret-key-val
    :signature
+   :subkey-signature
    :signature-val
    :pairing
    :pairing-val
    :crypto-text
    :crypto-text-vec
+   :public-subkey
+   :secret-subkey
    
    :init-pairing
    :need-pairing
@@ -319,24 +322,38 @@ Usually, they are in big-endian representation for PBC library."
 
 (defclass g1-cmpr (crypto-val)
   ((val :reader g1-cmpr-pt
-       :initarg  :pt)
-   )
+        :initarg  :pt))
   (:documentation "Wrapper for compressed points from G1 group"))
 
 (defclass signature (g1-cmpr)
   ((val :reader signature-val
-       :initarg  :val))
+        :initarg  :val))
   (:documentation "Wrapper for signatures computed in G1"))
+
+(defclass subkey-signature (g1-cmpr)
+  ((val :reader signature-val
+        :initarg  :val))
+  (:documentation "Wrapper for subkey signatures computed in G1"))
+
+(defclass secret-subkey (g1-cmpr)
+  ((val :reader secret-subkey-val
+        :initarg  :val))
+  (:documentation "Wrapper for secret subkeys in G1"))
 
 (defclass g2-cmpr (crypto-val)
   ((val  :reader g2-cmpr-pt
-        :initarg  :pt))
+         :initarg  :pt))
   (:documentation "Wrapper for compressed points in G2 group"))
 
 (defclass public-key (g2-cmpr)
   ((val  :reader public-key-val
-        :initarg  :val))
+         :initarg  :val))
   (:documentation "Wrapper for public keys in G2 group"))
+
+(defclass public-subkey (g2-cmpr)
+  ((val  :reader public-subkey-val
+         :initarg  :val))
+  (:documentation "Wrapper for public subkeys in G2 group"))
 
 (defclass gt (crypto-val)
   ((val  :reader  gt-val
@@ -883,6 +900,12 @@ library."
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
 
+(defmethod sign-hash ((hash hash) (skey secret-subkey))
+  "Bare-bones BLS Signature on subkeying"
+  (make-instance 'subkey-signature
+                 :val (expt-pt-zr skey (zr-from-hash hash))))
+
+
 (defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   "Check bare-bones BLS Signature"
   (need-pairing)
@@ -892,6 +915,14 @@ library."
                        (pbuf *g2-size*  pkey))
       (zerop (_check-signature sbuf hbuf nhash pbuf))
       )))
+
+(defmethod check-hash ((hash hash) (sig subkey-signature) (pkey public-subkey))
+  "Check bare-bones BLS Signature on subkeying"
+  (need-pairing)
+  (let* ((p1  (compute-pairing sig pkey))
+         (h   (zr-from-hash hash))
+         (p2  (compute-pairing (expt-pt-zr (get-g1) h) (get-g2))))
+    (= (int p1) (int p2))))
 
 ;; --------------------------------------------------------------
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
@@ -965,7 +996,7 @@ Certification includes a BLS Signature on the public key."
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
       (_make-public-subkey abuf pbuf hbuf hlen)
-      (make-instance 'public-key
+      (make-instance 'public-subkey
                      :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
@@ -974,7 +1005,7 @@ Certification includes a BLS Signature on the public key."
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
       (_make-secret-subkey abuf sbuf hbuf hlen)
-      (make-instance 'secret-key
+      (make-instance 'secret-subkey
                      :val (xfer-foreign-to-lisp abuf *g1-size*)))))
 
 ;; --------------------------------------------------------------
@@ -1191,6 +1222,9 @@ Certification includes a BLS Signature on the public key."
                      (pkey2 signed-message-pkey)) sm2
       ;; no point combining signatures unless the message was the
       ;; same for both...
+      (unless (and (typep sig1 'signature)
+                   (typep sig2 'signature))
+        (error "Cannot combine subkey signatures"))
       (make-instance 'signed-message
                      :msg  msg1
                      :sig  (change-class (mul-pts sig1 sig2)   'signature)
