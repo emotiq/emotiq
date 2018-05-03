@@ -775,6 +775,50 @@ check that each TXIN and TXOUT is mathematically sound."
         (wait))
       )))
 
+;; ------------------------------
+
+(=defun gossip-signing (node my-ip consensus-stage msg seq-id)
+  (cond ((int= (node-pkey node) *leader*)
+         ;; we are leader node, so fire off gossip spray and await answers
+         (let ((timeout  30
+                         ;; (* (node-load node) *default-timeout-period*)
+                         )
+               (ret-addr (make-return-addr my-ip))
+               (gbits    0)
+               (gsig     nil))
+           
+           ;; uncomment when this gets resolved
+           ;; (gossip:neighborcast :signing ret-addr consensus-stage msg seq-id)
+
+           (labels
+               ((=return (val)
+                  (unregister-return-addr ret-addr)
+                  (=values val))
+                
+                (wait ()
+                  (recv
+                    ((list :signed sub-seq sig bits)
+                     (when (and (eql sub-seq seq-id)
+                                (pbc:check-message sig))
+                       (setf gbits (logior gbits bits)
+                             gsig  (if gsig
+                                       (pbc:combine-signatures gsig sig)
+                                     sig)))
+                     (wait))
+                    
+                    (_
+                     (wait))
+                    
+                    :TIMEOUT    timeout
+                    :ON-TIMEOUT (=return (list gsig gbits))
+                    )))
+             (wait))))
+
+        (t 
+         ;; else - not leader don't re-gossip request for signatures
+         (=values nil))
+        ))
+
 ;; -------------------------------------------------------
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
 ;; each different type of Cosi network... For now, just act as notary
@@ -855,9 +899,15 @@ check that each TXIN and TXOUT is mathematically sound."
                                 consensus-stage
                                 blk
                                 seq-id)
-                   subs))
+                   subs)
+          ;; gossip-mode group
+          (gossip-signing node
+                          (node-real-ip node)
+                          consensus-stage
+                          blk
+                          seq-id))
       (let ((*current-node* node))
-        (destructuring-bind ((sig bits) r-lst) ans
+        (destructuring-bind ((sig bits) r-lst g-ans) ans
           (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
@@ -877,6 +927,14 @@ check that each TXIN and TXOUT is mathematically sound."
                          ))
                       )))
             (mapc #'fold-answer subs r-lst) ;; gather results from subs
+            (when g-ans
+              (destructuring-bind (g-sig g-bits) g-ans
+                (when (and g-sig
+                           (pbc:check-message g-sig))
+                  (setf sig (if sig
+                                (pbc:combine-signatures sig g-sig)
+                              g-sig)
+                        bits (logior bits g-bits)))))
             (send reply-to :signed seq-id sig bits))
           )))))
 
