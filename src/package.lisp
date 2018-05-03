@@ -59,3 +59,24 @@
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
+
+(defpackage emotiq/config
+  (:use #:cl)
+
+  (:export
+   #:*keypair-db-file*
+   #:*hosts-db-file*
+   #:*pubkeys-db-file*
+   #:*gossip-db-file*
+
+   #:make-key-integers
+   #:make-keypairs-conf
+   #:read-keypairs-conf
+
+   #:make-pubkeys-conf
+   #:lookup-private-key
+
+   #:read-hosts-conf))
+
+  
+  
