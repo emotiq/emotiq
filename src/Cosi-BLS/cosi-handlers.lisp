@@ -34,81 +34,6 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------
 
-(defvar *current-node*  nil)  ;; for sim = current node running
-
-(defun node-dispatcher (node &rest msg)
-  (let ((*current-node* node))
-    (um:dcase msg
-      ;; ----------------------------
-      ;; user accessible entry points - directed to leader node
-      
-      (:cosi-sign-prepare (reply-to msg)
-       (node-compute-cosi node reply-to :prepare msg))
-      
-      (:cosi-sign-commit (reply-to msg)
-       (node-compute-cosi node reply-to :commit msg))
-      
-      (:cosi-sign (reply-to msg)
-       (node-compute-cosi node reply-to :notary msg))
-      
-      (:new-transaction (msg)
-       (node-check-transaction msg))
-      
-      (:validate (reply-to sig bits)
-       (node-validate-cosi reply-to sig bits))
-      
-      (:public-key (reply-to)
-       (reply reply-to :pkey+zkp (node-pkeyzkp node)))
-      
-      (:add/change-node (new-node-info)
-       (node-insert-node node new-node-info))
-      
-      (:remove-node (node-ip)
-       (node-remove-node node node-ip))
-      
-      (:election (new-leader-ip)
-       (node-elect-new-leader new-leader-ip))
-      
-      ;; -------------------------------
-      ;; internal comms between Cosi nodes
-      
-      (:signing (reply-to consensus-stage msg seq)
-       (case consensus-stage
-         (:notary 
-          (node-cosi-notary-signing node reply-to
-                                    consensus-stage msg seq))
-         (otherwise
-          (node-cosi-signing node reply-to
-                             consensus-stage msg seq))
-         ))
-      
-      ;; -----------------------------------
-      ;; for sim and debug
-      
-      (:make-block ()
-       (leader-exec node))
-
-      (:genesis-utxo (utxo)
-       (record-new-utxo (bev (txout-hashlock utxo))))
-      
-      (:answer (&rest msg)
-       ;; for round-trip testing
-       (ac:pr msg))
-      
-      (t (&rest msg)
-         (error "Unknown message: ~A~%Node: ~A" msg (node-ip node)))
-      )))
-  
-;; -------------------------------------------------------
-
-(defun make-node-dispatcher (node)
-  ;; use indirection to node-dispatcher for while we are debugging and
-  ;; extending the dispatcher. Saves reconstructing the tree every
-  ;; time the dispatching chanages.
-  (ac:make-actor
-   ;; one of these closures is stored in the SELF slot of every node
-   (lambda (&rest msg)
-     (apply 'node-dispatcher node msg))))
 
 (defun crash-recovery ()
   ;; just in case we need to re-make the Actors for the network
@@ -335,10 +260,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defvar *election-proof*   nil)
 (defvar *leader*           nil)
 
-(define-symbol-macro *blockchain*     (node-blockchain *current-node*))
-(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
-(define-symbol-macro *mempool*        (node-mempool *current-node*))
-(define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
+(defvar *current-node*  nil)  ;; for sim = current node running
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
@@ -381,10 +303,10 @@ Later it may become an ADS structure"
 ;; testing-version transaction cache
 
 (defmethod cache-transaction ((key bev) val)
-  (setf (gethash (bev-vec key) *mempool*) val))
+  (setf (gethash (bev-vec key) (node-mempool *current-node*)) val))
 
 (defmethod remove-tx-from-mempool ((key bev))
-  (remhash (bev-vec key) *mempool*))
+  (remhash (bev-vec key) (node-mempool *current-node*)))
 
 (defmethod remove-tx-from-mempool ((tx transaction))
   (remove-tx-from-mempool (bev (hash/256 tx))))
@@ -401,29 +323,29 @@ transactions."
 ;; testing-version TXOUT log
 
 (defmethod lookup-utxo  ((key bev))
-  (gethash (bev-vec key) *utxo-table*))
+  (gethash (bev-vec key) (node-utxo-table *current-node*)))
 
 (defmethod record-new-utxo ((key bev))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
   (let ((vkey (bev-vec key)))
     (multiple-value-bind (x present-p)
-        (gethash vkey *utxo-table*)
+        (gethash vkey (node-utxo-table *current-node*))
       (declare (ignore x))
       (when present-p
         (error "Shouldn't Happen: Effective Hash Collision!!!"))
-      (setf (gethash vkey *utxo-table*) :spendable))))
+      (setf (gethash vkey (node-utxo-table *current-node*)) :spendable))))
 
 (defmethod record-new-utxo ((txout txout))
   (record-new-utxo (bev (txout-hashlock txout))))
 
 
 (defmethod record-utxo ((key bev) val)
-  (setf (gethash (bev-vec key) *utxo-table*) val))
+  (setf (gethash (bev-vec key) (node-utxo-table *current-node*)) val))
 
 
 (defmethod remove-utxo ((key bev))
-  (remhash (bev-vec key) *utxo-table*))
+  (remhash (bev-vec key) (node-utxo-table *current-node*)))
 
 (defmethod remove-utxo ((txin txin))
   (remove-utxo (bev (txin-hashlock txin))))
@@ -566,7 +488,7 @@ topo-sorted partial order"
     (maphash (lambda (k tx)
                (declare (ignore k))
                (push tx txs))
-             *mempool*)
+             (node-mempool *current-node*))
     (let ((trimmed (topo-sort txs)))
       (dolist (tx (set-difference txs trimmed))
         ;; remove invalid transactions whose inputs refer to future
@@ -821,8 +743,8 @@ check that each TXIN and TXOUT is mathematically sound."
                                                              :pkey (bc-block-signature-pkey blk)
                                                              :sig  (bc-block-signature      blk)))
                            )))
-         (push blk *blockchain*)
-         (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
+         (push blk (node-blockchain *current-node*))
+         (setf (gethash (bc-block-hash blk) (node-blockchain-tbl *current-node*)) blk)
          ;; clear out *mempool* and spent utxos
          (dolist (tx (get-block-transactions blk))
            (remove-tx-from-mempool tx)
@@ -971,12 +893,12 @@ bother factoring it with NODE-COSI-SIGNING."
   (print "Assemble new block")
   (let ((new-block (make-bc-block
                     :protocol-version *protocol-version*
-                    :epoch            (if *blockchain*
-                                          (1+ (bc-block-epoch (first *blockchain*)))
+                    :epoch            (if (node-blockchain *current-node*)
+                                          (1+ (bc-block-epoch (first (node-blockchain *current-node*))))
                                         0)
                     :timestamp        (uuid:make-v1-uuid)
-                    :prev-block-hash  (and *blockchain*
-                                           (bc-block-hash (first *blockchain*)))
+                    :prev-block-hash  (and (node-blockchain *current-node*)
+                                           (bc-block-hash (first (node-blockchain *current-node*))))
                     :election-proof   (base58 *election-proof*)
                     :leader-pkey      (base58 *leader*)
                     :witnesses        (map 'vector (um:compose 'base58 'node-pkey) *node-bit-tbl*)

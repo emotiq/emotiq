@@ -9,33 +9,12 @@
   (cosi-init ipstr)
   (cosi-generate)
   (init-sim)
-  (reset-blockchain)
+  (tst-blk)
 
-  (let ((node (start-node)))
+  (emotiq/cli:main)
     
-    (with-wallet (wallet (emotiq/cli::open-wallet name))
-
-      (let ((blk (create-fresh-block node)))
-        (add-genesis-utxo-to-block blk 1000)
-        (spend-genesis blk 1000 genesis-utxo wallet)
-        (seal-block blk)
-        (send-block-to-blockchain blk)))
-      
-      ;; at this point, the wallet should hold all 1000 Emtq's (unspent)
-      ;; given to it by the genesis utxo
-
-      )
-    
-    (emotiq/cli:wallet-at-command-line "Alice")
-    
-    )
   )
 
-
-
-
-(defun start-node ()
-  (spawn 
 
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
@@ -111,4 +90,3 @@
    (lambda (&rest msg)
      (apply 'node-dispatcher node msg))))
 
-  
