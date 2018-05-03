@@ -221,6 +221,9 @@ are in place between nodes.
 (defun uid? (thing)
   (integerp thing))
 
+(defun uid= (thing1 thing2)
+  (eql thing1 thing2))
+
 (defclass uid-mixin ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
         :documentation "Unique ID. These are assumed to become larger over time and not be random: They
@@ -403,9 +406,10 @@ are in place between nodes.
    (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
                       :accessor repliers-expected
                       :documentation "2-level Hash-table mapping a solicitation id to another hashtable of srcuids
-                     that I expect to reply to that solicitation. Values in second hashtable are interim replies
+                     that I expect to reply to that solicitation. Values in second hashtable are either interim replies
                      that have been received from that srcuid for the given solicitation id.
-                     Only accessed from this node's actor thread. No locking needed.")
+                     Only accessed from this node's actor thread. No locking needed.
+                     See Note B below for more info.")
    (reply-cache :initarg :reply-cache :initform (kvs:make-store ':hashtable :test 'equal)
                :accessor reply-cache
                :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
@@ -675,8 +679,8 @@ dropped on the floor.
                             :args args))
              (soluid (uid solicitation)))
         (send-msg solicitation
-                  uid      ; destination
-                  #'final-continuation)     ; srcuid
+                  uid                   ; destination
+                  #'final-continuation) ; srcuid. Note that nodes that are instructed to reply-to themselves will instead send the reply upstream
         (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
                                                        (lambda () response))))
           (values 
@@ -702,6 +706,38 @@ dropped on the floor.
                 uid      ; destination
                 nil)     ; srcuid
       soluid)))
+
+#+LATER-ACTORS ; not working ATM. Figure it out later.
+(defun solicit-wait (mbox node kind &rest args)
+  "Like solicit but waits for a reply. Only works for :UPSTREAM replies.
+  Don't use this on messages that don't expect a reply, because it'll wait forever."
+  (unless node
+    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
+  (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
+                  (uid node)
+                node))
+         (solicitation (make-solicitation
+                        :reply-to :UPSTREAM
+                        :kind kind
+                        :args args))
+         (soluid (uid solicitation))
+         (me (ac:current-actor)))
+    (send-msg solicitation
+              uid      ; destination
+              me)
+    (ac:recv
+      ((list reply)
+       (ac:send mbox (list (first (args reply)) soluid)))
+
+      :ON-TIMEOUT (ac:send mbox (list :TIMEOUT soluid))
+      :TIMEOUT *max-seconds-to-wait*)))
+
+#+LATER-ACTORS ; not working ATM. Figure it out later.
+(defun test-solicit-wait (node kind &rest args)
+  (let ((mbox   (mpcompat:make-mailbox)))
+    (apply 'ac:spawn 'solicit-wait mbox node kind args)
+    (mpcompat::mailbox-read mbox)))
+; (test-solicit-wait (first (listify-nodes)) :list-alive)
 
 (defun solicit-wait (node kind &rest args)
   "Like solicit but waits for a reply. Only works for :UPSTREAM replies.
@@ -927,11 +963,13 @@ dropped on the floor.
         (cond (kindsym
                (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
                  (cond (interim-table
-                        (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
-                          (declare (ignore val))
-                          (if present-p
-                              kindsym
-                              (values nil :unexpected-1))))
+                        (if (eql :ANONYMOUS interim-table) ; accept replies from any srcuid
+                            kindsym
+                            (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+                              (declare (ignore val))
+                              (if present-p
+                                  kindsym
+                                  (values nil :unexpected-1)))))
                        (t (values nil :unexpected-2)))))
               (t (values nil failure-reason))))))
 
@@ -1054,27 +1092,6 @@ dropped on the floor.
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
 
-; NOTE A:
-; If node X is ignoring a solicitation* from node Y because it already
-; saw that solicitation, then it must also not expect a reply from node Y
-; for that same solicitation.
-; Here's why [In this scenario, imagine #'locally-receive-msg is acting on behalf of node X]:
-; If node X ignores a solicition from node Y -- because it's already seen that solicitation --
-;   then X knows the following:
-;   1. Node Y did not receive the solicition from X. It must have received it from somewhere else,
-;      because nodes *never* forward messages to their upstream.
-;   2. Therefore, if X forwards (or forwarded) the solicitation to Y, Y
-;      is definitely going to ignore it. Because Y has already seen it.
-;   3. Therefore (to recap) if X just ignored a solicitation from Y, then X
-;      knows Y is going to ignore that same solicitation from X.
-;   4. THEREFORE: X must not expect Y to respond, and that's why
-;      we call cancel-replier here. If we don't do this, Y will ignore
-;      and X will eventually time out, which it doesn't need to do.
-;   5. FURTHERMORE: Y knows X knows this. So it knows X will stop waiting for it.
-;
-; * we take no special action for non-solicitation messages because they can't
-;   ever be replied to anyway.
-
 (defmethod locally-receive-msg ((msg t) (thisnode proxy-gossip-node) srcuid)
   (declare (ignore srcuid))
   (error "Bug: Cannot locally-receive to a proxy node!"))
@@ -1120,7 +1137,7 @@ dropped on the floor.
                      (t ; note: Following log message doesn't necessarily mean anything is wrong.
                       ; If node is singly-connected to the graph, it's to be expected
                       (maybe-log node :NO-TIMER-FOUND msg)))))
-        (coalesce&replyupstream node kind soluid)))))
+        (coalesce&reply (reply-to msg) node kind soluid)))))
 
 (defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
   "Prepare reply tables for given node, solicitation uid, and set of downstream repliers."
@@ -1149,12 +1166,14 @@ dropped on the floor.
 
 (defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
   "Utility function. Can be called by message handlers.
-   If whichones is true, returns not just true but an actual list of expected repliers [or nil if none]."
+  If whichones is true, returns not just true but an actual list of expected repliers [or nil if none]."
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (when interim-table
-      (if whichones
-          (loop for key being each hash-key of interim-table collect key)
-          (not (zerop (hash-table-count interim-table)))))))
+      (if (eql :ANONYMOUS interim-table)
+          nil
+          (if whichones
+              (loop for key being each hash-key of interim-table collect key)
+              (not (zerop (hash-table-count interim-table))))))))
 
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. The sender of this message will be thisnode itself"
@@ -1273,9 +1292,8 @@ dropped on the floor.
              (kvs:relate-unique! (reply-cache thisnode) soluid (initial-reply-value kind thisnode (args msg))))
            
            (must-coalesce? ()
-             "Returns true if we might expect repliers. (The only reason we wouldn't is
-             if there are no downstream nodes to forward the message to.)
-             If nil, there is no possibility of repliers."
+             "Returns true if this node must coalesce any incoming replies.
+             If nil, there is no possibility of repliers, so no coalescence is needed."
              (or (eql :UPSTREAM (reply-to msg))
                  (and (uid? (reply-to msg)) ; check for potential direct replies back to this node
                       (eql (reply-to msg) (uid thisnode))))))
@@ -1287,16 +1305,16 @@ dropped on the floor.
       ;;; It's possible for there to be a downstream but have no potential repliers. In that case
       ;;; we need to go ahead and reply.
       
-      
-      ;;; Is it possible to have must-coalesce? true but no downstream? Yes, the way the code is written now. Makes no sense.
-      
       ;;; It's never necessary to coalesce when there's no downstream, because there won't be anything TO coalesce in that case.
       ;;; It MAY not be necessary to coalesce even when there IS a downstream (that's the case for direct replies where this node
       ;;;   is not the node to reply to).
       
       (cond (downstream
              (cond ((must-coalesce?)
-                    (prepare-repliers thisnode soluid downstream)
+                    (if (and (uid? (reply-to msg)) ; check for potential direct replies back to this node
+                             (eql (reply-to msg) (uid thisnode)))
+                        (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)
+                        (prepare-repliers thisnode soluid downstream))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
                     (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
@@ -1319,13 +1337,14 @@ dropped on the floor.
   (let ((kind (kind msg))
         (soluid (solicitation-uid msg)))
     ; First record the data in the reply appropriately
-    (when (record-interim-reply msg thisnode soluid srcuid) ; true if this reply is later than previous
-      ; coalesce all known data and send it upstream as another interim reply.
-      ; (if this reply is not later, drop it on the floor)
-      (if *delay-interim-replies*
-          (send-delayed-interim-reply thisnode kind soluid)
-          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
-            (send-interim-reply thisnode kind soluid upstream-source))))))
+    (unless (eql :ANONYMOUS (kvs:lookup-key (repliers-expected thisnode) soluid)) ; ignore interim-replies to anonymous expectations
+      (when (record-interim-reply msg thisnode soluid srcuid) ; true if this reply is later than previous
+        ; coalesce all known data and send it upstream as another interim reply.
+        ; (if this reply is not later, drop it on the floor)
+        (if *delay-interim-replies*
+            (send-delayed-interim-reply thisnode kind soluid)
+            (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
+              (send-interim-reply thisnode kind soluid upstream-source)))))))
 
 (defmethod generic-srr-handler ((msg final-reply) (thisnode gossip-node) srcuid)
   (let* ((kind (kind msg))
@@ -1450,6 +1469,9 @@ dropped on the floor.
           ; if no place left to reply to, just log the result.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
+          #+LATER-ACTORS ; not working ATM. Figure it out later.
+          ((typep where-to-send-reply 'ac::actor) ; can happen if actor version of solicit-wait was used
+           (ac:send where-to-send-reply reply (uid srcnode)))
           ((functionp where-to-send-reply)
            (maybe-log srcnode :FINALREPLY (briefname soluid "sol") data)
            (funcall where-to-send-reply reply))
@@ -1457,7 +1479,7 @@ dropped on the floor.
            (maybe-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
           (t (error "Invalid destination")))))
 
-(defun coalesce&replyupstream (thisnode reply-kind soluid)
+(defun coalesce&reply (reply-to thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or
   timeout has happened. Only for upstream [reduce-style] replies; don't use otherwise.
   Cleans up reply tables and reply upstream with final reply containing coalesced data.
@@ -1470,7 +1492,14 @@ dropped on the floor.
     (kvs:remove-key (timers thisnode) soluid)
     (kvs:remove-key (timeout-handlers thisnode) soluid)
     ; must create a new reply here; cannot reuse an old one because its content has changed
-    (send-final-reply thisnode :UPSTREAM soluid reply-kind coalesced-data)
+    (send-final-reply
+     thisnode
+     (if (uid? reply-to)
+         (if (uid= reply-to (uid thisnode)) ; can't send a reply to myself, so punt and send it upstream
+             :UPSTREAM
+             reply-to)
+         reply-to)
+     soluid reply-kind coalesced-data)
     coalesced-data ; mostly for debugging
     ))
 
@@ -1534,6 +1563,7 @@ gets sent back, and everything will be copacetic.
 
 (defun send-interim-reply (thisnode reply-kind soluid where-to-send-reply)
   "Send an interim reply, right now."
+  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((coalesced-data (coalesce thisnode reply-kind soluid)))
     (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
         (let ((reply (make-interim-reply :solicitation-uid soluid
@@ -1568,6 +1598,7 @@ gets sent back, and everything will be copacetic.
 ;;; Memorizing previous replies
 (defmethod set-previous-reply ((node gossip-node) soluid srcuid reply)
   "Remember interim reply indexed by soluid and srcuid"
+  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (unless interim-table
       (setf interim-table (kvs:make-store ':hashtable :test 'equal))
@@ -1576,6 +1607,7 @@ gets sent back, and everything will be copacetic.
 
 (defmethod get-previous-reply ((node gossip-node) soluid srcuid)
   "Retrieve interim reply indexed by soluid and srcuid"
+  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (when interim-table
       (kvs:lookup-key interim-table srcuid))))
@@ -1584,6 +1616,7 @@ gets sent back, and everything will be copacetic.
   "Remove interim reply (if any) indexed by soluid and srcuid from repliers-expected table.
   Return true if table is now empty; false if any other expected repliers remain.
   Second value is true if given soluid and srcuid was indeed present in repliers-expected."
+  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (unless interim-table
       (return-from remove-previous-reply (values t nil))) ; no table found. Happens for soluids where no replies were ever expected.
@@ -1601,6 +1634,7 @@ gets sent back, and everything will be copacetic.
   "Record new-reply for given soluid and srcuid on given node.
   If new-reply is later or first one, replace old and return true.
   Otherwise return false."
+  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let* ((previous-interim (get-previous-reply node soluid srcuid)))
     (when (or (null previous-interim)
               (later-reply? new-reply previous-interim))
@@ -1654,14 +1688,16 @@ gets sent back, and everything will be copacetic.
   This is essentially a reduce operation but of course we can't use that name."
   (let* ((local-data    (kvs:lookup-key (reply-cache node) soluid))
          (interim-table (kvs:lookup-key (repliers-expected node) soluid))
-         (interim-data (when interim-table (loop for reply being each hash-value of interim-table
-                         while reply collect (first (args reply)))))
+         (interim-data (when (and interim-table
+                                  (hash-table-p interim-table))
+                         (loop for reply being each hash-value of interim-table
+                           while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
     ;(maybe-log node :COALESCE interim-data local-data)
     (let ((coalesced-output
            (reduce coalescer
-            interim-data
-            :initial-value local-data)))
+                   interim-data
+                   :initial-value local-data)))
       ;(maybe-log node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
@@ -1670,19 +1706,22 @@ gets sent back, and everything will be copacetic.
   If no more repliers, reply upstream with final reply.
   If more repliers, reply upstream either immediately or after a yield period with an interim-reply.
   Returns true if a [now-cancelled] reply had been expected from soluid/srcuid."
-  (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
-    (cond (no-more-repliers
-           (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
-             (if timeout-handler ; will be nil for messages that don't expect a reply
-               (funcall timeout-handler nil)
-               (maybe-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
-          (t ; more repliers are expected
-           ; functionally coalesce all known data and send it upstream as another interim reply
-           (if *delay-interim-replies*
-               (send-delayed-interim-reply thisnode reply-kind soluid)
-               (let ((upstream-source (get-upstream-source thisnode soluid)))
-                 (send-interim-reply thisnode reply-kind soluid upstream-source)))))
-    was-present?))
+  (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) soluid)))
+    (cond ((eql :ANONYMOUS interim-table)
+           nil) ; do nothing and return nil if we're accepting :ANONYMOUS replies
+          (t (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
+               (cond (no-more-repliers
+                      (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+                        (if timeout-handler ; will be nil for messages that don't expect a reply
+                            (funcall timeout-handler nil)
+                            (maybe-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
+                     (t ; more repliers are expected
+                      ; functionally coalesce all known data and send it upstream as another interim reply
+                      (if *delay-interim-replies*
+                          (send-delayed-interim-reply thisnode reply-kind soluid)
+                          (let ((upstream-source (get-upstream-source thisnode soluid)))
+                            (send-interim-reply thisnode reply-kind soluid upstream-source)))))
+               was-present?)))))
 
 ;;;; END OF REPLY SUPPORT ROUTINES
 
@@ -2211,3 +2250,62 @@ original message."
 (setf msg (make-solicitation :kind :list-alive))
 #+TESTING
 (copy-message msg)
+
+#| NOTES
+
+NOTE A: About proactive reply cancellation
+If node X is ignoring a solicitation* from node Y because it already
+saw that solicitation, then it must also not expect a reply from node Y
+for that same solicitation.
+Here's why [In this scenario, imagine #'locally-receive-msg is acting on behalf of node X]:
+If node X ignores a solicition from node Y -- because it's already seen that solicitation --
+  then X knows the following:
+  1. Node Y did not receive the solicition from X. It must have received it from somewhere else,
+     because nodes *never* forward messages to their upstream.
+  2. Therefore, if X forwards (or forwarded) the solicitation to Y, Y
+     is definitely going to ignore it. Because Y has already seen it.
+  3. Therefore (to recap) if X just ignored a solicitation from Y, then X
+     knows Y is going to ignore that same solicitation from X.
+  4. THEREFORE: X must not expect Y to respond, and that's why
+     we call cancel-replier here. If we don't do this, Y will ignore
+     and X will eventually time out, which it doesn't need to do.
+  5. FURTHERMORE: Y knows X knows this. So it knows X will stop waiting for it.
+* we take no special action for non-solicitation messages because they can't
+  ever be replied to anyway.
+
+NOTE B: About the repliers-expected slot.
+This slot always contains a hashtable mapping a soluid to a value.
+The value can be:
+--Another hashtable, which maps srcuid to a subvalue. If subvalue is nil, it means this node
+  expects a reply from srcuid for the soluid that represents this table. If the subvalue is non-nil,
+  it can only be an interim-reply that srcuid has already sent. Future interim-replies from that srcuid
+  will supersede older ones. (They will not be coalesced with older interim-replies; they replace them.)
+  Subvalue will never be a final-reply because those don't get stored--they get coalesced with the value
+  in reply-cache and stored in the reply-cache.
+--The keyword :ANONYMOUS which indicates that replies from any srcuid are accepted. We don't expect to
+  receive interim-replies from :ANONYMOUS repliers, so if we do receive any, they simply get dropped on
+  the floor rather than stored. See Note C for more info.
+--The value NIL, which indicates that no replies (or no further replies) are expected for this soluid.
+
+
+NOTE C: About :ANONYMOUS expectations.
+We have a mechanism to allow replies to a node to occur from unpredictable sources. This can happen
+when we send a message with forward-to :NEIGHBORCAST or :GOSSIP but whose reply-to slot is a single UID.
+In this case, there's no way to know who might reply in advance, so we have to allow replies (to this soluid)
+from any srcuid. So in that case, we do
+(kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)
+to prepare for replies.
+There are several implications here:
+1. We cannot know in advance when we have received all possible replies. Thus we have to depend on a timeout
+as the only mechanism to know when to ignore further replies (and to reply ourselves, if necessary).
+2. We don't allow interim-replies to :ANONYMOUS expectations, because we're not creating a table to keep them
+(because in place of that table, we just have the keyword :ANONYMOUS), and because I don't think we'll ever need
+interim-replies in this case.
+3. We still allow coalescence at the node expecting :ANONYMOUS replies; they just always come from final-replies.
+4. There's a possible hazard condition here: If a single node sends us two final-replies with the same soluid,
+we won't know to reject the second one, and we'll coalesce a value from that node twice, which would cause
+an incorrect coalescence result. We may have to care about this in future, but I'm not going to worry about
+it now. In working code, there's no code path that would cause a node to respond with a final-reply for a given
+soluid twice.
+
+|#
