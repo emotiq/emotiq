@@ -1217,7 +1217,7 @@ bother factoring it with NODE-COSI-SIGNING."
                      (let ((trans (make-transaction `(,utxin) `(,info)
                                                     `(,utxo1 ,utxo2)
                                                     `(,secr1 ,secr2)
-                                                    10)))
+                                                    :fee 10)))
                        
                        ;; send TX to all nodes
                        (send-tx-to-all (setf *trans1* trans))
@@ -1240,7 +1240,7 @@ bother factoring it with NODE-COSI-SIGNING."
                                (let ((trans (make-transaction `(,utxin) `(,info)
                                                               `(,utxo1 ,utxo2)
                                                               `(,secr1 ,secr2)
-                                                              10)))
+                                                              :fee 10)))
                                  ;; send TX to all nodes
                                  (send-tx-to-all (setf *trans2* trans))
                                  ))))))

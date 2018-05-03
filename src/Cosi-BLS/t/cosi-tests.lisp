@@ -25,7 +25,7 @@
           (let ((trans (make-transaction `(,utxin) `(,info)
                                          `(,utxo1 ,utxo2)
                                          `(,secr1 ,secr2)
-                                         10)))
+                                         :fee 10)))
 
             (print "Validate transaction")
             (assert-true (validate-transaction trans)) ;; 7.6s MacBook Pro
@@ -48,7 +48,7 @@
                     (let ((trans (make-transaction `(,utxin) `(,info)
                                                    `(,utxo1 ,utxo2)
                                                    `(,secr1 ,secr2)
-                                                   10)))
+                                                   :fee 10)))
                       (print "Validate 2nd transaction")
                       (assert-true (validate-transaction trans))
                       )))))
