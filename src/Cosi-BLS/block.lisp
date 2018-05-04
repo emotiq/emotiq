@@ -6,37 +6,43 @@
 
 
                                                                                 ;
-(defclass eblock ()
+(defclass block ()
   ((protocol-version
+    :accessor protocol-version
     :initform 1
     :documentation 
       "Version of the protocol/software, an integer.")
 
    (epoch                               ; aka "height"
-    :initarg :epoch
+    :initarg :epoch :accessor epoch
     :initform nil 
     :documentation
       "The integer of the epoch that this block is a part of."
       ;; height: "Position of block in the chain, an integer."
       )
 
+   (block-hash
+    :accessor block-hash
+    :documentation "Hash of this block.")
    (prev-block-hash
+    :accessor prev-block-hash
     :documentation "Hash of previous block (nil for genesis block).")
 
-   (timestamp
+   (block-timestamp
+    :accessor block-timestamp
     :documentation 
-      "Approximate creation time in seconds since Unix epoch. The time zone is UTC.")
+      "Approximate creation time in seconds since Unix epoch.")
 
-   (signature
-    :reader block-signature
+   (block-signature
+    :accessor block-signature
     :documentation
     "A signature over the whole block authorizing all transactions.")
-   (signature-pkey
-    :reader block-signature-pkey
+   (block-signature-pkey
+    :accessor block-signature-pkey
     :documentation
     "Public key for block-signature")
-   (signature-bitmap
-    :reader block-signature-bitmap
+   (block-signature-bitmap
+    :accessor block-signature-bitmap
     :initform 0
     :documentation 
     "Use methods ith-witness-signed-p and set-ith-witness-signed-p OR,
@@ -45,31 +51,27 @@
      corresponds to a vector index, such that its state tells you
      whether that particular potential witness signed.")
 
-   (witnesses
-    :reader block-witnesses
+   (public-keys-of-witnesses
+    :accessor public-keys-of-witnesses
     :documentation
     "Sequence of public keys of validators 1:1 w/witness-bitmap slot.")
 
    (merkle-root-hash
-    :reader block-merkle-root-hash
-    :documentation "Merkle root hash of transactions.")
+    :accessor merkle-root-hash
+    :documentation "Merkle root hash of block-transactions.")
 
    ;; Transactions is generally what's considered the main contents of a block
    ;; whereas the rest of the above comprises what's known as the 'block header'
    ;; information.
    (transactions
-    :reader block-transactions
-    :documentation
-    "For now a sequence of transactions. Later, this may be changed to
-    be a merkle tree or simply allowed to be either a sequence or a
-    merkle tree as an alternative representation "))
+    :accessor transactions
+    :documentation "A sequence of transactions"))
   (:documentation "A block on the Emotiq blockchain."))
 
 
 
 (defvar *unix-epoch-ut* (encode-universal-time 0 0 0 1 1 1970 0)
-  "The Unix epoch as a Common Lisp universal time. (Note: implied time
-  zone is UTC.)")
+  "The Unix epoch as a Common Lisp universal time.")
 
 
 
@@ -87,19 +89,18 @@
 ;;; and they can require this order for a block to be considered valid.
 ;;; Software may also rely upon this order, e.g., as a search heuristic.
 
-(defun create-block (prev-block? transactions)
-  (let ((blk (make-instance 'eblock)))
-    (when prev-block? 
-      (with-slots (epoch prev-block-hash)
-          blk
-        (setf epoch (1+ (slot-value prev-block? 'epoch)))
-        (setf prev-block-hash (hash-block prev-block?))))
-    (with-slots (merkle-root-hash transactions timestamp)
-        blk
-      (setf merkle-root-hash (compute-merkle-root-hash transactions))
-      (setf transactions transactions)
-      (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
-      block)))
+(defun create-block (epoch prev-block transactions)
+  (let ((block (make-instance 'block :epoch epoch)))
+    (setf (prev-block-hash block) 
+          (if (null prev-block)
+              nil
+              (hash-block prev-block)))
+    (setf (merkle-root-hash block)
+          (compute-merkle-root-hash transactions))
+    (setf (transactions block) transactions)
+    (setf (block-timestamp block) 
+          (- (get-universal-time) *unix-epoch-ut*))
+    block))
 
 
 (defun hash-256 (&rest hashables)
@@ -123,11 +124,11 @@
   '(protocol-version 
     epoch
     prev-block-hash
-    timestamp
+    block-timestamp
 
-    signature
-    signature-pkey
-    signature-bitmap
+    block-signature
+    block-signature-pkey
+    block-signature-bitmap
 
     merkle-root-hash)
   "These slots are serialized and then hashed. The hash is stored as
@@ -222,16 +223,3 @@
           (dpb (if signed-p 1 0)
                (byte 1 i)
                witness-bitmap))))
-
-
-
-(defun update-block-signature (block sig bits)
-  (with-slots (signature signature-pkey signature-bitmap)
-      block
-    (setf signature (pbc:signed-message-sig sig))
-    (setf signature-pkey (pbc:signed-message-pkey sig))
-    (setf signature-bitmap bits)))
-
-;; Note: DBM had wrapped (base58 ) around all three values, but said
-;; that had only been for debugging, so I've removed that in this
-;; version.  -mhd, 5/2/18
