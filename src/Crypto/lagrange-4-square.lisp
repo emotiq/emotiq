@@ -29,7 +29,7 @@ THE SOFTWARE.
 (in-package :lagrange-4-square)
 
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0))
+(declaim  (OPTIMIZE (SPEED 3) #|(SAFETY 0)|# #+:LISPWORKS (FLOAT 0))
           (inline empty singleton create))
 
 (declaim (inline mod4 mod8 trunc2 trunc4 expt2))

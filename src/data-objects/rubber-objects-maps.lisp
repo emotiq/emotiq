@@ -62,7 +62,7 @@ THE SOFTWARE.
 
 ;; equiv to #F
 (declaim (optimize (speed  3)
-                   (safety 0)
+                   ;; (safety 0)
                    #+:LISPWORKS (float  0)))
 
 ;; -----------------------------------------------------------------------------
