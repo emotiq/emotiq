@@ -46,7 +46,6 @@ THE SOFTWARE.
                         :serial t
                         :components (#+CLOZURE (:file "clozure")
                                      (:file "cosi-blkdef")
-                                     (:file "block")
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
                                      (:file "cosi-sockets")
