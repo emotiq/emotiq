@@ -13,7 +13,7 @@ case ${LISP} in
         lisp_cli="$HOME/bin/ccl"
         ;;
     sbcl*)
-        lisp_cli="/usr/local/bin/sbcl"
+        lisp_cli="/usr/local/bin/sbcl --disable-debugger"
         ;;
     *)
         echo "Unknown Lisp dialect: $LISP"
