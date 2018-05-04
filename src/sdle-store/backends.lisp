@@ -36,6 +36,21 @@
    )
   (:documentation "Core class which custom backends must extend"))
 
+(defmethod collect-slots ((backend backend))
+  (list :name                     (name backend)
+        :magic-number             (magic-number backend)
+        :compatible-magic-numbers (compatible-magic-numbers backend)
+        :old-magic-numbers        (old-magic-numbers backend)
+        :stream-type              (stream-type backend)))
+
+(defmethod copy-backend ((backend backend) &rest initargs)
+  (apply 'make-instance (class-of backend)
+         (append initargs (collect-slots backend))))
+
+(defmethod copy-backend ((backend symbol) &rest initargs)
+  (apply 'copy-backend (find-backend backend) initargs))
+
+
 (deftype backend-designator ()
   `(or symbol backend))
 

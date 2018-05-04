@@ -151,16 +151,6 @@ Encrypted data is marked as such by making the prefix count odd."
       ((minusp ix))
     (setf (aref buf ix) (logand v #x0ff))) )
 
-(defun do-with-magic-number (backend use-magic fn)
-  (with-accessors ((magic  sdle-store:magic-number))
-      (sdle-store:find-backend backend)
-    (um:with-transient-mutation ((magic use-magic))
-      (funcall fn))
-    ))
-
-(defmacro with-magic-number ((backend use-magic) &body body)
-  `(do-with-magic-number ,backend ,use-magic (lambda () ,@body)))
-
 ;; -------------------------------------------
 
 (defun encode (msg &key
@@ -181,9 +171,12 @@ Encrypted data is marked as such by making the prefix count odd."
                       
                       ;; reserve room for prefix count and encryption signature
                       (setf (ubstream:stream-file-position s) (+ preflen reserve))
-                      
-                      (with-magic-number (backend use-magic)
-                        (sdle-store:store msg s backend))
+
+                      (let ((bknd (if use-magic
+                                      (sdle-store:copy-backend backend
+                                                               :magic-number use-magic)
+                                    backend)))
+                        (sdle-store:store msg s bknd))
                       
                       ;; pad data to an even number of bytes
                       (let* ((data-len (- (ubstream:stream-file-position s)
@@ -330,17 +323,19 @@ from the buffer manager.
 A single I/O read operation then reads the entire encoded message into that buffer, and then
 we recursively decode the contents of the buffer. The final decoded message object is returned after
 recycling that buffer for another use later. This is an attempt to avoid generating too much garbage."
-  (let ((preflen (normalize-prefix-length prefix-length)))
-    (with-magic-number (backend use-magic)
-      (cond (preflen
-             (deserialize-prefixed-stream stream preflen :backend backend))
+  (let ((preflen (normalize-prefix-length prefix-length))
+        (bknd    (if use-magic
+                     (sdle-store:copy-backend backend
+                                              :magic-number use-magic)
+                   backend)))
+    (cond (preflen
+           (deserialize-prefixed-stream stream preflen :backend bknd))
             
-            (length
-             (deserialize-for-length stream length :backend backend))
-            
-            (t  (sdle-store:restore stream backend))
-            ))
-    ))
+          (length
+           (deserialize-for-length stream length :backend bknd))
+          
+          (t  (sdle-store:restore stream bknd))
+          )))
 
 ;; -----------------------------------------------------------------------------
 
