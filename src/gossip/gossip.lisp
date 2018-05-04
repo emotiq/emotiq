@@ -20,6 +20,7 @@
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
+(defparameter *direct-reply-max-seconds-to-wait* (ceiling *max-seconds-to-wait* 2) "Max second to wait for direct replies")
 
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
@@ -905,6 +906,7 @@ dropped on the floor.
         (nodes (listify-nodes)))
     (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
     (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
+    (setf nodes (mapcar 'uid nodes))
     (forward msg srcuid nodes)))
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
@@ -1286,6 +1288,7 @@ dropped on the floor.
          (soluid (uid msg))
          (downstream (get-downstream thisnode srcuid (forward-to msg))) ; don't forward to the source of this solicitation
          (timer nil)
+         (seconds-to-wait *max-seconds-to-wait*)
          (cleanup (make-timeout-handler thisnode msg kind)))
     (flet ((initialize-reply-cache ()
              "Set up node's reply-cache with initial-reply-value for this message"
@@ -1313,11 +1316,13 @@ dropped on the floor.
              (cond ((must-coalesce?)
                     (if (and (uid? (reply-to msg)) ; check for potential direct replies back to this node
                              (eql (reply-to msg) (uid thisnode)))
-                        (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)
+                        (progn
+                          (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
+                          (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS))
                         (prepare-repliers thisnode soluid downstream))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
-                    (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
+                    (setf timer (schedule-gossip-timeout (ceiling seconds-to-wait) (actor thisnode) soluid))
                     (kvs:relate-unique! (timers thisnode) soluid timer)
                     (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
                     ;(maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
@@ -1785,9 +1790,18 @@ gets sent back, and everything will be copacetic.
                                    :proxy-subtable proxy-subtable)))
     proxy))
 
-(defun incoming-message-handler (msg srcuid destuid)
+(defmethod incoming-message-handler ((msg solicitation) srcuid destuid)
   "Locally dispatch messages received from network"
   ;; srcuid will be that of a proxy-gossip-node on receiver (this) machine
+  ;; destuid will be that of a true gossip-node on receiver (this) machine
+  (when (uid? (reply-to msg)) ; deal with direct replies properly
+          (setf (reply-to msg) srcuid))
+  (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
+  (send-msg msg destuid srcuid))
+
+(defmethod incoming-message-handler ((msg reply) srcuid destuid)
+  "Locally dispatch messages received from network"
+  ;; proxy will be a proxy-gossip-node on receiver (this) machine
   ;; destuid will be that of a true gossip-node on receiver (this) machine
   (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
   (send-msg msg destuid srcuid))
@@ -1981,13 +1995,13 @@ gets sent back, and everything will be copacetic.
 ;;; Rather, reuse the one we already have. This is critical to ensure the
 ;;;   other end sees the proper port to respond to.
 (defun internal-send-socket (ip port packet)
-    (let ((nb (length packet)))
-      (when (> nb cosi-simgen::*max-buffer-length*)
-        (error "Packet too large for UDP transmission"))
-      (let ((socket *udp-gossip-socket*))
-        ;; (pr :sock-send (length packet) real-ip packet)
-        (unless (eql nb (usocket:socket-send socket packet nb :host ip :port port))
-          (ac::pr :socket-send-error ip packet)))))
+  (let ((nb (length packet)))
+    (when (> nb cosi-simgen::*max-buffer-length*)
+      (error "Packet too large for UDP transmission"))
+    (let ((socket *udp-gossip-socket*))
+      ;; (pr :sock-send (length packet) real-ip packet)
+      (unless (eql nb (usocket:socket-send socket packet nb :host ip :port port))
+        (ac::pr :socket-send-error ip packet)))))
 
 (defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
   (declare (ignore port))
@@ -2163,6 +2177,7 @@ original message."
         65002)))
     
 ; UDP TESTS
+; Test 1
 ; ON SERVER MACHINE
 ; (clrhash *nodes*)
 #+TEST
@@ -2190,6 +2205,29 @@ original message."
 ; (solicit-wait localnode :list-addresses)
 ; (solicit localnode :gossip-relate-unique :foo :bar)
 ; (solicit-wait localnode :gossip-lookup-key :foo)
+
+; Test 2: List live nodes at given address
+; ; ON SERVER MACHINE
+; (clrhash *nodes*)
+; (make-graph 10)
+; (run-gossip-sim)
+
+; ON CLIENT MACHINE
+; (clrhash *nodes*)
+; (run-gossip-sim)
+#+TEST-LOCALHOST
+(setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+#+TEST-AMAZON
+(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+
+#+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
+       ;   continuation that solicit-wait makes across the network
+(setf localnode (make-node
+  :UID 201
+  :NEIGHBORS (list (uid rnode))))
+; (solicit-direct localnode :count-alive)
+; (solicit-direct localnode :list-alive)
+; (inspect *log*)
 
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
