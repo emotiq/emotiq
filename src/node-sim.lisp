@@ -1,21 +1,69 @@
 ;; top-level glue code for a simulation node
  
-(in-package :cosi-simgen)
+(in-package :emotiq-user)
 
-(defun node (&optional
-             (name "Alice")
-             (ipstr "127.0.0.1"))  ;; specify an IP (as string) if you want something other than 127.0.0.1
+(defun start-network (&key
+                        (ipstr "127.0.0.1"))
+  "IPSTR string) if you want something other than 127.0.0.1"
 
-  (cosi-init ipstr)
-  (cosi-generate)
-  (init-sim)
-  (tst-blk)
+  (cosi-simgen::cosi-init ipstr)
+  (cosi-simgen::cosi-generate)
+  (cosi-simgen::init-sim)
+  (cosi-simgen::reset-blockchain)
+  #+(or)
+  (emotiq/cli:main))
 
-  (emotiq/cli:main)
-    
-  )
+(defvar *singularity-account*
+  (pbc:make-key-pair :singularity)
+  "Origin of genesis transaction.")
 
+(defvar *genesis-account*
+  (pbc:make-key-pair :genesis)
+  "Genesis account.")
 
+(defvar *genesis-output*
+  nil
+  "Genesis UTXO.")
+
+(defun send-genesis-utxo (&key (monetary-supply 1000))
+  (when *genesis-output*
+    (error "Can't create more than one genesis UTXO."))
+  (let ((pkey  (pbc:keying-triple-pkey *singularity-account*)))
+    (print "Construct Genesis transaction")
+    (multiple-value-bind (utxog secrg)
+        (cosi/proofs:make-txout monetary-supply pkey)
+      (declare (ignore secrg))
+
+      (setf *genesis-output* utxog)
+      (map nil
+       (lambda (node)
+         (ac:send node :genesis-utxo utxog))
+       cosi-simgen::*node-bit-tbl*))))
+
+(defun spend-from-genesis (receiver amount)
+  (unless *genesis-output*
+    (error "No genesis account to spend from."))
+  (with-accessors ((public-key pbc:keying-triple-pkey)
+                   (private-key pbc:keying-triple-skey))
+      *singularity-account*
+    (let ((minfo (cosi/proofs:decrypt-txout-info
+                  *genesis-output* (pbc:keying-triple-skey *singularity-account*))))
+      (multiple-value-bind (utxin info)  ;; spend side
+          (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt minfo) ;; spend side
+                                 (cosi/proofs:txout-secr-gamma minfo)
+                                 public-key private-key)
+        (multiple-value-bind (utxo1 secr1) ;; sends
+            (cosi/proofs:make-txout amount (pbc:keying-triple-pkey receiver))
+          (let ((transaction (cosi/proofs:make-transaction (list utxin)
+                                                           (list info)
+                                                           (list utxo1)
+                                                           (list secr1))))
+            (map nil (lambda (node)
+                       (ac:send node :new-transaction transaction))
+                 cosi-simgen::*node-bit-tbl*)))))))
+
+(defun force-epoch-end ()
+  (ac:send (cosi-simgen::node-self cosi-simgen::*top-node*) :make-block))
 
 #|
 create a Genesis UTXO: (special case for initialization) AMT0
@@ -172,3 +220,15 @@ lookups
 
 
 |#
+
+
+(defparameter *user* (pbc:make-key-pair :user))
+
+;; Recreate (tst-blk)
+(defun test-network ()
+  (setf *genesis-output* nil)
+  (start-network)
+  (send-genesis-utxo)
+  (spend-from-genesis *user* 100)
+  (force-epoch-end))
+

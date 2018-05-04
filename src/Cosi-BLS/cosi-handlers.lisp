@@ -966,6 +966,8 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
+(defvar *blocks* nil)
+
 (defun leader-exec (node)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
@@ -1003,6 +1005,7 @@ bother factoring it with NODE-COSI-SIGNING."
                               (cond ((check-byz-threshold bits new-block)
                                      #+(or)
                                      (inspect new-block)
+                                     (push new-block *blocks*)
                                      (print "Block committed to blockchain"))
                                     
                                     (t

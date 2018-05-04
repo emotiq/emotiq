@@ -62,3 +62,8 @@
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
 
+(defpackage emotiq-user
+  (:use #:cl))
+
+  
+
