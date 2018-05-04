@@ -25,7 +25,8 @@ THE SOFTWARE.
 (in-package "ENGFMT")
 
 (declaim (optimize (speed 3)
-                   (safety 0)))
+                   #|(safety 0)|#
+                   ))
 
 ;; -----------------------------------------------------------------
 
