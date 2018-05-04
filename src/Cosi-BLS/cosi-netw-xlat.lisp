@@ -184,7 +184,7 @@
 
 (defvar *keys*   (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
 (defvar *sender* (make-actor (lambda (ip port packet)
-                               (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
+                               ;; (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
                                (internal-send-socket ip port packet))))
   
 (defun shutdown-server (&optional (port *cosi-port*))

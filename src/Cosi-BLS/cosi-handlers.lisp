@@ -1115,7 +1115,9 @@ bother factoring it with NODE-COSI-SIGNING."
                                 (cond ((check-byz-threshold bits new-block)
                                        #+(or)
                                        (inspect new-block)
-                                       (pr "Block committed to blockchain"))
+                                       (pr "Block committed to blockchain")
+                                       (pr (format nil "Block signatures = ~D" (logcount (bc-block-signature-bitmap new-block))))
+                                       )
                                       
                                       (t
                                        (pr "Failed to get sufficient signatures during commit phase"))
