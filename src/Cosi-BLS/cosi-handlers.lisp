@@ -336,11 +336,10 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defvar *election-proof*   nil)
 (defvar *leader*           nil)
 
-(define-symbol-macro *blockchain* (node-blockchain *current-node*))
-(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl
-*current-node*)) (define-symbol-macro *mempool* (node-mempool
-*current-node*)) (define-symbol-macro *utxo-table* (node-utxo-table
-*current-node*))
+(define-symbol-macro *blockchain*     (node-blockchain *current-node*))
+(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
+(define-symbol-macro *mempool*        (node-mempool *current-node*))
+(define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
@@ -383,10 +382,10 @@ Later it may become an ADS structure"
 ;; testing-version transaction cache
 
 (defmethod cache-transaction ((key bev) val)
-  (setf (gethash (bev-vec key) (node-mempool *current-node*)) val))
+  (setf (gethash (bev-vec key) *mempool*) val))
 
 (defmethod remove-tx-from-mempool ((key bev))
-  (remhash (bev-vec key) (node-mempool *current-node*)))
+  (remhash (bev-vec key) *mempool*))
 
 (defmethod remove-tx-from-mempool ((tx transaction))
   (remove-tx-from-mempool (bev (hash/256 tx))))
@@ -403,29 +402,29 @@ transactions."
 ;; testing-version TXOUT log
 
 (defmethod lookup-utxo  ((key bev))
-  (gethash (bev-vec key) (node-utxo-table *current-node*)))
+  (gethash (bev-vec key) *utxo-table*))
 
 (defmethod record-new-utxo ((key bev))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
   (let ((vkey (bev-vec key)))
     (multiple-value-bind (x present-p)
-        (gethash vkey (node-utxo-table *current-node*))
+        (gethash vkey *utxo-table*)
       (declare (ignore x))
       (when present-p
         (error "Shouldn't Happen: Effective Hash Collision!!!"))
-      (setf (gethash vkey (node-utxo-table *current-node*)) :spendable))))
+      (setf (gethash vkey *utxo-table*) :spendable))))
 
 (defmethod record-new-utxo ((txout txout))
   (record-new-utxo (bev (txout-hashlock txout))))
 
 
 (defmethod record-utxo ((key bev) val)
-  (setf (gethash (bev-vec key) (node-utxo-table *current-node*)) val))
+  (setf (gethash (bev-vec key) *utxo-table*) val))
 
 
 (defmethod remove-utxo ((key bev))
-  (remhash (bev-vec key) (node-utxo-table *current-node*)))
+  (remhash (bev-vec key) *utxo-table*))
 
 (defmethod remove-utxo ((txin txin))
   (remove-utxo (bev (txin-hashlock txin))))
@@ -568,7 +567,7 @@ topo-sorted partial order"
     (maphash (lambda (k tx)
                (declare (ignore k))
                (push tx txs))
-             (node-mempool *current-node*))
+             *mempool*)
     (let ((trimmed (topo-sort txs)))
       (dolist (tx (set-difference txs trimmed))
         ;; remove invalid transactions whose inputs refer to future
@@ -824,7 +823,7 @@ check that each TXIN and TXOUT is mathematically sound."
                                                              :sig  (bc-block-signature      blk)))
                            )))
          (push blk *blockchain*)
-         (setf (gethash (bc-block-hash blk) (node-blockchain-tbl *current-node*)) blk)
+         (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
          ;; clear out *mempool* and spent utxos
          (dolist (tx (get-block-transactions blk))
            (remove-tx-from-mempool tx)
