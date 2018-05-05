@@ -364,7 +364,7 @@ THE SOFTWARE.
            ))))
 
 (defvar *chk-bp-basis*
-  #x0339da1f894bb45f6b07737ae21681bd2220b930b31bdbec4380242c1b845fbf5)
+  #x817364794f007ce83fa54d376fe225c8425f277bea914ac6d69a5f8c27dbc528)
 
 (assert (hash-check *bp-basis* *chk-bp-basis*))
 

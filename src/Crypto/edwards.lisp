@@ -95,7 +95,7 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve1174*
-  #x0a3b6b42e54adadf8d667141330d1d7416c87091c0d597adb20eb27d5429c5144)
+  #x50c953d8d6f83ab18a8a475acc04567cf621ea543a576f20d70f1f1784a3c727)
 
 ;; ---------------------------
 
@@ -115,7 +115,7 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve-E382*
-  #x0fb76d134d0df4bb1b04994ded81197a2501c5cbcd233660213c6201d7a82eead)
+  #x58aa9ce913eb890d831f3ec0e59d0aaaf32304cc4240bfc6ff045599b8ac8419)
 
 ;; ---------------------------
 
@@ -135,7 +135,7 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve41417*
-  #x0be03fd15c1d4e68f85da60dd6fe6324275a6ddd3059764bad546c73c7f03d402)
+  #xa26c08cde33e9d353b0ec47090c1d6fdea32842d9e5b7130a026b09e02d10fd0)
 
 ;; ---------------------------
 
@@ -155,7 +155,7 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve-E521*
-  #x0dceb7761259b1b090f5e3dc0a370ed3169a7cb8bb29990efda6158acb3c2716e)
+  #x689a5918f2d28f1d62965551d44c635a141b623ad672b464b21052b481a21420)
 
 ;; ------------------------------------------------------
 
