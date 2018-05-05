@@ -20,7 +20,7 @@
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-(defparameter *direct-reply-max-seconds-to-wait* (ceiling *max-seconds-to-wait* 2) "Max second to wait for direct replies")
+(defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
 
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
@@ -2221,6 +2221,7 @@ original message."
 ; ON CLIENT MACHINE
 ; (clrhash *nodes*)
 ; (run-gossip-sim)
+; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
