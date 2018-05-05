@@ -1994,14 +1994,20 @@ gets sent back, and everything will be copacetic.
 ;;; Don't create a new socket, and don't close it when we're done.
 ;;; Rather, reuse the one we already have. This is critical to ensure the
 ;;;   other end sees the proper port to respond to.
-(defun internal-send-socket (ip port packet)
-  (let ((nb (length packet)))
-    (when (> nb cosi-simgen::*max-buffer-length*)
-      (error "Packet too large for UDP transmission"))
-    (let ((socket *udp-gossip-socket*))
-      ;; (pr :sock-send (length packet) real-ip packet)
-      (unless (eql nb (usocket:socket-send socket packet nb :host ip :port port))
-        (ac::pr :socket-send-error ip packet)))))
+
+(let ((sender (ac:make-actor
+               (lambda (socket packet nb ip port)
+                 (unless (eql nb (usocket:socket-send socket packet nb
+                                                      :host ip :port port))
+                   (ac::pr :socket-send-error ip packet))))))
+  
+  (defun internal-send-socket (ip port packet)
+    (let ((nb (length packet)))
+      (when (> nb cosi-simgen::*max-buffer-length*)
+        (error "Packet too large for UDP transmission"))
+      (let ((socket *udp-gossip-socket*))
+        ;; (pr :sock-send (length packet) real-ip packet)
+        (ac:send sender socket packet nb ip port)))))
 
 (defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
   (declare (ignore port))
