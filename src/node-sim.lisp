@@ -40,60 +40,35 @@
          (ac:send node :genesis-utxo utxog))
        cosi-simgen::*node-bit-tbl*))))
 
-(defparameter *utxo* nil)
-(defparameter *secrets* nil)
-
 (defun spend-from-genesis (receiver amount)
   (unless *genesis-output*
     (error "No genesis account to spend from."))
-  (with-accessors ((public-key pbc:keying-triple-pkey)
-                   (private-key pbc:keying-triple-skey))
-      *singularity-account*
-    (let ((minfo (cosi/proofs:decrypt-txout-info
-                  *genesis-output* (pbc:keying-triple-skey *singularity-account*))))
-      (multiple-value-bind (utxin info)  ;; spend side
-          (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt minfo) ;; spend side
-                                 (cosi/proofs:txout-secr-gamma minfo)
-                                 public-key private-key)
-        (multiple-value-bind (utxo1 secr1) ;; sends
-            (cosi/proofs:make-txout amount (pbc:keying-triple-pkey receiver))
-          (setf *utxo* utxo1
-                *secrets* secr1)
-          (let ((transaction (cosi/proofs:make-transaction (list utxin)
-                                                           (list info)
-                                                           (list utxo1)
-                                                           (list secr1))))
-            (map nil (lambda (node)
-                       (ac:send node :new-transaction transaction))
-                 cosi-simgen::*node-bit-tbl*)))))))
+  (spend *singularity-account* *genesis-output* (pbc:keying-triple-pkey receiver) amount cosi-simgen::*node-bit-tbl*))
 
-(defun spend-utxo (sender utxo receiver amount)
-  "sender, receiver = keying-triple, utxo = specific utxo of sender
-   test version assumes only one utxo"
-  (unless (and
-           (eq 'PBC-INTERFACE:KEYING-TRIPLE (type-of sender))
-           (eq 'PBC-INTERFACE:KEYING-TRIPLE (type-of receiver))
-           (eq 'txout (type-of utxo))
-           (subtypep (type-of amount) 'number))
-    (error "spend-utxo() - illegal arguments"))
+(defun spend (from from-utxo to-pubkey amount bit-tbl)
+  "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
+    amount = number, bit-tbl = node's bit table"
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
                    (from-private-key pbc:keying-triple-skey))
-      sender
-    (with-accessors ((to-public-key pbc:keying-triple-pkey))
-        receiver
-      (let ((to-info (cosi/proofs:decrypt-txout-info utxo from-private-key)))
-        (multiple-value-bind (utxin info)
-            (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt minfo)
-                                   (cosi/proofs:txout-secr-gamma minfo)
+      from
+    (let ((from-skey (pbc:keying-triple-skey from)))
+      (let ((decrypted-from-utxo (cosi/proofs:decrypt-txout-info from-utxo from-skey)))
+        (multiple-value-bind (txin txin-gamma)  ;; decrypt "from" txout, then make a txin for current txn
+            (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) ;;
+                                   (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
                                    from-public-key from-private-key)
-          (multiple-value-bind (utxo1 secr1)
-              (cosi/proofs:make-txout amount to-public-key)
-            (let ((transaction
-                   (cosi/proofs:make-transaction (list utxin) (list info) (list utxo1) (list secr1))))
-              (map nil
-                   (lambda (node)
-                     (ac:send node :new-transaction transaction))
-                   cosi-simgen::*node-bit-tbl*))))))))
+          (multiple-value-bind (new-utxo new-utxo-secrets) ;; sends
+              (cosi/proofs:make-txout amount to-pubkey)
+            (setf *utxo* new-utxo
+                  *secrets* new-utxo-secrets)
+            (let ((transaction (cosi/proofs:make-transaction (list txin)
+                                                             (list txin-gamma)
+                                                             (list new-utxo)
+                                                             (list new-utxo-secrets))))
+              (map nil (lambda (node)
+                         (ac:send node :new-transaction transaction))
+                   bit-tbl))))))))
+
 
 (defun force-epoch-end ()
   (ac:send (cosi-simgen::node-self cosi-simgen::*top-node*) :make-block))
@@ -265,6 +240,5 @@ lookups
   (start-network)
   (send-genesis-utxo)
   (spend-from-genesis *user* 100)
-  ;(spend-utxo *user* *utxo* *Alice* 100)
   (force-epoch-end))
 
