@@ -67,7 +67,8 @@
                                                              (list new-utxo-secrets))))
               (map nil (lambda (node)
                          (ac:send node :new-transaction transaction))
-                   bit-tbl))))))))
+                   bit-tbl)
+              transaction)))))))
 
 
 (defun force-epoch-end ()
@@ -239,6 +240,7 @@ lookups
   (setf *genesis-output* nil)
   (start-network)
   (send-genesis-utxo)
-  (spend-from-genesis *user* 100)
-  (force-epoch-end))
+  (let ((txn (spend-from-genesis *user* 100)))
+    (force-epoch-end)
+    txn))
 
