@@ -39,6 +39,8 @@ THE SOFTWARE.
 ;;
 ;; See paper: "Elligator: Elliptic-curve points indistinguishable from uniform random strings"
 ;; by Bernstein, Hamburg, Krasnova, and Lange
+;;
+;; See also, https://safecurves.cr.yp.to
 
 (defstruct ed-curve
   name c d q h r gen)
