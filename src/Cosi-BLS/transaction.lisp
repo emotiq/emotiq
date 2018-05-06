@@ -123,13 +123,17 @@ the simple commitment to the uncloaked value"
             :initarg :txins)
    (txouts  :reader  trans-txouts  ;; txout or integer, to new owner or self
             :initarg :txouts)
+   (fee     :reader  trans-fee
+            :initarg :fee
+            :initform 0)
    (gamadj  :reader  trans-gamadj  ;; A curve adjustment to get to zero balance.
             :initarg :gamadj) 
    ))
 
 ;; ---------------------------------------------------------------------
 
-(defun make-transaction (txins gam-txins txouts txout-secrets)
+(defun make-transaction (txins gam-txins txouts txout-secrets
+                               &key (fee 0))
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
 some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
@@ -145,6 +149,7 @@ correction factor gamadj on curve H for the overall transaction."
     (make-instance 'transaction
                    :txins   txins
                    :txouts  txouts
+                   :fee     fee
                    :gamadj  gamadj)))
 
 ;; ---------------------------------------------------------------------
@@ -178,10 +183,11 @@ correction factor gamadj on curve H for the overall transaction."
                                :initial-value (ed-neutral-point)))
              (ctxouts   (mapcar 'pedersen-commitment (trans-txouts  trn)))
              (ttxout    (reduce 'ed-add ctxouts
-                               :initial-value (ed-neutral-point))))
-        ;; check that Sum(txin) = Sum(txout)
-        (ed-neutral-point-p (ed-add (ed-mul (range-proofs:hpt) gamadj)
-                                    (ed-sub ttxin ttxout)))
+                               :initial-value (ed-nth-pt (trans-fee trn)))))
+        ;; check that Sum(txin) = Sum(txout) + Fee
+        (ed-neutral-point-p
+         (ed-add (ed-mul (range-proofs:hpt) gamadj)
+                 (ed-sub ttxin ttxout)))
         ))))
 
 (defmethod validate-transaction :around ((trn transaction))
