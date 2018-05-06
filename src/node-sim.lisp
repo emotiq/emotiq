@@ -37,7 +37,7 @@
       (setf *genesis-output* utxog)
       (map nil
        (lambda (node)
-         (ac:send node :genesis-utxo utxog))
+         (ac:send (cosi-simgen::node-self node) :genesis-utxo utxog))
        cosi-simgen::*node-bit-tbl*))))
 
 (defun spend-from-genesis (receiver amount)
@@ -59,7 +59,7 @@
                                                            (list utxo1)
                                                            (list secr1))))
             (map nil (lambda (node)
-                       (ac:send node :new-transaction transaction))
+                       (ac:send (cosi-simgen::node-self node) :new-transaction transaction))
                  cosi-simgen::*node-bit-tbl*)))))))
 
 (defun force-epoch-end ()
@@ -227,8 +227,10 @@ lookups
 ;; Recreate (tst-blk)
 (defun test-network ()
   (setf *genesis-output* nil)
-  (start-network)
-  (send-genesis-utxo)
-  (spend-from-genesis *user* 100)
-  (force-epoch-end))
+  (ac:spawn
+   (lambda ()
+     (start-network)
+     (send-genesis-utxo)
+     (spend-from-genesis *user* 100)
+     (force-epoch-end))))
 

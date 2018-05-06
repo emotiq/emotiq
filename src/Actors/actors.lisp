@@ -492,9 +492,9 @@ THE SOFTWARE.
 
 (defmethod send (other-obj &rest message)
   (let ((mfn (car message)))
-    (when (funcallable-p mfn)
-      (apply mfn other-obj (cdr message))
-      )))
+    (if (funcallable-p mfn)
+        (apply mfn other-obj (cdr message))
+      (error "wrong first arg for ac:send"))))
 
 ;; ------------------------------------------
 ;; A mailbox repository...
@@ -612,7 +612,8 @@ THE SOFTWARE.
 (defvar *last-heartbeat*     0)   ;; time of last Executive activity
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
-(defvar *maximum-age*        3)   ;; how long before watchdog should bark
+;(defvar *maximum-age*        3)   ;; how long before watchdog should bark
+(defvar *maximum-age*        120)   ;; how long before watchdog should bark
 (defvar *nbr-execs*               ;; should match the number of CPU Cores
   #+(AND :LISPWORKS :MACOSX)
   (load-time-value

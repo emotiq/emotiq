@@ -1,3 +1,4 @@
+
 ;; cosi-handlers.lisp -- Handlers for various Cosi operations
 ;;
 ;; DM/Emotiq  02/18
@@ -54,6 +55,7 @@ THE SOFTWARE.
        (node-compute-cosi node reply-to :notary msg))
       
       (:new-transaction (msg)
+       (ac:pr ":new-transaction")
        (node-check-transaction msg))
       
       (:validate (reply-to sig bits)
@@ -107,10 +109,11 @@ THE SOFTWARE.
   ;; use indirection to node-dispatcher for while we are debugging and
   ;; extending the dispatcher. Saves reconstructing the tree every
   ;; time the dispatching chanages.
-  (ac:make-actor
-   ;; one of these closures is stored in the SELF slot of every node
-   (lambda (&rest msg)
-     (apply 'node-dispatcher node msg))))
+  (setf (cosi-simgen::node-self node)
+        (ac:make-actor
+         ;; one of these closures is stored in the SELF slot of every node
+         (lambda (&rest msg)
+           (apply 'node-dispatcher node msg)))))
 
 (defun crash-recovery ()
   ;; just in case we need to re-make the Actors for the network
@@ -462,15 +465,23 @@ in a cache log to speed up later block validation.
 Return nil if transaction is invalid."
   (let* ((key        (bev (hash/256 tx)))
          (txout-keys (txout-keys tx)))
-    (when (and (notany (lambda (txin)
-                         ;; can't be spending an output you are just
-                         ;; now creating
-                         (find txin txout-keys))
-                       (txin-keys tx))
-               ;; now do the math
-               (validate-transaction tx))
-      (cache-transaction key tx))
-    ))
+;;;     (when (and (notany (lambda (txin)
+;;;                        ;; can't be spending an output you are just
+;;;                        ;; now creating
+;;;                        (find txin txout-keys))
+;;;                      (txin-keys tx))
+;;;              ;; now do the math
+;;;              (validate-transaction tx))
+;;;         (cache-transaction key tx)
+         (let ((na (notany (lambda (txin)
+                        ;; can't be spending an output you are just
+                        ;; now creating
+                        (find txin txout-keys))
+                      (txin-keys tx)))
+               (vt (validate-transaction tx)))
+           (if (and na vt)
+               (cache-transaction key tx)
+             (error (format nil "invalid txn na=~A and vt=~A" na vt))))))
 
 ;; --------------------------------------------------------------------
 ;; Code to assemble a block - must do full validity checking,
@@ -1106,22 +1117,25 @@ bother factoring it with NODE-COSI-SIGNING."
 (defvar *trans2* nil)
 (defvar *genesis* nil)
 
+; temporary work-around
+;(defmethod send ((self actor) &rest msg)
+;(defmethod send ((node cosi-simgen::node) &rest msg)
+;  (error "wrong node type for send"))
+
 (defun tst-blk ()
-  (spawn
-   (lambda ()
      (reset-blockchain)
      (labels
          ((send-tx-to-all (tx)
             #||#
             (map nil (lambda (node)
-                       (send node :new-transaction tx))
+                       (send (cosi-simgen::node-self node) :new-transaction tx))
                  *node-bit-tbl*)
             #||#
             ;; (send *top-node* :new-transaction tx)
             )
           (send-genesis-to-all (utxo)
             (map nil (lambda (node)
-                       (send node :genesis-utxo utxo))
+                       (send (cosi-simgen::node-self node) :genesis-utxo utxo))
                  *node-bit-tbl*))
           )
        
@@ -1190,7 +1204,7 @@ bother factoring it with NODE-COSI-SIGNING."
        ;; ------------------------------------------------------------------------
        
        (send (node-self *top-node*) :make-block)
-       ))))
+       ))
 
 ;; -------------------------------------------------------------
 

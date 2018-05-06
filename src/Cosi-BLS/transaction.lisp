@@ -184,6 +184,11 @@ correction factor gamadj on curve H for the overall transaction."
                                     (ed-sub ttxin ttxout)))
         ))))
 
+(defmethod validate-transaction :around ((trn transaction))
+  (let ((r (call-next-method)))
+    (ac:pr (format nil "validate transaction returned ~A" r))
+    r))
+
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
 
