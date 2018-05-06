@@ -240,10 +240,11 @@ lookups
 ;; Recreate (tst-blk)
 (defun test-network ()
   (setf *genesis-output* nil)
-  (ac:spawn
-   (lambda ()
-     (start-network)
-     (send-genesis-utxo :monetary-supply 1000)
-     (spend-from-genesis *user* 1000)
-     (force-epoch-end))))
+  (let ((amount 1000))
+    (ac:spawn
+     (lambda ()
+       (start-network)
+       (send-genesis-utxo :monetary-supply amount)
+       (spend-from-genesis *user* amount)
+       (force-epoch-end)))))
 
