@@ -5,13 +5,10 @@
 (defun start-network (&key
                         (ipstr "127.0.0.1"))
   "IPSTR string) if you want something other than 127.0.0.1"
-
   (cosi-simgen::cosi-init ipstr)
   (cosi-simgen::cosi-generate)
   (cosi-simgen::init-sim)
-  (cosi-simgen::reset-blockchain)
-  #+(or)
-  (emotiq/cli:main))
+  (cosi-simgen::reset-blockchain))
 
 (defvar *singularity-account*
   (pbc:make-key-pair :singularity)
@@ -37,7 +34,7 @@
       (setf *genesis-output* utxog)
       (map nil
        (lambda (node)
-         (ac:send node :genesis-utxo utxog))
+         (ac:send (cosi-simgen::node-self node) :genesis-utxo utxog))
        cosi-simgen::*node-bit-tbl*))))
 
 (defun spend-from-genesis (receiver amount)
@@ -66,7 +63,9 @@
                                                              (list new-utxo)
                                                              (list new-utxo-secrets))))
               (map nil (lambda (node)
-                         (ac:send node :new-transaction transaction))
+                         (when (eq node cosi-simgen::*top-node*)
+                           (format t "sending txn ~A~%" transaction))
+                         (ac:send (cosi-simgen::node-self node) :new-transaction transaction))
                    bit-tbl)
               transaction)))))))
 
@@ -238,9 +237,16 @@ lookups
 (defun test-network ()
   (setf cosi-simgen::*blocks* nil)
   (setf *genesis-output* nil)
-  (start-network)
-  (send-genesis-utxo)
-  (let ((txn (spend-from-genesis *user* 100)))
-    (force-epoch-end)
-    txn))
+  (ac:spawn
+   (lambda ()
+     (start-network)
+     (send-genesis-utxo)
+     (let ((txn (spend-from-genesis *user* 100)))
+       (force-epoch-end))))
+  #+(or)
+  (emotiq/cli:main))
+
+(defun blocks ()
+  "returns *blocks* - only useful after network has settled"
+  cosi-simgen::*blocks*)
 

@@ -40,6 +40,7 @@ THE SOFTWARE.
 
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
+    (format t "node-dispatcher ~A~%" node)
     (um:dcase msg
       ;; ----------------------------
       ;; user accessible entry points - directed to leader node
@@ -54,6 +55,7 @@ THE SOFTWARE.
        (node-compute-cosi node reply-to :notary msg))
       
       (:new-transaction (msg)
+       (format t "new txn node=~A~%" node)
        (node-check-transaction msg))
       
       (:validate (reply-to sig bits)
@@ -376,6 +378,8 @@ Later it may become an ADS structure"
   nil)
 
 (defmethod node-check-transaction ((msg transaction))
+  (when (eq *top-node* *current-node*)
+    (format t "new-trans ~A~%" msg))
   (check-transaction-math msg))
 
 ;; -------------------------------
@@ -708,6 +712,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun reset-nodes ()
   (loop for node across *node-bit-tbl* do
+        (format t "reseting node ~A~%" node)
         (setf (node-bad        node) nil
               (node-blockchain node) nil)
         (clrhash (node-blockchain-tbl node))
@@ -1115,14 +1120,15 @@ bother factoring it with NODE-COSI-SIGNING."
          ((send-tx-to-all (tx)
             #||#
             (map nil (lambda (node)
-                       (send node :new-transaction tx))
+                       (format t "sending :new-transaction ~a to ~a~%" tx node)
+                       (send (node-self node) :new-transaction tx))
                  *node-bit-tbl*)
             #||#
             ;; (send *top-node* :new-transaction tx)
             )
           (send-genesis-to-all (utxo)
             (map nil (lambda (node)
-                       (send node :genesis-utxo utxo))
+                       (send (node-self node) :genesis-utxo utxo))
                  *node-bit-tbl*))
           )
        
