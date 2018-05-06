@@ -411,6 +411,7 @@ THE SOFTWARE.
       )))
 
 (defun ed-sub (pt1 pt2)
+  (emotiq:deb "ed-sub")
   (ed-add pt1 (ed-negate pt2)))
 
 (defun naf (k)

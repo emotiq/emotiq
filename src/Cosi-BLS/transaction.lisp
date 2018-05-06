@@ -180,15 +180,24 @@ correction factor gamadj on curve H for the overall transaction."
                (every 'validate-txout txouts))
       (let* ((ctxins  (mapcar 'pedersen-commitment (trans-txins trn)))
              (ttxin   (reduce 'ed-add ctxins
-                               :initial-value (ed-neutral-point)))
+                              :initial-value (ed-neutral-point)))
              (ctxouts   (mapcar 'pedersen-commitment (trans-txouts  trn)))
              (ttxout    (reduce 'ed-add ctxouts
-                               :initial-value (ed-nth-pt (trans-fee trn)))))
+                                :initial-value (ed-nth-pt (trans-fee trn)))))
+
+;;;         ;; check that Sum(txin) = Sum(txout) + Fee
+;;;         (ed-neutral-point-p
+;;;          (ed-add (ed-mul (range-proofs:hpt) gamadj)
+;;;                  (ed-sub ttxin ttxout)))
+
         ;; check that Sum(txin) = Sum(txout) + Fee
-        (ed-neutral-point-p
-         (ed-add (ed-mul (range-proofs:hpt) gamadj)
-                 (ed-sub ttxin ttxout)))
-        ))))
+        (let ((ea (ed-add (ed-mul (range-proofs:hpt) gamadj)
+                            (ed-sub ttxin ttxout))))
+          (emotiq:deb (format nil "vt3 type-of ea is ~A" (type-of ea) ))
+          (setf emotiq-user::*ea* ea)
+          (let ((enp (ed-neutral-point-p ea)))
+            (emotiq:deb (format nil "vt4 ~A" enp))
+            enp))))))
 
 ;; ---------------------------------------------------------------------
 ;; Recover spend info

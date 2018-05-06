@@ -27,6 +27,7 @@ THE SOFTWARE.
 |#
 
 (in-package :cosi-simgen)
+
 ;; ---------------------------------------------------------------
 
 (defun NYI (&rest args)
@@ -40,7 +41,6 @@ THE SOFTWARE.
 
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
-    (format t "node-dispatcher ~A~%" node)
     (um:dcase msg
       ;; ----------------------------
       ;; user accessible entry points - directed to leader node
@@ -55,7 +55,7 @@ THE SOFTWARE.
        (node-compute-cosi node reply-to :notary msg))
       
       (:new-transaction (msg)
-       (format t "new txn node=~A~%" node)
+       (emotiq:deb (format nil "new txn node=~A" node))
        (node-check-transaction msg))
       
       (:validate (reply-to sig bits)
@@ -379,7 +379,7 @@ Later it may become an ADS structure"
 
 (defmethod node-check-transaction ((msg transaction))
   (when (eq *top-node* *current-node*)
-    (format t "new-trans ~A~%" msg))
+    (emotiq:deb (format nil "new-trans ~A ~A" (type-of msg) msg)))
   (check-transaction-math msg))
 
 ;; -------------------------------
@@ -466,13 +466,16 @@ in a cache log to speed up later block validation.
 Return nil if transaction is invalid."
   (let* ((key        (bev (hash/256 tx)))
          (txout-keys (txout-keys tx)))
+    (setq emotiq::*txn* tx)
     (when (and (notany (lambda (txin)
                          ;; can't be spending an output you are just
                          ;; now creating
                          (find txin txout-keys))
                        (txin-keys tx))
                ;; now do the math
-               (validate-transaction tx))
+               (let ((val (validate-transaction tx)))
+                 (emotiq:deb (format nil "validate-transaction ~A ~A" (type-of tx) val)))
+               val)
       (cache-transaction key tx))
     ))
 

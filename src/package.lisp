@@ -42,7 +42,9 @@
    #:main
    #:start)
   (:export 
-   #:node))
+   #:node)
+  (:export 
+   #:deb)) ;; during simulation
    
 (defpackage emotiq/cli
   (:use #:cl)
