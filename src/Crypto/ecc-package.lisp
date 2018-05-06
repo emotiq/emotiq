@@ -37,6 +37,7 @@ THE SOFTWARE.
    :cached-var)
   (:export
    :with-mod
+   :with-fast-mod
    :reset-blinders
    :m^
    :msqrt
