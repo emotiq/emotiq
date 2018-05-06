@@ -13,9 +13,9 @@
   #+(or)
   (emotiq/cli:main))
 
-(defvar *singularity-account*
-  (pbc:make-key-pair :singularity)
-  "Origin of genesis transaction.")
+;(defvar *singularity-account*
+;  (pbc:make-key-pair :singularity)
+;  "Origin of genesis transaction.")
 
 (defvar *genesis-account*
   (pbc:make-key-pair :genesis)
@@ -28,7 +28,7 @@
 (defun send-genesis-utxo (&key (monetary-supply 1000))
   (when *genesis-output*
     (error "Can't create more than one genesis UTXO."))
-  (let ((pkey  (pbc:keying-triple-pkey *singularity-account*)))
+  (let ((pkey  (pbc:keying-triple-pkey *genesis-account*)))
     (print "Construct Genesis transaction")
     (multiple-value-bind (utxog secrg)
         (cosi/proofs:make-txout monetary-supply pkey)
@@ -45,9 +45,9 @@
     (error "No genesis account to spend from."))
   (with-accessors ((public-key pbc:keying-triple-pkey)
                    (private-key pbc:keying-triple-skey))
-      *singularity-account*
+      *genesis-account*
     (let ((minfo (cosi/proofs:decrypt-txout-info
-                  *genesis-output* (pbc:keying-triple-skey *singularity-account*))))
+                  *genesis-output* (pbc:keying-triple-skey *genesis-account*))))
       (multiple-value-bind (utxin info)  ;; spend side
           (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt minfo) ;; spend side
                                  (cosi/proofs:txout-secr-gamma minfo)
@@ -230,7 +230,7 @@ lookups
   (ac:spawn
    (lambda ()
      (start-network)
-     (send-genesis-utxo)
-     (spend-from-genesis *user* 100)
+     (send-genesis-utxo :monetary-supply 1000)
+     (spend-from-genesis *user* 1000)
      (force-epoch-end))))
 
