@@ -466,9 +466,13 @@ in a cache log to speed up later block validation.
 Return nil if transaction is invalid."
   (let* ((key        (bev (hash/256 tx)))
          (txout-keys (txout-keys tx)))
-    (when (and (notany (lambda (txin)
+    (when (and (notany
+                (or (format t "in notany~%")
+                    t)
+                (lambda (txin)
                          ;; can't be spending an output you are just
                          ;; now creating
+                         (format t "calling find~%")
                          (find txin txout-keys))
                        (txin-keys tx))
                ;; now do the math
