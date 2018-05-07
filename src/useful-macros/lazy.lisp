@@ -50,7 +50,7 @@ THE SOFTWARE.
 
 ;; equiv to #F
 (proclaim '(optimize (speed  3)
-                     (safety 0)
+                     ;; (safety 0)
                      (float  0)))
 
 ;; ------------------------------------

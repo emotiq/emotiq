@@ -33,7 +33,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------
 (in-package #:mp-compatibility)
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 3) (debug 3) #+:LISPWORKS (FLOAT 0)))
+(declaim  (OPTIMIZE (SPEED 3) #|(SAFETY 3)|# (debug 3) #+:LISPWORKS (FLOAT 0)))
 ;; --------------------------------------------------
 ;; Compatibility Layer
 

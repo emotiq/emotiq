@@ -493,8 +493,10 @@ THE SOFTWARE.
 (defmethod send (other-obj &rest message)
   (let ((mfn (car message)))
     (if (funcallable-p mfn)
-        (apply mfn other-obj (cdr message))
-      (error "wrong first arg for ac:send"))))
+      (apply mfn other-obj (cdr message))
+      ;; else
+      (error "Invalid SEND target"))
+    ))
 
 ;; ------------------------------------------
 ;; A mailbox repository...

@@ -36,7 +36,7 @@ THE SOFTWARE.
 ;; Physical network
 
 #+(AND :COM.RAL :LISPWORKS)
-(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
+(defvar *local-nodes*  '(("Arroyo.local"    . "127.0.0.1" #|"10.0.1.33"|#)
                          ("Malachite.local" . "10.0.1.6")
                          ("Dachshund.local" . "10.0.1.3")
                          ("Rambo"           . "10.0.1.13")
