@@ -60,15 +60,12 @@
                                    from-public-key from-private-key)
           (multiple-value-bind (new-utxo new-utxo-secrets) ;; sends
               (cosi/proofs:make-txout amount to-pubkey)
-            (setf *utxo* new-utxo
-                  *secrets* new-utxo-secrets)
             (let ((transaction (cosi/proofs:make-transaction (list txin)
                                                              (list txin-gamma)
                                                              (list new-utxo)
                                                              (list new-utxo-secrets))))
               (map nil (lambda (node)
                          (when (eq node cosi-simgen::*top-node*)
-                           (setf emotiq::*txn* transaction)
                            (ac:pr (format nil "sending txn ~A" transaction)))
                          (ac:send (cosi-simgen::node-self node) :new-transaction transaction))
                    bit-tbl)
@@ -245,6 +242,7 @@ lookups
      (lambda ()
        (start-network)
        (send-genesis-utxo :monetary-supply amount)
-       (spend-from-genesis *user* amount)
-       (force-epoch-end)))))
+       (let ((txn (spend-from-genesis *user* amount)))
+         (force-epoch-end)
+         (force-epoch-end))))))
 
