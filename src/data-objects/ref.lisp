@@ -45,7 +45,7 @@ THE SOFTWARE.
 
 (in-package #:ref)
    
-(declaim (optimize (speed 3) (safety 0) #+:LISPWORKS (float 0)))
+(declaim (optimize (speed 3) #|(safety 0)|# #+:LISPWORKS (float 0)))
 
 ;; ====================================================================
 

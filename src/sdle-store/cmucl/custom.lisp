@@ -20,7 +20,7 @@
   (store-type-object obj stream))
 
 (defrestore-sdle-store (structure-object stream)
-  (restore-type-object stream))
+  (restore-type-object stream 'structure-object))
 
 ;; Structure definitions
 (defun get-layout (obj)

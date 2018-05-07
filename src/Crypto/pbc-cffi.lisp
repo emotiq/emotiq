@@ -47,7 +47,6 @@ THE SOFTWARE.
    :secret-key
    :secret-key-val
    :signature
-   :subkey-signature
    :signature-val
    :pairing
    :pairing-val
@@ -330,11 +329,6 @@ Usually, they are in big-endian representation for PBC library."
         :initarg  :val))
   (:documentation "Wrapper for signatures computed in G1"))
 
-(defclass subkey-signature (g1-cmpr)
-  ((val :reader signature-val
-        :initarg  :val))
-  (:documentation "Wrapper for subkey signatures computed in G1"))
-
 (defclass secret-subkey (g1-cmpr)
   ((val :reader secret-subkey-val
         :initarg  :val))
@@ -429,7 +423,7 @@ Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
 (defparameter *chk-curve-fr449-params*
-  #x0732d454c47858b528680914049875b1b5620587b401786af7463846dcdd2fc45)
+  #xd7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
@@ -464,7 +458,7 @@ Barreto and Naehrig
 Size of q^12 is 3072 bits.")
 
 (defparameter *chk-curve-fr256-params*
-  #x0c99a23cae907bbb3675b74ba04d731c78a68dba60f91bddd9c91a83a546c8e74)
+  #xb937a11b2d71b08fecddfdd2be170ed1dfab1bd8891d45914f071cc63cd28443)
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
@@ -631,7 +625,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 3 out of 4 hash/256")
 
 (defparameter *chk-curve-fr256-params-old*
-  #x0f78607c325104ff451da10c516b929b4cdf6a12609316947bc6c29d1a0d77eab)
+  #xec9f36b197a11280f6cc4b47a8a3dc7b8663ccbb3975c3068c9069803673361d)
 
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
@@ -661,7 +655,7 @@ serves as a check on our implementation with his pbc-calc for
 comparison.")
 
 (defparameter *chk-curve-default-ar160-params*
-  #x08c6f089a6c6d637b34b3e9653dbe2a7430556624fc0f964d8ee35a1ac03ed6b7)
+  #x16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38)
 
 ;; ---------------------------------------------------------------------------------------
 
@@ -900,12 +894,6 @@ library."
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
 
-(defmethod sign-hash ((hash hash) (skey secret-subkey))
-  "Bare-bones BLS Signature on subkeying"
-  (make-instance 'subkey-signature
-                 :val (expt-pt-zr skey (zr-from-hash hash))))
-
-
 (defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   "Check bare-bones BLS Signature"
   (need-pairing)
@@ -915,14 +903,6 @@ library."
                        (pbuf *g2-size*  pkey))
       (zerop (_check-signature sbuf hbuf nhash pbuf))
       )))
-
-(defmethod check-hash ((hash hash) (sig subkey-signature) (pkey public-subkey))
-  "Check bare-bones BLS Signature on subkeying"
-  (need-pairing)
-  (let* ((p1  (compute-pairing sig pkey))
-         (h   (zr-from-hash hash))
-         (p2  (compute-pairing (expt-pt-zr (get-g1) h) (get-g2))))
-    (= (int p1) (int p2))))
 
 ;; --------------------------------------------------------------
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
