@@ -232,18 +232,21 @@ lookups
 
 (defparameter *user* (pbc:make-key-pair :user))
 (defparameter *user2* (pbc:make-key-pair :user))
+(defparameter *user3* (pbc:make-key-pair :user))
 (defparameter *txn1* nil)
 (defparameter *txn2* nil)
+(defparameter *txn3* nil)
 (defparameter *blocks* nil)
 
 ;; Recreate (tst-blk)
 (defun test-network ()
   (setf *genesis-output* nil)
   (setf *txn1* nil
-        *txn2* nil)
+        *txn2* nil
+        *tsn3* nil)
   (let ((amount 1000))
-    (ac:spawn
-     (lambda ()
+;    (ac:spawn
+;     (lambda ()
        (start-network)
        (send-genesis-utxo :monetary-supply amount)
        (force-epoch-end)
@@ -257,11 +260,21 @@ lookups
                               (pbc:keying-triple-pkey *user2*)
                               amount
                               cosi-simgen::*node-bit-tbl*)))
-             (force-epoch-end)
-             (setf *txn2* txn2))
+             (let ((txout2 (cosi/proofs::trans-txouts txn2)))
+               (let ((txn3 (spend *user2*
+                                  (first txout2)
+                                  (pbc:keying-triple-pkey *user3*)
+                                  amount
+                                  cosi-simgen::*node-bit-tbl*)))
+                 (force-epoch-end)
+                 (setf *txn2* txn2)
+                 (setf *txn3* txn3)))
            )
          )
-       ))))
+         )
+;       ))
+))
+       
 
 (defun txn1 ()
   *txn1*)
@@ -269,13 +282,16 @@ lookups
 (defun txn2 ()
   *txn2*)
 
+(defun txn3 ()
+  *txn3*)
+
 (defun blocks ()
   cosi-simgen::*blocks*)
 
 
 #|
 todo:
-- remove ac:spawn from test-network, see if it still works
+x remove ac:spawn from test-network, see if it still works
 - txn that splits outputs
 - elections
 - insert :fee in transactions (new field)
