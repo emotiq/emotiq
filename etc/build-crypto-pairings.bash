@@ -37,7 +37,7 @@ case ${uname_s} in
         ;;
 esac
 
-EXTERNAL_LIBS_VERSION=release-0.1.1
+EXTERNAL_LIBS_VERSION=release-0.1.2
 
 libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTERNAL_LIBS_VERSION}/emotiq-external-libs-${lib_suffix}.tgz
 
