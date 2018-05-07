@@ -48,8 +48,10 @@ pbc=${src}/pbc-0.5.14
 lib=${prefix}/lib
 inc=${prefix}/include
 
-version=`/bin/date "+%Y%m%d%H%M%S"`
+date_now=`/bin/date "+%Y%m%d%H%M%S"`
+hash=$(git rev-parse --short $(git log -1 --pretty=format:"%H"))
 
+version="${date_now}-${hash}"
 
 tar_dir=${prefix}/production
 tdir=emotiq-${version}-${arch}
