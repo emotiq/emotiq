@@ -6,5 +6,15 @@ to run the simulation:
 
 to see the blocks:
 
-- cosi-simgen::*blocks*
+- (in-package :emotiq-user)
+- (blocks)
+
+to see the single transaction
+
+- (in-package :emotiq-user)
+- (txn)
+
+both of these functions only work after the system has settled down.
+
+
 
