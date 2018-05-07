@@ -65,8 +65,6 @@
                                                              (list new-utxo)
                                                              (list new-utxo-secrets))))
               (map nil (lambda (node)
-                         (when (eq node cosi-simgen::*top-node*)
-                           (ac:pr (format nil "sending txn ~A" transaction)))
                          (ac:send (cosi-simgen::node-self node) :new-transaction transaction))
                    bit-tbl)
               transaction)))))))

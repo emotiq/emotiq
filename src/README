@@ -1,22 +1,10 @@
+to run the simulation:
 
-to build and run:
+- (ql:quickload :emotiq/sim)
+- (in-package :emotiq-user)
+- (test-network)
 
-> (ql:quickload :emotiq/node)
-> (emotiq:node)
+to see the blocks:
 
-You should see an "emotiq>" prompt, at which you can type 'help'.
-
-
-
-To get the simulator to work on a single machine:
-
-change the IP address in node-sim.lisp
-
-> (ql:quickload :emotiq/sim)
-> (cosi-simgen:node) ;; which defaults to the *top-node* being 127.0.0.1
-or
-> (cosi-simgen:node "192.168.2.13") ;; (replace the string with your IP address) *top-node* becomes the specified string
-
-On LispWorks, open an Output-Browser to see the output.  Other lisps, the output ends up
-being displayed where PRINT displays.
+- cosi-simgen::*blocks*
 

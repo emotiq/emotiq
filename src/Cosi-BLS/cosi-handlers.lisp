@@ -55,7 +55,6 @@ THE SOFTWARE.
        (node-compute-cosi node reply-to :notary msg))
       
       (:new-transaction (msg)
-       (ac:pr ":new-transaction")
        (node-check-transaction msg))
       
       (:validate (reply-to sig bits)
