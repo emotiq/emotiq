@@ -595,6 +595,7 @@ topo-sorted partial order"
         ;; put these back in the pond for next round
         (unspend-utxos tx))
       ;; now hd represents the actual transactions going into the next block
+      (pr (format nil "~D Transactions" (length hd)))
       hd)))
       
 ;; ----------------------------------------------------------------------
