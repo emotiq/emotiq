@@ -232,27 +232,54 @@ lookups
 
 (defparameter *user* (pbc:make-key-pair :user))
 (defparameter *user2* (pbc:make-key-pair :user))
-(defparameter *txn* nil)
+(defparameter *txn1* nil)
+(defparameter *txn2* nil)
 (defparameter *blocks* nil)
 
 ;; Recreate (tst-blk)
 (defun test-network ()
   (setf *genesis-output* nil)
+  (setf *txn1* nil
+        *txn2* nil)
   (let ((amount 1000))
     (ac:spawn
      (lambda ()
        (start-network)
        (send-genesis-utxo :monetary-supply amount)
        (force-epoch-end)
-       (let ((txn (spend-from-genesis *user* amount)))  ;; spend txn must use up all input UTXO's
+       (let ((txn-genesis (spend-from-genesis *user* amount)))  ;; spend txn must use up all input UTXO's, this is actually, the "genesis transaction"
          (force-epoch-end)
-         (setf *txn* txn)  ;; actors run asynchronously, check value of *txn* only when all activity stops
-         )))))
+         (setf *txn1* txn-genesis)  ;; actors run asynchronously, check value of *txn* only when all activity stops
+         (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
+           (assert (= 1 (length txout2)))
+           (let ((txn2 (spend *user*
+                              (first txout2)
+                              (pbc:keying-triple-pkey *user2*)
+                              amount
+                              cosi-simgen::*node-bit-tbl*)))
+             (force-epoch-end)
+             (setf *txn2* txn2))
+           )
+         )
+       ))))
 
-(defun txn ()
-  *txn*)
+(defun txn1 ()
+  *txn1*)
+
+(defun txn2 ()
+  *txn2*)
 
 (defun blocks ()
   cosi-simgen::*blocks*)
 
 
+#|
+todo:
+- remove ac:spawn from test-network, see if it still works
+- txn that splits outputs
+- elections
+- insert :fee in transactions (new field)
+- txn dumper
+- get signing to work in sim (not always OK?) [what purpose?]
+- [ignore] investigate why I saw 5 blocks for 3 epochs?  intermittent?  Or temp bug during fixing?
+|#

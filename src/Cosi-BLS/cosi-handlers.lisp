@@ -1076,7 +1076,10 @@ bother factoring it with NODE-COSI-SIGNING."
                                      #+(or)
                                      (inspect new-block)
                                      (push new-block *blocks*)
-                                     (print "Block committed to blockchain"))
+                                     (print (format nil "~A (top-node=~A) Block committed to chain, epoch = ~A"
+                                                    (cosi-simgen::node-ip node)
+                                                    (cosi-simgen::node-ip *top-node*)
+                                                    (bc-block-epoch new-block))))
                                     
                                     (t
                                      (print "Failed to get sufficient signatures during commit phase"))
