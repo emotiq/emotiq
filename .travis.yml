@@ -70,7 +70,7 @@ jobs:
         provider: releases
         api_key:
           secure: "O4vQSliHmXERI2Hl2l3gLWZ4vR3aAFSfsk+sraBOz74u7uoc1t3ztJMluZ5INNbx2KOE2lLxND/NETAQkj5PCzdrYd2Aar6goG1ePLtzwd3wdzKa9RyIEEek586dATIhdMKH4+HeddfhE2uOE4eaHLXmMMtoiX5KEyZmUAK2tTjjvSQAVVl2RV7Dzoa5EjmjXgt1mRY3AJ4Erap3/Q4Iw0A5ZZXOl4HOx6j0ufph3y5GsnMU1k9giEo0jfM54o1LOfwsVW7Tv/EpGn0Qz1VgM+aFnPTBiEr4lLuYf12f+LJNOGugwV3Rv3TLDlPwnL76zBzvw4wJo+NtV2ysu+jhwHSigBGjqR55wdom6OrizUmCCyvgZdf3JlkKNvqbqJgsQiWeyG2oVjlGz9z+eGJ92k/7SrhYLBzOszKNIrZPMr3y4saCwZyOYKwMbsHiRkPOm3xy2po+jB9Lq7gt2dd8c/FENk/Bcug1wf3Cjr/4+s+P1BnHQcHzrfsd4zGfDKXDmkF2/iCWd4QnedlyuwWoAE0IsVpdZ/yP3tm899Rg8xXrbTQRzBK9M+gDZp2uYw4fZwV2yuM/SR5zGeXcIOnC4+5c8p51sLgdTq1IAWKiqSOEQfKlpqsnwnpOuXOcvK25ewu0d99W86N4QW/+FHiO/+1EMjRpoYAcy1DthTfkXWY="
-        file: "var/local/production/emotiq-$(cat var/local/production/version.txt)-linux.bz2"
+        file: "var/local/production/emotiq-$(cat var/local/production/version.txt)-linux.tar.bz2"
         skip_cleanup: true
         on:
           tags: true
@@ -82,7 +82,7 @@ jobs:
         provider: releases
         api_key:
           secure: "O4vQSliHmXERI2Hl2l3gLWZ4vR3aAFSfsk+sraBOz74u7uoc1t3ztJMluZ5INNbx2KOE2lLxND/NETAQkj5PCzdrYd2Aar6goG1ePLtzwd3wdzKa9RyIEEek586dATIhdMKH4+HeddfhE2uOE4eaHLXmMMtoiX5KEyZmUAK2tTjjvSQAVVl2RV7Dzoa5EjmjXgt1mRY3AJ4Erap3/Q4Iw0A5ZZXOl4HOx6j0ufph3y5GsnMU1k9giEo0jfM54o1LOfwsVW7Tv/EpGn0Qz1VgM+aFnPTBiEr4lLuYf12f+LJNOGugwV3Rv3TLDlPwnL76zBzvw4wJo+NtV2ysu+jhwHSigBGjqR55wdom6OrizUmCCyvgZdf3JlkKNvqbqJgsQiWeyG2oVjlGz9z+eGJ92k/7SrhYLBzOszKNIrZPMr3y4saCwZyOYKwMbsHiRkPOm3xy2po+jB9Lq7gt2dd8c/FENk/Bcug1wf3Cjr/4+s+P1BnHQcHzrfsd4zGfDKXDmkF2/iCWd4QnedlyuwWoAE0IsVpdZ/yP3tm899Rg8xXrbTQRzBK9M+gDZp2uYw4fZwV2yuM/SR5zGeXcIOnC4+5c8p51sLgdTq1IAWKiqSOEQfKlpqsnwnpOuXOcvK25ewu0d99W86N4QW/+FHiO/+1EMjRpoYAcy1DthTfkXWY="
-        file: "var/local/production/emotiq-$(cat var/local/production/version.txt)-macos.bz2"
+        file: "var/local/production/emotiq-$(cat var/local/production/version.txt)-macos.tar.bz2"
         skip_cleanup: true
         on:
           tags: true
