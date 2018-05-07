@@ -231,6 +231,9 @@ lookups
 
 
 (defparameter *user* (pbc:make-key-pair :user))
+(defparameter *user2* (pbc:make-key-pair :user))
+(defparameter *txn* nil)
+(defparameter *blocks* nil)
 
 ;; Recreate (tst-blk)
 (defun test-network ()
@@ -240,7 +243,16 @@ lookups
      (lambda ()
        (start-network)
        (send-genesis-utxo :monetary-supply amount)
-       (let ((txn (spend-from-genesis *user* amount)))
+       (force-epoch-end)
+       (let ((txn (spend-from-genesis *user* amount)))  ;; spend txn must use up all input UTXO's
          (force-epoch-end)
-         (force-epoch-end))))))
+         (setf *txn* txn)  ;; actors run asynchronously, check value of *txn* only when all activity stops
+         )))))
+
+(defun txn ()
+  *txn*)
+
+(defun blocks ()
+  cosi-simgen::*blocks*)
+
 
