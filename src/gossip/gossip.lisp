@@ -440,7 +440,7 @@ are in place between nodes.
 ; We'll use these for real (not simulated on one machine) protocol over the network
 (defclass proxy-gossip-node (gossip-mixin actor-mixin)
   ((real-address :initarg :real-address :initform nil :accessor real-address
-            :documentation "Real IP address of remote node")
+            :documentation "Real IP or DNS address of remote node")
    (real-port :initarg :real-port :initform *nominal-gossip-port* :accessor real-port
               :documentation "Real port of remote node")
    (real-uid :initarg :real-uid :initform nil :accessor real-uid
@@ -1748,6 +1748,12 @@ gets sent back, and everything will be copacetic.
 ;   srcuid of sending node
 ;   gossip-msg
 
+(defun make-ip-key (address port)
+  (if (and (integerp address)
+           (null port))
+      address ; means port is already folded into real-address
+      (+ (ash (usocket::host-to-hbo address) 16) port)))
+
 (defmethod memoize-proxy ((proxy proxy-gossip-node) &optional subtable)
   "Memoize given proxy for quick lookup. Returns proxy itself."
   (with-slots (real-address real-port real-uid) proxy
@@ -1755,10 +1761,7 @@ gets sent back, and everything will be copacetic.
                    (udp-gossip-node *udp-proxy-table*)
                    (tcp-gossip-node *tcp-proxy-table*))))
       (unless subtable
-        (let ((key (if (and (integerp real-address)
-                            (null real-port))
-                       real-address ; means port is already folded into real-address
-                       (+ (ash real-address 16) real-port))))
+        (let ((key (make-ip-key real-address real-port)))
           (setf subtable (gethash key table))
           (unless subtable (setf subtable (setf (gethash key table) (make-hash-table))))))
       (setf (gethash real-uid subtable) proxy))))
@@ -1767,12 +1770,8 @@ gets sent back, and everything will be copacetic.
   "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
    Returns newly-created or old proxy-gossip-node.
    Found or newly-created proxy will be added to *nodes* database for this process."
-  (let* ((key (if (and (integerp real-address)
-                       (null real-port))
-                  real-address ; means port is already folded into real-address
-                  (progn
-                    (setf real-address (usocket::host-to-hbo real-address))
-                    (+ (ash real-address 16) real-port))))
+  (check-type real-port integer) ; might want to support lookup of port-name to port-number eventually
+  (let* ((key (make-ip-key real-address real-port))
          (table (case mode
                    (:udp *udp-proxy-table*)
                    (:tcp *tcp-proxy-table*)))
@@ -1836,16 +1835,17 @@ gets sent back, and everything will be copacetic.
 
 ;; ------------------------------------------------------------------------------
 
-(defun incoming-message-handler-udp (raw-message-buffer rem-address rem-port)
+(defun incoming-message-handler-udp (raw-message-buffer rem-address)
   "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
-  ;network message: (list (real-uid node) srcuid msg)
+  ;                                                v--- Port at which passive listener is running
+  ;network message: (list (real-uid node) srcuid rem-port msg)
   ;                     uid  --^            ^-- source uid
   ;             on local machine            on destination machine
   (with-authenticated-packet (packet)
       (loenc:decode raw-message-buffer)
-    (destructuring-bind (destuid srcuid msg) packet ;; note: if not what we were expecting, then this will signal error
+    (destructuring-bind (destuid srcuid rem-port msg) packet ;; note: if not what we were expecting, then this will signal error
       (when (debug-level 1)
         (debug-log :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
       (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
@@ -1860,14 +1860,14 @@ gets sent back, and everything will be copacetic.
   "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
-  ;network message: (list (real-uid node) srcuid msg)
+  ;                                                v--- Port at which passive listener is running
+  ;network message: (list (real-uid node) srcuid rem-port msg)
   ;                    uid  --^            ^-- source uid
   ;             on local machine     on destination machine
   (with-authenticated-packet (packet)
       (loenc:deserialize stream)
-    (let ((rem-address (usocket:get-peer-address stream))
-          (rem-port    (usocket:get-peer-port stream)))
-      (destructuring-bind (destuid srcuid msg) packet ;; if not what we expected, this will signal error
+    (let ((rem-address (usocket:get-peer-address stream)))
+      (destructuring-bind (destuid srcuid rem-port msg) packet ;; if not what we expected, this will signal error
         (when (debug-level 1)
           (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
         (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
@@ -1886,7 +1886,7 @@ gets sent back, and everything will be copacetic.
             (when (eql :SHUTDOWN-SERVER *shutting-down*)
                 (setf *shutting-down* nil)
                 (return-from serve-gossip-port))
-	    (multiple-value-bind (buf buf-len rem-ip rem-port)
+	    (multiple-value-bind (buf buf-len rem-ip)
 		(usocket:socket-receive socket maxbuf (length maxbuf))
               (let* ((saf-buf (if (eq buf maxbuf)
                                   (subseq buf 0 buf-len)
@@ -1895,7 +1895,8 @@ gets sent back, and everything will be copacetic.
                 (when shutdown-msg?
                   (setf *shutting-down* nil)
                   (return-from serve-gossip-port))
-                (incoming-message-handler-udp saf-buf rem-ip rem-port))))
+                (incoming-message-handler-udp saf-buf rem-ip))))
+        (usocket:socket-shutdown socket ':IO)
         (usocket:socket-close socket))))
 
 ; TCP not done yet
@@ -1920,7 +1921,7 @@ gets sent back, and everything will be copacetic.
           (setf stream (usocket:wait-for-input stream :timeout 10 :ready-only t))
           (setf timed-out? (not (eql :READ (usocket::state stream))))
           
-          (when (debug-level 4)
+          (when (debug-level 3)
             (if timed-out?
                 (debug-log "Giving up.")
                 (debug-log "Got data.")))
@@ -1943,7 +1944,6 @@ gets sent back, and everything will be copacetic.
   (USOCKET:ADDRESS-IN-USE-ERROR ()
                                 :ADDRESS-IN-USE)))
 
-; TCP not done yet
 (defun open-passive-tcp-socket (port)
   "Open a passive tcp socket. Returns socket if successful.
   Returns a keyword if some kind of error."
@@ -1973,22 +1973,22 @@ gets sent back, and everything will be copacetic.
                    ; otherwise, assume process exists for serving UDP on some OTHER lisp image, which means we can retry
                    (start-gossip-server mode (1+ port) (1+ try-count)))))))))
 
-; TCP not done yet
 (defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*) (try-count 0))
-  (unless (find-process *tcp-gossip-server-name*)
-    (setf *shutting-down* nil)
-    (let* ((socket open-passive-tcp-socket))
-      (cond ((usocket:stream-server-usocket-p socket)
-             (mpcompat:process-run-function *tcp-gossip-server-name* nil
-               'serve-gossip-port mode socket)
-             (values (setf *tcp-gossip-socket* socket)
-                     (setf *actual-tcp-gossip-port* (usocket:get-local-port socket))))
-            ((eql :ADDRESS-IN-USE socket)
-             (if (find-process *tcp-gossip-server-name*)
-                 ; if process exists for serving TCP in THIS LISP IMAGE, we're done
-                 nil
-                 ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
-                 (start-gossip-server mode (1+ port) (1+ try-count))))))))
+  (when (< try-count *max-server-tries*)
+    (unless (find-process *tcp-gossip-server-name*)
+      (setf *shutting-down* nil)
+      (let* ((socket (open-passive-tcp-socket port)))
+        (cond ((usocket:stream-server-usocket-p socket)
+               (mpcompat:process-run-function *tcp-gossip-server-name* nil
+                 'serve-gossip-port mode socket)
+               (values (setf *tcp-gossip-socket* socket)
+                       (setf *actual-tcp-gossip-port* (usocket:get-local-port socket))))
+              ((eql :ADDRESS-IN-USE socket)
+               (if (find-process *tcp-gossip-server-name*)
+                   ; if process exists for serving TCP in THIS LISP IMAGE, we're done
+                   nil
+                   ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
+                   (start-gossip-server mode (1+ port) (1+ try-count)))))))))
 
 ;;; This is different from cosi-simgen::internal-send-socket.
 ;;; Don't create a new socket, and don't close it when we're done.
@@ -1996,18 +1996,18 @@ gets sent back, and everything will be copacetic.
 ;;;   other end sees the proper port to respond to.
 
 (let ((sender (ac:make-actor
-               (lambda (socket packet nb ip port)
+               (lambda (socket packet nb addr port)
                  (unless (eql nb (usocket:socket-send socket packet nb
-                                                      :host ip :port port))
-                   (ac::pr :socket-send-error ip packet))))))
+                                                      :host addr :port port))
+                   (ac::pr :socket-send-error addr packet))))))
   
-  (defun internal-send-socket (ip port packet)
+  (defun internal-send-socket (addr port packet)
     (let ((nb (length packet)))
       (when (> nb cosi-simgen::*max-buffer-length*)
         (error "Packet too large for UDP transmission"))
       (let ((socket *udp-gossip-socket*))
-        ;; (pr :sock-send (length packet) real-ip packet)
-        (ac:send sender socket packet nb ip port)))))
+        ;; (pr :sock-send (length packet) addr packet)
+        (ac:send sender socket packet nb addr port)))))
 
 (defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
   (declare (ignore port))
@@ -2066,7 +2066,7 @@ original message."
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (cond (*udp-gossip-socket*
          (maybe-log node :TRANSMIT msg)
-         (let* ((payload (sign-message (list (real-uid node) srcuid msg)))
+         (let* ((payload (sign-message (list (real-uid node) srcuid *actual-udp-gossip-port* msg)))
                 (packet  (loenc:encode payload))
                 (nb      (length packet)))
            (when (> nb cosi-simgen::*max-buffer-length*)
@@ -2080,11 +2080,16 @@ original message."
   "Send message across network.
   srcuid is that of the (real) local gossip-node that sent message to this node."
   (let ((stream (ensure-open-stream (real-address node) (real-port node))))
-    (when (streamp stream)
-      (let ((payload (sign-message ;; (list (uid node) (real-uid node) srcuid msg)
-                                   ;; DBM - the above does not match recv expectations
-                                   (list (real-uid node) srcuid msg))))
-        (loenc:serialize payload stream)))))
+    (cond ((streamp stream)
+           (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
+             (loenc:serialize payload stream)))
+          (t
+           (maybe-log node :CANNOT-TRANSMIT "no stream")))))
+
+(defun ensure-open-stream (addr port)
+  (when (debug-level 3)
+            (debug-log "Opening stream to " (usocket::host-to-vector-quad addr) port))
+  (usocket:socket-connect addr port :protocol ':stream :element-type '(unsigned-byte 8)))
 
 #|
 (defun ensure-open-stream (ip port)
@@ -2120,7 +2125,7 @@ original message."
   (vector-push-extend *log* *archived-logs*)
   (setf *log* (new-log)))
 
-(defun run-gossip-sim (&optional (protocol :UDP))
+(defun run-gossip-sim (&optional (protocol :TCP))
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
@@ -2176,32 +2181,39 @@ original message."
 (defmethod ccl::local-socket-address ((socket ccl::udp-socket))
   (getf (ccl::socket-keys socket) :local-address))
 
-(defun other-port ()
+(defun other-udp-port ()
   (when *udp-gossip-socket*
     (if (= 65002 *actual-udp-gossip-port*)
         65003
         65002)))
+
+(defun other-tcp-port ()
+  (when *tcp-gossip-socket*
+    (if (= 65002 *actual-tcp-gossip-port*)
+        65003
+        65002)))
+
     
 ; UDP TESTS
 ; Test 1
 ; ON SERVER MACHINE
 ; (clrhash *nodes*)
-#+TEST
+#+TEST1
 (setf localnode (make-node
   :UID 200
   :NEIGHBORS nil))
-; (run-gossip-sim)
+; (run-gossip-sim :UDP)
 
 ; ON CLIENT MACHINE
 ; (clrhash *nodes*)
-; (run-gossip-sim)
+; (run-gossip-sim :UDP)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
 (setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
 
 
-#+TEST ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
+#+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
   :UID 201
@@ -2216,14 +2228,14 @@ original message."
 ; ; ON SERVER MACHINE
 ; (clrhash *nodes*)
 ; (make-graph 10)
-; (run-gossip-sim)
+; (run-gossip-sim :UDP)
 
 ; ON CLIENT MACHINE
 ; (clrhash *nodes*)
-; (run-gossip-sim)
+; (run-gossip-sim :UDP)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
 (setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
 
@@ -2235,6 +2247,34 @@ original message."
 ; (solicit-direct localnode :count-alive)
 ; (solicit-direct localnode :list-alive)
 ; (inspect *log*)
+
+
+; Test 3: List live nodes at given address via TCP
+; ; ON SERVER MACHINE
+; (clrhash *nodes*)
+; (make-graph 10)
+; (run-gossip-sim :TCP)
+
+; ON CLIENT MACHINE
+; (clrhash *nodes*)
+; (run-gossip-sim :TCP)
+; (archive-log)
+; (set-protocol-style :neighborcast)
+#+TEST-LOCALHOST
+(setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+#+TEST-AMAZON
+(setf rnode (ensure-proxy-node :TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+
+#+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
+       ;   continuation that solicit-wait makes across the network
+(setf localnode (make-node
+  :UID 201
+  :NEIGHBORS (list (uid rnode))))
+; (solicit-direct localnode :count-alive)
+; (solicit-direct localnode :list-alive)
+; (inspect *log*)
+
+
 
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
