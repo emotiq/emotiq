@@ -1,0 +1,6 @@
+to run simulation:
+
+(asdf:make :emotiq/sim)
+(in-package :emotiq/sim)
+once:   (cosi-simgen::cosi-generate :nodes 3)
+(sim)

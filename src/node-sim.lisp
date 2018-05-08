@@ -293,6 +293,10 @@ lookups
                  (setf *txn2* txn2)
                  (setf *txn3* txn3))))))))))
 
+(defun sim (&key (cloaked t))
+  (initialize)
+  (run))
+
 (defun txn1 ()
   *txn1*)
 
