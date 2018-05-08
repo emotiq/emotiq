@@ -48,10 +48,11 @@ THE SOFTWARE.
                                      (:file "cosi-blkdef")
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
-                                     ;; (:file "cosi-sockets")
                                      (:file "cosi-netw-xlat")
                                      (:file "range-proofs")
                                      (:file "transaction")
-                                     (:file "cosi-handlers")))))
+                                     (:file "cosi-handlers")
+                                     (:file "cosi-config")))))
+
 
                         
