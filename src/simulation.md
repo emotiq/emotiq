@@ -1,15 +1,21 @@
-to run the simulation:
+# to run the simulation:
 
 - (ql:quickload :emotiq/sim)
 - (in-package :emotiq-user)
-- (test-network)
+- (initialize-sim)
+
+If you don't see messages like 
+    "fowarding-by-default-to-me: (RESET)" 
+the initialization has failed.      
+
+- (run-sim)
 
 to see the blocks:
 
 - (in-package :emotiq-user)
 - (blocks)
 
-to see the single transaction
+To see a transaction
 
 - (in-package :emotiq-user)
 - (txn)

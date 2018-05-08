@@ -2,14 +2,12 @@
  
 (in-package :emotiq-user)
 
-(defun start-network (&key
-                        (ipstr "127.0.0.1"))
-  "IPSTR string) if you want something other than 127.0.0.1"
-
-  (cosi-simgen::cosi-init ipstr)
-  (cosi-simgen::cosi-generate)
+(defun initialize-sim (&key (leader-node "127.0.0.1"))
+  (setf actors::*maximum-age* 120)
+  (cosi-simgen::cosi-init leader-node)
+  #+(or) ;; Weird:  can't run cosi-generate as part of the process
+  (cosi-simgen::cosi-generate :nodes 3)
   (cosi-simgen::init-sim)
-  (cosi-simgen::reset-system)
   #+(or)
   (emotiq/cli:main))
 
@@ -99,14 +97,8 @@
               transaction)))))))
 
 (defun force-epoch-end ()
-;  (ac:send (cosi-simgen::node-self cosi-simgen::*top-node*) :make-block))
-       (sleep 10)
-       (map nil (lambda (node)
-                  (cosi-simgen::send (cosi-simgen::node-self node) :answer
-                        (format nil "Ready-to-run: ~A" (cosi-simgen::short-id node))))
-            cosi-simgen::*node-bit-tbl*)
-       (cosi-simgen::send cosi-simgen::*leader* :make-block))
-;       (send *top-node* :make-block))
+  (cosi-simgen::send cosi-simgen::*leader* :make-block))
+
 
 #|
 create a Genesis UTXO: (special case for initialization) AMT0
@@ -274,20 +266,20 @@ lookups
 (defparameter *blocks* nil)
 
 ;; Recreate (tst-blk)
-(defun test-network (&key (cloaked t))
+(defun run-sim (&key (cloaked t))
   (setf *genesis-output* nil)
   (setf *txn1* nil
         *txn2* nil
         *txn3* nil)
-  (let ((amount 1000))
-    (ac:spawn
-     (lambda ()
-       (start-network)
+  (cosi-simgen::reset-nodes)
+  (ac:spawn
+   (lambda ()
+     (let ((amount 1000))
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
-       (force-epoch-end)
-       (let ((txn-genesis (spend-from-genesis *user* amount :cloaked cloaked)))  ;; spend txn must use up all input UTXO's, this is actually, the "genesis transaction"
-         (force-epoch-end)
-         (setf *txn1* txn-genesis)  ;; actors run asynchronously, check value of *txn* only when all activity stops
+       ;; spend txn must use up all input UTXO's, this is actually, the "genesis transaction"
+       (let ((txn-genesis (spend-from-genesis *user* amount :cloaked cloaked))) 
+         ;; actors run asynchronously, check value of *txn* only when all activity stops
+         (setf *txn1* txn-genesis)  
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
            (let ((txn2 (spend *user*
@@ -298,21 +290,16 @@ lookups
                               :cloaked cloaked)))
              (let ((txout2 (cosi/proofs::trans-txouts txn2)))
                (let ((txn3 (spend-list *user2*
-                                              (first txout2)
-                                              (list (pbc:keying-triple-pkey *user3*)
-                                                    (pbc:keying-triple-pkey *user2*))
-                                              (list (- amount 100) 100)  ;; send 900 to user 3, 100 back as change
-                                              cosi-simgen::*node-bit-tbl*
-                                              :cloaked cloaked)))
+                                       (first txout2)
+                                       (list (pbc:keying-triple-pkey *user3*)
+                                             (pbc:keying-triple-pkey *user2*))
+                                       ;; send 900 to user 3, 100 back as change
+                                       (list (- amount 100) 100)  
+                                       cosi-simgen::*node-bit-tbl*
+                                       :cloaked cloaked)))
                  (force-epoch-end)
                  (setf *txn2* txn2)
-                 (setf *txn3* txn3)))
-           )
-         )
-         )
-       ))
-))
-       
+                 (setf *txn3* txn3))))))))))
 
 (defun txn1 ()
   *txn1*)
@@ -324,8 +311,7 @@ lookups
   *txn3*)
 
 (defun blocks ()
-  cosi-simgen::*blocks*)
-
+  (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
 
 #|
 todo:
