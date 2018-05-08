@@ -2,7 +2,7 @@
 (in-package #:mp-compatibility)
 ;; --------------------------------------------------
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
+(declaim  (OPTIMIZE (SPEED 3) #|(SAFETY 0)|# #+:LISPWORKS (FLOAT 0)))
 #|
 The MIT License
 

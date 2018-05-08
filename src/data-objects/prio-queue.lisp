@@ -30,7 +30,7 @@ THE SOFTWARE.
 (in-package #:priq)
 
 ;; equiv to #F
-(declaim  (OPTIMIZE (SPEED 3) (SAFETY 0) #+:LISPWORKS (FLOAT 0)))
+(declaim  (OPTIMIZE (SPEED 3) #|(SAFETY 0)|# #+:LISPWORKS (FLOAT 0)))
 
 ;; All FIFO Queues provide methods ADDQ, POPQ, and EMPTYQ-P, as well
 ;; as individual make-xxx constructors for variants.
