@@ -54,15 +54,20 @@
 (defun write-inner-commands (stream nodelist)
   (let ((edges-already-drawn (make-hash-table :test 'equalp)))
     (dolist (node nodelist)
-      (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
-              (uid node))
-      (dolist (neighbor (neighbors node))
-        (let* ((minuid (min neighbor (uid node)))
-               (maxuid (max neighbor (uid node)))
-               (key (cons minuid maxuid)))
-          (unless (gethash key edges-already-drawn) ; don't draw links twice
-            (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
-            (setf (gethash key edges-already-drawn) t)))))))
+      (cond ((typep node 'proxy-gossip-node) ; draw proxies in yellow
+             ; proxies don't have neighbors, so edges to proxies are strictly "to" the proxy, never "from"
+             (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
+                     (uid node)))
+            (t ; "real" nodes in green
+             (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+                     (uid node))
+             (dolist (neighbor (neighbors node))
+               (let* ((minuid (min neighbor (uid node)))
+                      (maxuid (max neighbor (uid node)))
+                      (key (cons minuid maxuid)))
+                 (unless (gethash key edges-already-drawn) ; don't draw links twice
+                   (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
+                   (setf (gethash key edges-already-drawn) t)))))))))
 
 (defun write-dotfile-stream (stream nodelist)
   (let ((mapname (random-name)))

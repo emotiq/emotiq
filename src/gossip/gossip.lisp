@@ -43,16 +43,22 @@
 
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
+(defvar *tcp-socket-waiter-name* 'TCP-waiter)
 
 (defvar *debug* 4 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
-(defun debug-level (&optional level)
-  (when *debug*
-    (if (numberp *debug*)
-      (if (numberp level)
-        (>= *debug* level)
-        t)
-      t)))
+(defun debug-level (&optional (level nil level-supplied-p))
+  (cond (level-supplied-p
+         (when *debug*
+           (if (numberp *debug*)
+               (if (numberp level)
+                   (>= *debug* level)
+                   t)
+               t)))
+        (t *debug*)))
+
+(defun (setf debug-level) (val)
+  (setf *debug* val))
 
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
@@ -98,7 +104,7 @@ Discussion: :gossip style is more realistic for "loose" networks where nodes don
 are in place between nodes.
 |#
 
-(defparameter *gossip-absorb-errors* t "True for normal use; nil for debugging")
+(defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
 (defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
 (defvar *uid-lock* (mpcompat:make-lock) "Lock for *last-uid*")
 
@@ -358,13 +364,13 @@ are in place between nodes.
 (defun make-final-reply (&rest args)
   (apply 'make-instance 'final-reply args))
 
-(defclass timeout (gossip-message-mixin solicitation-uid-mixin)
+(defclass system-async (gossip-message-mixin solicitation-uid-mixin)
   ()
-  (:documentation "Used only for special timeout messages. In this case, solicitation-uid field
+  (:documentation "Used only for special timeout and socket-wakeup messages. In this case, solicitation-uid field
     is used to indicate which solicitation should be timed out at the receiver of this message."))
 
-(defun make-timeout (&rest args)
-  (let ((timeout (apply 'make-instance 'timeout args)))
+(defun make-system-async (&rest args)
+  (let ((timeout (apply 'make-instance 'system-async args)))
     (when (null (solicitation-uid timeout)) (error "No solicitation-uid on timeout"))
     timeout))
 
@@ -373,7 +379,7 @@ are in place between nodes.
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
 
-(defmethod copy-message :around ((msg timeout))
+(defmethod copy-message :around ((msg system-async))
   (let ((new-msg (call-next-method)))
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
@@ -456,7 +462,8 @@ are in place between nodes.
   )
 
 (defclass tcp-gossip-node (proxy-gossip-node)
-  ())
+  ((open-sockets-table :initarg :open-sockets-table :initform (kvs:make-store :hashtable) :accessor open-sockets-table
+                       :documentation "Table mapping soluids to open streams for use by replies.")))
 
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
@@ -475,6 +482,8 @@ are in place between nodes.
     :node node
     :fn 
     (lambda (&rest msg)
+      (when (debug-level 5)
+        (debug-log "Gossip Actor" (ac::current-actor) "received" msg))
       (apply 'gossip-dispatcher node msg))))
 
 #+OBSOLETE
@@ -825,7 +834,7 @@ dropped on the floor.
 (defmethod briefname ((msg reply) &optional (prefix "rep"))
   (format nil "~A~D" prefix (uid msg)))
 
-(defmethod briefname ((msg timeout) &optional (prefix "timeout"))
+(defmethod briefname ((msg system-async) &optional (prefix "timeout"))
   (format nil "~A~D" prefix (uid msg)))
 
 (defmethod briefname ((id integer) &optional (prefix ""))
@@ -916,6 +925,8 @@ dropped on the floor.
       (if (null destnode)
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
+    (when (debug-level 4)
+      (debug-log "send-msg" msg destnode srcuid))
     (ac:send destactor
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
@@ -975,10 +986,10 @@ dropped on the floor.
                        (t (values nil :unexpected-2)))))
               (t (values nil failure-reason))))))
 
-(defmethod accept-msg? ((msg timeout) (thisnode gossip-node) srcuid)
+(defmethod accept-msg? ((msg system-async) (thisnode gossip-node) srcuid)
   (declare (ignore srcuid))
-  'timeout ; timeouts are always accepted
-  )
+  ; system-asyncs are always accepted
+  (intern (symbol-name (kind msg)) :gossip))
 
 ; TODO: Remove old entries in message-cache, eventually.
 (defmethod memoize-message ((node gossip-node) (msg gossip-message-mixin) srcuid)
@@ -1110,8 +1121,26 @@ dropped on the floor.
   (ac:send actor
            :gossip
            'ac::*master-timer* ; source of timeout messages is always *master-timer* thread
-           (make-timeout :solicitation-uid soluid
+           (make-system-async :solicitation-uid soluid
                          :kind :timeout)))
+
+(defun send-gossip-socket-timeout-message (actor socket soluid)
+  "Send a socket-timeout message to an actor."
+  (ac:send actor
+           :gossip
+           *tcp-socket-waiter-name*
+           (make-system-async :solicitation-uid soluid
+                         :kind :socket-timeout
+                         :args (list socket))))
+
+(defun send-gossip-socket-wakeup-message (actor socket soluid)
+  "Send a socket-wakeup message to an actor."
+  (ac:send actor
+           :gossip
+           *tcp-socket-waiter-name*
+           (make-system-async :solicitation-uid soluid
+                         :kind :socket-wakeup
+                         :args (list socket))))
 
 (defun schedule-gossip-timeout (delta actor soluid)
   "Call this to schedule a timeout message to be sent to an actor after delta seconds from now.
@@ -1121,6 +1150,28 @@ dropped on the floor.
                   'send-gossip-timeout-message actor soluid)))
       (ac::schedule-timer-relative timer (ceiling delta)) ; delta MUST be an integer number of seconds here
       timer)))
+
+(defun socket-waiter (actor socket soluid timeout)
+  "Wait on a socket to be ready. Runs in a thread, not in an actor"
+  (multiple-value-bind (success errno status)
+                       (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) timeout)
+    (cond ((and (null success) ; if success and errno are both nil, we timed out without error
+                (null errno))
+           (send-gossip-socket-timeout-message actor socket soluid))
+          ((or errno
+               (and (/= status 0)
+                    (/= status #$POLLIN)))
+           ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
+           (format t  "~%Errno = ~D, status=~D" errno status))
+          (t
+           (send-gossip-socket-wakeup-message actor socket soluid)
+           ))))
+
+(defun wait-for-socket (socket soluid)
+  "Called from an actor to tell the OS to wait for a TCP socket to become available"
+  (uiop:if-let (actor (ac:current-actor))
+    (mpcompat:process-run-function *tcp-socket-waiter-name* nil
+      'socket-waiter actor socket soluid *max-seconds-to-wait*)))
 
 (defmethod make-timeout-handler ((node gossip-node) (msg solicitation) #-LISPWORKS (kind keyword) #+LISPWORKS (kind symbol))
   (let ((soluid (uid msg)))
@@ -1154,7 +1205,7 @@ dropped on the floor.
 
 ;;; Timeout. Generic message handler for all methods that scheduled a timeout.
 ;;; These never expect a reply but they can happen for methods that did expect one.
-(defmethod timeout ((msg timeout) thisnode srcuid)
+(defmethod timeout ((msg system-async) thisnode srcuid)
   "Timeouts are a special kind of message in the gossip protocol,
   and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
@@ -1165,6 +1216,18 @@ dropped on the floor.
              (funcall timeout-handler t))))
         (t ; log an error and do nothing
          (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
+
+(defmethod socket-wakeup ((msg system-async) thisnode srcuid)
+  "Handler for messages of kind :SOCKET-WAKEUP from *tcp-socket-waiter-name*"
+  (declare (ignore thisnode srcuid))
+  (let ((socket (car (args msg))))
+    (incoming-message-handler-tcp socket)))
+
+(defmethod socket-timeout ((msg system-async) thisnode srcuid)
+  "Handler for messages of kind :SOCKET-TIMEOUT from *tcp-socket-waiter-name*"
+  (declare (ignore thisnode srcuid))
+  (let ((socket (car (args msg))))
+    (usocket:socket-close socket)))
 
 (defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
   "Utility function. Can be called by message handlers.
@@ -1796,14 +1859,16 @@ gets sent back, and everything will be copacetic.
   (when (uid? (reply-to msg)) ; deal with direct replies properly
           (setf (reply-to msg) srcuid))
   (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-  (send-msg msg destuid srcuid))
+  (send-msg msg destuid srcuid)
+  t)
 
 (defmethod incoming-message-handler ((msg reply) srcuid destuid)
   "Locally dispatch messages received from network"
   ;; proxy will be a proxy-gossip-node on receiver (this) machine
   ;; destuid will be that of a true gossip-node on receiver (this) machine
   (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-  (send-msg msg destuid srcuid))
+  (send-msg msg destuid srcuid)
+  t)
 
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
@@ -1836,7 +1901,7 @@ gets sent back, and everything will be copacetic.
 ;; ------------------------------------------------------------------------------
 
 (defun incoming-message-handler-udp (raw-message-buffer rem-address)
-  "Deserialize a raw message string, srcuid, and destuid.
+  "Deserialize a raw message string, srcuid, rem-port and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
   ;                                                v--- Port at which passive listener is running
@@ -1855,26 +1920,35 @@ gets sent back, and everything will be copacetic.
           ;   on THIS machine.
         ))))
 
-; TCP not done yet
-(defun incoming-message-handler-tcp (stream)
-  "Deserialize a raw message string, srcuid, and destuid.
+(defun incoming-message-handler-tcp (socket)
+  "Deserialize a raw message string, srcuid, rem-port and destuid.
+  Returns nil, errno, status if socket is dead.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
-  respectively."
+  respectively.
+  We assume socket is ready to be read if we get to this point."
   ;                                                v--- Port at which passive listener is running
   ;network message: (list (real-uid node) srcuid rem-port msg)
   ;                    uid  --^            ^-- source uid
   ;             on local machine     on destination machine
-  (with-authenticated-packet (packet)
+  (let ((rem-address (usocket:get-peer-address socket))
+        (stream (usocket:socket-stream socket)))
+    (with-authenticated-packet (packet)
       (loenc:deserialize stream)
-    (let ((rem-address (usocket:get-peer-address stream)))
       (destructuring-bind (destuid srcuid rem-port msg) packet ;; if not what we expected, this will signal error
         (when (debug-level 1)
           (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
-        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
         ;ensure a local node of type proxy-gossip-node exists on this machine with
         ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
+        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid))
+              (soluid (uid msg)))
+          (when (typep msg 'solicitation)
+            (cond ((reply-to msg)
+                   ; it's an incoming solicitation expecting a reply. Remember the socket for the reply.
+                   (kvs:relate-unique! (open-sockets-table proxy) soluid socket))
+                  (t ; no replies will be generated, so close the socket
+                   (usocket:socket-close socket))))
           (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
-        ;   on THIS machine.
+          ;   on THIS machine.
           )))))
 
 (defmethod serve-gossip-port ((mode (eql :UDP)) socket)
@@ -1899,39 +1973,51 @@ gets sent back, and everything will be copacetic.
         (usocket:socket-shutdown socket ':IO)
         (usocket:socket-close socket))))
 
-; TCP not done yet
 (defmethod serve-gossip-port ((mode (eql :TCP)) listening-socket)
-  "TCP gossip port server loop"
+  "TCP gossip port server loop. This runs in its own thread, not in an actor."
   (unwind-protect
       (loop
         (when (eql :SHUTDOWN-SERVER *shutting-down*)
           (setf *shutting-down* nil)
           (return-from serve-gossip-port))
-        (let ((stream nil)
+        (let ((socket nil)
               (timed-out? nil))
           ; Following always returns T in CCL. Thus sockets are "born blocking"
           ;(format t "~%Blocking status of socket: ~S" (ccl::get-socket-fd-blocking (ccl::socket-device listening-socket)))
-          (setf stream (ignore-errors (usocket:socket-accept listening-socket)))
+          (setf socket (ignore-errors (usocket:socket-accept listening-socket)))
           
           (when (debug-level 3)
-            (debug-log "Got connection from " (usocket:get-peer-address stream)))
+            (debug-log "Got connection from " (usocket:get-peer-address socket)))
           
           ;; At this point, we have a live incoming stream. Although it may be closing.
           
-          (setf stream (usocket:wait-for-input stream :timeout 10 :ready-only t))
-          (setf timed-out? (not (eql :READ (usocket::state stream))))
+          ;(setf stream (usocket:wait-for-input stream :timeout 10 :ready-only nil))
           
-          (when (debug-level 3)
-            (if timed-out?
-                (debug-log "Giving up.")
-                (debug-log "Got data.")))
-          ;; At this point, we have data available. Probably (may be closed or timed out).
-          (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
-                     timed-out?)
-                 (when stream (usocket:socket-close stream)))
-                ;; Really should have data at this point...
-                (t
-                 (incoming-message-handler-tcp stream)))))
+          ;(setf timed-out? (not (eql :READ (usocket::state stream))))
+          ;; (setf stream (usocket:socket-stream socket))
+          
+          (multiple-value-bind (success errno status)
+                               (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) 10) ; should have data within 10 seconds
+            ; if success and errno are both nil, we timed out without error
+            (cond ((and (null success)
+                        (null errno))
+                   (setf timed-out? t))
+                  ((or errno
+                       (and (/= status 0)
+                            (/= status #$POLLIN)))
+                   ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
+                   (format t  "~%Errno = ~D, status=~D" errno status)))
+            (when (debug-level 3)
+              (if timed-out?
+                  (debug-log "Giving up.")
+                  (debug-log "Got data.")))
+            ;; At this point, we have data available. Probably (may be closed or timed out).
+            (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
+                       timed-out?)
+                   (when socket (usocket:socket-close socket)))
+                  ;; Really should have data at this point...
+                  (t
+                   (incoming-message-handler-tcp socket))))))
     (when listening-socket (usocket:socket-close listening-socket))))
 
 (defun open-passive-udp-socket (port)
@@ -2076,17 +2162,58 @@ original message."
         (t
          (maybe-log node :CANNOT-TRANSMIT "no socket"))))
 
-(defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
-  "Send message across network.
+(defmethod transmit-msg ((msg solicitation) (node tcp-gossip-node) srcuid)
+  "Send an initial solicitation across network.
   srcuid is that of the (real) local gossip-node that sent message to this node."
-  (let ((stream (ensure-open-stream (real-address node) (real-port node))))
-    (cond ((streamp stream)
+  (let ((socket (ensure-open-socket (real-address node) (real-port node))))
+    (cond ((usocket:stream-usocket-p socket)
            (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
-             (loenc:serialize payload stream)))
+             (loenc:serialize payload (usocket:socket-stream socket))
+             (finish-output (usocket:socket-stream socket))
+             ; wait for reply(es) iff a reply or replies are coming back to this machine
+             (when (or (eql :UPSTREAM (reply-to msg))
+                       (and (uid? (reply-to msg))
+                            (lookup-node (reply-to msg))))
+               ; Wait in a separate thread for socket to become ready
+               (wait-for-socket socket (uid msg))))
+           
+           #+IGNORE
+           (let ((rem-address (usocket:get-peer-address socket))
+                 (soluid (uid msg)))
+             (loop while (ccl::open-stream-p (usocket:socket-stream socket)) do
+               (when (debug-level 3)
+                 (debug-log :TCP-WAITING-FOR-REPLY msg :FROM rem-address :TO (uid msg)))
+               (multiple-value-setq (success errno status)
+                 (incoming-message-handler-tcp socket *max-seconds-to-wait*))
+               (unless success
+                 (usocket:socket-close socket)
+                 (return)))
+             (when (debug-level 3)
+               (if (and (null success)
+                        (null errno))
+                   (debug-log "Reply socket timed out. We closed it." socket soluid)
+                   (debug-log "Reply socket found closed, or error" socket errno status))))
+           )
+          
+          
           (t
            (maybe-log node :CANNOT-TRANSMIT "no stream")))))
 
-(defun ensure-open-stream (addr port)
+(defmethod transmit-msg ((msg reply) (node tcp-gossip-node) srcuid)
+  "Send reply across network.
+  srcuid is that of the (real) local gossip-node that sent message to this node."
+  (let ((socket (kvs:lookup-key (open-sockets-table node) (solicitation-uid msg))))
+    (unless socket
+      (error "No socket to reply to!"))
+    (cond ((usocket:stream-usocket-p socket)
+           (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
+             (loenc:serialize payload (usocket:socket-stream socket))
+             (finish-output (usocket:socket-stream socket))))
+          (t
+           (maybe-log node :CANNOT-TRANSMIT "no stream")))))
+
+(defun ensure-open-socket (addr port)
+  "Only for initiating a connection to send an initial solicitation from one machine to another"
   (when (debug-level 3)
             (debug-log "Opening stream to " (usocket::host-to-vector-quad addr) port))
   (usocket:socket-connect addr port :protocol ':stream :element-type '(unsigned-byte 8)))
@@ -2109,6 +2236,14 @@ original message."
 |#
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
+  (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
+  ;  modify the original without affecting other threads.
+  (incf (hopcount gossip-msg))
+  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
+  (locally-receive-msg gossip-msg node srcuid))
+
+(defmethod deliver-gossip-msg ((gossip-msg system-async) (node gossip-mixin) srcuid)
+  "System-async messages are always delivered locally"
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))

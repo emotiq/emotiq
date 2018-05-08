@@ -13,6 +13,7 @@
                :cosi-BLS)
   :serial t
   :components ((:file "package")
+               #+OPENMCL (:file "ccl-sockets-patch")
                (:file "gossip")
                (:file "http-fetch")
                (:file "graphviz")
