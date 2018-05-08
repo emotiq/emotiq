@@ -34,7 +34,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("Arroyo.local"    . "127.0.0.1" #|"10.0.1.33"|#)))
+(defvar *local-nodes*  '(("Arroyo.local"    . "127.0.0.1")))
 #|
 (defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
                          ("Malachite.local" . "10.0.1.6")
@@ -266,6 +266,16 @@ THE SOFTWARE.
           (coerce collected 'vector))
     ))
 
+(defun init-mappings ()
+  (setf *my-node* nil
+        *top-node* nil
+        *leader-node* (get-local-ipv4 "Arroyo.local")
+        *real-nodes*  (mapcar 'cdr *local-nodes*))
+  (clrhash *ip-node-tbl*)
+  (clrhash *pkey-node-tbl*)
+  (clrhash *pkey-skey-tbl*)
+  (setf *node-bit-tbl* #()))
+
 ;; -------------------------------------------------------------------
 ;; Node construction
 
@@ -398,6 +408,7 @@ THE SOFTWARE.
 ;; Generate Tree / Keying and save to startup init files
 
 (defun generate-tree (&key datafile keyfile (nodes 1000))
+  (init-mappings)
   (let* ((leader     *leader-node*)
          (real-nodes  (remove-duplicates *real-nodes*
                                          :test 'string=)))
@@ -465,6 +476,7 @@ THE SOFTWARE.
       
 (defun reconstruct-tree (&key datafile keyfile)
   ;; read the keying file
+  (init-mappings)
   (let* ((key-path  (or keyfile 
                      *default-key-file*))
          (keys       (read-data-file key-path))
