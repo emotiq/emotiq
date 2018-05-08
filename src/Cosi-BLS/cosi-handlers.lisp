@@ -99,6 +99,7 @@ THE SOFTWARE.
        (ac:pr msg))
 
       (:reset ()
+       (ac:pr (format nil "current node ~a got reset" (short-id node)))
        (reset-nodes))
       
       (t (&rest msg)
@@ -718,6 +719,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun reset-nodes ()
   (setf *leader* (node-pkey *top-node*))
+  (format t "*leader* set to ~A in reset-nodes " *leader*)
   (loop for node across *node-bit-tbl* do
         (setf (node-bad        node) nil
               (node-blockchain node) nil)
@@ -1124,7 +1126,7 @@ bother factoring it with NODE-COSI-SIGNING."
 				       (print (format nil "~A (top-node=~A) Block committed to chain, epoch = ~A"
 						      (cosi-simgen::node-ip node)
 						      (cosi-simgen::node-ip *top-node*)
-						      (bc-block-epoch new-block))))
+						      (bc-block-epoch new-block)))
                                        (pr (format nil "Block signatures = ~D" (logcount (bc-block-signature-bitmap new-block))))
                                        )
                                       
@@ -1227,11 +1229,6 @@ bother factoring it with NODE-COSI-SIGNING."
 (defvar *trans1* nil)
 (defvar *trans2* nil)
 (defvar *genesis* nil)
-
-; temporary work-around
-;(defmethod send ((self actor) &rest msg)
-;(defmethod send ((node cosi-simgen::node) &rest msg)
-;  (error "wrong node type for send"))
 
 (defun tst-blk ()
   (spawn

@@ -9,7 +9,7 @@
   (cosi-simgen::cosi-init ipstr)
   (cosi-simgen::cosi-generate)
   (cosi-simgen::init-sim)
-  (cosi-simgen::reset-blockchain)
+  (cosi-simgen::reset-system)
   #+(or)
   (emotiq/cli:main))
 
@@ -37,7 +37,7 @@
       (setf *genesis-output* utxog)
       (map nil
        (lambda (node)
-         (ac:send (cosi-simgen::node-self node) :genesis-utxo utxog))
+         (cosi-simgen::send (cosi-simgen::node-self node) :genesis-utxo utxog))
        cosi-simgen::*node-bit-tbl*))))
 
 
@@ -65,7 +65,7 @@
                                                              (list new-utxo)
                                                              (list new-utxo-secrets))))
               (map nil (lambda (node)
-                         (ac:send (cosi-simgen::node-self node) :new-transaction transaction))
+                         (cosi-simgen::send (cosi-simgen::node-self node) :new-transaction transaction))
                    bit-tbl)
               transaction)))))))
 
@@ -94,12 +94,19 @@
                                                              new-utxo-list
                                                              new-utxo-secrets-list)))
               (map nil (lambda (node)
-                         (ac:send (cosi-simgen::node-self node) :new-transaction transaction))
+                         (cosi-simgen::send (cosi-simgen::node-self node) :new-transaction transaction))
                    bit-tbl)
               transaction)))))))
 
 (defun force-epoch-end ()
-  (ac:send (cosi-simgen::node-self cosi-simgen::*top-node*) :make-block))
+;  (ac:send (cosi-simgen::node-self cosi-simgen::*top-node*) :make-block))
+       (sleep 10)
+       (map nil (lambda (node)
+                  (cosi-simgen::send (cosi-simgen::node-self node) :answer
+                        (format nil "Ready-to-run: ~A" (cosi-simgen::short-id node))))
+            cosi-simgen::*node-bit-tbl*)
+       (cosi-simgen::send cosi-simgen::*leader* :make-block))
+;       (send *top-node* :make-block))
 
 #|
 create a Genesis UTXO: (special case for initialization) AMT0
@@ -273,8 +280,8 @@ lookups
         *txn2* nil
         *txn3* nil)
   (let ((amount 1000))
-;    (ac:spawn
-;     (lambda ()
+    (ac:spawn
+     (lambda ()
        (start-network)
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
        (force-epoch-end)
@@ -303,7 +310,7 @@ lookups
            )
          )
          )
-;       ))
+       ))
 ))
        
 
