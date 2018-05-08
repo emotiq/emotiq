@@ -156,17 +156,17 @@
    (if (consp transactions)
        ;; (optimized for list case)
        (loop for tx in transactions
-             as tx-out-id = (get-txid-out-id tx)
+             as tx-out-id = (get-transaction-id tx)
              collect tx-out-id)
        (loop for i from 0 below (length transactions)
              as tx = (elt transactions i)
-             as tx-out-id = (get-txid-out-id tx)
+             as tx-out-id = (get-transaction-id tx)
              collect tx-out-id))))
 
 
 
-(defun get-txid-out-id (transaction)
-  "Get the identifier of TRANSACTION an octet vector of length 32, which can be
+(defun get-transaction-id (transaction)
+  "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
    used to hash the transactions leaves of the merkle tree to produce the
    block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
    a superset thereof."
