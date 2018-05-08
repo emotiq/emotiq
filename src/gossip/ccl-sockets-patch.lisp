@@ -82,6 +82,7 @@ may automatically retry on occurrence of EINTR.
 
 (defun process-input-wait* (fd &optional timeout)
   "Wait until input is available on a given file-descriptor.
+  Timeout is in milliseconds.
   Timeout = nil: Block indefinitely.
   Timeout > 0  : Block for that number of milliseconds.
   Timeout = 0  : Return immediately.

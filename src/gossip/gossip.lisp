@@ -43,7 +43,7 @@
 
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
-(defvar *tcp-socket-waiter-name* 'TCP-waiter)
+(defvar *tcp-socket-waiter-name* "TCP waiter")
 
 (defvar *debug* 4 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
@@ -986,7 +986,7 @@ dropped on the floor.
                        (t (values nil :unexpected-2)))))
               (t (values nil failure-reason))))))
 
-(defmethod accept-msg? ((msg system-async) (thisnode gossip-node) srcuid)
+(defmethod accept-msg? ((msg system-async) (thisnode gossip-mixin) srcuid)
   (declare (ignore srcuid))
   ; system-asyncs are always accepted
   (intern (symbol-name (kind msg)) :gossip))
@@ -1056,6 +1056,27 @@ dropped on the floor.
               to
               from)))
 
+(defun locally-dispatch-msg (kindsym node msg srcuid)
+  "Final dispatcher for messages local to this machine. No validation is done here."
+  (let ((logsym (typecase msg
+                  (solicitation :accepted)
+                  (interim-reply :interim-reply-accepted)
+                  (final-reply :final-reply-accepted)
+                  (t nil) ; don't log timeouts here. Too much noise.
+                  )))
+    (when logsym
+      (maybe-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
+    (if *gossip-absorb-errors*
+        (handler-case (funcall kindsym msg node srcuid)
+          (error (c) (maybe-log node :ERROR msg c)))
+        (funcall kindsym msg node srcuid))))
+
+(defmethod locally-receive-msg ((msg system-async) (node gossip-mixin) srcuid)
+  (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
+    (cond (kindsym ; message accepted
+           (locally-dispatch-msg kindsym node msg srcuid))
+          (t (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)))))
+
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
   First checks to see whether this message should be accepted by the node at all, and if so,
@@ -1064,18 +1085,7 @@ dropped on the floor.
     (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
       (cond (kindsym ; message accepted
              (memoize-message node msg srcuid)
-             (let ((logsym (typecase msg
-                             (solicitation :accepted)
-                             (interim-reply :interim-reply-accepted)
-                             (final-reply :final-reply-accepted)
-                             (t nil) ; don't log timeouts here. Too much noise.
-                             )))
-               (when logsym
-                 (maybe-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
-               (if *gossip-absorb-errors*
-                   (handler-case (funcall kindsym msg node srcuid)
-                     (error (c) (maybe-log node :ERROR msg c)))
-                   (funcall kindsym msg node srcuid))))
+             (locally-dispatch-msg kindsym node msg srcuid))
             (t ; not accepted
              (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)
              (case failure-reason
@@ -1153,25 +1163,34 @@ dropped on the floor.
 
 (defun socket-waiter (actor socket soluid timeout)
   "Wait on a socket to be ready. Runs in a thread, not in an actor"
-  (multiple-value-bind (success errno status)
-                       (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) timeout)
-    (cond ((and (null success) ; if success and errno are both nil, we timed out without error
-                (null errno))
-           (send-gossip-socket-timeout-message actor socket soluid))
-          ((or errno
-               (and (/= status 0)
-                    (/= status #$POLLIN)))
-           ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
-           (format t  "~%Errno = ~D, status=~D" errno status))
-          (t
-           (send-gossip-socket-wakeup-message actor socket soluid)
-           ))))
+  (when (debug-level 4)
+    (debug-log "In socket-waiter"))
+  (when socket
+    (multiple-value-bind (success errno status)
+                         (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) (* 1000 timeout))
+      (when (debug-level 3)
+        (debug-log "Done waiting" socket soluid))
+      
+      (when actor
+        (cond ((and (null success) ; if success and errno are both nil, we timed out without error
+                    (null errno))
+               (send-gossip-socket-timeout-message actor socket soluid))
+              ((or errno
+                   (and (/= status 0)
+                        (/= status #$POLLIN)))
+               ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
+               (format t  "~%Errno = ~D, status=~D" errno status))
+              (t
+               (send-gossip-socket-wakeup-message actor socket soluid)
+               ))))))
 
 (defun wait-for-socket (socket soluid)
   "Called from an actor to tell the OS to wait for a TCP socket to become available"
-  (uiop:if-let (actor (ac:current-actor))
-    (mpcompat:process-run-function *tcp-socket-waiter-name* nil
-      'socket-waiter actor socket soluid *max-seconds-to-wait*)))
+  (when (debug-level 3)
+    (debug-log "Waiting for socket" socket soluid))
+  (mpcompat:process-run-function *tcp-socket-waiter-name* nil
+    'socket-waiter (ac:current-actor) socket soluid (truncate *max-seconds-to-wait* 2)
+    ))
 
 (defmethod make-timeout-handler ((node gossip-node) (msg solicitation) #-LISPWORKS (kind keyword) #+LISPWORKS (kind symbol))
   (let ((soluid (uid msg)))
@@ -1997,7 +2016,7 @@ gets sent back, and everything will be copacetic.
           ;; (setf stream (usocket:socket-stream socket))
           
           (multiple-value-bind (success errno status)
-                               (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) 10) ; should have data within 10 seconds
+                               (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) 10000) ; should have data within 10 seconds
             ; if success and errno are both nil, we timed out without error
             (cond ((and (null success)
                         (null errno))
@@ -2243,7 +2262,6 @@ original message."
   (locally-receive-msg gossip-msg node srcuid))
 
 (defmethod deliver-gossip-msg ((gossip-msg system-async) (node gossip-mixin) srcuid)
-  "System-async messages are always delivered locally"
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
@@ -2252,7 +2270,7 @@ original message."
 
 (defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
-   (transmit-msg gossip-msg node srcuid))
+  (transmit-msg gossip-msg node srcuid))
 
 (defun archive-log ()
   "Archive existing *log* and start a new one.
