@@ -9,7 +9,7 @@
   (let ((machine-name (machine-instance)))
     (setf *local-nodes*  `((,machine-name . ,leader-node-ip))
           *real-nodes*   (list leader-node-ip)
-          *leader-node*  (cosi-simgen::get-local-ipv4 machine-name))))
+          *leader-node*  leader-node-ip)))
 
 (defun cosi-generate (&key (nodes 10))
   "Generate a Cosi network based on special variable settings."

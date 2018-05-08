@@ -1,19 +1,16 @@
 ;; top-level glue code for a simulation node
  
-(in-package :emotiq-user)
+(in-package :emotiq/sim)
 
-(defun initialize-sim (&key (leader-node "127.0.0.1"))
+(defun initialize (&key (leader-node "127.0.0.1"))
   (setf actors::*maximum-age* 120)
   (cosi-simgen::cosi-init leader-node)
-  #+(or) ;; Weird:  can't run cosi-generate as part of the process
+  ;; Weird:  can't run cosi-generate as part of the process
+  #+(or)
   (cosi-simgen::cosi-generate :nodes 3)
   (cosi-simgen::init-sim)
   #+(or)
   (emotiq/cli:main))
-
-;(defvar *singularity-account*
-;  (pbc:make-key-pair :singularity)
-;  "Origin of genesis transaction.")
 
 (defvar *genesis-account*
   (pbc:make-key-pair :genesis)
@@ -98,7 +95,6 @@
 
 (defun force-epoch-end ()
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
-
 
 #|
 create a Genesis UTXO: (special case for initialization) AMT0
@@ -252,37 +248,33 @@ lookups
 - find-txin-for-pkey-hash (pkey-hash txn)
 - find-txout-for-pkey-hash (pkey-hash txn)
 
-
-
 |#
 
 
-(defparameter *user* (pbc:make-key-pair :user))
+(defparameter *user1* (pbc:make-key-pair :user1))
 (defparameter *user2* (pbc:make-key-pair :user2))
 (defparameter *user3* (pbc:make-key-pair :user3))
 (defparameter *txn1* nil)
 (defparameter *txn2* nil)
 (defparameter *txn3* nil)
-(defparameter *blocks* nil)
 
-;; Recreate (tst-blk)
-(defun run-sim (&key (cloaked t))
-  (setf *genesis-output* nil)
-  (setf *txn1* nil
-        *txn2* nil
-        *txn3* nil)
-  (cosi-simgen::reset-nodes)
+(defun run (&key (cloaked t))
+  (setf *genesis-output* nil
+        *txn1*           nil
+        *txn2*           nil
+        *txn3*           nil)
+  (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
      (let ((amount 1000))
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
        ;; spend txn must use up all input UTXO's, this is actually, the "genesis transaction"
-       (let ((txn-genesis (spend-from-genesis *user* amount :cloaked cloaked))) 
+       (let ((txn-genesis (spend-from-genesis *user1* amount :cloaked cloaked))) 
          ;; actors run asynchronously, check value of *txn* only when all activity stops
          (setf *txn1* txn-genesis)  
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
-           (let ((txn2 (spend *user*
+           (let ((txn2 (spend *user1*
                               (first txout2)
                               (pbc:keying-triple-pkey *user2*)
                               amount
