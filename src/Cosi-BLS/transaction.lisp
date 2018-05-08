@@ -233,11 +233,12 @@ correction factor gamadj on curve H for the overall transaction."
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
 
-(defmethod get-txin-amount ((txin uncloaked-txin))
+(defmethod get-txin-amount ((txin uncloaked-txin) skey)
+  (declare (ignore skey))
   (txin-amt txin))
 
-(defmethod get-txin-amount ((txin txin))
-  (decrypt-txin-info txin))
+(defmethod get-txin-amount ((txin txin) skey)
+  (decrypt-txin-info txin skey))
 
 
 

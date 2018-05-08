@@ -34,7 +34,7 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("Arroyo.local"    . "127.0.0.1")))
+(defvar *local-nodes*  '(("localhost"    . "127.0.0.1")))
 #|
 (defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
                          ("Malachite.local" . "10.0.1.6")
@@ -269,7 +269,7 @@ THE SOFTWARE.
 (defun init-mappings ()
   (setf *my-node* nil
         *top-node* nil
-        *leader-node* (get-local-ipv4 "Arroyo.local")
+        *leader-node* (get-local-ipv4 "localhost")
         *real-nodes*  (mapcar 'cdr *local-nodes*))
   (clrhash *ip-node-tbl*)
   (clrhash *pkey-node-tbl*)
