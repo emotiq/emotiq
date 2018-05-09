@@ -59,3 +59,14 @@
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
+
+(defpackage emotiq/sim
+  (:use #:cl)
+
+  (:export
+   #:initialize
+   #:run))
+
+
+  
+

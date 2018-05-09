@@ -1,0 +1,188 @@
+;-- A "reading" of (tst-blk), my comments begin with ";-- "
+
+;-- General observations
+
+;-- Ben Lynn's homepage https://crypto.stanford.edu/~blynn/ (with notes, esp. crypto)
+
+
+;-- cosi/proofs:make-txout defined in src/Cosi-BLS/transaction.lisp specializes on two possible params:
+
+;-- (defmethod make-txout ((amt integer) (pkey pbc:public-key))
+;--     returns (values <CLOAKED-txout> <txout-secrets>)
+
+;-- (defmethod make-txout ((amt integer) (pkey null))
+;--     returns (values <UNCLOAKED-txout> <txout-secrets>)
+
+;-- ** TODO: if we are going to switch between cloaked and uncloaked txns, we might need to further
+;--    specialize this function
+
+;-- uncloaked-txout is {hashpkey, txout-hashlock, uncloaked-txout-amt, uncloaked-txout-gamma}
+;--   cloaked-txout is {hashpkey, txout-hashlock, txout-prf ("proof"), txout-encr ("encrypted")}
+
+;-- ** TODO: do we want to create a super-class for txout and have uncloaked-txout and cloaked-txout
+;--    inherit from it?  (Does it ever matter?  DRY?)
+
+;-- src/Crypto/vec-repr.lisp defines vec-repr:ub8v (unsigned byte 8, vector) as the super-class of
+;-- various other representations: LEV (little endian vector), BEV (big endian), BASE58, BASE64, HEX
+;-- bev-vec (big-endian vector of UB8)
+
+;-- a "transaction" has 3 fields {txins, txouts, gamma-adjustment}
+;--  (txins and txouts are lists)
+;--  (see src/Cosi-BLS/transactions.lisp--make-transaction)
+;--  make-transaction accepts the 4 arguments (txins, gammas for txins, txouts, gammas for txouts)
+;--  make-transaction creates a transaction with txins and txouts and a gamma adjustment
+;--  (using modular arith, crypto-etc) to ensure that 0 == txouts-txins for the created transaction
+;--  to satisfy Pederson commitments and cloaking.
+
+(in-package :cosi-simgen)
+
+
+(defun tst-blk ()
+;-- this tests the block function(s) of the Cosi code
+
+  (spawn
+;-- make an actor which calls the Lambda below every time it receives a message
+;-- this particular lambda takes 0 args
+;-- in the "spawn" code, the actor is activated by one message-send - with 0 args
+
+   (lambda ()
+;-- funcall this lambda every time we get a message in our queue
+
+     (reset-blockchain)
+;-- this sets *leader* to be the *top-node* (i.e. the only real node in my system)
+;-- it also calls (reset-nodes), which resets this node and every faked node  (I see
+;-- three hash tables in each node (node-blockchain-tbl, node-mempool, node-utxo-table))
+
+
+     (labels
+;-- defines two inner functions "send-tx-to-all" and "send-genesis-to-all"
+
+         ((send-tx-to-all (tx)
+            #||#
+            (map nil (lambda (node)
+                       (send node :new-transaction tx))
+                 *node-bit-tbl*)
+;-- sends a `(:new-transaction ,tx) message to every node in the *node-bit-tbl*
+
+            #||#
+            ;; (send *top-node* :new-transaction tx)
+            )
+          (send-genesis-to-all (utxo)
+            (map nil (lambda (node)
+                       (send node :genesis-utxo utxo))
+                 *node-bit-tbl*))
+;-- sends a `(:genesis-utxo ,utxo) message to every node in the *node-bit-tbl*
+
+          )
+       
+       ;; -------------------------------------------------------------
+       ;; manufacture two transactions and send to all nodes
+;-- very simple test - send genesis UTXO to everyone and then send two txns to everyone
+
+       (if *trans1*
+;-- test == if *trans1* already exists, then we assume that *genesis* and *trans2* exist
+;-- this is just test code and will not exist in full version
+
+
+;-- testing - send gensis and two test transactions to all nodes
+;-- saves time during testing (no need to generate the test transactions
+
+           (progn
+;-- N.B. this does not create a genesis block, but a genesis UTXO,
+;-- which contains "less infomation" than a full transaction
+;-- each Node has a utxo-table (see (defclass node ...) in src/Cosi-BLS/cosi-construction.lisp)
+;-- a special message :genesis-utxo is used
+             (send-genesis-to-all *genesis*)
+
+             (send-tx-to-all *trans1*)
+             (send-tx-to-all *trans2*))
+
+         ;; else
+
+;-- keying-triple is {pkey, signature, skey}
+;-- keying-triple is a defclass with slots {keying-triple-pkey, keying-triple-sig, keying-triple-skey}
+;-- the pkey is signed (with the pkey/skey combo)
+;-- see pbc-cffi.lisp/make-key-pair, which then dives into the PBC C code to do the signing
+
+;-- sha/256 is defined as a defclass and as a defun in src/Crypto/hash.lisp
+;-- (there is also basic-hash256 in src/ads/hash.lisp) 
+
+;-- see wikipedia for BLS https://en.wikipedia.org/wiki/Boneh%E2%80%93Lynn%E2%80%93Shacham
+
+;-- make two key-pairs, one for genesis and one for Mary
+         (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
+                (pkey  (pbc:keying-triple-pkey k))
+                (skey  (pbc:keying-triple-skey k))
+                
+                (km    (pbc:make-key-pair :mary)) ;; Mary keying
+                (pkeym (pbc:keying-triple-pkey km))
+                (skeym (pbc:keying-triple-skey km)))
+		
+
+;-- make genesis cloaked txn and send to all nodes
+;-- unlike BitCoin, utxo.s are cloaked
+           (print "Construct Genesis transaction")
+;-- utxog is "utxo for genesis" (class txout), secrg is "secret for genesis" (class txout-secrets)
+           (multiple-value-bind (utxog secrg)
+;-- make a cloaked txout for 1,000 units using genesis' pubkey
+               (make-txout 1000 pkey)
+             (declare (ignore secrg))
+             (send-genesis-to-all (setf *genesis* utxog))
+
+
+             (let ((minfo (decrypt-txout-info utxog skey)))
+               (multiple-value-bind (utxin info)  ;; spend side
+;-- make-txin returns (values txin gamma)
+                   (make-txin (txout-secr-amt minfo) ;; spend side
+                              (txout-secr-gamma minfo)
+                              pkey skey)
+
+;-- make 2 txouts, 750 to Mary, 250 back to genesis
+                 (multiple-value-bind (utxo1 secr1) ;; sends
+;-- pkeym is Mary's pub key
+                     (make-txout 750 pkeym)
+                   (multiple-value-bind (utxo2 secr2)
+;-- pkey is genesis' pub key
+                       (make-txout 250 pkey)
+                     
+                     (let ((trans (make-transaction `(,utxin) `(,info)
+                                                    `(,utxo1 ,utxo2)
+                                                    `(,secr1 ,secr2))))
+                       
+                       ;; send TX to all nodes
+;-- put this transaction (*trans1*) into the "database" (the blockchain)
+                       (send-tx-to-all (setf *trans1* trans))
+
+;-- now, Mary constructs a new txn, sending 250 to herself and 500 to genesis
+                       (print "Find UTX for Mary")
+                       (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
+                              (minfo  (decrypt-txout-info utxm skeym)))
+                         
+                         (print "Construct 2nd transaction")
+;-- find Mary's inputs
+                         (multiple-value-bind (utxin info)  ;; spend side
+                             (make-txin (txout-secr-amt minfo)
+                                        (txout-secr-gamma minfo)
+                                        pkeym skeym)
+
+;-- 2 new txouts, 250 to Mary, 500 to genesis                           
+                           (multiple-value-bind (utxo1 secr1) ;; sends
+                               (make-txout 250 pkeym)
+                             (multiple-value-bind (utxo2 secr2)
+                                 (make-txout 500 pkey)
+                               
+;-- create the transaction and send it to the blockchain
+                               (let ((trans (make-transaction `(,utxin) `(,info)
+                                                              `(,utxo1 ,utxo2)
+                                                              `(,secr1 ,secr2))))
+                                 ;; send TX to all nodes
+                                 (send-tx-to-all (setf *trans2* trans))
+                                 ))))))
+                     )))))))
+       ;; ------------------------------------------------------------------------
+
+;-- sim and debug
+       (send *top-node* :make-block)
+       ))))
+
+
