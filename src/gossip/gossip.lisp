@@ -693,6 +693,37 @@ dropped on the floor.
                :TIMEOUT)
            soluid))))))
 
+#+STILL-DOESNT-WORK ; returns immediately. Also incoming-message-handler gets confused with destid is an actor-name
+(defun solicit-direct (node kind &rest args)
+  "Like solicit-wait but asks for all replies to be sent back to node directly, rather than percolated upstream.
+  Don't use this on messages that don't expect a reply, because it'll wait forever."
+  (unless node
+    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
+  (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
+                  (uid node)
+                  node))
+         (mbox (mpcompat:make-mailbox))
+         (actor (ac:spawn (lambda (&rest msg) (apply 'ac:send mbox msg))))
+         (actor-name (gentemp "OUTPUTTER" :gossip)))
+    (unwind-protect
+        (progn 
+          (ac:register-actor actor actor-name)
+          (let* ((solicitation (make-solicitation
+                                :reply-to (uid node)
+                                :kind kind
+                                :args args))
+                 (soluid (uid solicitation)))
+            (send-msg solicitation
+                      uid                   ; destination
+                      actor-name)
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox *max-seconds-to-wait*)
+              (values 
+               (if success
+                   response
+                   :TIMEOUT)
+               soluid))))
+      (ac:unregister-actor actor-name))))
+
 (defun solicit (node kind &rest args)
   "Send a solicitation to the network starting with given node. This is the primary interface to 
   the network to start an action from the outside. Nodes shouldn't use this function to initiate an
@@ -920,7 +951,7 @@ dropped on the floor.
       (if (null destnode)
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
-    (when (debug-level 4)
+    (when (debug-level 5)
       (debug-log "send-msg" msg destnode srcuid))
     (ac:send destactor
            :gossip ; actor-verb
@@ -1157,34 +1188,37 @@ dropped on the floor.
       timer)))
 
 (defun socket-waiter (actor socket soluid timeout)
-  "Wait on a socket to be ready. Runs in a thread, not in an actor"
+  "Wait on a socket to be ready. Must run in a thread, not in an actor"
   (when socket
-    (multiple-value-bind (success errno status)
-                         (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) (* 1000 timeout))
-      (when actor
-        (cond ((and (null success) ; if success and errno are both nil, we timed out without error
-                    (null errno))
-               (when (debug-level 3)
-                 (debug-log "Socket timeout" socket soluid))
-               (send-gossip-socket-timeout-message actor socket soluid))
-              ((or errno
-                   (and (/= status 0)
-                        (/= status #$POLLIN)))
-               ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
-               (format t  "~%Errno = ~D, status=~D" errno status))
-              (t
-               (when (debug-level 3)
-                 (debug-log "Socket wakeup" socket soluid))
-               (send-gossip-socket-wakeup-message actor socket soluid)
-               ))))))
+    (loop
+      (multiple-value-bind (success errno status)
+                           (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) (* 1000 timeout))
+        (when actor
+          (cond ((and (null success) ; if success and errno are both nil, we timed out without error
+                      (null errno))
+                 (when (debug-level 3)
+                   (debug-log "Socket timeout" socket soluid))
+                 ; When no further data available, fall through and end loop
+                 (send-gossip-socket-timeout-message actor socket soluid)
+                 (return))
+                ((or errno
+                     (and (/= status 0)
+                          (/= status #$POLLIN)))
+                 ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
+                 (format t  "~%Errno = ~D, status=~D" errno status))
+                (t
+                 (when (debug-level 3)
+                   (debug-log "Socket wakeup" socket soluid))
+                 (send-gossip-socket-wakeup-message actor socket soluid)
+                 )))))))
 
 (defun wait-for-socket (socket soluid)
   "Called from an actor to tell the OS to wait for a TCP socket to become available"
   (when (debug-level 3)
     (debug-log "Waiting for socket" socket soluid))
   (mpcompat:process-run-function *tcp-socket-waiter-name* nil
-    'socket-waiter (ac:current-actor) socket soluid (truncate *max-seconds-to-wait* 2)
-    ))
+    'socket-waiter (ac:current-actor) socket soluid *max-seconds-to-wait*)
+    )
 
 (defmethod make-timeout-handler ((node gossip-node) (msg solicitation) #-LISPWORKS (kind keyword) #+LISPWORKS (kind symbol))
   (let ((soluid (uid msg)))
@@ -1549,9 +1583,11 @@ dropped on the floor.
           ; if no place left to reply to, just log the result.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
-          #+LATER-ACTORS ; not working ATM. Figure it out later.
           ((typep where-to-send-reply 'ac::actor) ; can happen if actor version of solicit-wait was used
-           (ac:send where-to-send-reply reply (uid srcnode)))
+           (ac:send where-to-send-reply reply))
+          ((typep where-to-send-reply 'symbol)
+           (uiop:if-let (actor (ac:find-actor where-to-send-reply))
+             (ac:send actor reply)))
           ((functionp where-to-send-reply)
            (maybe-log srcnode :FINALREPLY (briefname soluid "sol") data)
            (funcall where-to-send-reply reply))
@@ -2585,7 +2621,7 @@ downstream nodes is an :ANONYMOUS node, it'll never reply (because anonymous nod
 reply messages). And direct messages can be weird: Any given downstream node may or may not choose to even accept
 the message, let alone reply to it. Direct messages are in some sense intended to be weird. They're for bootstrapping
 or out-of-band status purposes or whatever. The point is, only :UPSTREAM solicitations should ever definitively
-expect replies from specific downstream nodes, and even then, not in the case where there's an :ANONYMOUS node in
+expect replies from specific downstream nodes, and even then, only in the case where there's no :ANONYMOUS node in
 the downstream set.
 
 A subtlety: Note that coalescence is a different issue than expectations. It's possible that a node will want to coalesce
