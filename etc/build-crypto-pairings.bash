@@ -43,7 +43,7 @@ libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTE
 
 mkdir -p ${var}/local
 
-(cd ${var}/local && wget -O - ${libs_url} | tar xvfz -)
+(cd ${var}/local && curl -L ${libs_url} | tar xvfz -)
 
 prefix=${var}/local
 lib=${prefix}/lib
