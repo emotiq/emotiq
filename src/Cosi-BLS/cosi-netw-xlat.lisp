@@ -132,7 +132,7 @@
 ;; -----------------------------------------------------
 
 (defparameter *max-buffer-length* 65500)
-(defparameter *shutting-down*     nil)
+(defparameter *socket-open*       nil)
 
 (defun port-routing-handler (buf)
   (let ((packet (verify-hmac buf)))
@@ -181,14 +181,10 @@
 (defvar *sender* (make-actor (lambda (ip port packet)
                                ;; (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
                                (internal-send-socket ip port packet))))
-
-(defvar *servers-started* 0)
-
+  
 (defun shutdown-server (&optional (port *cosi-port*))
-  (when (and (plusp *servers-started*)
-             *my-node*)
-    (setf *shutting-down* :SHUTDOWN-SERVER)
-    (decf *servers-started*)
+  (when *socket-open*
+    (setf *socket-open* nil)
     (ac:send *sender* *local-ip* port "ShutDown")))
 
 (defmethod socket-send (ip port dest msg)
@@ -281,7 +277,6 @@
       (usocket:get-local-port socket)))
        
   (defun start-server ()
-    (incf *servers-started*)
     (start-ephemeral-server *cosi-port*))
 
   ;; -------------
@@ -327,10 +322,8 @@
         (start-server)
         (return-from #1#))
 
-      (if (eql :SHUTDOWN-SERVER *shutting-down*)
-          (progn
-            (setf *shutting-down* nil)
-            (comm:close-async-io-state async-io-state))
+      (if (null *socket-open*)
+          (comm:close-async-io-state async-io-state)
         (progn
           (port-router string)
           (udp-cosi-server-receive-next async-io-state)))))
@@ -350,10 +343,9 @@
       (multiple-value-bind (ip port)
           (comm:async-io-state-address async-io-state)  ;; returns address,port
         (declare (ignore ip))
-        port)))
+        (setf *socket-open* port))))
       
   (defun start-server ()
-    (incf *servers-started*)
     (start-ephemeral-server *cosi-port*))
 
   ;; -----------------
