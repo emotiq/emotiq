@@ -1175,6 +1175,7 @@ bother factoring it with NODE-COSI-SIGNING."
 |#
 
 (defun tst ()
+  (reset-system)
   (spawn
    (lambda ()
      (send *dly-instr* :clr)
@@ -1221,9 +1222,9 @@ bother factoring it with NODE-COSI-SIGNING."
 (defvar *genesis* nil)
 
 (defun tst-blk ()
+  (reset-system)
   (spawn
    (lambda ()
-     (reset-system)
      (labels
          ((send-tx-to-all (tx)
             (map nil (lambda (node)
