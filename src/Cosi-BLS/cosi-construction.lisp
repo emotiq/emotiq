@@ -50,7 +50,7 @@ THE SOFTWARE.
   (get-local-ipv4 (machine-instance)))
 
 (defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "Arroyo.local"))
+(defvar *leader-node* (get-local-ipv4 "localhost"))
 ;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
 
 (defvar *top-node*   nil) ;; current leader node
