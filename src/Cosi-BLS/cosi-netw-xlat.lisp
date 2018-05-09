@@ -181,10 +181,14 @@
 (defvar *sender* (make-actor (lambda (ip port packet)
                                ;; (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
                                (internal-send-socket ip port packet))))
-  
+
+(defvar *servers-started* 0)
+
 (defun shutdown-server (&optional (port *cosi-port*))
-  (when *my-node*
+  (when (and (plusp *servers-started*)
+             *my-node*)
     (setf *shutting-down* :SHUTDOWN-SERVER)
+    (decf *servers-started*)
     (ac:send *sender* *local-ip* port "ShutDown")))
 
 (defmethod socket-send (ip port dest msg)
@@ -277,6 +281,7 @@
       (usocket:get-local-port socket)))
        
   (defun start-server ()
+    (incf *servers-started*)
     (start-ephemeral-server *cosi-port*))
 
   ;; -------------
@@ -348,6 +353,7 @@
         port)))
       
   (defun start-server ()
+    (incf *servers-started*)
     (start-ephemeral-server *cosi-port*))
 
   ;; -----------------
