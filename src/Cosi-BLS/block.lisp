@@ -89,18 +89,19 @@
 ;;; and they can require this order for a block to be considered valid.
 ;;; Software may also rely upon this order, e.g., as a search heuristic.
 
-(defun create-block (epoch prev-block transactions)
-  (let ((block (make-instance 'block :epoch epoch)))
-    (setf (prev-block-hash block) 
-          (if (null prev-block)
-              nil
-              (hash-block prev-block)))
-    (setf (merkle-root-hash block)
-          (compute-merkle-root-hash transactions))
-    (setf (transactions block) transactions)
-    (setf (block-timestamp block) 
-          (- (get-universal-time) *unix-epoch-ut*))
-    block))
+(defun create-block (prev-block? block-transactions)
+  (let ((blk (make-instance 'eblock)))
+    (with-slots (merkle-root-hash transactions timestamp)
+        blk
+      (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
+      (setf transactions block-transactions)
+      (setf merkle-root-hash (compute-merkle-root-hash block-transactions))
+      (when prev-block? 
+        (with-slots (epoch prev-block-hash)
+            blk
+          (setf epoch (1+ (slot-value prev-block? 'epoch)))
+          (setf prev-block-hash (hash-block prev-block?))))
+      blk)))
 
 
 (defun hash-256 (&rest hashables)
@@ -157,17 +158,17 @@
    (if (consp transactions)
        ;; (optimized for list case)
        (loop for tx in transactions
-             as tx-out-id = (get-txid-out-id tx)
+             as tx-out-id = (get-transaction-id tx)
              collect tx-out-id)
        (loop for i from 0 below (length transactions)
              as tx = (elt transactions i)
-             as tx-out-id = (get-txid-out-id tx)
+             as tx-out-id = (get-transaction-id tx)
              collect tx-out-id))))
 
 
 
-(defun get-txid-out-id (transaction)
-  "Get the identifier of TRANSACTION an octet vector of length 32, which can be
+(defun get-transaction-id (transaction)
+  "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
    used to hash the transactions leaves of the merkle tree to produce the
    block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
    a superset thereof."
