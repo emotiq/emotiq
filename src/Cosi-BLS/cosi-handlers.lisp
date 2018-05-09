@@ -595,6 +595,7 @@ topo-sorted partial order"
         ;; put these back in the pond for next round
         (unspend-utxos tx))
       ;; now hd represents the actual transactions going into the next block
+      (pr (format nil "~D Transactions" (length hd)))
       hd)))
       
 ;; ----------------------------------------------------------------------
@@ -1174,6 +1175,7 @@ bother factoring it with NODE-COSI-SIGNING."
 |#
 
 (defun tst ()
+  (reset-system)
   (spawn
    (lambda ()
      (send *dly-instr* :clr)
@@ -1220,9 +1222,9 @@ bother factoring it with NODE-COSI-SIGNING."
 (defvar *genesis* nil)
 
 (defun tst-blk ()
+  (reset-system)
   (spawn
    (lambda ()
-     (reset-system)
      (labels
          ((send-tx-to-all (tx)
             (map nil (lambda (node)

@@ -116,6 +116,8 @@
    :txin-pkey
    :txin-sig
    :txin-prf
+   :txin-amt
+   :get-txin-amount
    
    :txout
    :make-txout
