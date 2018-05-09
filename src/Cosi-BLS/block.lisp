@@ -89,18 +89,19 @@
 ;;; and they can require this order for a block to be considered valid.
 ;;; Software may also rely upon this order, e.g., as a search heuristic.
 
-(defun create-block (epoch prev-block transactions)
-  (let ((block (make-instance 'block :epoch epoch)))
-    (setf (prev-block-hash block) 
-          (if (null prev-block)
-              nil
-              (hash-block prev-block)))
-    (setf (merkle-root-hash block)
-          (compute-merkle-root-hash transactions))
-    (setf (transactions block) transactions)
-    (setf (block-timestamp block) 
-          (- (get-universal-time) *unix-epoch-ut*))
-    block))
+(defun create-block (prev-block? block-transactions)
+  (let ((blk (make-instance 'eblock)))
+    (with-slots (merkle-root-hash transactions timestamp)
+        blk
+      (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
+      (setf transactions block-transactions)
+      (setf merkle-root-hash (compute-merkle-root-hash block-transactions))
+      (when prev-block? 
+        (with-slots (epoch prev-block-hash)
+            blk
+          (setf epoch (1+ (slot-value prev-block? 'epoch)))
+          (setf prev-block-hash (hash-block prev-block?))))
+      blk)))
 
 
 (defun hash-256 (&rest hashables)
