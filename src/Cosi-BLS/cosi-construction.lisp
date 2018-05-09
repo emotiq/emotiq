@@ -157,7 +157,7 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
-(defvar *comm-ip*  nil)
+(defvar *comm-ip*  nil) ;; internal use only
 
 (defun make-node (ipstr pkeyzkp parent)
   (let* ((cmpr-pkey (first pkeyzkp))
@@ -520,5 +520,6 @@ THE SOFTWARE.
       (assign-bits)
       #+:LISPWORKS (view-tree main-tree)
       (setf *top-node* main-tree
-            *my-node*  (gethash (get-my-ipv4) *ip-node-tbl*)))))
+            *my-node*  main-tree)) ;; (gethash (get-my-ipv4) *ip-node-tbl*)
+    ))
 
