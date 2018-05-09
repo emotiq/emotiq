@@ -86,7 +86,8 @@ THE SOFTWARE.
       ;; for sim and debug
       
       (:make-block ()
-       (leader-exec node))
+       (let ((timeout (* 5 60))) ;; massive timeout during simulation (gets rid of :non-existent-actors messages?)
+         (leader-exec node timeout)))
 
       (:genesis-utxo (utxo)
        (record-new-utxo (bev (txout-hashlock utxo))))
@@ -1078,7 +1079,7 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
-(defun leader-exec (node)
+(defun leader-exec (node timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
@@ -1095,7 +1096,7 @@ bother factoring it with NODE-COSI-SIGNING."
                     :witnesses        (map 'vector 'node-pkey *node-bit-tbl*)
                     :transactions     (get-transactions-for-new-block)))
         (self  (current-actor)))
-    (ac:self-call :cosi-sign-prepare self new-block 10)
+    (ac:self-call :cosi-sign-prepare self new-block timeout)
     (pr "Waiting for Cosi prepare")
     (labels
         ((wait-prep-signing ()
