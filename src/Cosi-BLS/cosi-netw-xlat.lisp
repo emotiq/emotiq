@@ -16,6 +16,10 @@
   #+:CLOZURE   (make-hash-table :weak :value)
   )
 
+;; this is just a sanity check set in (unregister-aid) and checked
+;; in (port-routing-handler) (:NON-EXISTENT-ACTOR case)
+(defparameter *previously-unregistered* (make-hash-table :test 'equal))
+
 (um:defmonitor
     ((associate-aid-with-actor (aid actor)
        (setf (gethash aid *aid-tbl*) actor))
@@ -24,6 +28,8 @@
        (gethash aid *aid-tbl*))
      
      (unregister-aid (aid)
+       (pr (format nil "unregistering ~A" aid))
+       (setf (gethash aid *previously-unregistered*) t)
        (remhash aid *aid-tbl*))
      ))
 
@@ -166,7 +172,8 @@
                 (t
                  (let ((actor (lookup-actor-for-aid dest)))
                    (unless actor
-                     (pr :non-existent-actor))
+                     (let ((prev (gethash dest *previously-unregistered*)))
+                       (pr (format nil "~A :non-existent-actor" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
                      (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
