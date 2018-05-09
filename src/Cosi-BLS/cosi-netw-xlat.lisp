@@ -115,7 +115,6 @@
   (pbc:sign-message msg pkey skey))
     
 
-#|
 (defun verify-hmac (packet)
   (let ((decoded (ignore-errors
                    ;; might not be a valid encoding
@@ -127,10 +126,6 @@
       ;; return the contained message
       (pbc:signed-message-msg decoded))
     ))
-|#
-(defun verify-hmac (packet)
-  (progn ;; ignore-errors
-    (loenc:decode packet)))
 
 ;; -----------------------------------------------------
 ;; THE SOCKET INTERFACE...
@@ -196,7 +191,7 @@
   (let* ((payload (make-hmac (list* dest msg)
                              (pbc:keying-triple-pkey *keys*)
                              (pbc:keying-triple-skey *keys*)))
-         (packet  (loenc:encode (list* dest msg))))
+         (packet  (loenc:encode payload)))
     (ac:send *sender* ip port packet)))
 
 #|
