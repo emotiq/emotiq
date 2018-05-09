@@ -131,8 +131,8 @@
 ;; THE SOCKET INTERFACE...
 ;; -----------------------------------------------------
 
-(defparameter *max-buffer-length* 65500)
-(defparameter *socket-open*       nil)
+(defvar *max-buffer-length* 65500)
+(defvar *socket-open*       nil)
 
 (defun port-routing-handler (buf)
   (let ((packet (verify-hmac buf)))
