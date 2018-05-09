@@ -273,7 +273,7 @@
 					   )))
       (mpcompat:process-run-function "UDP Cosi Server" nil
                                      'serve-cosi-port socket)
-      (usocket:get-local-port socket)))
+      (setf *socket-open* (usocket:get-local-port socket))))
        
   (defun start-server ()
     (start-ephemeral-server *cosi-port*))
