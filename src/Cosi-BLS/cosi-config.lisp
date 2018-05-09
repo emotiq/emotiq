@@ -6,7 +6,7 @@
 (defun cosi-init (leader-node-ip)
   "Steps necessary to initialize specials in the cosi-bls system to
    create a machine local simulation network."
-  (let ((machine-name (machine-instance)))
+  (let ((machine-name "localhost"))
     (setf *local-nodes*  `((,machine-name . ,leader-node-ip))
           *real-nodes*   (list leader-node-ip)
           *leader-node*  leader-node-ip)))
