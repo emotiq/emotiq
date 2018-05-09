@@ -3,7 +3,8 @@
 (in-package :emotiq/sim)
 
 (defun initialize (&key (leader-node "127.0.0.1"))
-  (setf actors::*maximum-age* 120)
+  (setf actors::*maximum-age* 120
+        actors::*nbr-execs* 8)  ;; for sim, set to #cores (linux /usr/bin/nproc)
   (cosi-simgen::cosi-init leader-node)
   ;; Weird:  can't run cosi-generate as part of the process
   #+(or)
