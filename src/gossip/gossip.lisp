@@ -106,10 +106,8 @@ are in place between nodes.
 
 (defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
 (defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
-(defvar *uid-lock* (mpcompat:make-lock) "Lock for *last-uid*")
 
 (defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
-(defvar *tiny-uid-lock* (mpcompat:make-lock) "Lock for *last-tiny-uid*")
 
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *delay-interim-replies* t "True to delay interim replies.
@@ -191,10 +189,8 @@ are in place between nodes.
           (ash process-id 32)
           numeric-id))
 
-; Should do this with an actor gatekeeper, but I don't know how to wrap an actor around a read operation
 (defun generate-new-monotonic-id ()
-    (mpcompat:with-lock (*uid-lock*)
-      (incf *last-uid*)))
+  (mpcompat:atomic-incf *last-uid*))
 
 #+LISPWORKS
 (progn
@@ -213,10 +209,8 @@ are in place between nodes.
 (defun long-uid ()
   (uuid::uuid-to-integer (uuid::make-v1-uuid)))
 
-; Should do this with an actor gatekeeper, but I don't know how to wrap an actor around a read operation
 (defun new-tiny-uid ()
-  (mpcompat:with-lock (*tiny-uid-lock*)
-    (incf *last-tiny-uid*)))
+  (mpcompat:atomic-incf *last-tiny-uid*))
 
 (defun new-uid (&optional (style *default-uid-style*))
   "Generate a new UID of the given style"
@@ -910,7 +904,8 @@ dropped on the floor.
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
-   before #'neighbors connectivity has been established."
+   before #'neighbors connectivity has been established.
+   See Note D."
   (let ((no-forward-msg (copy-message msg))
         (nodes (listify-nodes)))
     (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
@@ -1163,17 +1158,14 @@ dropped on the floor.
 
 (defun socket-waiter (actor socket soluid timeout)
   "Wait on a socket to be ready. Runs in a thread, not in an actor"
-  (when (debug-level 4)
-    (debug-log "In socket-waiter"))
   (when socket
     (multiple-value-bind (success errno status)
                          (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) (* 1000 timeout))
-      (when (debug-level 3)
-        (debug-log "Done waiting" socket soluid))
-      
       (when actor
         (cond ((and (null success) ; if success and errno are both nil, we timed out without error
                     (null errno))
+               (when (debug-level 3)
+                 (debug-log "Socket timeout" socket soluid))
                (send-gossip-socket-timeout-message actor socket soluid))
               ((or errno
                    (and (/= status 0)
@@ -1181,6 +1173,8 @@ dropped on the floor.
                ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
                (format t  "~%Errno = ~D, status=~D" errno status))
               (t
+               (when (debug-level 3)
+                 (debug-log "Socket wakeup" socket soluid))
                (send-gossip-socket-wakeup-message actor socket soluid)
                ))))))
 
@@ -1396,12 +1390,11 @@ dropped on the floor.
       
       (cond (downstream
              (cond ((must-coalesce?)
-                    (if (and (uid? (reply-to msg)) ; check for potential direct replies back to this node
-                             (eql (reply-to msg) (uid thisnode)))
-                        (progn
+                    (if (eql :UPSTREAM (reply-to msg)) ; See Note D
+                        (prepare-repliers thisnode soluid downstream)
+                        (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
-                          (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS))
-                        (prepare-repliers thisnode soluid downstream))
+                          (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
                     (setf timer (schedule-gossip-timeout (ceiling seconds-to-wait) (actor thisnode) soluid))
@@ -1409,7 +1402,7 @@ dropped on the floor.
                     (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
                     ;(maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
                     (maybe-log thisnode :WAITING msg downstream))
-                   (t ; just forward the message if there won't be an :UPSTREAM reply
+                   (t ; just forward the message since there won't be an :UPSTREAM reply
                     (forward msg thisnode downstream)
                     ; No cleanup necessary because even though we had a downstream, we never expected any replies.
                     (send-final-reply thisnode (reply-to msg) soluid kind (initial-reply-value kind thisnode (args msg))))))
@@ -2181,6 +2174,9 @@ original message."
         (t
          (maybe-log node :CANNOT-TRANSMIT "no socket"))))
 
+(defmethod transmit-msg :before (msg (node tcp-gossip-node) srcuid)
+  (maybe-log node :TRANSMIT msg srcuid))
+
 (defmethod transmit-msg ((msg solicitation) (node tcp-gossip-node) srcuid)
   "Send an initial solicitation across network.
   srcuid is that of the (real) local gossip-node that sent message to this node."
@@ -2405,7 +2401,7 @@ original message."
 ; Test 3: List live nodes at given address via TCP
 ; ; ON SERVER MACHINE
 ; (clrhash *nodes*)
-; (make-graph 10)
+; (make-graph 1)
 ; (run-gossip-sim :TCP)
 
 ; ON CLIENT MACHINE
@@ -2418,16 +2414,18 @@ original message."
 #+TEST-AMAZON
 (setf rnode (ensure-proxy-node :TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
 
-#+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
+#+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
   :UID 201
   :NEIGHBORS (list (uid rnode))))
+; (visualize-nodes *nodes*)
 ; (solicit-direct localnode :count-alive)
 ; (solicit-direct localnode :list-alive)
+; (solicit-wait localnode :count-alive)
+; (solicit-wait localnode :list-alive)
+; (solicit-wait localnode :list-addresses)
 ; (inspect *log*)
-
-
 
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
@@ -2536,6 +2534,7 @@ to prepare for replies.
 There are several implications here:
 1. We cannot know in advance when we have received all possible replies. Thus we have to depend on a timeout
 as the only mechanism to know when to ignore further replies (and to reply ourselves, if necessary).
+Thus for a node expecting :ANONYMOUS replies, we must not call #'prepare-repliers for that node.
 2. We don't allow interim-replies to :ANONYMOUS expectations, because we're not creating a table to keep them
 (because in place of that table, we just have the keyword :ANONYMOUS), and because I don't think we'll ever need
 interim-replies in this case.
@@ -2545,5 +2544,57 @@ we won't know to reject the second one, and we'll coalesce a value from that nod
 an incorrect coalescence result. We may have to care about this in future, but I'm not going to worry about
 it now. In working code, there's no code path that would cause a node to respond with a final-reply for a given
 soluid twice.
+
+NOTE D: About :ANONYMOUS nodes
+
+#'prepare-repliers is solely for use by a given node X when it is passing along a message whose reply-to slot
+is :UPSTREAM. It should never be used for any other kind of reply-to, and in some cases it should not use even
+in the :UPSTREAM case. Read on.
+
+An :ANONYMOUS node is a proxy-node whose real-uid slot contains 0. It stands in for "every node" on some remote
+machine. A regular proxy-node on machine A masquerades as the source of messages to local nodes on machine A, where
+the actual source is actually on machine B. #'ensure-proxy-node is what makes this happen. But it NEVER happens
+for :ANONYMOUS nodes. When a remote node on B responds to A, its message always comes in through a regular proxy-node
+(which has a nonzero real-uid). Said proxy-node will be automatically created if it doesn't already exist.
+Thus :ANONYMOUS nodes are always created manually -- never automatically -- and they're used for bootstrapping
+a gossip network. And they're only used for outgoing messages -- never incoming.
+
+Any regular gossip-node X which has an :ANONYMOUS node in its immediate downstream (its neighbors slot) MUST only
+expect :ANONYMOUS replies. This is because the presence of even one :ANONYMOUS node in node X's downstream
+means that node X can never be sure when all replies have occurred. Thus node X MUST NOT call #'prepare-repliers
+in this case -- even if the reply-to happens to be :UPSTREAM.
+
+Note that :ANONYMOUS nodes are essential for bootstrapping a gossip network that spans multiple machines--we
+cannot just disallow them.
+
+So why not just let all replies and all proxy-nodes be :ANONYMOUS?
+Because with :ANONYMOUS replies, you can't ever be sure when you're done. You have to rely on timeouts to stop
+waiting for replies. This is acceptable at boot time, but as proxy nodes for unique remote nodes are automatically
+created, it's best to wire those into the gossip network as neighbors rather than :ANONYMOUS nodes, simply
+because non-anonymous proxy nodes can have expectations set up for replies and thus not rely solely on timeouts.
+Bottom line: Non-anonymous nodes are faster than anonymous ones.
+
+This leads to another observation: Don't put :ANONYMOUS nodes into the neighbors slot of any node. That way,
+you won't have to worry about :ANONYMOUS nodes being downstream, ever.
+
+Furthermore, if node X passes along a direct-reply message (that is, its reply-to slot contains a UID), it must
+never call #'prepare-repliers. This is pretty obvious at first glance, because in the case of direct replies,
+node X is probably not going to be the replyee anyway. But what if it is? What if node X _is_ the replyee?
+Even in that case, we can't always be sure that every downstream node is going to reply. If one of those
+downstream nodes is an :ANONYMOUS node, it'll never reply (because anonymous nodes never masquerade as the source of
+reply messages). And direct messages can be weird: Any given downstream node may or may not choose to even accept
+the message, let alone reply to it. Direct messages are in some sense intended to be weird. They're for bootstrapping
+or out-of-band status purposes or whatever. The point is, only :UPSTREAM solicitations should ever definitively
+expect replies from specific downstream nodes, and even then, not in the case where there's an :ANONYMOUS node in
+the downstream set.
+
+A subtlety: Note that coalescence is a different issue than expectations. It's possible that a node will want to coalesce
+its replies without having any expectations as to who will reply. This is precisely the case for node X, where node X
+is expecting direct replies to itself. See generic-srr-handler method for solicitations for how this is coded.
+
+TODO:
+Ensure that anonymous nodes can never be in neighbors slot.
+Figure out a way to make solicit-direct work in that case.
+
 
 |#
