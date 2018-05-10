@@ -32,6 +32,12 @@ THE SOFTWARE.
 (defun NYI (&rest args)
   (error "Not yet implemented: ~A" args))
 
+(defvar *cosi-prepare-timeout* 10
+  "Timeout in seconds that the leader waits during prepare phase for sealing a block.")
+
+(defvar *cosi-commit-timeout* 10
+  "Timeout in seconds that the leader waits during commit phase for sealing a block.")
+
 ;; -------------------------------------------------------
 
 (defvar *current-node*  nil)  ;; for sim = current node running
@@ -86,7 +92,7 @@ THE SOFTWARE.
       ;; for sim and debug
       
       (:make-block ()
-       (leader-exec node))
+       (leader-exec node *cosi-timeout*))
 
       (:genesis-utxo (utxo)
        (record-new-utxo (bev (txout-hashlock utxo))))
@@ -1078,7 +1084,7 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
-(defun leader-exec (node)
+(defun leader-exec (node prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
@@ -1095,7 +1101,7 @@ bother factoring it with NODE-COSI-SIGNING."
                     :witnesses        (map 'vector 'node-pkey *node-bit-tbl*)
                     :transactions     (get-transactions-for-new-block)))
         (self  (current-actor)))
-    (ac:self-call :cosi-sign-prepare self new-block 10)
+    (ac:self-call :cosi-sign-prepare self new-block timeout)
     (pr "Waiting for Cosi prepare")
     (labels
         ((wait-prep-signing ()
@@ -1106,7 +1112,7 @@ bother factoring it with NODE-COSI-SIGNING."
                       (bc-block-signature-pkey   new-block) (pbc:signed-message-pkey sig)
                       (bc-block-signature-bitmap new-block) bits
                       (bc-block-hash             new-block) (compute-block-hash new-block))
-                (ac:self-call :cosi-sign-commit self new-block 10)
+                (ac:self-call :cosi-sign-commit self new-block timeout)
                 (pr "Waiting for Cosi commit")
                 (labels ((wait-cmt-signing ()
                            (recv
