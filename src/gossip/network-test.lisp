@@ -109,5 +109,6 @@
       (solicit-wait localnode :list-alive)
     (inspect *log*)))
 
+; (ac::kill-executives)
 ; (test-client-upstream1)
 ; (test-client-upstream2)

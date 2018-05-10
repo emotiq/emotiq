@@ -1162,15 +1162,19 @@ dropped on the floor.
 
 (defun send-gossip-socket-timeout-message (actor socket soluid)
   "Send a socket-timeout message to an actor."
+  (when (debug-level 3)
+    (debug-log "Socket timeout" socket soluid))
   (ac:send actor
            :gossip
            *tcp-socket-waiter-name*
            (make-system-async :solicitation-uid soluid
-                         :kind :socket-timeout
-                         :args (list socket))))
+                              :kind :socket-timeout
+                              :args (list socket))))
 
 (defun send-gossip-socket-wakeup-message (actor socket soluid)
   "Send a socket-wakeup message to an actor."
+  (when (debug-level 3)
+    (debug-log "Socket wakeup" socket soluid))
   (ac:send actor
            :gossip
            *tcp-socket-waiter-name*
@@ -1196,8 +1200,6 @@ dropped on the floor.
         (when actor
           (cond ((and (null success) ; if success and errno are both nil, we timed out without error
                       (null errno))
-                 (when (debug-level 3)
-                   (debug-log "Socket timeout" socket soluid))
                  ; When no further data available, fall through and end loop
                  (send-gossip-socket-timeout-message actor socket soluid)
                  (return))
@@ -1207,8 +1209,7 @@ dropped on the floor.
                  ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
                  (format t  "~%Errno = ~D, status=~D" errno status))
                 (t
-                 (when (debug-level 3)
-                   (debug-log "Socket wakeup" socket soluid))
+                 (break)
                  (send-gossip-socket-wakeup-message actor socket soluid)
                  )))))))
 
@@ -1981,7 +1982,7 @@ gets sent back, and everything will be copacetic.
   (let ((rem-address (usocket:get-peer-address socket))
         (stream (usocket:socket-stream socket)))
     (with-authenticated-packet (packet)
-      (loenc:deserialize stream)
+      (loenc:deserialize stream) ; this can block. Be careful.
       (destructuring-bind (destuid srcuid rem-port msg) packet ;; if not what we expected, this will signal error
         (when (debug-level 1)
           (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
@@ -2227,26 +2228,7 @@ original message."
                             (lookup-node (reply-to msg))))
                ; Wait in a separate thread for socket to become ready
                (wait-for-socket socket (uid msg))))
-           
-           #+IGNORE
-           (let ((rem-address (usocket:get-peer-address socket))
-                 (soluid (uid msg)))
-             (loop while (ccl::open-stream-p (usocket:socket-stream socket)) do
-               (when (debug-level 3)
-                 (debug-log :TCP-WAITING-FOR-REPLY msg :FROM rem-address :TO (uid msg)))
-               (multiple-value-setq (success errno status)
-                 (incoming-message-handler-tcp socket *max-seconds-to-wait*))
-               (unless success
-                 (usocket:socket-close socket)
-                 (return)))
-             (when (debug-level 3)
-               (if (and (null success)
-                        (null errno))
-                   (debug-log "Reply socket timed out. We closed it." socket soluid)
-                   (debug-log "Reply socket found closed, or error" socket errno status))))
            )
-          
-          
           (t
            (maybe-log node :CANNOT-TRANSMIT "no stream")))))
 
@@ -2627,6 +2609,15 @@ the downstream set.
 A subtlety: Note that coalescence is a different issue than expectations. It's possible that a node will want to coalesce
 its replies without having any expectations as to who will reply. This is precisely the case for node X, where node X
 is expecting direct replies to itself. See generic-srr-handler method for solicitations for how this is coded.
+
+NOTE E: Debugging Actor code
+If it seems like -- contrary to all expectations -- messages are never getting delivered to a given actor,
+check the processes window. If a given Actor Executive shows "Active" rather than "Waiting for Actor", that's
+a HUGE red flag. It means some Actor's code body never exited. And that actor will appear to have stopped 
+receiving messages.
+In ccl, you can interrupt and backtrace a background process like so:
+(ccl::force-break-in-listener (gossip::find-process <process-name>))
+
 
 TODO:
 Ensure that anonymous nodes can never be in neighbors slot.
