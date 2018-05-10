@@ -1,6 +1,8 @@
 ;;; socket-actor-test.lisp
 ;;; Tests of actor sockets
 
+(ql:quickload :gossip)
+
 (in-package :gossip)
 
 (defparameter *server-address* "localhost")
@@ -17,26 +19,36 @@
   ; Start listener socket thread
   (start-gossip-server :TCP))
 
-(defun setup-client (&optional server-address)
+(defparameter *stop-loopback* nil)
+
+(defun loopback-server ()
+  "Wait for an object to appear -- from anywhere -- and echo it."
+  (setup-server)
+  (setf *stop-loopback* nil)
+  (loop until *stop-loopback* do
+    (multiple-value-bind (object valid) (mpcompat:mailbox-read *incoming-mailbox* 10)
+      (when valid (print object)
+        (destructuring-bind (reply-actor msg) object
+          (ac:send reply-actor :send-socket-data (concatenate 'string msg "GOO")))))))
+
+; (trace ac:send)
+; (loopback-server)
+
+(defun setup-client ()
   ; Start listener socket thread
-  (start-gossip-server :TCP)
-  (unless server-address (setf server-address (car *server-address*)))
+  (start-gossip-server :TCP))
+
+(defun test-sa-client1 (&optional server-address)
+  "Assumes (loopback-server) is running on server"
+  (archive-log)
+  (setup-client)
+  (unless server-address (setf server-address *server-address*))
   (let* ((server-port (if (equalp "localhost" server-address)
                           (other-tcp-port)
                           *nominal-gossip-port*))
-         (socket-actor (ensure-connection server-address server-port)))
-    socket-actor))
+         (socket-actor (ensure-connection server-address server-port))
+         (mbox (get-outbox socket-actor)))
+    (ac:send socket-actor :send-socket-data "Foo")
+    (mpcompat:mailbox-read mbox 10)))
 
-(defparameter *sa* (setup-client))
-
-(defun test-sa-client1 ()
-  (archive-log)
-  (let ((mbox (get-mbox *sa*)))
-    (mpcompat:mailbox-read mbox)))
-
-  (multiple-value-prog1
-      (solicit-direct localnode :count-alive)
-    (inspect *log*)))
-
-
-  (mpcompat:mailbox-read mbox)
+; (test-sa-client1) ; should return (<some actor> "FooGOO")

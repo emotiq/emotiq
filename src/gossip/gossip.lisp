@@ -21,6 +21,7 @@
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
+(defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
@@ -2066,7 +2067,7 @@ gets sent back, and everything will be copacetic.
                    (when socket (usocket:socket-close socket)))
                   ;; Really should have data at this point...
                   (t
-                   (make-socket-actor socket))))))
+                   (make-socket-actor socket *incoming-mailbox*))))))
     (when listening-socket (usocket:socket-close listening-socket))))
 
 (defun open-passive-udp-socket (port)

@@ -84,6 +84,8 @@
                    (and (/= status 0)
                         (/= status #$POLLIN)))
                ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
+               (when (not (zerop (logand status #$POLLHUP)))
+                   (send-socket-shutdown-message actor))
                (format t  "~%Errno = ~D, status=~D" errno status))
               (t
                (send-socket-receive-message actor)))))))
@@ -104,12 +106,21 @@
              (cond ((and (usocket:stream-usocket-p socket)
                          (open-stream-p stream))
                     (loenc:serialize payload stream)
-                    (finish-output (usocket:socket-stream socket)))
+                    (finish-output stream))
                    (t (ac:self-call :shutdown)))))
           (:receive-socket-data
            (let ((outbox (get-outbox actor))
-                 (object (loenc:deserialize (usocket:socket-stream socket))))
-             (apply 'ac:send outbox object)))
+                 (stream (usocket:socket-stream socket))
+                 (object nil))
+             (when (listen stream) ; it is ****VERY**** important to check this here.
+               ; Why? Because many :receive-socket-data messages can pile up because the concurrent select-loop can show the socket has data
+               ;      _while_ loenc:deserialize is happening. The result will be that (current-actor) will hang in the next loenc:deserialize
+               ;      because there won't really be any data waiting, because the previous loenc:deserialize used it all up.
+               ;      We should probably set a flag in the actor to better coordinate between
+               ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
+               (setf object (loenc:deserialize stream))
+               (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
+               )))
           (:shutdown
            ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
            (let ((socket (get-socket actor))
