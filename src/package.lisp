@@ -65,7 +65,10 @@
 
   (:export
    #:initialize
-   #:run))
+   #:run
+
+   #:blocks
+   #:transactions))
 
 
   
