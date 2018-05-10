@@ -2,12 +2,25 @@
  
 (in-package :emotiq/sim)
 
-(defun initialize (&key (leader-node "127.0.0.1"))
+(defun initialize (&key
+                     (executive-threads nil)
+                     (nodes 8)
+                     (new-configuration-p nil))
+  "Initialize a new local simulation of the Emotiq chain
+
+The simulation can be configured to run across the number of EXECUTIVE-THREADS 
+
+If NEW-CONFIGURATION-P is true, a new simulation network will be
+generated.  The configured simulation will have the integer number of
+NODES as witnesses."
   (setf actors::*maximum-age* 120)
-  (cosi-simgen::cosi-init leader-node)
-  ;; Weird:  can't run cosi-generate as part of the process
-  #+(or)
-  (cosi-simgen::cosi-generate :nodes 3)
+  (when executive-threads
+    (setf actors::*nbr-execs*
+          executive-threads))
+  (when (or new-configuration-p
+              (not (and (probe-file cosi-simgen::*default-data-file*)
+                        (probe-file cosi-simgen::*default-key-file*))))
+    (cosi-simgen::generate-tree :nodes nodes))
   (cosi-simgen::init-sim)
   #+(or)
   (emotiq/cli:main))
@@ -293,14 +306,8 @@ lookups
                  (setf *txn2* txn2)
                  (setf *txn3* txn3))))))))))
 
-(defun txn1 ()
-  *txn1*)
-
-(defun txn2 ()
-  *txn2*)
-
-(defun txn3 ()
-  *txn3*)
+(defun transactions ()
+  (list *tx1* *tx2* *tx3*))
 
 (defun blocks ()
   (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
