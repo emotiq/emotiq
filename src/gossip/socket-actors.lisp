@@ -1,4 +1,4 @@
-;;; actor-sockets.lisp
+;;; socket-actors.lisp
 ;;; Actor-protected TCP sockets
 
 (in-package :gossip)
@@ -108,8 +108,8 @@
                    (t (ac:self-call :shutdown)))))
           (:receive-socket-data
            (let ((outbox (get-outbox actor))
-                 (packet (loenc:deserialize (usocket:socket-stream socket))))
-             (apply 'ac:send outbox packet)))
+                 (object (loenc:deserialize (usocket:socket-stream socket))))
+             (apply 'ac:send outbox object)))
           (:shutdown
            ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
            (let ((socket (get-socket actor))
@@ -129,14 +129,17 @@
           (t
            (error "Can't open socket ~S" socket)))))
 
-(defun ensure-connection (address port)
+(defun ensure-connection (address port &optional outbox)
   "Find or make an actor-mediated connection to given address and port"
   (or (lookup-connection address port)
-      (make-socket-actor (ensure-open-socket address port))))
+      (make-socket-actor (ensure-open-socket address port) outbox)))
       
-(defun make-socket-actor (socket)
-  "Wraps an actor around an open socket connection. Returns the actor."
-  (let* ((outbox (mpcompat:make-mailbox))
+(defun make-socket-actor (socket &optional outbox)
+  "Wraps an actor around an open socket connection. Returns the actor.
+   You can pass in your own argument for outbox; if nil a mailbox will be created automatically.
+   Given outbox could be either a mailbox, an actor, or a function that acts as a continuation
+   for handling received objects."
+  (let* ((outbox (or outbox (mpcompat:make-mailbox)))
          (actor  (make-instance 'socket-actor :fn 'socket-actor-dispatcher))
          (address (usocket:get-peer-address socket))
          (port    (usocket:get-peer-port socket)))

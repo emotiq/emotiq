@@ -75,9 +75,9 @@
 
 (defun other-tcp-port ()
   (when *tcp-gossip-socket*
-    (if (= 65002 *actual-tcp-gossip-port*)
-        65003
-        65002)))
+    (if (= *nominal-gossip-port* *actual-tcp-gossip-port*)
+        (1+ *nominal-gossip-port*)
+        *nominal-gossip-port*)))
 
 (defun setup-client-for-upstream-test (n m other-machine-address)
   "n is starting UID

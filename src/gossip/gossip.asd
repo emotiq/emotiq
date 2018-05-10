@@ -14,6 +14,7 @@
   :serial t
   :components ((:file "package")
                #+OPENMCL (:file "ccl-sockets-patch")
+               (:file "socket-actors")
                (:file "gossip")
                (:file "http-fetch")
                (:file "graphviz")
