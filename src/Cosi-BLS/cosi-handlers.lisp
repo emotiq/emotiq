@@ -36,6 +36,10 @@ THE SOFTWARE.
 
 (defvar *current-node*  nil)  ;; for sim = current node running
 
+(defvar *cosi-sign-prepare-timeout* 10
+  "Timeout in seconds that the leader sends to participants in the
+  prepare phase for sealing a block.")
+
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
     (um:dcase msg
@@ -86,7 +90,8 @@ THE SOFTWARE.
       ;; for sim and debug
       
       (:make-block ()
-       (leader-exec node))
+                   (leader-exec node
+                                :cosi-sign-prepare-timeout *cosi-sign-prepare-timeout*))
 
       (:genesis-utxo (utxo)
        (record-new-utxo (bev (txout-hashlock utxo))))
@@ -153,7 +158,7 @@ THE SOFTWARE.
   (let ((new-top-node (gethash (int new-leader-pkey) *pkey-node-tbl*)))
     ;; Maybe... ready for prime time?
     (cond ((null new-top-node)
-           (error "Not a valid leader node: ~A" new-leader-ip))
+           (error "Not a valid key for a leader node: ~A" new-leader-pkey))
           ((eq new-top-node *top-node*)
            ;; nothing to do here...
            )
@@ -1078,7 +1083,11 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
-(defun leader-exec (node)
+(defun leader-exec (node &key (cosi-sign-prepare-timeout 10))
+  "Logic which the leader follows to orchestrate the sealing a block
+
+For the cosi nodes signal a COSI-SIGN-PREPARE-TIMEOUT in seconds.
+"
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
@@ -1095,7 +1104,7 @@ bother factoring it with NODE-COSI-SIGNING."
                     :witnesses        (map 'vector 'node-pkey *node-bit-tbl*)
                     :transactions     (get-transactions-for-new-block)))
         (self  (current-actor)))
-    (ac:self-call :cosi-sign-prepare self new-block 10)
+    (ac:self-call :cosi-sign-prepare self new-block cosi-sign-prepare-timeout)
     (pr "Waiting for Cosi prepare")
     (labels
         ((wait-prep-signing ()
