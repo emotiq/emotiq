@@ -38,7 +38,10 @@
                                        
 (defsystem "emotiq/startup"
   ;; add gossip here soon:
-  :depends-on (emotiq/blockchain crypto-pairings core-crypto)
+  :depends-on (emotiq/blockchain
+               emotiq-rest
+               crypto-pairings
+               core-crypto)
   :components ((:module source
                 :pathname "./"
                 :serial t

@@ -29,6 +29,7 @@
   ;; ^^ in this context "production" ONLY means binary build.
   (setq *production* t)
   (message-running-state "from command line")
+  (emotiq-rest:start)
   
   (main))
 
