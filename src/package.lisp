@@ -68,7 +68,14 @@
    #:run
 
    #:blocks
-   #:transactions))
+
+   #:spend #:spend-list
+
+   #:force-epoch-end
+
+   
+   #:*user-1* #:*user-2* #:*user-3*
+   #:*tx-1* #:*tx-2* #:*tx-3*))
 
 
   
