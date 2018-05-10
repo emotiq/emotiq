@@ -1,5 +1,7 @@
 (defsystem "emotiq-rest"
   :depends-on (restas
+               cosi-bls
+               jonathan
                cl-who
                simple-date-time)
   :components ((:module package

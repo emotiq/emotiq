@@ -9,6 +9,16 @@
                              :content-type "text/html")
   (as-html
     (:html
-     (:body "Wallet REST interface"))))
+     (:body
+      (:h1 "Wallet REST interface"
+           (:ul
+            (:li (:a :href "dictionary.js" "English dictionary"))))))))
+
+(restas:define-route %dictionary.js ("/dictionary.js"
+                                     :content-type "application/javascript")
+  (jonathan:to-json `(:dictionary ,(cosi-keying::import-wordlist "english.txt"))))
+
+                                  
+  
 
 
