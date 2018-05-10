@@ -2,15 +2,30 @@
  
 (in-package :emotiq/sim)
 
-(defun initialize (&key (leader-node "127.0.0.1"))
+(defun initialize (&key
+                     (executive-threads nil)
+                     (nodes 8)
+                     (new-configuration-p nil)
+                     (run-cli-p nil))
+  "Initialize a new local simulation of the Emotiq chain
+
+The simulation can be configured to run across the number of EXECUTIVE-THREADS 
+
+If either NEW-CONFIGURATION-P is true or the simulator has never been
+run on this node, a new simulation network will be generated.  The
+configured simulation will have the integer number of NODES as
+witnesses."
   (setf actors::*maximum-age* 120)
-  (cosi-simgen::cosi-init leader-node)
-  ;; Weird:  can't run cosi-generate as part of the process
-  #+(or)
-  (cosi-simgen::cosi-generate :nodes 3)
+  (when executive-threads
+    (setf actors::*nbr-execs*
+          executive-threads))
+  (when (or new-configuration-p
+              (not (and (probe-file cosi-simgen::*default-data-file*)
+                        (probe-file cosi-simgen::*default-key-file*))))
+    (cosi-simgen::generate-tree :nodes nodes))
   (cosi-simgen::init-sim)
-  #+(or)
-  (emotiq/cli:main))
+  (when run-cli-p
+    (emotiq/cli:main)))
 
 (defvar *genesis-account*
   (pbc:make-key-pair :genesis)
@@ -251,58 +266,64 @@ lookups
 |#
 
 
-(defparameter *user1* (pbc:make-key-pair :user1))
-(defparameter *user2* (pbc:make-key-pair :user2))
-(defparameter *user3* (pbc:make-key-pair :user3))
-(defparameter *txn1* nil)
-(defparameter *txn2* nil)
-(defparameter *txn3* nil)
+(defparameter *user-1* (pbc:make-key-pair :user-1))
+(defparameter *user-2* (pbc:make-key-pair :user-2))
+(defparameter *user-3* (pbc:make-key-pair :user-3))
+(defparameter *tx-1* nil)
+(defparameter *tx-2* nil)
+(defparameter *tx-3* nil)
 
-(defun run (&key (cloaked t))
+(defun run (&key
+              (amount 1000)
+              (cloaked t)) ;;; non-cloaking does not currently work
+  "Run the block chain simulation entirely within the current process
+
+This will spawn an actor which will asynchronously do the following:
+
+  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
+      coins to *USER-1*.  The resulting transaction can be referenced
+      via *tx-1*.
+
+  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
+
+  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
+"
+
   (setf *genesis-output* nil
-        *txn1*           nil
-        *txn2*           nil
-        *txn3*           nil)
+        *tx-1*           nil
+        *tx-2*           nil
+        *tx-3*           nil)
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-     (let ((amount 1000))
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
        ;; spend txn must use up all input UTXO's, this is actually, the "genesis transaction"
-       (let ((txn-genesis (spend-from-genesis *user1* amount :cloaked cloaked))) 
+       (let ((txn-genesis (spend-from-genesis *user-1* amount :cloaked cloaked))) 
          ;; actors run asynchronously, check value of *txn* only when all activity stops
-         (setf *txn1* txn-genesis)  
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
-           (let ((txn2 (spend *user1*
+           (let ((txn2 (spend *user-1*
                               (first txout2)
-                              (pbc:keying-triple-pkey *user2*)
+                              (pbc:keying-triple-pkey *user-2*)
                               amount
                               cosi-simgen::*node-bit-tbl*
                               :cloaked cloaked)))
-             (let ((txout2 (cosi/proofs::trans-txouts txn2)))
-               (let ((txn3 (spend-list *user2*
+             (let ((txout2 (cosi/proofs::trans-txouts txn2))
+                   (change (floor (/ amount 2))))
+               (let ((txn3 (spend-list *user-2*
                                        (first txout2)
-                                       (list (pbc:keying-triple-pkey *user3*)
-                                             (pbc:keying-triple-pkey *user2*))
-                                       ;; send 900 to user 3, 100 back as change
-                                       (list (- amount 100) 100)  
+                                       (list (pbc:keying-triple-pkey *user-3*)
+                                             (pbc:keying-triple-pkey *user-2*))
+                                       (list (- amount change) change)
                                        cosi-simgen::*node-bit-tbl*
                                        :cloaked cloaked)))
                  (force-epoch-end)
-                 (setf *txn2* txn2)
-                 (setf *txn3* txn3))))))))))
-
-(defun txn1 ()
-  *txn1*)
-
-(defun txn2 ()
-  *txn2*)
-
-(defun txn3 ()
-  *txn3*)
+                 (setf *tx-1* txn-genesis
+                       *tx-2* txn2
+                       *tx-3* txn3)))))))))
 
 (defun blocks ()
+  "Return the blocks in the chain currently under local simulation."
   (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
 
 #|
