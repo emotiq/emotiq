@@ -131,19 +131,28 @@
              (unmemoize-connection address port))))))))
 
 (defun ensure-open-socket (address port)
-  "Initiates a TCP connection from this machine to another"
+  "Initiates a TCP connection from this machine to another.
+   If second value is non-nil, it indicates some kind of error that makes first value invalid."
   (when (debug-level 3)
-            (debug-log "Opening socket to " (usocket::host-to-vector-quad address) port))
-  (let ((socket (usocket:socket-connect address port :protocol ':stream :element-type '(unsigned-byte 8))))
-    (cond ((usocket:stream-usocket-p socket)
+    (debug-log "Opening socket to " (usocket::host-to-vector-quad address) port))
+  (multiple-value-bind (socket errorp)
+                       (handler-case (usocket:socket-connect address port :protocol ':stream :element-type '(unsigned-byte 8))
+                         (USOCKET:CONNECTION-REFUSED-ERROR () (values nil :CONNECTION-REFUSED))
+                         (T (e) (values nil e)))
+    (cond ((and (not errorp)
+                (usocket:stream-usocket-p socket))
            socket)
-          (t
-           (error "Can't open socket ~S" socket)))))
+          (t (values socket (or errorp :INVALID-SOCKET))))))
 
 (defun ensure-connection (address port &optional outbox)
-  "Find or make an actor-mediated connection to given address and port"
+  "Find or make an actor-mediated connection to given address and port.
+  If second value is non-nil, it indicates some kind of error that makes first value invalid."
   (or (lookup-connection address port)
-      (make-socket-actor (ensure-open-socket address port) outbox)))
+      (multiple-value-bind (socket errorp)
+                           (ensure-open-socket address port)
+        (cond ((not errorp)
+               (make-socket-actor socket outbox))
+              (t (values socket errorp))))))
       
 (defun make-socket-actor (socket &optional outbox)
   "Wraps an actor around an open socket connection. Returns the actor.
