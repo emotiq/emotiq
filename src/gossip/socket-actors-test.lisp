@@ -8,14 +8,6 @@
 (defparameter *server-address* "localhost")
 ;(defparameter *server-address* "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com")
 
-(defun other-tcp-port ()
-  "Deduce proper port for other end of connection based on whether this process
-   has already established one. Only used for testing two processes communicating on one machine."
-  (when *tcp-gossip-socket*
-    (if (= *nominal-gossip-port* *actual-tcp-gossip-port*)
-        (1+ *nominal-gossip-port*)
-        *nominal-gossip-port*)))
-
 (defun setup-server ()
   ; Start listener socket thread
   (start-gossip-server :TCP))
@@ -59,3 +51,5 @@
 ; (test-sa-client1) ; should return (<some actor> "FooGOO")
 
 ; (test-sa-client1 "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com")
+
+; (test-sa-client1 "emq-01.aws.emotiq.ch")

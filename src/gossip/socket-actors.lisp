@@ -3,7 +3,7 @@
 
 (in-package :gossip)
 
-(defvar *tcp-connection-table* (kvs:make-store ':hashtable :test 'eql) "Memoizes open connections")
+(defvar *tcp-connection-table* (kvs:make-store ':hashtable :test 'eql) "Memoizes all open connections")
 
 ; herein we sometimes refer to these things as "connections"
 (defclass socket-actor (ac:actor)
@@ -54,8 +54,6 @@
 
 (defun send-socket-receive-message (actor)
   "Send a socket-receive message to an actor."
-  (when (debug-level 3)
-    (debug-log "Socket receive" actor))
   (ac:send actor :receive-socket-data))
 
 (defun send-socket-shutdown-message (actor)
@@ -84,9 +82,9 @@
                    (and (/= status 0)
                         (/= status #$POLLIN)))
                ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
-               (when (not (zerop (logand status #$POLLHUP)))
-                   (send-socket-shutdown-message actor))
-               (format t  "~%Errno = ~D, status=~D" errno status))
+               (if (not (zerop (logand status #$POLLHUP)))
+                   (send-socket-shutdown-message actor)
+                   (format t  "~%Errno = ~D, status=~D" errno status)))
               (t
                (send-socket-receive-message actor)))))))
   
@@ -118,6 +116,8 @@
                ;      because there won't really be any data waiting, because the previous loenc:deserialize used it all up.
                ;      We should probably set a flag in the actor to better coordinate between
                ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
+               (when (debug-level 3)
+                 (debug-log "Socket receive" actor))
                (setf object (loenc:deserialize stream))
                (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
                )))
