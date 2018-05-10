@@ -72,6 +72,7 @@
   :depends-on (emotiq/cli)
   :components ((:module source
                 :pathname "./"
-                :components ((:file "node-sim")))))
+                :components ((:file "sim-election")
+                             (:file "node-sim")))))
 
 

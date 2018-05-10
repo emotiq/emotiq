@@ -22,8 +22,12 @@ witnesses."
   (when (or new-configuration-p
               (not (and (probe-file cosi-simgen::*default-data-file*)
                         (probe-file cosi-simgen::*default-key-file*))))
-    (cosi-simgen::generate-tree :nodes nodes))
+    (cosi-simgen::generate-tree :nodes nodes)
+    (let ((node-list (list-of-nodes)))
+      (assign-phony-stake-to-nodes node-list)
+      (sim-trial-election:set-nodes (sort-nodes-by-stake node-list))))
   (cosi-simgen::init-sim)
+  (sim-trial-election:make-trial-election-beacon)
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -326,17 +330,24 @@ This will spawn an actor which will asynchronously do the following:
   "Return the blocks in the chain currently under local simulation."
   (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
 
-#|
-todo:
-- randomness
-- staking
-- election
-x remove ac:spawn from test-network, see if it still works
-x- txn that splits outputs
-- elections
-- insert :fee in transactions (new field)
-- txn dumper
-- get signing to work in sim (not always OK?) [what purpose?]
-- [ignore] investigate why I saw 5 blocks for 3 epochs?  intermittent?  Or temp bug during fixing?
-- uncloaked txouts
-|#
+
+;; hacked copy of cosi-simgen::assign-bits()
+(defun list-of-nodes ()
+  (let ((collected
+         (um:accum acc
+           (maphash (lambda (k node)
+                      (declare (ignore k))
+                      (acc node))
+                    cosi-simgen::*ip-node-tbl*))))
+    collected))
+
+(defun assign-phony-stake-to-nodes (node-list)
+  ;; set the node-stake slot of every node to a random number <= 100,000
+  (loop for node in node-list
+        (let ((phony-stake (random 100000)))
+          (setf (node-stake node) phony-stake))))
+
+(defun sort-nodes-by-stake (node-list)
+    (sort node-list '< :key (node-stake)))
+
+
