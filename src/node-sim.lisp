@@ -14,7 +14,10 @@
 The simulation can be configured to run across the number of EXECUTIVE-THREADS 
 
 COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait for responses during prepare phase. 
-COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait for responses during commit phase. 
+COSI-COMMIT-TIMEOUT specifies how many seconds that cosi leaders wait for responses during commit phase. 
+
+Prepare can possibly take longer than commit, because the block may contain txns that a witness has not
+yet seen (and, therefore, needs to validate the unseen txn(s))
 
 If either NEW-CONFIGURATION-P is true or the simulator has never been
 run on this node, a new simulation network will be generated.  The

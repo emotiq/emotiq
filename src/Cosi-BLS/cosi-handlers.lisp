@@ -92,7 +92,7 @@ THE SOFTWARE.
       ;; for sim and debug
       
       (:make-block ()
-       (leader-exec node *cosi-timeout*))
+       (leader-exec node *cosi-prepare-timeout* *cosi-commit-timeout*))
 
       (:genesis-utxo (utxo)
        (record-new-utxo (bev (txout-hashlock utxo))))
