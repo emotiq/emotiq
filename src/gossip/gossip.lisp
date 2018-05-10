@@ -2066,7 +2066,7 @@ gets sent back, and everything will be copacetic.
                    (when socket (usocket:socket-close socket)))
                   ;; Really should have data at this point...
                   (t
-                   (incoming-message-handler-tcp socket))))))
+                   (make-socket-actor socket))))))
     (when listening-socket (usocket:socket-close listening-socket))))
 
 (defun open-passive-udp-socket (port)
@@ -2244,12 +2244,6 @@ original message."
              (finish-output (usocket:socket-stream socket))))
           (t
            (maybe-log node :CANNOT-TRANSMIT "no stream")))))
-
-(defun ensure-open-socket (addr port)
-  "Only for initiating a connection to send an initial solicitation from one machine to another"
-  (when (debug-level 3)
-            (debug-log "Opening stream to " (usocket::host-to-vector-quad addr) port))
-  (usocket:socket-connect addr port :protocol ':stream :element-type '(unsigned-byte 8)))
 
 #|
 (defun ensure-open-stream (ip port)
