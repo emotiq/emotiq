@@ -137,7 +137,6 @@
     (debug-log "Opening socket to " (usocket::host-to-vector-quad address) port))
   (multiple-value-bind (socket errorp)
                        (handler-case (usocket:socket-connect address port :protocol ':stream :element-type '(unsigned-byte 8))
-                         (USOCKET:CONNECTION-REFUSED-ERROR () (values nil :CONNECTION-REFUSED))
                          (T (e) (values nil e)))
     (cond ((and (not errorp)
                 (usocket:stream-usocket-p socket))
