@@ -1101,7 +1101,7 @@ bother factoring it with NODE-COSI-SIGNING."
                     :witnesses        (map 'vector 'node-pkey *node-bit-tbl*)
                     :transactions     (get-transactions-for-new-block)))
         (self  (current-actor)))
-    (ac:self-call :cosi-sign-prepare self new-block timeout)
+    (ac:self-call :cosi-sign-prepare self new-block prepare-timeout)
     (pr "Waiting for Cosi prepare")
     (labels
         ((wait-prep-signing ()
@@ -1112,7 +1112,7 @@ bother factoring it with NODE-COSI-SIGNING."
                       (bc-block-signature-pkey   new-block) (pbc:signed-message-pkey sig)
                       (bc-block-signature-bitmap new-block) bits
                       (bc-block-hash             new-block) (compute-block-hash new-block))
-                (ac:self-call :cosi-sign-commit self new-block timeout)
+                (ac:self-call :cosi-sign-commit self new-block commit-timeout)
                 (pr "Waiting for Cosi commit")
                 (labels ((wait-cmt-signing ()
                            (recv
