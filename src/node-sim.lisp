@@ -6,19 +6,26 @@
                      (executive-threads nil)
                      (nodes 8)
                      (new-configuration-p nil)
+                     (cosi-sign-prepare-timeout 10)
                      (run-cli-p nil))
   "Initialize a new local simulation of the Emotiq chain
 
-The simulation can be configured to run across the number of EXECUTIVE-THREADS 
+EXECUTIVE-THREADS specifies how many threads to allocate to actors.
+The default is 8.
+
+COSI-SIGN-PREPARE-TIMEOUT specifies how many seconds for cosi participants to wait
+for a timeout.  
 
 If either NEW-CONFIGURATION-P is true or the simulator has never been
-run on this node, a new simulation network will be generated.  The
+run on this instance, a new simulation network will be generated.  The
 configured simulation will have the integer number of NODES as
 witnesses."
   (setf actors::*maximum-age* 120)
   (when executive-threads
     (setf actors::*nbr-execs*
           executive-threads))
+  (setf cosi-simgen::*cosi-sign-prepare-timeout*
+        cosi-sign-prepare-timeout)
   (when (or new-configuration-p
               (not (and (probe-file cosi-simgen::*default-data-file*)
                         (probe-file cosi-simgen::*default-key-file*))))

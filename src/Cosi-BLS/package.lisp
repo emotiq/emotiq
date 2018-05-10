@@ -200,6 +200,7 @@
    :generate-tree
    :reconstruct-tree
    :forwarding)
+  (:export *cosi-sign-prepare-timeout*)
   (:export :block))
 
 (defpackage :cosi-keying
