@@ -45,27 +45,33 @@ witnesses."
       (declare (ignore secrg))
 
       (setf *genesis-output* utxog)
-      (map nil
-       (lambda (node)
-         (cosi-simgen::send (cosi-simgen::node-self node) :genesis-utxo utxog))
-       cosi-simgen::*node-bit-tbl*))))
+      (broadcast-message :genesis-utxo utxog))))
 
-
+(defun broadcast-message (message arg)
+  (loop
+     :for node :across cosi-simgen::*node-bit-tbl*
+     :doing (cosi-simgen::send (cosi-simgen::node-self node)
+                               message arg)))
+  
 (defun spend-from-genesis (receiver amount &key (cloaked t))
   (unless *genesis-output*
     (error "No genesis account to spend from."))
-  (spend *genesis-account* *genesis-output* (pbc:keying-triple-pkey receiver) amount cosi-simgen::*node-bit-tbl* :cloaked cloaked))
+  (spend *genesis-account* *genesis-output*
+         (pbc:keying-triple-pkey receiver)
+         amount
+         :cloaked cloaked))
 
-(defun spend (from from-utxo to-pubkey amount bit-tbl &key (cloaked t))
+(defun spend (from from-utxo to-pubkey amount &key (cloaked t))
   "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
     amount = number, bit-tbl = node's bit table"
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
-                     (from-private-key pbc:keying-triple-skey))
+                   (from-private-key pbc:keying-triple-skey))
       from
-    (let ((from-skey (pbc:keying-triple-skey from)))
-      (let ((decrypted-from-utxo (cosi/proofs:decrypt-txout-info from-utxo from-skey)))
-        (multiple-value-bind (txin txin-gamma)  ;; decrypt "from" txout, then make a txin for current txn
-            (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) ;;
+    (let ((decrypted-from-utxo
+           (cosi/proofs:decrypt-txout-info from-utxo from-private-key)))
+      ;; decrypt "from" txout, then make a txin for current txn
+      (multiple-value-bind (txin txin-gamma)  
+            (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) 
                                    (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
                                    from-public-key from-private-key)
           (multiple-value-bind (new-utxo new-utxo-secrets) ;; sends
@@ -74,39 +80,35 @@ witnesses."
                                                              (list txin-gamma)
                                                              (list new-utxo)
                                                              (list new-utxo-secrets))))
-              (map nil (lambda (node)
-                         (cosi-simgen::send (cosi-simgen::node-self node) :new-transaction transaction))
-                   bit-tbl)
-              transaction)))))))
+              (broadcast-message :new-transaction transaction)
+              transaction))))))
 
-(defun spend-list (from from-utxo to-pubkey-list amount-list bit-tbl &key (cloaked t))
+(defun spend-list (from from-utxo to-pubkey-list amount-list &key (cloaked t))
   " like spend, but allows multiple receivers, returns one transaction with multiple txouts"
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
-                     (from-private-key pbc:keying-triple-skey))
+                   (from-private-key pbc:keying-triple-skey))
       from
-    (let ((from-skey (pbc:keying-triple-skey from)))
-      (let ((decrypted-from-utxo (cosi/proofs:decrypt-txout-info from-utxo from-skey)))
-        (multiple-value-bind (txin txin-gamma)  ;; decrypt "from" txout, then make a txin for current txn
-            (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) ;;
-                                   (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
-                                   from-public-key from-private-key)
-          (let ((new-utxo-list nil)
-                (new-utxo-secrets-list nil))
-            (mapc #'(lambda (to-pubkey amount)
-                      (multiple-value-bind (new-utxo new-utxo-secrets)
-                          (cosi/proofs:make-txout amount (if cloaked to-pubkey nil))
-                        (push new-utxo new-utxo-list)
-                        (push new-utxo-secrets new-utxo-secrets-list)))
-                  to-pubkey-list
-                  amount-list)
-            (let ((transaction (cosi/proofs:make-transaction (list txin)
-                                                             (list txin-gamma)
-                                                             new-utxo-list
-                                                             new-utxo-secrets-list)))
-              (map nil (lambda (node)
-                         (cosi-simgen::send (cosi-simgen::node-self node) :new-transaction transaction))
-                   bit-tbl)
-              transaction)))))))
+    (let ((decrypted-from-utxo
+           (cosi/proofs:decrypt-txout-info from-utxo from-private-key)))
+      (multiple-value-bind (txin txin-gamma)  
+          (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) 
+                                 (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
+                                 from-public-key from-private-key)
+        (let ((new-utxo-list nil)
+              (new-utxo-secrets-list nil))
+          (mapc #'(lambda (to-pubkey amount)
+                    (multiple-value-bind (new-utxo new-utxo-secrets)
+                        (cosi/proofs:make-txout amount (if cloaked to-pubkey nil))
+                      (push new-utxo new-utxo-list)
+                      (push new-utxo-secrets new-utxo-secrets-list)))
+                to-pubkey-list
+                amount-list)
+          (let ((transaction (cosi/proofs:make-transaction (list txin)
+                                                           (list txin-gamma)
+                                                           new-utxo-list
+                                                           new-utxo-secrets-list)))
+            (broadcast-message :new-transaction transaction)
+            transaction))))))
 
 (defun force-epoch-end ()
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
@@ -297,16 +299,13 @@ This will spawn an actor which will asynchronously do the following:
   (ac:spawn
    (lambda ()
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
-       ;; spend txn must use up all input UTXO's, this is actually, the "genesis transaction"
        (let ((txn-genesis (spend-from-genesis *user-1* amount :cloaked cloaked))) 
-         ;; actors run asynchronously, check value of *txn* only when all activity stops
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
            (let ((txn2 (spend *user-1*
                               (first txout2)
                               (pbc:keying-triple-pkey *user-2*)
                               amount
-                              cosi-simgen::*node-bit-tbl*
                               :cloaked cloaked)))
              (let ((txout2 (cosi/proofs::trans-txouts txn2))
                    (change (floor (/ amount 2))))
@@ -315,7 +314,6 @@ This will spawn an actor which will asynchronously do the following:
                                        (list (pbc:keying-triple-pkey *user-3*)
                                              (pbc:keying-triple-pkey *user-2*))
                                        (list (- amount change) change)
-                                       cosi-simgen::*node-bit-tbl*
                                        :cloaked cloaked)))
                  (force-epoch-end)
                  (setf *tx-1* txn-genesis
