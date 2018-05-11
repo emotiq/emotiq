@@ -69,10 +69,6 @@ THE SOFTWARE.
       (:election (new-leader-pkey)
        (node-elect-new-leader new-leader-pkey))
 
-      (:hold-an-election (n)
-       (let ((tree (sim-trial-election:hold-trial-election n)))
-         (ac:pr (format nil "election results(~A) ~A" n tree))))
-
       ;; -------------------------------
       ;; internal comms between Cosi nodes
       

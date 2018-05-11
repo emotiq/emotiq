@@ -26,8 +26,17 @@ witnesses."
     (let ((node-list (list-of-nodes)))
       (assign-phony-stake-to-nodes node-list)
       (sim-trial-election:set-nodes (sort-nodes-by-stake node-list))))
+
   (cosi-simgen::init-sim)
-  (sim-trial-election:make-trial-election-beacon)
+
+  ;; the real random beacon should send :hold-an-election messages
+  ;; to cosi-handlers::node-dispatcher, but, in keeping
+  ;; with the principle of "leave cosi-handlers alone"
+  ;; I've wired the beacon into a fake actor (see "run" below) that
+  ;; runs fake elections and prints the results
+
+  ;;(sim-trial-election:make-trial-election-beacon <node-dispatcher-actor>)
+
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -298,6 +307,19 @@ This will spawn an actor which will asynchronously do the following:
         *tx-2*           nil
         *tx-3*           nil)
   (cosi-simgen::reset-nodes) 
+
+  ;; simulator: fake elections send the timer to this actor, to simulate elections 
+  ;; and print results without actually changing the leader
+  (let ((election-faker (ac:spacwn 
+                         (lambda ()
+                           (um:dcase msg
+                             (:hold-an-election (n)
+                              (let ((tree (sim-trial-election:hold-trial-election n)))
+                                (ac:pr (format nil "election results(~A) ~A" n tree))))
+                             (t (&rest msg)
+                                (error "bad message to election-faker ~A" msg)))))))
+    (sim-trial-election:make-trial-election-beacon election-faker))
+
   (ac:spawn
    (lambda ()
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)

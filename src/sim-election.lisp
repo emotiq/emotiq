@@ -54,7 +54,12 @@ THE SOFTWARE.
                                 *beacon-interval*)))
 
 
-(defvar *all-nodes*  nil) ;; ordered list/vector of all known stakeholders
+;; ordered list/vector of all known stakeholders
+;; in real life, this should be an ordered list/vector of *real-nodes*
+;; in the simulator, 1 machine, this is a list of all nodes (fake and real)
+;; and, in the simulator, we only hold mock elections, and print the
+;; results, since only real nodes can be leaders
+(defvar *all-nodes*  nil) 
 
 (defun set-nodes (sorted-node-list)
   (setf *all-nodes* sorted-node-list))
@@ -88,10 +93,12 @@ THE SOFTWARE.
 
 (defmethod node-stake ((node tree-node))
   (tree-node-sum node))
-  
+
 (defmethod node-stake ((node cosi-simgen::node))
   (cosi-simgen::node-stake node))
   
+;; a tree of stakes, cosi-simgen::nodes at the leaves (very bottom of tree)
+
 (defun make-tree-node (pair)
   (destructuring-bind (l &optional r) pair
     (if r
@@ -99,8 +106,7 @@ THE SOFTWARE.
                        :l  l
                        :r  r
                        :sum (+ (node-stake l)
-                               (node-stake r))
-                       :cosi-node node)
+                               (node-stake r)))
       ;; else
       l)))
 
