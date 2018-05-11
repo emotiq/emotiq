@@ -104,7 +104,7 @@ THE SOFTWARE.
       ;; else
       l)))
 
-(defun hold-trail-election (nfrac)
+(defun hold-trial-election (nfrac)
   "Given a fraction (0 < nfrac < 1) arrange all stakeholders into a
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
