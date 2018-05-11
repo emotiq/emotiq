@@ -26,7 +26,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :sim-trial-electionb)
+(in-package :sim-trial-election)
 ;; ---------------------------------------------------------------
 
 (defvar *beacon-timer*     nil)
@@ -80,9 +80,7 @@ THE SOFTWARE.
         :initarg :r
         :initform nil)
    (sum :reader tree-node-sum
-        :initarg :sum)
-   (cosi-node :reader tree-node-node
-              :initarg :cosi-node)
+        :initarg :sum))
   (:documentation "Election tree node"))
 
 (defmethod tree-node-p (x)

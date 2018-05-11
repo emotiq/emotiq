@@ -3,10 +3,12 @@
 (in-package :emotiq/sim)
 
 (defun initialize (&key
-                     (executive-threads nil)
-                     (nodes 8)
-                     (new-configuration-p nil)
-                     (run-cli-p nil))
+                   (cosi-prepare-timeout 10)
+                   (cosi-commit-timeout 10)
+                   (executive-threads nil)
+                   (nodes 8)
+                   (new-configuration-p nil)
+                   (run-cli-p nil))
   "Initialize a new local simulation of the Emotiq chain
 
 The simulation can be configured to run across the number of EXECUTIVE-THREADS 
@@ -310,12 +312,12 @@ This will spawn an actor which will asynchronously do the following:
 
   ;; simulator: fake elections send the timer to this actor, to simulate elections 
   ;; and print results without actually changing the leader
-  (let ((election-faker (ac:spacwn 
-                         (lambda ()
+  (let ((election-faker (ac:spawn 
+                         (let ()
                            (um:dcase msg
                              (:hold-an-election (n)
                               (let ((tree (sim-trial-election:hold-trial-election n)))
-                                (ac:pr (format nil "election results(~A) ~A" n tree))))
+                                (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
                              (t (&rest msg)
                                 (error "bad message to election-faker ~A" msg)))))))
     (sim-trial-election:make-trial-election-beacon election-faker))
@@ -365,11 +367,11 @@ This will spawn an actor which will asynchronously do the following:
 
 (defun assign-phony-stake-to-nodes (node-list)
   ;; set the node-stake slot of every node to a random number <= 100,000
-  (loop for node in node-list
+  (dolist (node node-list)
         (let ((phony-stake (random 100000)))
-          (setf (node-stake node) phony-stake))))
+          (setf (cosi-simgen::node-stake node) phony-stake))))
 
 (defun sort-nodes-by-stake (node-list)
-    (sort node-list '< :key (node-stake)))
+    (sort node-list '< :key #'cosi-simgen::node-stake))
 
 
