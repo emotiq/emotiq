@@ -60,7 +60,7 @@
     :initform nil
     :reader block-witnesses
     :documentation
-    "Sequence of public keys of validators 1:1 w/witness-bitmap slot.")
+    "Sequence of public keys of validators 1:1 w/signature-bitmap slot.")
 
    (merkle-root-hash
     :reader block-merkle-root-hash
@@ -76,6 +76,42 @@
     be a merkle tree or simply allowed to be either a sequence or a
     merkle tree as an alternative representation "))
   (:documentation "A block on the Emotiq blockchain."))
+
+
+
+;;; NB: in case of changes to eblock's slots, keep the following
+;;; variable in sync.
+
+(defparameter *names-of-block-slots-to-serialize*
+  '(protocol-version 
+    epoch
+    prev-block-hash
+    timestamp
+
+    leader-pkey
+
+    election-proof
+
+    signature
+    signature-pkey
+    signature-bitmap
+
+    witnesses
+    
+    merkle-root-hash)
+  "These slots are serialized and then hashed. The hash is stored as
+   the block-hash on the current block and the prev-block-hash on a
+   newer block on the blockchain.")
+
+
+
+(defun serialize-block-octets (block)
+  "Return a serialization of BLOCK as a list of octet vectors for the slots in
+   \*names-of-block-slots-to-serialize*. It is an error to call this before all
+   those slots are bound. This is to be used to hash a previous block, i.e., on
+   that has been fully formed and already been added to the blockchain."
+  (loop for slot-name in *names-of-block-slots-to-serialize*
+        collect (loenc:encode (slot-value block slot-name))))
 
 
 
@@ -133,33 +169,6 @@
   ;;
   ;;   (hash-256  #<bv 1>  #<bv 2>  ...  #<bv N>)
   (apply #'hash-256 (serialize-block-octets block)))
-
-
-
-(defparameter *names-of-block-slots-to-serialize*
-  '(protocol-version 
-    epoch
-    prev-block-hash
-    timestamp
-
-    signature
-    signature-pkey
-    signature-bitmap
-
-    merkle-root-hash)
-  "These slots are serialized and then hashed. The hash is stored as
-   the block-hash on the current block and the prev-block-hash on a
-   newer block on the blockchain.")
-
-
-
-(defun serialize-block-octets (block)
-  "Return a serialization of BLOCK as a list of octet vectors for the slots in
-   \*names-of-block-slots-to-serialize*. It is an error to call this before all
-   those slots are bound. This is to be used to hash a previous block, i.e., on
-   that has been fully formed and already been added to the blockchain."
-  (loop for slot-name in *names-of-block-slots-to-serialize*
-        collect (loenc:encode (slot-value block slot-name))))
 
 
 
