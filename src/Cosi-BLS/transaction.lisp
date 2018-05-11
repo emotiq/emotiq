@@ -101,8 +101,9 @@ the simple commitment to the uncloaked value"
      gam)))
 
 (defun make-uncloaked-txin (amt pkey skey)
-  "Make a signed uncloaked TXIN. Someone must sign for it, typically
-the epoch leader."
+"Make a signed uncloaked TXIN. Someone must sign for it. When no
+pre-existing UTXO, e.g., sum of block fees and confiscated stakes,
+only the epoch leader."
   (let ((hashlock (make-hashlock amt pkey))
         (sig      (pbc:sign-hash hashlock skey)))
     (make-instance 'uncloaked-txin
