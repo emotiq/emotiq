@@ -1,0 +1,303 @@
+swagger: "2.0"
+info:
+  description: "emotiq-wallet"
+  version: "1.0.0"
+  title: "emotiq-wallet"
+tags:
+- name: "syncing"
+- name: "wallet"
+- name: "transaction"
+- name: "dictionary"
+schemes:
+- "http"
+paths:
+
+  /syncing/current:
+    get:
+      tags:
+      - "syncing"
+      summary: "get current syncing block"
+      operationId: "getCurrentBlock"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              number: 
+                type: number
+        400:
+          description: "Invalid status value"
+          
+  /syncing/last:
+    get:
+      tags:
+      - "syncing"
+      summary: "get last(highest) syncing block"
+      operationId: "getLastBlock"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              number: 
+                type: number
+        400:
+          description: "Invalid status value"
+          
+  /wallet:
+    post:
+      tags:
+      - "wallet"
+      summary: "create / restore wallet"
+      operationId: "createWallet"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "body"
+        name: "body"
+        required: true
+        schema:
+          type: object
+          required: 
+            - recoveryPhrase
+          properties:
+            recoveryPhrase:
+              type: string
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              address:
+                type: string
+        400:
+          description: "Invalid status value"
+          
+  /wallet/{walletAddress}/balance:
+    get:
+      tags:
+      - "wallet"
+      summary: "get wallet balance"
+      operationId: "getWalletBalance"
+      produces:
+      - "application/json"
+      parameters: 
+      - name: "walletAddress"
+        in: "path"
+        required: true
+        type: string
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              amount: 
+                type: number
+        400:
+          description: "Invalid status value"
+          
+  /wallet/{walletAddress}/transactions:
+    get:
+      tags:
+      - "wallet"
+      summary: "get wallet transactions"
+      operationId: "getWalletTransactions"
+      produces:
+      - "application/json"
+      parameters: 
+      - name: "walletAddress"
+        in: "path"
+        required: true
+        type: string
+      - name: "limit"
+        in: "query"
+        type: integer
+      - name: "offset"
+        in: "query"
+        type: integer
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Transaction"
+          headers:
+            X-Transactions-Count:
+              type: integer
+              description: "count of wallet transactions"
+        400:
+          description: "Invalid status value"
+          
+  /wallet/{walletAddress}/address:
+    post:
+      tags:
+      - "wallet"
+      summary: "generate new address"
+      operationId: "generateAddress"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "walletAddress"
+        in: "path"
+        required: true
+        type: string
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              address:
+                type: string
+        400:
+          description: "Invalid status value"
+          
+  /wallet/{walletAddress}/address/all:
+    get:
+      tags:
+      - "wallet"
+      summary: "get all addresses"
+      operationId: "getAllAddresses"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "walletAddress"
+        in: "path"
+        required: true
+        type: string
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: array
+            items:
+              type: string
+        400:
+          description: "Invalid status value"
+          
+  /wallet/{walletAddress}/address/status:
+    get:
+      tags:
+      - "wallet"
+      summary: "get address status"
+      operationId: "getAddressStatus"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "walletAddress"
+        in: "path"
+        required: true
+        type: string
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: 
+                - "USED"
+                - "UNUSED"
+        400:
+          description: "Invalid status value"
+          
+  /transaction:
+    post:
+      tags:
+      - "transaction"
+      summary: "send EMTQ"
+      operationId: "sendEMTQ"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "body"
+        name: "body"
+        required: true
+        schema:
+          type: object
+          required: 
+            - walletAddress
+            - addressTo
+            - amount
+          properties:
+            walletAddress: 
+              type: string
+            addressTo:
+              type: string
+            amount:
+              type: number
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            items:
+              $ref: "#/definitions/Transaction"
+        400:
+          description: "Invalid status value"
+          
+  /dictionary:
+    get:
+      tags:
+      - "dictionary"
+      summary: "get dictionary"
+      operationId: "getDictionary"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: array
+            items:
+              type: string
+        400:
+          description: "Invalid status value"
+          
+  /dictionary/phrase:
+    get:
+      tags:
+      - "dictionary"
+      summary: "get mnemonic phrase"
+      description: "used for wallet generation"
+      operationId: "getPhrase"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: object
+            properties:
+              phrase:
+                type: string
+        400:
+          description: "Invalid status value"
+definitions:
+  Transaction:
+    type: object
+    properties:
+      id: 
+        type: string
+      direction: 
+        type: string
+        enum: 
+        - "IN"
+        - "OUT"
+      timestamp: 
+        type: integer
+        format: int64
+      amount:
+        type: number
+externalDocs:
+  description: "Find out more about Swagger"
+  url: "http://swagger.io"

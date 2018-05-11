@@ -1,5 +1,13 @@
 (in-package :emotiq-rest)
 
+(defun assemble-path (components)
+  "Return a slash-delimited path assembled from list of COMPONENTS."
+  (loop :for component :in components
+     :with result = ""
+     :doing (setf result (concatenate 'string result
+                                      "/" component))
+     :finally (return (string-left-trim "/" result))))
+
 (defun mime-type (path)
   "Return mime type corresponding to suffix of PATH"
   (flet ((ends-with (suffix string)

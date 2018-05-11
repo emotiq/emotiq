@@ -18,7 +18,11 @@
                (:module routes
                         :pathname "./"
                         :depends-on (util)
-                        :components ((:file "wallet-1.0.0")))))
+                        :serial t 
+                        :components ((:file "api-0.0.1")
+                                     (:file "wallet-0.0.1")
+                                     (:file "emotiq-0.0.1")))))
+
 
 
 

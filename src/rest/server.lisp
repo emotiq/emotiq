@@ -14,7 +14,7 @@
    :message-log-destination (merge-pathnames *server-log-dir* "error.log")))
 
 (defun start (&key (port *port*))
-  (let ((api :route.wallet/0/0/1))
+  (let ((api :route.emotiq/0/0/1))
     (ensure-directories-exist *server-log-dir*)
     (let ((base-uri
            (format nil "http://127.0.0.1:~a/" port))
