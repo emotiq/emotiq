@@ -30,10 +30,11 @@ witnesses."
   (when (or new-configuration-p
               (not (and (probe-file cosi-simgen::*default-data-file*)
                         (probe-file cosi-simgen::*default-key-file*))))
-    (cosi-simgen::generate-tree :nodes nodes)
-    (let ((node-list (list-of-nodes)))
-      (assign-phony-stake-to-nodes node-list)
-      (sim-trial-election:set-nodes (sort-nodes-by-stake node-list))))
+    (cosi-simgen::generate-tree :nodes nodes))
+  ;; should this following code be exected every time or only when new-configuration-p?
+  (let ((node-list (list-of-nodes)))
+    (assign-phony-stake-to-nodes node-list)
+    (sim-trial-election:set-nodes (sort-nodes-by-stake node-list)))
 
   (cosi-simgen::init-sim)
 
@@ -320,14 +321,16 @@ This will spawn an actor which will asynchronously do the following:
 
   ;; simulator: fake elections send the timer to this actor, to simulate elections 
   ;; and print results without actually changing the leader
-  (let ((election-faker (ac:spawn 
-                         (let ()
-                           (um:dcase msg
-                             (:hold-an-election (n)
-                              (let ((tree (sim-trial-election:hold-trial-election n)))
-                                (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
-                             (t (&rest msg)
-                                (error "bad message to election-faker ~A" msg)))))))
+  (let ((election-faker (ac:make-actor
+                         (lambda (&rest msg)
+                           (if (and (eq :hold-an-election (first msg))
+                                    (>= 2 (length msg))
+                                    (numberp (second msg)))
+                               (let ((n (second msg)))
+                                 (ac:pr (format nil "got :hold-an-election ~A" n))
+                                 (let ((tree (sim-trial-election:hold-trial-election n)))
+                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
+                             (error "bad message to election-faker ~A" msg))))))
     (sim-trial-election:make-trial-election-beacon election-faker))
 
   (ac:spawn

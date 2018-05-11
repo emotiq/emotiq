@@ -30,14 +30,15 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------
 
 (defvar *beacon-timer*     nil)
-(defvar *beacon-interval*  30)
+;(defvar *beacon-interval*  30)
+(defvar *beacon-interval*  7)
 (defvar *self-destruct*    nil)
 
 (defun kill-beacon ()
   (setf *self-destruct* t))
 
 ;; mp is the multi-processing library for LispWorks
-(defun make-trial-election-beacon ()
+(defun make-trial-election-beacon (handler-actor)
   (unless *beacon-timer*
     (setf *beacon-timer* (mp:make-timer (lambda ()
                                           (cond (*self-destruct*
@@ -45,8 +46,9 @@ THE SOFTWARE.
                                                  (setf *self-destruct* nil
                                                        *beacon-timer*  nil))
                                                 (t
-                                                 (send-all (/ (random 1000000)
-                                                              1000000)))
+                                                 (ac:pr (format nil "~%sending :hold-an-election"))
+                                                 (cosi-simgen::send handler-actor :hold-an-election
+                                                                    (/ (random 1000000) 1000000)))
                                                 ))
                                         ))
     (mp:schedule-timer-relative *beacon-timer*
@@ -62,15 +64,17 @@ THE SOFTWARE.
 (defvar *all-nodes*  nil) 
 
 (defun set-nodes (sorted-node-list)
+  (ac:pr (format nil "election set-nodes ~A" sorted-node-list))
   (setf *all-nodes* sorted-node-list))
 
+;;; this can be done in the election handler, or use this code and ensure
+;;; that each node-handler responds to :hold-an-election
+;;; (defun send-all (n)
+;;;   (mapc (lambda (node)
+;;;           (send (node-ip-addr node) :hold-an-election n))
+;;;         *all-nodes*))
 
-(defun send-all (n)
-  (mapc (lambda (node)
-          (send (node-ip-addr node) :hold-an-election n))
-        *all-nodes*))
-
-;; --------------------------------------------------
+;;; ;; --------------------------------------------------
 
 (defclass tree-node ()
   ((l   :reader tree-node-l
@@ -116,17 +120,18 @@ based on their relative stake"
                     (if (= 1 (length nodes))
                         nodes
                       (iter (mapcar 'make-tree-node (um:group nodes 2)))))))
-    (um:nlet-tail iter ((tree  tree))                       ;; tail recursive, scheme-like, named let
-      (if (tree-node-p tree)
-          (let* ((l      (tree-node-l tree))
-                 (r      (tree-node-r tree))
-                 (lstake  (node-stake l))
-                 (tstake  (node-stake tree)))
-            (if (< (/ lstake tstake) nfrac)
-                (iter r)
-              (iter l)))
-        ;; else - we have arrived at a winner
-        tree))))
+    (when tree
+      (um:nlet-tail iter ((tree  tree))                       ;; tail recursive, scheme-like, named let
+        (if (tree-node-p tree)
+            (let* ((l      (tree-node-l tree))
+                   (r      (tree-node-r tree))
+                   (lstake  (node-stake l))
+                   (tstake  (node-stake tree)))
+              (if (< (/ lstake tstake) nfrac)
+                  (iter r)
+                (iter l)))
+          ;; else - we have arrived at a winner
+          tree)))))
 
         
     
