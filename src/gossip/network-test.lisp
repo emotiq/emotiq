@@ -2,6 +2,10 @@
 
 (in-package :gossip)
 
+(defparameter *aws0* "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com")
+(defparameter *aws1* "emq-01.aws.emotiq.ch")
+(defparameter *aws2* "emq-02.aws.emotiq.ch")
+(defparameter *server-address* *aws0*)
 
 ;;; ON SERVER MACHINE
 (defun setup-server (n)
@@ -21,19 +25,23 @@
 (defparameter rnode nil)
 (defparameter localnode nil)
 
-(defun setup-client (n rnodenum)
+(defun setup-client (n server-address rnodenum)
   "n is starting UID"
-  (setf *default-uid-style* :tiny)
-  (unless (>= *last-tiny-uid* n)
-    (setf *last-tiny-uid* n))
-  (clrhash *nodes*)
-  (run-gossip-sim :TCP)
-  (set-protocol-style :neighborcast)
-  (setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) rnodenum))
-  (setf localnode (make-node
-                     :NEIGHBORS (list (uid rnode)))))
+  (let ((server-port (if (equalp "localhost" server-address)
+                         (other-tcp-port)
+                         *nominal-gossip-port*)))
+    (setf *default-uid-style* :tiny)
+    (unless (>= *last-tiny-uid* n)
+      (setf *last-tiny-uid* n))
+    (clrhash *nodes*)
+    (run-gossip-sim :TCP)
+    (set-protocol-style :neighborcast)
+    (setf rnode (ensure-proxy-node :TCP server-address server-port rnodenum))
+    (setf localnode (make-node
+                     :NEIGHBORS (list (uid rnode))))))
 
-; (setup-client 100 202)
+; (setup-client 100 *server-address* 202)
+; (setup-client 100 *server-address* 0) ; for anonymous broadcast
 ; (visualize-nodes *nodes*)
 
 (defun test-client1 ()
@@ -59,6 +67,14 @@
     (inspect *log*)))
 
 ; (test-client3)
+
+(defun test-client4 ()
+  (archive-log)
+  (multiple-value-prog1
+      (solicit-direct localnode :list-alive)
+    (inspect *log*)))
+
+; (test-client4)
 
 ; only for the actor version of solicit-direct
 (defun setup-clientx (n)

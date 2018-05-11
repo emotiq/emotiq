@@ -688,6 +688,8 @@ dropped on the floor.
                       uid                   ; destination
                       actor-name)
             (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
+              ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
+              ;   Only after that elapses, will an actor put the value into the mbox.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
@@ -713,64 +715,39 @@ dropped on the floor.
                 nil)     ; srcuid
       soluid)))
 
-#+LATER-ACTORS ; not working ATM. Figure it out later.
-(defun solicit-wait (mbox node kind &rest args)
+(defun solicit-wait (node kind &rest args)
   "Like solicit but waits for a reply. Only works for :UPSTREAM replies.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
   (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
                   (uid node)
-                node))
-         (solicitation (make-solicitation
-                        :reply-to :UPSTREAM
-                        :kind kind
-                        :args args))
-         (soluid (uid solicitation))
-         (me (ac:current-actor)))
-    (send-msg solicitation
-              uid      ; destination
-              me)
-    (ac:recv
-      ((list reply)
-       (ac:send mbox (list (first (args reply)) soluid)))
+                  node))
+         (mbox (mpcompat:make-mailbox))
+         (actor (ac:make-actor (lambda (&rest msg) (apply 'ac:send mbox msg))))
+         (actor-name (gentemp "OUTPUTTER" :gossip)))
+    (unwind-protect
+        (progn
+          (ac:register-actor actor actor-name)
+          (let* ((solicitation (make-solicitation
+                                :reply-to :UPSTREAM
+                                :kind kind
+                                :args args))
+                 (soluid (uid solicitation)))
+            (send-msg solicitation
+                      uid      ; destination
+                      actor-name)     ; srcuid
+            
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox *max-seconds-to-wait*)
+              ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
+              ;   Only after that elapses, will an actor put the value into the mbox.
+              (values 
+               (if success
+                   (first (args (first response))) ; should be a FINAL-REPLY
+                   :TIMEOUT)
+               soluid))))
+      (ac:unregister-actor actor-name))))
 
-      :ON-TIMEOUT (ac:send mbox (list :TIMEOUT soluid))
-      :TIMEOUT *max-seconds-to-wait*)))
-
-#+LATER-ACTORS ; not working ATM. Figure it out later.
-(defun test-solicit-wait (node kind &rest args)
-  (let ((mbox   (mpcompat:make-mailbox)))
-    (apply 'ac:spawn 'solicit-wait mbox node kind args)
-    (mpcompat::mailbox-read mbox)))
-; (test-solicit-wait (first (listify-nodes)) :list-alive)
-
-(defun solicit-wait (node kind &rest args)
-  "Like solicit but waits for a reply. Only works for :UPSTREAM replies.
-  Don't use this on messages that don't expect a reply, because it'll wait forever."
-  (unless node
-    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
-                 (uid node)
-                 node))
-        (response nil))
-    (flet ((final-continuation (reply)
-             (setf response reply)))
-      (let* ((solicitation (make-solicitation
-                            :reply-to :UPSTREAM
-                            :kind kind
-                            :args args))
-             (soluid (uid solicitation)))
-        (send-msg solicitation
-                  uid      ; destination
-                  #'final-continuation)     ; srcuid
-        (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
-                                                       (lambda () response))))
-          (values 
-           (if win
-               (first (args response))
-               :TIMEOUT)
-           soluid))))))
 
 (defun solicit-progress (node kind &rest args)
   "Like solicit-wait but prints periodic progress log messages (if any)

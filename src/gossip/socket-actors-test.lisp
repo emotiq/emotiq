@@ -1,5 +1,5 @@
 ;;; socket-actor-test.lisp
-;;; Tests of actor sockets
+;;; Tests of actor sockets, without gossip
 
 (ql:quickload :gossip)
 
