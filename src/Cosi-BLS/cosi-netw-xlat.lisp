@@ -16,6 +16,10 @@
   #+:CLOZURE   (make-hash-table :weak :value)
   )
 
+;; this is just a sanity check set in (unregister-aid) and checked
+;; in (port-routing-handler) (:NON-EXISTENT-ACTOR case)
+(defparameter *previously-unregistered* (make-hash-table :test 'equal))
+
 (um:defmonitor
     ((associate-aid-with-actor (aid actor)
        (setf (gethash aid *aid-tbl*) actor))
@@ -24,6 +28,8 @@
        (gethash aid *aid-tbl*))
      
      (unregister-aid (aid)
+       (pr (format nil "unregistering ~A" aid))
+       (setf (gethash aid *previously-unregistered*) t)
        (remhash aid *aid-tbl*))
      ))
 
@@ -115,7 +121,6 @@
   (pbc:sign-message msg pkey skey))
     
 
-#|
 (defun verify-hmac (packet)
   (let ((decoded (ignore-errors
                    ;; might not be a valid encoding
@@ -127,17 +132,13 @@
       ;; return the contained message
       (pbc:signed-message-msg decoded))
     ))
-|#
-(defun verify-hmac (packet)
-  (progn ;; ignore-errors
-    (loenc:decode packet)))
 
 ;; -----------------------------------------------------
 ;; THE SOCKET INTERFACE...
 ;; -----------------------------------------------------
 
-(defparameter *max-buffer-length* 65500)
-(defparameter *shutting-down*     nil)
+(defvar *max-buffer-length* 65500)
+(defvar *socket-open*       nil)
 
 (defun port-routing-handler (buf)
   (let ((packet (verify-hmac buf)))
@@ -166,7 +167,8 @@
                 (t
                  (let ((actor (lookup-actor-for-aid dest)))
                    (unless actor
-                     (pr :non-existent-actor))
+                     (let ((prev (gethash dest *previously-unregistered*)))
+                       (pr (format nil "~A :non-existent-actor" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
                      (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
@@ -188,15 +190,15 @@
                                (internal-send-socket ip port packet))))
   
 (defun shutdown-server (&optional (port *cosi-port*))
-  (when *my-node*
-    (setf *shutting-down* :SHUTDOWN-SERVER)
+  (when *socket-open*
+    (setf *socket-open* nil)
     (ac:send *sender* *local-ip* port "ShutDown")))
 
 (defmethod socket-send (ip port dest msg)
   (let* ((payload (make-hmac (list* dest msg)
                              (pbc:keying-triple-pkey *keys*)
                              (pbc:keying-triple-skey *keys*)))
-         (packet  (loenc:encode (list* dest msg))))
+         (packet  (loenc:encode payload)))
     (ac:send *sender* ip port packet)))
 
 #|
@@ -258,8 +260,7 @@
 		(usocket:socket-receive socket maxbuf (length maxbuf))
 	      (declare (ignore rem-ip rem-port))
 	      ;; (pr :sock-read buf-len rem-ip rem-port (loenc:decode buf))
-              (when (eql :SHUTDOWN-SERVER *shutting-down*)
-                (setf *shutting-down* nil)
+              (when (null *socket-open*)
                 (return-from #1#))
               (let ((saf-buf  (if (eq buf maxbuf)
                                   (subseq buf 0 buf-len)
@@ -279,7 +280,7 @@
 					   )))
       (mpcompat:process-run-function "UDP Cosi Server" nil
                                      'serve-cosi-port socket)
-      (usocket:get-local-port socket)))
+      (setf *socket-open* (usocket:get-local-port socket))))
        
   (defun start-server ()
     (start-ephemeral-server *cosi-port*))
@@ -327,10 +328,8 @@
         (start-server)
         (return-from #1#))
 
-      (if (eql :SHUTDOWN-SERVER *shutting-down*)
-          (progn
-            (setf *shutting-down* nil)
-            (comm:close-async-io-state async-io-state))
+      (if (null *socket-open*)
+          (comm:close-async-io-state async-io-state)
         (progn
           (port-router string)
           (udp-cosi-server-receive-next async-io-state)))))
@@ -350,7 +349,7 @@
       (multiple-value-bind (ip port)
           (comm:async-io-state-address async-io-state)  ;; returns address,port
         (declare (ignore ip))
-        port)))
+        (setf *socket-open* port))))
       
   (defun start-server ()
     (start-ephemeral-server *cosi-port*))
@@ -370,6 +369,7 @@
   
   (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
+      (ac:pr (format nil "internal-send-socket nb=~A" nb))
       (when (> nb *max-buffer-length*)
         (error "Packet too large for UDP transmission"))
       (internal-udp-cosi-client-send-request 'comm:close-async-io-state

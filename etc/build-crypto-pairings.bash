@@ -16,92 +16,44 @@ set -x
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE=${DIR}/..
-# where the tarballs should be
-CRYPTO=${BASE}/src/Crypto
-dist=${CRYPTO}/PBC-Intf
-# pbc intf files are in the same place
-pbcintf=${dist}
-gmp_tbz=${dist}/gmp-6.1.2.tar.bz2
-pbc_tar=${dist}/pbc-0.5.14.tar
+var=${BASE}/var
 
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
-        MAKETARGET=makefile.linux
-        echo Using ${MAKETARGET}
+        echo Building for Linux
+        lib_suffix=linux
+        maketarget=makefile.linux
         ;;
     Darwin*)
-        MAKETARGET=makefile.osx
-        echo Using ${MAKETARGET}
+        echo Building for macOS
+        lib_suffix=osx
+        maketarget=makefile.macos
         ;;
     *)
-        MAKETARGET=makefile.linux
+        maketarget=makefile.linux
         echo Unknown OS \"$(uname_s)\" -- defaulting to Linux Makefile
-
+        exit 127
         ;;
 esac
 
-# where make install will install stuff
-var=${BASE}/var
-src=${var}/src
-prefix=${var}/local
-gmp=${src}/gmp-6.1.2
-pbc=${src}/pbc-0.5.14
+EXTERNAL_LIBS_VERSION=release-0.1.2
 
+libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTERNAL_LIBS_VERSION}/emotiq-external-libs-${lib_suffix}.tgz
+
+mkdir -p ${var}/local
+
+(cd ${var}/local && curl -L ${libs_url} | tar xvfz -)
+
+prefix=${var}/local
 lib=${prefix}/lib
 inc=${prefix}/include
-
-if [ ! -f ${gmp_tbz} ]
-then
-    echo the file ${gmp_tbz} does not exist
-    exit 1
-fi
-if [ ! -f ${pbc_tar} ]
-then
-    echo the file ${pbc_tar} does not exist
-    exit 1
-fi
-
-# Should not be necessary…
-# if [ -d ${LIB} ]
-# then
-#     rm -rf ${LIB}
-# fi
-
-# PBC depends on GMP, so build GMP first
-
-mkdir -p ${src}
-
-cd ${src} \
-    && tar -xjv -f ${gmp_tbz} \
-    && cd ${gmp} \
-    && ./configure --prefix=${prefix} \
-    && make \
-    && make install
-
-if [ ! -d ${lib} ]; then
-    echo the directory ${lib} does not exist, something went wrong during build of gmp
-    exit 1
-fi
-
-if [ ! -d ${inc} ]; then
-    echo the directory /${inc}/ does not exist, something went wrong during build of gmp
-    exit 1
-fi
+pbcintf=${BASE}/src/Crypto/PBC-Intf
 
 export CFLAGS=-I${inc}
 export CPPFLAGS=-I${inc}
 export CXXFLAGS=-I${inc}
 export LDFLAGS=-L${lib}
 
-cd ${src} \
-    && tar -xv -f ${pbc_tar} \
-    && cd ${pbc} \
-    && ./configure --prefix=${prefix} \
-    && make \
-    && make install
-
 cd ${pbcintf} && \
-    make --makefile=${MAKETARGET} PREFIX=${prefix}
-
-
+    make --makefile=${maketarget} PREFIX=${prefix}

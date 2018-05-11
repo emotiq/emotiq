@@ -16,6 +16,17 @@
               :initarg :encr))
   (:documentation "The 4-tuple that represents the txin side of a simple transaction"))
 
+(defclass uncloaked-txin ()
+  ((hashlock  :reader txin-hashlock
+              :initarg :hashlock)
+   (pkey      :reader txin-pkey
+              :initarg :pkey)
+   (sig       :reader txin-sig
+              :initarg :sig)
+   (amt       :reader  txin-amt
+              :initarg :amt))
+  (:documentation "The 4-tuple that represents an uncloaked txin"))
+
 (defclass uncloaked-txout ()
   ((hashpkey :reader  txout-hashpkey
              :initarg :hashpkey)
@@ -55,6 +66,9 @@ It should be stored in the wallet"))
 (defmethod pedersen-commitment ((utx txin))
   (pedersen-commitment (txin-prf utx)))
 
+(defmethod pedersen-commitment ((utx uncloaked-txin))
+  (ed-nth-pt (txin-amt utx)))
+
 (defmethod pedersen-commitment ((utx txout))
   (pedersen-commitment (txout-prf utx)))
 
@@ -65,6 +79,9 @@ It should be stored in the wallet"))
   "We are often given a long Bulletproof, and we need the to hash on
 the simple commitment to the uncloaked value"
   (hash:hash/256 (pedersen-commitment prf) pkey))
+
+(defmethod make-hashlock ((amt integer) (pkey pbc:public-key))
+  (hash:hash/256 amt pkey))
 
 ;; ---------------------------------------------------------------------
 
@@ -83,6 +100,22 @@ the simple commitment to the uncloaked value"
                     :encr      encr)
      gam)))
 
+(defun make-uncloaked-txin (amt pkey skey)
+  "Make a signed uncloaked TXIN. Someone must sign for it, typically
+the epoch leader."
+  (let ((hashlock (make-hashlock amt pkey))
+        (sig      (pbc:sign-hash hashlock skey)))
+    (make-instance 'uncloaked-txin
+                   :hashlock  hashlock
+                   :pkey      pkey
+                   :sig       sig
+                   :amt       amt)))
+        
+(defmethod gam-txin ((txin uncloaked-txin))
+  0)
+
+;; -------------------------------------------------------------
+    
 (defmethod make-txout ((amt integer) (pkey pbc:public-key))
   "Make a cloaked TXOUT with value proof"
   (multiple-value-bind (prf gamma)
@@ -165,6 +198,13 @@ correction factor gamadj on curve H for the overall transaction."
          (range-proofs:validate-range-proof (txin-prf utx))
          )))
 
+(defmethod validate-txin ((utx uncloaked-txin))
+  (let* ((hl  (make-hashlock (txin-amt utx)
+                             (txin-pkey utx))))
+    (and (not (minusp (txin-amt utx)))
+         (= (int hl)
+            (int (txin-hashlock utx))))))
+
 (defmethod validate-txout ((utx txout))
   (range-proofs:validate-range-proof (txout-prf utx)))
 
@@ -193,7 +233,16 @@ correction factor gamadj on curve H for the overall transaction."
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
 
-(defun decrypt-txin-info  (txin skey)
+(defmethod get-txin-amount ((txin uncloaked-txin) skey)
+  (declare (ignore skey))
+  (txin-amt txin))
+
+(defmethod get-txin-amount ((txin txin) skey)
+  (decrypt-txin-info txin skey))
+
+
+
+(defmethod decrypt-txin-info  ((txin txin) skey)
   (pbc:ibe-decrypt (txin-encr txin) skey))
 
 (defmethod find-txin-for-pkey-hash (pkey (trn transaction))

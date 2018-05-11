@@ -36,7 +36,7 @@
            #:with-serialization-unit #:create-serialize-hash
 
            #:alias-backend
-
+           #:copy-backend
            #:rawbytes
            #:rawbytes-bytes
            #:make-rawbytes)

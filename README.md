@@ -20,7 +20,7 @@ LispWorks Pro 7.1 implementation but we also test our code with
 `sbcl`, `ccl`, and `abcl`.  Currently not all ASDF systems run cleanly
 outside of `lwpro-7.1.0-patches-2`.
 
-### Tell ASDF where to find the Emotiq systems 
+### Tell ASDF where to find the Emotiq systems
 
 First, place a copy of this repository somewhere locally on your
 machine.  We refer to that location as `~/work/emotiq/` in the
@@ -38,7 +38,7 @@ running some version of *NIX:
 
     (uiop:run-program "mkdir -p ~/.config/common-lisp/source-registry.conf.d/ && cp ~/work/emotiq/etc/emotiq.conf ~/.config/common-lisp/source-registry.conf.d/")
 
-    
+
 If you are under Windows or have placed your copy of this source tree
 in a different location on the file-system, you will have to perform
 the corresponding actions manually as per your local OS conventions.
@@ -57,10 +57,10 @@ If Quicklisp is not locally available to your Lisp implementation,
 first download and install it via the instructions available at
 <https://www.quicklisp.org/beta/>.
 
-After Quicklisp has been installed, then issuing 
+After Quicklisp has been installed, then issuing
 
     (ql:quickload :emotiq-test)
-    
+
 will download all the dependencies needed by the tests gathered into
 the `emotiq-test` ASDF system.
 
@@ -99,17 +99,21 @@ stay equal, with other counts staying zero.
 ## Building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
-curve (PBC) cryptography.
+curve (PBC) cryptography, which in turn depends on GMP library.
+
+We have a separate repository [emotiq-external-libs](https://github.com/emotiq/emotiq-external-libs), where we build these libraries and store compiled version in the GitHub Releases page.
+
+To make access these libraries from Lisp code we have a glue library libLispPBCIntf source of which is located as `src/Crypto/PBC-Intf` directory.
 
 The library currently only builds on Linux/MacOS.  It requires a
-development tool-chain to be in place, of which dependencies include:
+development tool-chain to be in place.
 
-    gcc make g++ flex bison
-    
 Once these tools are installed so that they may be invoked from a
 shell, the script in `etc/build-crypto-pairings.bash` can be used to drive
-the build.  The results of that script are created under a `var/`
+the build. This script downloads compiled versions of external libraries and builds the glue library. The results of that script are created under a `var/`
 subdirectory.
+
+Particular version of `emotiq-external-libs` binaries can be selected by variable `$EXTERNAL_LIBS_VERSION` in the script `etc/build-crypto-pairings.bash`, which should contain a `tag` of release of `emotiq-external-libs` from [Releases](https://github.com/emotiq/emotiq-external-libs/releases)
 
 As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
@@ -128,7 +132,7 @@ The description of test coverage is contained in the Travis CI
 artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
 
 # Colophon
-    
+
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
     Revised: <2018-03-28 Wed 11:57Z>
