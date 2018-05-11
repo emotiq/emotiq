@@ -27,24 +27,26 @@
 
 (defun setup-client (n server-address rnodenum)
   "n is starting UID"
+  (setf *default-uid-style* :tiny)
+  (unless (>= *last-tiny-uid* n)
+    (setf *last-tiny-uid* n))
+  (set-protocol-style :neighborcast)
+  (clrhash *nodes*)
+  (run-gossip-sim :TCP)
   (let ((server-port (if (equalp "localhost" server-address)
                          (other-tcp-port)
                          *nominal-gossip-port*)))
-    (setf *default-uid-style* :tiny)
-    (unless (>= *last-tiny-uid* n)
-      (setf *last-tiny-uid* n))
-    (clrhash *nodes*)
-    (run-gossip-sim :TCP)
-    (set-protocol-style :neighborcast)
     (setf rnode (ensure-proxy-node :TCP server-address server-port rnodenum))
     (setf localnode (make-node
                      :NEIGHBORS (list (uid rnode))))))
 
 ; (setup-client 100 *server-address* 202)
+; (setup-client 100 "localhost" 202)
 ; (setup-client 100 *server-address* 0) ; for anonymous broadcast
 ; (visualize-nodes *nodes*)
 
 (defun test-client1 ()
+  "Test specific target and direct reply"
   (archive-log)
   (multiple-value-prog1
       (solicit-direct localnode :count-alive)
@@ -53,6 +55,7 @@
 ; (test-client1)
 
 (defun test-client2 ()
+  "Test specific target and upstream reply"
   (archive-log)
   (multiple-value-prog1
       (solicit-wait localnode :count-alive)
@@ -61,6 +64,7 @@
 ; (test-client2)
 
 (defun test-client3 ()
+  "Test specific target and upstream reply"
   (archive-log)
   (multiple-value-prog1
       (solicit-wait localnode :list-alive)
@@ -69,6 +73,7 @@
 ; (test-client3)
 
 (defun test-client4 ()
+  "Test specific target and direct reply"
   (archive-log)
   (multiple-value-prog1
       (solicit-direct localnode :list-alive)

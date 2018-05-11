@@ -3,6 +3,10 @@
 ;; Poll and EOF:
 ;; http://www.greenend.org.uk/rjk/tech/poll.html
 
+#+OPENMCL ; because this method doesn't exist in CCL, and the default doesn't work for udpsockets.
+(defmethod ccl::local-socket-address ((socket ccl::udp-socket))
+  (getf (ccl::socket-keys socket) :local-address))
+
 #+OPENMCL
 (let ((ccl::*warn-if-redefine-kernel* nil))
 ; note that #'stream-device is already checking that stream-ioblock is non-nil.

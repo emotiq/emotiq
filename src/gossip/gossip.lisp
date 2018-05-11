@@ -1,12 +1,11 @@
 ;;; gossip.lisp
+;;; 11-May-2018 SVS
 
-;;; More realistic gossip protocol.
-;;; Minimal changes to use actor concurrency model. As far as the actors are concerned,
-;;;  we're just sending messages of type :gossip, regardless of whether they're solicitations,
-;;;  replies, or timeouts.
+;;; Actor-based gossip protocol.
+;;; As far as the actors are concerned,
+;;; we're just sending messages of type :gossip, regardless of whether they're solicitations
+;;; or replies.
 ;;; Gossip messages are simply sent as payload of a lower-level actor message.
-;;; No more process-run-function because actors take care of that.
-;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
 
 ;;;; TODO:
 ;;;; Change things such that when forward-to is an integer, if a node gets an active ignore back from
@@ -121,7 +120,7 @@ are in place between nodes.
 ;;; defglobal here makes running tests easier
 #+LISPWORKS
 (hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
-#+CCL
+#+OpenMCL
 (ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun log-exclude (&rest strings)
@@ -239,7 +238,7 @@ are in place between nodes.
 (defun all-processes ()
   #+Allegro   mp:*all-processes*
   #+LispWorks (mp:list-all-processes)
-  #+CCL       (ccl:all-processes)
+  #+OpenMCL   (ccl:all-processes)
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of ALL-PROCESSES for this system.")
   )
@@ -247,14 +246,14 @@ are in place between nodes.
 (defun process-name (process)
   #+Allegro                (mp:process-name process)
   #+LispWorks              (mp:process-name process)
-  #+CCL                    (ccl:process-name process)
+  #+OpenMCL                (ccl:process-name process)
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-NAME for this system."))
 
 (defun process-kill (process)
   #+Allegro                (mp:process-kill process)
   #+LispWorks              (mp:process-terminate process)
-  #+CCL                    (ccl:process-kill process)
+  #+OpenMCL                (ccl:process-kill process)
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-KILL for this system."))
 
@@ -297,7 +296,9 @@ are in place between nodes.
    (reply-to :initarg :reply-to :initform nil :accessor reply-to
              :documentation "Nil for no reply expected. :UPSTREAM or :GOSSIP or :NEIGHBORCAST indicate
              replies should happen by one of those mechanisms, or a UID to request a direct reply to
-             a specific node.")))
+             a specific node."))
+  (:documentation "An initial message sent to a gossip network or gossip node. Some solicitations require replies;
+    some don't."))
 
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
@@ -785,17 +786,6 @@ dropped on the floor.
                  soluid)))
           (setf (logfn node) old-logger))))))
 
-(defun interactive-logging-function (logcmd nodename msgname &rest args)
-  "Use this logging function for interactive debugging. You'll probably only want to use this
-  in the node you called #'solicit on."
-  (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
-         (logstring (format nil "~S~%" logmsg)))
-    #+CCL
-    (if (find-package :hi)
-        (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
-        (write-string logstring *standard-output*))
-    #-CCL
-    (write-string logstring *standard-output*)))
 
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
@@ -872,14 +862,14 @@ dropped on the floor.
   Returns the form that default-logging-function returned."
   (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
          (logstring (format nil "~S~%" logmsg)))
-    #+CCL
+    #+OpenMCL
     (if (find-package :hi)
         (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
         (write-string logstring *standard-output*))
-    #-CCL
+    #-OpenMCL
     (write-string logstring *standard-output*)
     logmsg))
-  
+
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
@@ -1803,34 +1793,6 @@ gets sent back, and everything will be copacetic.
   t)
 
 ;; ------------------------------------------------------------------------------
-;; Generic handling for expected authenticated messages. Check for
-;; valid deserialization, check deserialization is a
-;; pbc:signed-message, check for valid signature, then call user's
-;; handler with embedded authenticated message. If any failure along
-;; the way, just drop the message on the floor.
-
-(defun do-process-authenticated-packet (deserialize-fn body-fn)
-  "Handle decoding and authentication. If fails in either case just do nothing."
-  (let ((decoded (ignore-errors
-                   ;; might not be a valid serialization
-                   (funcall deserialize-fn))))
-    (when (and decoded
-               (ignore-errors
-                 ;; might not be a pbc:signed-message
-                 (pbc:check-message decoded)))
-      (funcall body-fn (pbc:signed-message-msg decoded)))))
-
-(defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
-  "Macro to simplify decoding and authentication"
-  `(do-process-authenticated-packet (lambda ()
-                                      ,deserializer)
-                                    (lambda (,packet-arg)
-                                      ,@body)))
-
-#+:LISPWORKS
-(editor:setup-indent "with-authenticated-packet" 2)
-
-;; ------------------------------------------------------------------------------
 
 (defun incoming-message-handler-udp (raw-message-buffer rem-address)
   "Deserialize a raw message string, srcuid, rem-port and destuid.
@@ -1851,23 +1813,6 @@ gets sent back, and everything will be copacetic.
         (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
           ;   on THIS machine.
         ))))
-
-(defun afsag (source-actor object)
-  "The actor function for socket-actors used in gossip. At the moment, we're not
-   actually attaching this function to an actor, as it will only be called (via send) from
-   a socket-actor monitoring a connection."
-  (let ((rem-address (get-peer-address source-actor)))
-    (with-authenticated-packet (packet)
-      object ; has already been deserialized at this point
-      (destructuring-bind (destuid srcuid rem-port msg) packet
-        (when (debug-level 1)
-          (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
-        ;ensure a local node of type proxy-gossip-node exists on this machine with
-        ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
-          (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
-          ;   on THIS machine.
-          )))))
 
 (defmethod serve-gossip-port ((mode (eql :UDP)) socket)
   "UDP gossip port server loop"
@@ -1900,8 +1845,6 @@ gets sent back, and everything will be copacetic.
           (return-from serve-gossip-port))
         (let ((socket nil)
               (timed-out? nil))
-          ; Following always returns T in CCL. Thus sockets are "born blocking"
-          ;(format t "~%Blocking status of socket: ~S" (ccl::get-socket-fd-blocking (ccl::socket-device listening-socket)))
           (setf socket (ignore-errors (usocket:socket-accept listening-socket)))
           
           (when (debug-level 3)
@@ -1909,33 +1852,23 @@ gets sent back, and everything will be copacetic.
           
           ;; At this point, we have a live incoming stream. Although it may be closing.
           
-          ;(setf stream (usocket:wait-for-input stream :timeout 10 :ready-only nil))
-          
-          ;(setf timed-out? (not (eql :READ (usocket::state stream))))
-          ;; (setf stream (usocket:socket-stream socket))
-          
-          (multiple-value-bind (success errno status)
-                               (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) 10000) ; should have data within 10 seconds
-            ; if success and errno are both nil, we timed out without error
-            (cond ((and (null success)
-                        (null errno))
-                   (setf timed-out? t))
-                  ((or errno
-                       (and (/= status 0)
-                            (/= status #$POLLIN)))
-                   ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
-                   (format t  "~%Errno = ~D, status=~D" errno status)))
+          (multiple-value-bind (success errorp)
+                               (wait-for-stream-input (usocket:socket-stream socket) 10) ; should have data within 10 seconds
+            (when (and (null success)
+                       (null errorp))
+              (setf timed-out? t))
             (when (debug-level 3)
               (if timed-out?
                   (debug-log "Giving up.")
                   (debug-log "Got data.")))
             ;; At this point, we have data available. Probably (may be closed or timed out).
             (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
-                       timed-out?)
+                       timed-out?
+                       errorp)
                    (when socket (usocket:socket-close socket)))
                   ;; Really should have data at this point...
-                  (t
-                   (make-socket-actor socket 'afsag))))))
+                  (t ; establish a socket-actor for this new incoming connection
+                   (make-socket-actor socket 'ofsag))))))
     (when listening-socket (usocket:socket-close listening-socket))))
 
 (defun open-passive-udp-socket (port)
@@ -2169,10 +2102,6 @@ original message."
 ; (solicit-wait (random-node) :list-alive)
 ; (visualize-nodes *nodes*)
 ; (inspect *log*)
-
-#+CCL ; because this method doesn't exist in CCL, and the default doesn't work for udpsockets.
-(defmethod ccl::local-socket-address ((socket ccl::udp-socket))
-  (getf (ccl::socket-keys socket) :local-address))
 
 (defun other-udp-port ()
   (when *udp-gossip-socket*

@@ -5,10 +5,76 @@
 
 (defvar *tcp-connection-table* (kvs:make-store ':hashtable :test 'eql) "Memoizes all open connections")
 
+;; ------------------------------------------------------------------------------
+;; Generic handling for expected authenticated messages. Check for
+;; valid deserialization, check deserialization is a
+;; pbc:signed-message, check for valid signature, then call user's
+;; handler with embedded authenticated message. If any failure along
+;; the way, just drop the message on the floor.
+
+(defun do-process-authenticated-packet (deserialize-fn body-fn)
+  "Handle decoding and authentication. If fails in either case just do nothing."
+  (let ((decoded (ignore-errors
+                   ;; might not be a valid serialization
+                   (funcall deserialize-fn))))
+    (when (and decoded
+               (ignore-errors
+                 ;; might not be a pbc:signed-message
+                 (pbc:check-message decoded)))
+      (funcall body-fn (pbc:signed-message-msg decoded)))))
+
+(defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
+  "Macro to simplify decoding and authentication"
+  `(do-process-authenticated-packet (lambda ()
+                                      ,deserializer)
+                                    (lambda (,packet-arg)
+                                      ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-authenticated-packet" 2)
+
 ; herein we sometimes refer to these things as "connections"
 (defclass socket-actor (ac:actor)
   ()
-  (:documentation "An actor whose job is to gatekeep a two-way TCP connected socket"))
+  (:documentation "An actor whose job is to gatekeep one end of a two-way TCP connected socket"))
+
+; Probably should convert this to usocket:wait-for-input at some point, but I haven't tested it yet.
+(defun wait-for-stream-input (stream &optional timeout)
+  "Returns stream when stream is ready for input. Nil if timed-out or -- if timeout itself is nil -- if stream has been closed.
+  Second value will be true if stream has definitely been closed or POLLHUPed.
+  [Second value may be a numeric error code on some implementations.]"
+  #+OPENMCL
+  (multiple-value-bind (success errno status)
+                       (ccl::process-input-wait* (ccl::socket-device stream) (when timeout (* 1000 timeout)))
+    (cond ((and (null success) ; if success and errno are both nil, we timed out without error
+                (null errno))
+           ; When no further data available, fall through and end loop
+           (if timeout
+               (values nil nil)     ; stream might have data later--it merely timed out
+               (values nil :DEAD))) ; stream will never have more data, because fn returned but nil timeout
+          ((null success) ; stream will never have more data
+           (if (not (zerop (logand status #$POLLHUP)))
+               (values nil :POLLHUP) ; other end hung up
+               (values nil errno)))
+          (t (values stream nil))))
+  #+LISPWORKS
+  (let ((streams (system:wait-for-input-streams (list stream) :timeout timeout)))
+    (cond ((streams (values (car streams) nil)))
+          (t (if timeout
+                 (values nil 
+                         (if (open-stream-p stream)
+                             nil
+                             :STREAM-CLOSED)) ; stream might have data later--it just timed out
+                 (values nil :DEAD))))) ; stream will never have more data, because fn returned but nil timeout
+  )
+
+
+(defun stream-eofp (stream)
+  "Returns true if stream is at EOF"
+  #+OPENMCL
+  (ccl:stream-eofp stream)
+  #+LISPWORKS
+  (stream:stream-check-eof-no-hang stream))
 
 (defun make-ip-key (address port)
   (if (and (integerp address)
@@ -29,7 +95,7 @@
   (let ((key (make-ip-key address port)))
     (kvs:lookup-key *tcp-connection-table* key)))
 
-;;; Actor property functions. These can be called safely by anybody--not just by the actor itself.
+;;; Socket-actor property functions. These can be called safely by anybody--not just by the actor itself.
 (defmethod get-socket ((sa socket-actor))
   "Returns socket this actor controls"
   (ac:get-property sa :socket))
@@ -56,12 +122,16 @@
   "Send a socket-receive message to an actor."
   (ac:send actor :receive-socket-data))
 
-(defun send-socket-shutdown-message (actor)
+(defun send-socket-shutdown-message (actor &optional reason)
   "Send a socket-shutdown message to an actor."
-  (when (debug-level 3)
-    (debug-log "Socket shutdown" actor))
-  (ac:send actor :shutdown))
+  
+  (ac:send actor :shutdown reason))
 
+; Would be nice to convert this to a single external thread that monitors all
+;   open sockets and sends messages to actors associated with readable sockets.
+;   For that to be practical, it needs to be possible to add/delete sockets from
+;   the list being monitored without stopping and restarting the thread.
+;   For now, it's one thread per monitored socket.
 (defmethod select-loop ((actor socket-actor))
   "Loop that monitors read-readiness of socket and sends messages
   to actor when ready. This should be run in a separate
@@ -71,68 +141,77 @@
   messages.)"
   (let ((socket (get-socket actor)))
     (loop
-      (multiple-value-bind (success errno status)
-                           (ccl::process-input-wait* (ccl::socket-device (usocket:socket-stream socket)) nil)
-        (cond ((and (null success) ; if success and errno are both nil, we timed out without error
-                    (null errno))
-               ; When no further data available, fall through and end loop
-               (send-socket-shutdown-message actor)
-               (return))
-              ((or errno
-                   (and (/= status 0)
-                        (/= status #$POLLIN)))
-               ; presumably the POLLHUP bit is set, sometimes in addition to #$POLLIN
-               (if (not (zerop (logand status #$POLLHUP)))
-                   (send-socket-shutdown-message actor)
-                   (format t  "~%Errno = ~D, status=~D" errno status)))
-              (t
-               (send-socket-receive-message actor)))))))
+      (multiple-value-bind (success errorp)
+                           (wait-for-stream-input (usocket:socket-stream socket) nil)
+        (cond (success (send-socket-receive-message actor))
+              (t ; If success is null here, stream is irreparably dead with
+               ; no further data available, so fall through and end loop
+               (send-socket-shutdown-message actor errorp)
+               (return)))))))
   
-(defun make-select-thread (actor)
+(defmethod make-select-thread ((actor socket-actor))
+  "Launch a thread to monitor a socket for incoming data. If such occurs, send
+   a message to the socket's actor and return to monitoring."
   (mpcompat:process-run-function "Select loop" nil 'select-loop actor))
 
 (defmethod socket-actor-dispatcher (&rest msg)
+  "Dispatch function for a socket-actor"
   (let ((socket-cmd (first msg))
         (actor (ac:current-actor)))
-    (when actor
-      (let ((socket (get-socket actor)))
-        (case socket-cmd
-          (:send-socket-data
-           (let* ((socket (get-socket actor))
-                  (stream (usocket:socket-stream socket))
-                  (payload (second msg)))
-             (cond ((and (usocket:stream-usocket-p socket)
-                         (open-stream-p stream))
-                    (loenc:serialize payload stream)
-                    (finish-output stream))
-                   (t (ac:self-call :shutdown)))))
-          (:receive-socket-data
-           (let ((outbox (get-outbox actor))
-                 (stream (usocket:socket-stream socket))
-                 (object nil))
-             (when (listen stream) ; it is ****VERY**** important to check this here.
-               ; Why? Because many :receive-socket-data messages can pile up because the concurrent select-loop can show the socket has data
-               ;      _while_ loenc:deserialize is happening. The result will be that (current-actor) will hang in the next loenc:deserialize
-               ;      because there won't really be any data waiting, because the previous loenc:deserialize used it all up.
-               ;      We should probably set a flag in the actor to better coordinate between
-               ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
-               (when (debug-level 4)
-                 (debug-log "Socket receive" actor))
-               (setf object (loenc:deserialize stream))
-               (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
-               )))
-          (:shutdown
-           ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
-           (let ((socket (get-socket actor))
-                 (address (get-peer-address actor))
-                 (port (get-peer-port actor)))
-             (when (usocket:stream-usocket-p socket) (usocket:socket-close socket))
-             (process-kill (get-thread actor))
-             (unmemoize-connection address port))))))))
+    (labels ((handle-stream-error (errcode stream)
+               (cond ((open-stream-p stream)
+                      (if (stream-eofp stream)
+                          (ac:self-call :shutdown :EOF)
+                          (ac:self-call :shutdown errcode)))
+                     (t (ac:self-call :shutdown :CLOSED)))
+               nil)
+             (safe-listen (stream)
+               (handler-case (listen stream)
+                 (error (c) (handle-stream-error c stream)))))
+      (when actor
+        (let ((socket (get-socket actor)))
+          (case socket-cmd
+            (:send-socket-data
+             (let* ((socket (get-socket actor))
+                    (stream (usocket:socket-stream socket))
+                    (payload (second msg)))
+               (cond ((and (usocket:stream-usocket-p socket)
+                           (open-stream-p stream))
+                      (loenc:serialize payload stream)
+                      (finish-output stream))
+                     (t (ac:self-call :shutdown :CLOSED)))))
+            (:receive-socket-data
+             (let ((outbox (get-outbox actor))
+                   (stream (usocket:socket-stream socket))
+                   (object nil))
+               (when (safe-listen stream) ; it is ****VERY**** important to check listen here.
+                 ; Why? Because many :receive-socket-data messages can pile up because the concurrent select-loop can show the socket has data
+                 ;      _while_ loenc:deserialize is happening. The result will be that (current-actor) will hang in the next loenc:deserialize
+                 ;      because there won't really be any data waiting, because the previous loenc:deserialize used it all up.
+                 ;      We should probably set a flag in the actor and use a state machine to better coordinate between
+                 ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
+                 (when (debug-level 4)
+                   (debug-log "Socket receive" actor))
+                 (setf object
+                       (handler-case (loenc:deserialize stream)
+                         (error (c) (handle-stream-error c stream))))
+                 (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
+                 )))
+            (:shutdown
+             ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
+             (let ((socket (get-socket actor))
+                   (address (get-peer-address actor))
+                   (port (get-peer-port actor))
+                   (reason (second msg)))
+               (when (debug-level 3)
+                 (debug-log "Socket shutdown" actor reason))
+               (when (usocket:stream-usocket-p socket) (usocket:socket-close socket))
+               (process-kill (get-thread actor))
+               (unmemoize-connection address port)))))))))
 
 (defun ensure-open-socket (address port)
-  "Initiates a TCP connection from this machine to another.
-   If second value is non-nil, it indicates some kind of error that makes first value invalid."
+  "Open an active TCP connection from this machine to another.
+   If second value is non-nil, it indicates some kind of error happened that makes first value invalid."
   (when (debug-level 3)
     (debug-log "Opening socket to " (usocket::host-to-vector-quad address) port))
   (multiple-value-bind (socket errorp)
@@ -143,9 +222,26 @@
            socket)
           (t (values socket (or errorp :INVALID-SOCKET))))))
 
-(defun ensure-connection (address port &optional outbox)
+(defun ofsag (source-actor object) ; output function socket-actor gossip
+  "The output function for socket-actors used in gossip. This will only be called (via ac:send) from
+   a socket-actor monitoring a connection for incoming data."
+  (let ((rem-address (get-peer-address source-actor)))
+    (with-authenticated-packet (packet)
+      object ; has already been deserialized at this point
+      (destructuring-bind (destuid srcuid rem-port msg) packet
+        (when (debug-level 1)
+          (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
+        ;ensure a local node of type proxy-gossip-node exists on this machine with
+        ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
+        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
+          (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
+          ;   on THIS machine.
+          )))))
+
+(defun ensure-connection (address port &optional (outbox 'ofsag))
   "Find or make an actor-mediated connection to given address and port.
-  If second value is non-nil, it indicates some kind of error that makes first value invalid."
+   This will often locate an extant incoming connection that was left open: That's precisely the idea.
+   If second value is non-nil, it indicates some kind of error happened that makes first value invalid."
   (or (lookup-connection address port)
       (multiple-value-bind (socket errorp)
                            (ensure-open-socket address port)
@@ -168,5 +264,4 @@
     (ac:set-property actor :socket socket)
     (ac:set-property actor :thread (make-select-thread actor))
     (memoize-connection address port actor)
-    actor
-    ))
+    actor))
