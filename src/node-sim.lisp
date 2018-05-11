@@ -3,6 +3,8 @@
 (in-package :emotiq/sim)
 
 (defun initialize (&key
+                     (cosi-prepare-timeout 10)
+                     (cosi-commit-timeout 10)
                      (executive-threads nil)
                      (nodes 8)
                      (new-configuration-p nil)
@@ -10,6 +12,12 @@
   "Initialize a new local simulation of the Emotiq chain
 
 The simulation can be configured to run across the number of EXECUTIVE-THREADS 
+
+COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait for responses during prepare phase. 
+COSI-COMMIT-TIMEOUT specifies how many seconds that cosi leaders wait for responses during commit phase. 
+
+Prepare can possibly take longer than commit, because the block may contain txns that a witness has not
+yet seen (and, therefore, needs to validate the unseen txn(s))
 
 If either NEW-CONFIGURATION-P is true or the simulator has never been
 run on this node, a new simulation network will be generated.  The
@@ -23,6 +31,8 @@ witnesses."
               (not (and (probe-file cosi-simgen::*default-data-file*)
                         (probe-file cosi-simgen::*default-key-file*))))
     (cosi-simgen::generate-tree :nodes nodes))
+  (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
+  (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
   (cosi-simgen::init-sim)
   (when run-cli-p
     (emotiq/cli:main)))

@@ -369,6 +369,7 @@
   
   (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
+      (ac:pr (format nil "internal-send-socket nb=~A" nb))
       (when (> nb *max-buffer-length*)
         (error "Packet too large for UDP transmission"))
       (internal-udp-cosi-client-send-request 'comm:close-async-io-state
