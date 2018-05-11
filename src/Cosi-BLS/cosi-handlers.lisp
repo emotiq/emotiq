@@ -322,26 +322,8 @@ Connecting to #$(NODE "10.0.1.6" 65000)
              (exit))
            ))))
    ))
-|#         
+|#
 
-;; --------------------------------------------------------------------
-;; define a blockchain block
-
-(defstruct bc-block
-  hash
-  protocol-version
-  epoch
-  timestamp
-  prev-block-hash
-  election-proof
-  leader-pkey
-  witnesses
-  transactions
-  signature
-  signature-pkey
-  signature-bitmap)
-
-(defvar *protocol-version* #x100)
 (defvar *election-proof*   nil)
 (defvar *leader*           nil)
 
@@ -354,29 +336,12 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
 
 (defun signature-hash-message (blk)
-  (list
-   (bc-block-protocol-version blk)
-   (bc-block-epoch            blk)
-   (bc-block-timestamp        blk)
-   (bc-block-prev-block-hash  blk)
-   (bc-block-election-proof   blk)
-   (bc-block-leader-pkey      blk)
-   (bc-block-witnesses        blk)
-   (bc-block-transactions     blk)))
-
-(defun compute-block-hash (blk)
-  (apply 'hash/256
-         (nconc (signature-hash-message blk)
-                (list
-                 (bc-block-signature        blk)
-                 (bc-block-signature-pkey   blk)
-                 (bc-block-signature-bitmap blk)))
-         ))
+  (cosi/proofs:serialize-block-octets blk))
 
 (defun get-block-transactions (blk)
   "Right now it is a simple partially ordered list of transactions.
 Later it may become an ADS structure"
-  (bc-block-transactions blk))
+  (cosi/proofs:block-transactions blk))
 
 ;; --------------------------------------------------------------------
 
@@ -875,7 +840,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
       (> (logcount bits)
-         (* 2/3 (length (bc-block-witnesses blk))))))
+         (* 2/3 (length (cosi/proofs:block-witnesses blk))))))
 
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
@@ -895,20 +860,22 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (let ((signed (check-byz-threshold (bc-block-signature-bitmap blk) blk)))
+     (let ((signed (check-byz-threshold 
+                    (cosi/proofs:block-signature-bitmap blk)
+                    blk)))
        (unless signed
          (cleanup-mempool (get-block-transactions blk)))
        (when (and signed
                   (or (int= (node-pkey node) *leader*)
-                      (and (int= (bc-block-hash blk)
-                                 (compute-block-hash blk))
-                           (pbc:check-message (make-instance 'pbc:signed-message
-                                                             :msg  (signature-hash-message  blk)
-                                                             :pkey (bc-block-signature-pkey blk)
-                                                             :sig  (bc-block-signature      blk)))
-                           )))
+                      (int= (cosi/proofs:block-merkle-root-hash blk)
+                            (compute-merkle-root-hash
+                             (cosi/proofs:block-transactions blk)))
+                      (pbc:check-message (make-instance 'pbc:signed-message
+                                                        :msg  (signature-hash-message  blk)
+                                                        :pkey (cosi/proofs:block-signature-pkey blk)
+                                                        :sig  (cosi/proofs:block-signature blk)))))
          (push blk *blockchain*)
-         (setf (gethash (bc-block-hash blk) *blockchain-tbl*) blk)
+         (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
          ;; clear out *mempool* and spent utxos
          (dolist (tx (get-block-transactions blk))
            (remove-tx-from-mempool tx)
@@ -1088,19 +1055,12 @@ bother factoring it with NODE-COSI-SIGNING."
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
-  (let ((new-block (make-bc-block
-                    :protocol-version *protocol-version*
-                    :epoch            (if *blockchain*
-                                          (1+ (bc-block-epoch (first *blockchain*)))
-                                        0)
-                    :timestamp        (uuid:make-v1-uuid)
-                    :prev-block-hash  (and *blockchain*
-                                           (bc-block-hash (first *blockchain*)))
-                    :election-proof   *election-proof*
-                    :leader-pkey      *leader*
-                    :witnesses        (map 'vector 'node-pkey *node-bit-tbl*)
-                    :transactions     (get-transactions-for-new-block)))
-        (self  (current-actor)))
+  (let ((new-block 
+          (cosi/proofs:create-block
+           (first *blockchain*) *election-proof* *leader*
+           (map 'vector 'node-pkey *node-bit-tbl*)
+           (get-transactions-for-new-block)))
+        (self      (current-actor)))
     (ac:self-call :cosi-sign-prepare self new-block prepare-timeout)
     (pr "Waiting for Cosi prepare")
     (labels
@@ -1108,10 +1068,7 @@ bother factoring it with NODE-COSI-SIGNING."
            (recv
              ((list :answer (list :signature sig bits))
               (let ((*current-node* node))
-                (setf (bc-block-signature        new-block) (pbc:signed-message-sig  sig)
-                      (bc-block-signature-pkey   new-block) (pbc:signed-message-pkey sig)
-                      (bc-block-signature-bitmap new-block) bits
-                      (bc-block-hash             new-block) (compute-block-hash new-block))
+                (update-block-signature new-block sig bits)
                 (ac:self-call :cosi-sign-commit self new-block commit-timeout)
                 (pr "Waiting for Cosi commit")
                 (labels ((wait-cmt-signing ()
@@ -1123,7 +1080,7 @@ bother factoring it with NODE-COSI-SIGNING."
                                        #+(or)
                                        (inspect new-block)
                                        (pr "Block committed to blockchain")
-                                       (pr (format nil "Block signatures = ~D" (logcount (bc-block-signature-bitmap new-block))))
+                                       (pr (format nil "Block signatures = ~D" (logcount (cosi/proofs:block-signature-bitmap new-block))))
                                        )
                                       
                                       (t
