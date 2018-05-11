@@ -106,7 +106,7 @@
    :vec-repr
    :edec
    :pbc)
-  (:shadow :block)
+  (:shadow block)            ; used internally, not required for users
   (:import-from :ecc-crypto-b571
    :random-between)
   (:export
@@ -140,11 +140,30 @@
    :txout-secr-gamma
    )
   (:export
-   :block :protocol-version :epoch :prev-block :prev-block-hash
-   :merkle-root-hash :block-timestamp :transactions
-   :validator-keys-joining :validator-keys-leaving
-   :create-block :hash-block :serialize-block 
-   :compute-merkle-root-hash))
+   :eblock
+   :protocol-version
+   :epoch
+   :prev-block-hash
+   :merkle-root-hash
+   :timestamp
+   :transactions
+   :signature-bitmap
+   :witnesses
+   :signature-pkey
+   :signature
+   
+   :create-block
+   :hash-block 
+   :update-block-signature
+   :serialize-block-octets
+   :compute-merkle-root-hash
+
+   :block-transactions
+   :block-witnesses
+   :block-signature-bitmap
+   :block-signature-pkey
+   :block-signature
+   :block-merkle-root-hash))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
@@ -155,7 +174,6 @@
    :vec-repr
    :hash
    :cosi/proofs)
-  (:shadow :block)
   (:import-from :edwards-ecc
    :ed-add 
    :ed-sub 
@@ -199,8 +217,7 @@
   (:export
    :generate-tree
    :reconstruct-tree
-   :forwarding)
-  (:export :block))
+   :forwarding))
 
 (defpackage :cosi-keying
   (:use
