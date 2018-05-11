@@ -6,43 +6,48 @@
 
 
                                                                                 ;
-(defclass block ()
+(defclass eblock ()
   ((protocol-version
-    :accessor protocol-version
     :initform 1
     :documentation 
       "Version of the protocol/software, an integer.")
 
    (epoch                               ; aka "height"
-    :initarg :epoch :accessor epoch
-    :initform nil 
+    :initarg :epoch
+    :initform 0
     :documentation
-      "The integer of the epoch that this block is a part of."
-      ;; height: "Position of block in the chain, an integer."
-      )
+    "Increasing integer count of epoch this block is part of. We keep
+     a single chain combining identity and ledger, unlike Byzcoin,
+     which keeps an outside identity blockchain with its epoch count
+     and an inside ledger blockchain with its height count. Thus,
+     epoch subsumes height.")
 
-   (block-hash
-    :accessor block-hash
-    :documentation "Hash of this block.")
    (prev-block-hash
-    :accessor prev-block-hash
+    :initform nil
     :documentation "Hash of previous block (nil for genesis block).")
 
-   (block-timestamp
-    :accessor block-timestamp
+   (timestamp
     :documentation 
-      "Approximate creation time in seconds since Unix epoch.")
+      "Approximate creation time in seconds since Unix epoch. The time zone is UTC.")
 
-   (block-signature
-    :accessor block-signature
+   (leader-pkey
+    :documentation
+    "Public key for the leader for this epoch.")
+
+   (election-proof)
+
+   (signature
+    :initform nil
+    :reader block-signature
     :documentation
     "A signature over the whole block authorizing all transactions.")
-   (block-signature-pkey
-    :accessor block-signature-pkey
+   (signature-pkey
+    :initform nil
+    :reader block-signature-pkey
     :documentation
     "Public key for block-signature")
-   (block-signature-bitmap
-    :accessor block-signature-bitmap
+   (signature-bitmap
+    :reader block-signature-bitmap
     :initform 0
     :documentation 
     "Use methods ith-witness-signed-p and set-ith-witness-signed-p OR,
@@ -51,27 +56,68 @@
      corresponds to a vector index, such that its state tells you
      whether that particular potential witness signed.")
 
-   (public-keys-of-witnesses
-    :accessor public-keys-of-witnesses
+   (witnesses
+    :initform nil
+    :reader block-witnesses
     :documentation
-    "Sequence of public keys of validators 1:1 w/witness-bitmap slot.")
+    "Sequence of public keys of validators 1:1 w/signature-bitmap slot.")
 
    (merkle-root-hash
-    :accessor merkle-root-hash
-    :documentation "Merkle root hash of block-transactions.")
+    :reader block-merkle-root-hash
+    :documentation "Merkle root hash of transactions.")
 
    ;; Transactions is generally what's considered the main contents of a block
    ;; whereas the rest of the above comprises what's known as the 'block header'
    ;; information.
    (transactions
-    :accessor transactions
-    :documentation "A sequence of transactions"))
+    :reader block-transactions
+    :documentation
+    "For now a sequence of transactions. Later, this may be changed to
+    be a merkle tree or simply allowed to be either a sequence or a
+    merkle tree as an alternative representation "))
   (:documentation "A block on the Emotiq blockchain."))
 
 
 
+;;; NB: in case of changes to eblock's slots, keep the following
+;;; variable in sync.
+
+(defparameter *names-of-block-slots-to-serialize*
+  '(protocol-version 
+    epoch
+    prev-block-hash
+    timestamp
+
+    leader-pkey
+
+    election-proof
+
+    signature
+    signature-pkey
+    signature-bitmap
+
+    witnesses
+    
+    merkle-root-hash)
+  "These slots are serialized and then hashed. The hash is stored as
+   the block-hash on the current block and the prev-block-hash on a
+   newer block on the blockchain.")
+
+
+
+(defun serialize-block-octets (block)
+  "Return a serialization of BLOCK as a list of octet vectors for the slots in
+   \*names-of-block-slots-to-serialize*. It is an error to call this before all
+   those slots are bound. This is to be used to hash a previous block, i.e., on
+   that has been fully formed and already been added to the blockchain."
+  (loop for slot-name in *names-of-block-slots-to-serialize*
+        collect (loenc:encode (slot-value block slot-name))))
+
+
+
 (defvar *unix-epoch-ut* (encode-universal-time 0 0 0 1 1 1970 0)
-  "The Unix epoch as a Common Lisp universal time.")
+  "The Unix epoch as a Common Lisp universal time. (Note: implied time
+  zone is UTC.)")
 
 
 
@@ -89,18 +135,24 @@
 ;;; and they can require this order for a block to be considered valid.
 ;;; Software may also rely upon this order, e.g., as a search heuristic.
 
-(defun create-block (epoch prev-block transactions)
-  (let ((block (make-instance 'block :epoch epoch)))
-    (setf (prev-block-hash block) 
-          (if (null prev-block)
-              nil
-              (hash-block prev-block)))
-    (setf (merkle-root-hash block)
-          (compute-merkle-root-hash transactions))
-    (setf (transactions block) transactions)
-    (setf (block-timestamp block) 
-          (- (get-universal-time) *unix-epoch-ut*))
-    block))
+(defun create-block (prev-block? block-election-proof block-leader-pkey
+                     block-witnesses block-transactions)
+  (let ((blk (make-instance 'eblock)))
+    (with-slots (merkle-root-hash timestamp election-proof 
+                 leader-pkey witnesses transactions)
+        blk
+      (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
+      (setf election-proof block-election-proof)
+      (setf leader-pkey block-leader-pkey)
+      (setf witnesses block-witnesses)
+      (setf transactions block-transactions)
+      (setf merkle-root-hash (compute-merkle-root-hash block-transactions))
+      (when prev-block? 
+        (with-slots (epoch prev-block-hash)
+            blk
+          (setf epoch (1+ (slot-value prev-block? 'epoch)))
+          (setf prev-block-hash (hash-block prev-block?))))
+      blk)))
 
 
 (defun hash-256 (&rest hashables)
@@ -120,33 +172,6 @@
 
 
 
-(defparameter *names-of-block-slots-to-serialize*
-  '(protocol-version 
-    epoch
-    prev-block-hash
-    block-timestamp
-
-    block-signature
-    block-signature-pkey
-    block-signature-bitmap
-
-    merkle-root-hash)
-  "These slots are serialized and then hashed. The hash is stored as
-   the block-hash on the current block and the prev-block-hash on a
-   newer block on the blockchain.")
-
-
-
-(defun serialize-block-octets (block)
-  "Return a serialization of BLOCK as a list of octet vectors for the slots in
-   \*names-of-block-slots-to-serialize*. It is an error to call this before all
-   those slots are bound. This is to be used to hash a previous block, i.e., on
-   that has been fully formed and already been added to the blockchain."
-  (loop for slot-name in *names-of-block-slots-to-serialize*
-        collect (loenc:encode (slot-value block slot-name))))
-
-
-
 ;;; COMPUTE-MERKLE-ROOT-HASH: construct a merkle root for a sequence of
 ;;; TRANSACTIONS according to bitcoin.org Bitcoin developer reference doc, here:
 ;;; https://bitcoin.org/en/developer-reference#block-versions
@@ -157,17 +182,17 @@
    (if (consp transactions)
        ;; (optimized for list case)
        (loop for tx in transactions
-             as tx-out-id = (get-txid-out-id tx)
+             as tx-out-id = (get-transaction-id tx)
              collect tx-out-id)
        (loop for i from 0 below (length transactions)
              as tx = (elt transactions i)
-             as tx-out-id = (get-txid-out-id tx)
+             as tx-out-id = (get-transaction-id tx)
              collect tx-out-id))))
 
 
 
-(defun get-txid-out-id (transaction)
-  "Get the identifier of TRANSACTION an octet vector of length 32, which can be
+(defun get-transaction-id (transaction)
+  "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
    used to hash the transactions leaves of the merkle tree to produce the
    block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
    a superset thereof."
@@ -223,3 +248,16 @@
           (dpb (if signed-p 1 0)
                (byte 1 i)
                witness-bitmap))))
+
+
+
+(defun update-block-signature (block sig bits)
+  (with-slots (signature signature-pkey signature-bitmap)
+      block
+    (setf signature (pbc:signed-message-sig sig))
+    (setf signature-pkey (pbc:signed-message-pkey sig))
+    (setf signature-bitmap bits)))
+
+;; Note: DBM had wrapped (base58 ) around all three values, but said
+;; that had only been for debugging, so I've removed that in this
+;; version.  -mhd, 5/2/18
