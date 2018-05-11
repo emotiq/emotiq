@@ -45,7 +45,7 @@
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
 
-(defvar *debug* 4 "True to log debugging information while handling gossip requests. Larger values log more messages.")
+(defvar *debug* 3 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
 (defun debug-level (&optional (level nil level-supplied-p))
   (cond (level-supplied-p
@@ -670,39 +670,11 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
-                 (uid node)
-                 node))
-        (response nil))
-    (flet ((final-continuation (reply)
-             (setf response reply)))
-      (let* ((solicitation (make-solicitation
-                            :reply-to (uid node)
-                            :kind kind
-                            :args args))
-             (soluid (uid solicitation)))
-        (send-msg solicitation
-                  uid                   ; destination
-                  #'final-continuation) ; srcuid. Note that nodes that are instructed to reply-to themselves will instead send the reply upstream
-        (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
-                                                       (lambda () response))))
-          (values 
-           (if win
-               (first (args response))
-               :TIMEOUT)
-           soluid))))))
-
-#+STILL-DOESNT-WORK ; returns immediately. Also incoming-message-handler gets confused with destid is an actor-name
-(defun solicit-direct (node kind &rest args)
-  "Like solicit-wait but asks for all replies to be sent back to node directly, rather than percolated upstream.
-  Don't use this on messages that don't expect a reply, because it'll wait forever."
-  (unless node
-    (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
   (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
                   (uid node)
                   node))
          (mbox (mpcompat:make-mailbox))
-         (actor (ac:spawn (lambda (&rest msg) (apply 'ac:send mbox msg))))
+         (actor (ac:make-actor (lambda (&rest msg) (apply 'ac:send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
     (unwind-protect
         (progn 
@@ -715,10 +687,10 @@ dropped on the floor.
             (send-msg solicitation
                       uid                   ; destination
                       actor-name)
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox *max-seconds-to-wait*)
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
               (values 
                (if success
-                   response
+                   (first (args (first response))) ; should be a FINAL-REPLY
                    :TIMEOUT)
                soluid))))
       (ac:unregister-actor actor-name))))
@@ -945,7 +917,9 @@ dropped on the floor.
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
-         (destactor (when destnode (actor destnode))))
+         (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can ac:send to
+                        (actor destnode)
+                        destuid)))
     (when (null destactor)
       (if (null destnode)
           (error "Cannot find node for ~D" destuid)
@@ -1361,9 +1335,12 @@ dropped on the floor.
       (cond (downstream
              (cond ((must-coalesce?)
                     (if (eql :UPSTREAM (reply-to msg)) ; See Note D
-                        (prepare-repliers thisnode soluid downstream)
+                        (progn
+                          (prepare-repliers thisnode soluid downstream)
+                          (maybe-log thisnode :WAITING msg downstream))
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
+                          (maybe-log thisnode :WAITING msg :ANONYMOUS)
                           (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
@@ -1371,7 +1348,7 @@ dropped on the floor.
                     (kvs:relate-unique! (timers thisnode) soluid timer)
                     (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
                     ;(maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
-                    (maybe-log thisnode :WAITING msg downstream))
+                    )
                    (t ; just forward the message since there won't be an :UPSTREAM reply
                     (forward msg thisnode downstream)
                     ; No cleanup necessary because even though we had a downstream, we never expected any replies.
@@ -1512,24 +1489,18 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (maybe-log srcnode :SEND-FINAL-REPLY reply :to (briefname where-to-send-reply "node") data)
+           (maybe-log srcnode :FINALREPLY (briefname soluid "sol") :to (briefname where-to-send-reply "node") data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
           ; if no place left to reply to, just log the result.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
-          ((typep where-to-send-reply 'ac::actor) ; can happen if actor version of solicit-wait was used
-           (ac:send where-to-send-reply reply))
-          ((typep where-to-send-reply 'symbol)
-           (uiop:if-let (actor (ac:find-actor where-to-send-reply))
-             (ac:send actor reply)))
-          ((functionp where-to-send-reply)
-           (maybe-log srcnode :FINALREPLY (briefname soluid "sol") data)
-           (funcall where-to-send-reply reply))
           ((null where-to-send-reply)
            (maybe-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
-          (t (error "Invalid destination")))))
+          (t
+           (maybe-log srcnode :FINALREPLY (briefname soluid "sol") :TO where-to-send-reply data)
+           (ac:send where-to-send-reply reply)))))
 
 (defun coalesce&reply (reply-to thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or

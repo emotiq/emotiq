@@ -116,7 +116,7 @@
                ;      because there won't really be any data waiting, because the previous loenc:deserialize used it all up.
                ;      We should probably set a flag in the actor to better coordinate between
                ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
-               (when (debug-level 3)
+               (when (debug-level 4)
                  (debug-log "Socket receive" actor))
                (setf object (loenc:deserialize stream))
                (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
