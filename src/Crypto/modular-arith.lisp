@@ -32,21 +32,82 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------
 
-(defvar *m*  1)   ;; current modular base
+(defvar *m*            1 "current modular base")
+(defvar *power*      nil "current power")
+(defvar *subtrahend* nil "current subtrahend")
+
+; Slow mod operations are known to be correct. Correctness of fast mods is still under test.
+(defparameter *use-fast-mod* nil "True to request fast mod operations when possible. Nil to force slow mods always.")
+#+FAST-MOD-DEBUG
+(defparameter *debug-fast-mod* nil "True to debug fast mod operations by breaking if result differs from slow mod")
 
 (declaim (integer *m*)
-         (inline mmod m-1 m/2l m+1 m/2u))
+         (inline #-FAST-MOD-DEBUG mmod
+                 m-1 m/2l m+1 m/2u))
 
 (defmacro with-mod (base &body body)
-  `(let ((*m* ,base))
+  "Force slow, general mod algorithm"
+  `(let ((*m* ,base)
+         (*power* nil)
+         (*subtrahend* nil))
+     ,@body))
+
+(defmacro with-fast-mod ((base &optional power subtrahend) &body body)
+  "Request fast mod algorithm for special moduli of form base = (- (ash 1 power) subtrahend)
+   if power and subtrahend are non-nil. If either is nil, slow algorithm will be used."
+  `(let ((*m* ,base)
+         (*power* ,power)
+         (*subtrahend* ,subtrahend))
      ,@body))
 
 #+:LISPWORKS
 (editor:setup-indent "with-mod" 1)
 
+(defun fast-mod (x m power subtrahend)
+  ; Modular arithmetic when modulus is m = (- (ash 1 power) subtrahend)
+  ; Handbook of Applied Cryptography page 605
+  ; ONLY WORKS FOR POSITIVE X
+  (declare (integer x)
+           (optimize (speed 3) (safety 1) (debug 1)))
+  (let ((flip (minusp x)))
+    (when flip (setf x (- x)))
+    (let* ((negpower (- power))
+           (qi (ash x negpower))
+           (ri (- x (ash qi power)))
+           (r ri))
+      (declare (integer negpower qi ri r))
+      
+      (loop for i from 0 while (> qi 0) do
+        (let* ((qic (* qi subtrahend))
+               (qnext (ash qic negpower))
+               (rnext (- qic (ash qnext power))))
+          (declare (integer qic qnext rnext))
+          (incf r rnext) ; note Handbook of A. C. gets this step wrong
+          (setf qi qnext
+                ri rnext)))
+      (loop while (>= r m) do (decf r m))
+      (if flip
+          (- m r)
+          r))))
+
+#+FAST-MOD-DEBUG
 (defun mmod (x)
   (declare (integer x))
-  (mod x *m*))
+  (if (and *use-fast-mod* *power* *subtrahend*)
+      (if *debug-fast-mod*
+          (let ((fm (fast-mod x *m* *power* *subtrahend*))
+                (sm (mod x *m*)))
+            (unless (= fm sm) (break))
+            fm)
+          (fast-mod x *m* *power* *subtrahend*))
+      (mod x *m*)))
+
+#-FAST-MOD-DEBUG
+(defun mmod (x)
+  (declare (integer x))
+  (if (and *use-fast-mod* *power* *subtrahend*)
+      (fast-mod x *m* *power* *subtrahend*)
+      (mod x *m*)))
 
 (defun m-1 ()
   (1- *m*))

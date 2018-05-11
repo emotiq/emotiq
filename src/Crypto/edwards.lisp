@@ -43,7 +43,7 @@ THE SOFTWARE.
 ;; See also, https://safecurves.cr.yp.to
 
 (defstruct ed-curve
-  name c d q h r gen)
+  name c d q power subtrahend h r gen)
 
 ;; -----------------------------------------------------------
 
@@ -86,6 +86,8 @@ THE SOFTWARE.
    :c    1
    :d    -1174
    :q    (- (ash 1 251) 9)
+   :power 251
+   :subtrahend 9
    :r    904625697166532776746648320380374280092339035279495474023489261773642975601
    ;; = 2^249 - 11332719920821432534773113288178349711
    :h    4  ;; cofactor -- #E(K) = h*r
@@ -106,6 +108,8 @@ THE SOFTWARE.
    :c    1
    :d    -67254
    :q    (- (ash 1 382) 105)
+   :power 382
+   :subtrahend 105
    :r    2462625387274654950767440006258975862817483704404090416745738034557663054564649171262659326683244604346084081047321
             ;; = 2^380 - 1030303207694556153926491950732314247062623204330168346855
    :h    4
@@ -126,6 +130,8 @@ THE SOFTWARE.
    :c    1
    :d    3617
    :q    (- (ash 1 414) 17)
+   :power 414
+   :subtrahend 17
    :r    5288447750321988791615322464262168318627237463714249754277190328831105466135348245791335989419337099796002495788978276839289
             ;; = 2^411 - 33364140863755142520810177694098385178984727200411208589594759
    :h    8
@@ -146,6 +152,8 @@ THE SOFTWARE.
    :c    1
    :d    -376014
    :q    (- (ash 1 521) 1)
+   :power 521
+   :subtrahend 1
    :r    1716199415032652428745475199770348304317358825035826352348615864796385795849413675475876651663657849636693659065234142604319282948702542317993421293670108523
             ;; = 2^519 - 337554763258501705789107630418782636071904961214051226618635150085779108655765
    :h    4
@@ -164,6 +172,8 @@ THE SOFTWARE.
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
 (define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
 (define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
+(define-symbol-macro *ed-power* (ed-curve-power *edcurve*))
+(define-symbol-macro *ed-subtrahend* (ed-curve-subtrahend *edcurve*))
 (define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
 (define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
 (define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
@@ -210,7 +220,7 @@ THE SOFTWARE.
   (optima:ematch pt
     ((ecc-pt-) pt)
     ((ed-proj-pt- :x x :y y :z z)
-     (with-mod *ed-q*
+     (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
        (make-ecc-pt
         :x (m/ x z)
         :y (m/ y z))))))
@@ -219,7 +229,7 @@ THE SOFTWARE.
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
      (let* ((alpha (random-between 1 *ed-q*)))
-         (with-mod *ed-q*
+         (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
            (make-ed-proj-pt
             :x (m* alpha x)
             :y (m* alpha y)
@@ -229,7 +239,7 @@ THE SOFTWARE.
     ))
 
 (defun ed-random-projective (pt)
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (let* ((alpha (random-between 1 *ed-q*)))
       (declare (integer alpha))
       (optima:ematch pt
@@ -277,7 +287,7 @@ THE SOFTWARE.
       ((ed-proj-pt- :x x1 :y y1 :z z1)
        (optima:match upt2
          ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (with-mod *ed-q*
+          (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
             (and (= (m* x1 z2)
                     (m* x2 z1))
                  (= (m* y1 z2)
@@ -311,7 +321,7 @@ THE SOFTWARE.
 |#
 
 (defun ed-satisfies-curve (pt)
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (optima:ematch pt
       ((ecc-pt- :x x :y y)
        ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
@@ -329,7 +339,7 @@ THE SOFTWARE.
 
 (defun ed-affine-add (pt1 pt2)
   ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y)) pt1)
                (:struct-accessors ecc-pt ((x2 x) (y2 y)) pt2)
                (y1y2  (m* y1 y2))
@@ -346,7 +356,7 @@ THE SOFTWARE.
       )))
 
 (defun ed-projective-add (pt1 pt2)
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (um:bind* ((:struct-accessors ed-proj-pt ((x1 x)
                                               (y1 y)
                                               (z1 z)) pt1)
@@ -399,7 +409,7 @@ THE SOFTWARE.
 |#
 
 (defun ed-negate (pt)
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (optima:ematch pt
       ((ecc-pt- :x x :y y)
        (make-ecc-pt
@@ -539,7 +549,7 @@ THE SOFTWARE.
   (ed-decompress-pt (int x)))
 
 (defmethod ed-decompress-pt ((v integer))
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (let* ((nbits (ed-nbits))
            (sgn   (ldb (byte 1 nbits) v))
            (x     (dpb 0 (byte 1 nbits) v))
@@ -627,7 +637,7 @@ THE SOFTWARE.
   "Hash onto curve. Treat h as X coord with sign indication,
 just like a compressed point. Then if Y is a quadratic residue
 we are done. Else re-probe with (X^2 + 1)."
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (let* ((nbits (ed-nbits))
            (v     (int h))
            (sgn   (ldb (byte 1 nbits) v))
@@ -799,7 +809,7 @@ we are done. Else re-probe with (X^2 + 1)."
 
 (defun compute-csr ()
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (let* ((dp1  (m+ *ed-d* 1))
            (dm1  (m- *ed-d* 1))
            (dsqrt (m* 2 (msqrt (m- *ed-d*))))
@@ -835,7 +845,7 @@ we are done. Else re-probe with (X^2 + 1)."
            (ed-neutral-point))
           
           (t
-           (with-mod *ed-q*
+           (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
              (um:bind* (((c s r) (csr))
                         (u     (m/ (m- 1 z) (m+ 1 z)))
                         (u^2   (m* u u))
@@ -873,7 +883,7 @@ we are done. Else re-probe with (X^2 + 1)."
   (if (ed-neutral-point-p pt)
       (logior 1 (elligator-int-padding))
     ;; else
-    (with-mod *ed-q*
+    (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
       (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
                  (yp1  (m+ y 1)))
         (unless (zerop yp1)
@@ -1157,7 +1167,7 @@ we are done. Else re-probe with (X^2 + 1)."
   ;; to get: w^2 = u^3 + A*u^2 + B*u
   ;; we precompute c4d = c^4*d, A = 2*(c^4*d+1)/(c^4*d-1), and B = 1
   ;; must have: A*B*(A^2 - 4*B) != 0
-  (with-mod *ed-q*
+  (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
     (let* ((c4d        (m* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
            (sqrt-c4dm1 (msqrt (m- c4d 1))) ;; used during coord conversion
            (a          (m/ (m* 2 (m+ c4d 1)) (m- c4d 1)))
@@ -1189,7 +1199,7 @@ we are done. Else re-probe with (X^2 + 1)."
       ;; else
       (destructuring-bind (sqrt-c4dm1 a b u) (elli2-ab)
         (declare (ignore a b u))
-        (with-mod *ed-q*
+        (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
           (let* ((yv   (m* sqrt-c4dm1 yw))
                  (x    (m/ (m* -2 *ed-c* xu) yv))
                  (y    (m/ (m* *ed-c* (m+ 1 xu)) (m- 1 xu)))
@@ -1217,7 +1227,7 @@ we are done. Else re-probe with (X^2 + 1)."
     (declare (integer r))
     (cond  ((zerop r)  (ed-neutral-point))
            (t
-            (with-mod *ed-q*
+            (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
               (um:bind* (((sqrt-c4dm1 a b u) (elli2-ab))
                          (u*r^2   (m* u r r))
                          (1+u*r^2 (m+ 1 u*r^2)))
@@ -1271,7 +1281,7 @@ we are done. Else re-probe with (X^2 + 1)."
        :x 0
        :y 0)
     ;; else
-    (with-mod *ed-q*
+    (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
       (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
                  ((sqrt-c4dm1 a b u) (elli2-ab))
                  (declare (ignore u))
@@ -1292,7 +1302,7 @@ we are done. Else re-probe with (X^2 + 1)."
   (cond ((ed-neutral-point-p pt)
          (elligator-int-padding))
         (t
-         (with-mod *ed-q*
+         (with-fast-mod (*ed-q* *ed-power* *ed-subtrahend*)
            (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
                       ((sqrt-c4dm1 a b u) (elli2-ab))
                       (declare (ignore b))
