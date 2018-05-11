@@ -159,7 +159,7 @@ THE SOFTWARE.
   (let ((new-top-node (gethash (int new-leader-pkey) *pkey-node-tbl*)))
     ;; Maybe... ready for prime time?
     (cond ((null new-top-node)
-           (error "Not a valid leader node: ~A" new-leader-ip))
+           (error "Not a valid leader node: ~A" new-leader-pkey))
           ((eq new-top-node *top-node*)
            ;; nothing to do here...
            )
