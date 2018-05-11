@@ -105,6 +105,11 @@ THE SOFTWARE.
                    (make-hash-table
                     :test 'equal
                     :single-thread t)
+                   #+:OPENMCL
+                   (make-hash-table
+                    :test 'equal
+                    :lock-free ':shared
+                    :shared t)
                    #+:SBCL
                    (make-hash-table
                     :test 'equal
@@ -117,6 +122,11 @@ THE SOFTWARE.
                    (make-hash-table
                     :test 'eq
                     :single-thread t)
+                   #+:OPENMCL
+                   (make-hash-table
+                    :test 'eq
+                    :lock-free ':shared
+                    :shared t)
                    #+:SBCL
                    (make-hash-table
                     :test 'eq
@@ -204,7 +214,7 @@ THE SOFTWARE.
   (install-actor-directory)
   (install-actor-printer))
 
-#+:ALLEGRO
+#+(or :ALLEGRO :OPENMCL)
 (install-actor-system)
 
 #||#
