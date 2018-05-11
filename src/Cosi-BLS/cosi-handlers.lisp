@@ -74,7 +74,7 @@ THE SOFTWARE.
 
       (:election (new-leader-pkey)
        (node-elect-new-leader new-leader-pkey))
-      
+
       ;; -------------------------------
       ;; internal comms between Cosi nodes
       
@@ -1316,10 +1316,12 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; -------------------------------------------------------------
 
+#|
 (defvar *arroyo*     "10.0.1.2")
 (defvar *dachshund*  "10.0.1.3")
 (defvar *malachite*  "10.0.1.6")
 (defvar *rambo*      "10.0.1.13")
+|#
 
 (defmethod damage ((ip string) t/f)
   (damage (gethash ip *ip-node-tbl*) t/f))

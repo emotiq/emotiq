@@ -77,6 +77,12 @@
    #:*user-1* #:*user-2* #:*user-3*
    #:*tx-1* #:*tx-2* #:*tx-3*))
 
-
-  
+(defpackage :sim-trial-election
+  (:use :cl )
+  (:export
+   :make-trial-election-beacon
+   :kill-beacon
+   :hold-trial-election
+   :set-nodes))
+   
 
