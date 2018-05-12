@@ -3,12 +3,12 @@
 (in-package :emotiq/sim)
 
 (defun initialize (&key
-                     (cosi-prepare-timeout 10)
-                     (cosi-commit-timeout 10)
-                     (executive-threads nil)
-                     (nodes 8)
-                     (new-configuration-p nil)
-                     (run-cli-p nil))
+                   (cosi-prepare-timeout 10)
+                   (cosi-commit-timeout 10)
+                   (executive-threads nil)
+                   (nodes 8)
+                   (new-configuration-p nil)
+                   (run-cli-p nil))
   "Initialize a new local simulation of the Emotiq chain
 
 The simulation can be configured to run across the number of EXECUTIVE-THREADS 
@@ -31,9 +31,21 @@ witnesses."
               (not (and (probe-file cosi-simgen::*default-data-file*)
                         (probe-file cosi-simgen::*default-key-file*))))
     (cosi-simgen::generate-tree :nodes nodes))
-  (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
-  (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
+  ;; should this following code be exected every time or only when new-configuration-p?
+  (let ((node-list (list-of-nodes)))
+    (assign-phony-stake-to-nodes node-list)
+    (sim-trial-election:set-nodes (sort-nodes-by-stake node-list)))
+
   (cosi-simgen::init-sim)
+
+  ;; the real random beacon should send :hold-an-election messages
+  ;; to cosi-handlers::node-dispatcher, but, in keeping
+  ;; with the principle of "leave cosi-handlers alone"
+  ;; I've wired the beacon into a fake actor (see "run" below) that
+  ;; runs fake elections and prints the results
+
+  ;;(sim-trial-election:make-trial-election-beacon <node-dispatcher-actor>)
+
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -306,6 +318,21 @@ This will spawn an actor which will asynchronously do the following:
         *tx-2*           nil
         *tx-3*           nil)
   (cosi-simgen::reset-nodes) 
+
+  ;; simulator: fake elections send the timer to this actor, to simulate elections 
+  ;; and print results without actually changing the leader
+  (let ((election-faker (ac:make-actor
+                         (lambda (&rest msg)
+                           (if (and (eq :hold-an-election (first msg))
+                                    (>= 2 (length msg))
+                                    (numberp (second msg)))
+                               (let ((n (second msg)))
+                                 (ac:pr (format nil "got :hold-an-election ~A" n))
+                                 (let ((tree (sim-trial-election:hold-trial-election n)))
+                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
+                             (error "bad message to election-faker ~A" msg))))))
+    (sim-trial-election:make-trial-election-beacon election-faker))
+
   (ac:spawn
    (lambda ()
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
@@ -334,17 +361,24 @@ This will spawn an actor which will asynchronously do the following:
   "Return the blocks in the chain currently under local simulation."
   (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
 
-#|
-todo:
-- randomness
-- staking
-- election
-x remove ac:spawn from test-network, see if it still works
-x- txn that splits outputs
-- elections
-- insert :fee in transactions (new field)
-- txn dumper
-- get signing to work in sim (not always OK?) [what purpose?]
-- [ignore] investigate why I saw 5 blocks for 3 epochs?  intermittent?  Or temp bug during fixing?
-- uncloaked txouts
-|#
+
+;; hacked copy of cosi-simgen::assign-bits()
+(defun list-of-nodes ()
+  (let ((collected
+         (um:accum acc
+           (maphash (lambda (k node)
+                      (declare (ignore k))
+                      (acc node))
+                    cosi-simgen::*ip-node-tbl*))))
+    collected))
+
+(defun assign-phony-stake-to-nodes (node-list)
+  ;; set the node-stake slot of every node to a random number <= 100,000
+  (dolist (node node-list)
+        (let ((phony-stake (random 100000)))
+          (setf (cosi-simgen::node-stake node) phony-stake))))
+
+(defun sort-nodes-by-stake (node-list)
+    (sort node-list '< :key #'cosi-simgen::node-stake))
+
+
