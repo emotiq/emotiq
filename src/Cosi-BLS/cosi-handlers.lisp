@@ -822,7 +822,6 @@ check that each TXIN and TXOUT is mathematically sound."
            
            (pr "Running Gossip Signing")
            (gossip-neighborcast my-node :signing ret-addr consensus-stage msg seq-id timeout)
-           (gossip-neighborcast my-node :answer :in-gossip)
            (setf start (get-universal-time))
            
            (labels
