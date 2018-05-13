@@ -148,8 +148,9 @@ witnesses."
   (let ((amount (cosi/proofs::uncloaked-txout-amt from-utxo)))
     (with-accessors ((from-private-key pbc:keying-triple-skey))
         from-account
-      (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma)  
+      (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma-dont-care)  
           (cosi/proofs:make-uncloaked-txin amount to-pubkey from-private-key)
+        (declare (ignore uncloaked-txin-gamma-dont-care))
         (multiple-value-bind (new-uncloaked-utxo new-uncloaked-secrets)
             (cosi/proofs:make-txout amount nil) ;; pkey=nil -> uncloaked
           (let ((transaction (cosi/proofs:make-transaction (list uncloaked-txin)
@@ -159,6 +160,38 @@ witnesses."
             (broadcast-message :new-transaction transaction)
             transaction))))))
 
+(defun spend-uncloaked-list (from-account from-utxo to-pubkey-list amount-list)
+  "like spend-uncloadek, but allows multiple receivers, returns one transaction with multiple txouts"
+  (let ((amount (cosi/proofs::uncloaked-txout-amt from-utxo))
+        (in-amount (reduce #'+ amount-list)))
+    (when (< amount in-amount)
+      (error (format nil "trying to spend more than input, ins=%a outs=%a" amount in-amount)))
+    (with-accessors ((from-private-key pbc:keying-triple-skey))
+        from-account
+        (let ((new-uncloaked-utxo-list nil)            ;; we will create a list of utxos in the mapc below
+              (new-uncloaked-utxo-secrets-list nil)
+              (uncloaked-txin-gamma-list nil)
+              (txin-list nil))
+          (mapc #'(lambda (amount-out pkey)
+                    ;; we would expect only one txin, but the txin is used
+                    ;; multiple times, forming one hashlock for each "to"
+                    (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma-dont-care)
+                        (cosi/proofs:make-uncloaked-txin amount-out pkey from-private-key)
+                      (declare (ignore uncloaked-txin-gamma-dont-care))
+                      (push uncloaked-txin txin-list)
+                      (multiple-value-bind (new-uncloaked-utxo new-uncloaked-utxo-secrets)
+                          (cosi/proofs:make-txout amount-out nil) ;; nil -> uncloaked
+                        (push new-uncloaked-utxo new-uncloaked-utxo-list)
+                        (push new-uncloaked-utxo-secrets new-uncloaked-utxo-secrets-list)
+                        (push (cosi/proofs:gam-txin uncloaked-txin) uncloaked-txin-gamma-list))))
+                    amount-list
+                    to-pubkey-list)
+          (let ((transaction (cosi/proofs:make-transaction txin-list
+                                                           uncloaked-txin-gamma-list
+                                                           new-uncloaked-utxo-list
+                                                           new-uncloaked-utxo-secrets-list)))
+            (broadcast-message :new-transaction transaction)
+            transaction)))))
 
 (defparameter *user-1* (pbc:make-key-pair :user-1))
 (defparameter *user-2* (pbc:make-key-pair :user-2))
@@ -167,9 +200,7 @@ witnesses."
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
 
-(defun run (&key
-              (amount 1000)
-              (cloaked t)) ;;; non-cloaking does not currently work
+(defun run (&key (amount 1000))
   "Run the block chain simulation entirely within the current process
 
 This will spawn an actor which will asynchronously do the following:
@@ -190,27 +221,25 @@ This will spawn an actor which will asynchronously do the following:
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-       (send-uncloaked-genesis-utxo :monetary-supply amount :cloaked cloaked)
-       (let ((txn-genesis (spend-from-genesis *user-1* amount :cloaked cloaked))) 
+       (send-uncloaked-genesis-utxo :monetary-supply amount)
+       (let ((txn-genesis (spend-from-genesis *user-1* amount)) 
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
            (let ((txn2 (spend *user-1*
                               (first txout2)
                               (pbc:keying-triple-pkey *user-2*)
-                              amount
-                              :cloaked cloaked)))
+                              amount)))
              (let ((txout2 (cosi/proofs::trans-txouts txn2))
                    (change (floor (/ amount 2))))
                (let ((txn3 (spend-list *user-2*
                                        (first txout2)
                                        (list (pbc:keying-triple-pkey *user-3*)
                                              (pbc:keying-triple-pkey *user-2*))
-                                       (list (- amount change) change)
-                                       :cloaked cloaked)))
+                                       (list (- amount change) change))))
                  (force-epoch-end)
                  (setf *tx-1* txn-genesis
                        *tx-2* txn2
-                       *tx-3* txn3)))))))))
+                       *tx-3* txn3))))))))))
 
 (defun urun (&key (amount 1000))
   "Run the block chain simulation entirely within the current process
@@ -237,8 +266,24 @@ This will spawn an actor which will asynchronously do the following:
        (send-uncloaked-genesis-utxo :monetary-supply amount)
        (let ((txn-genesis (spend-uncloaked-from-genesis *user-1*)))
          (force-epoch-end)
-         (setf *tx-1* txn-genesis)))))
-
+         (setf *tx-1* txn-genesis)
+         (let ((txout-from-genesis-list (cosi/proofs::trans-txouts txn-genesis)))
+           (assert (= 1 (length txout-from-genesis-list)))
+           (let ((txn2 (spend-uncloaked *user-1*
+                                        (first txout-from-genesis-list)       ;; input to txn2 (txout from genesis txn1)
+                                        (pbc:keying-triple-pkey *user-2*))))  ;; destination pkey
+             (let ((txout2 (cosi/proofs::trans-txouts txn2))
+                   (change (floor (/ amount 2))))
+               (let ((txn3 (spend-uncloaked-list *user-2*
+                                                 (first txout2)
+                                                 (list (pbc:keying-triple-pkey *user-3*)
+                                                       (pbc:keying-triple-pkey *user-2*))
+                                                 (list (- amount change) change))))
+                 (force-epoch-end)
+                 (setf *tx-1* txn-genesis
+                       *tx-2* txn2
+                       *tx-3* txn3)))))))))
+       
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
