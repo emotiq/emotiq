@@ -34,6 +34,13 @@ witnesses."
   (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
   (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
   (cosi-simgen::init-sim)
+
+  ;; should this following code be executed every time or only when a new configuration is created?
+  (let ((node-list (list-of-nodes)))
+    (assert node-list)
+    (assign-phony-stake-to-nodes node-list)
+    (emotiq/elections:set-nodes (sort-nodes-by-stake node-list)))
+
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -305,7 +312,22 @@ This will spawn an actor which will asynchronously do the following:
         *tx-1*           nil
         *tx-2*           nil
         *tx-3*           nil)
-  (cosi-simgen::reset-nodes) 
+  (cosi-simgen::reset-nodes)
+
+  ;; simulator: fake elections send the timer to this actor, to simulate elections 
+  ;; and print results without actually changing the leader (which must always be a real node)
+  (let ((election-faker (ac:make-actor
+                         (lambda (&rest msg)
+                           (if (and (eq :hold-an-election (first msg))
+                                    (>= 2 (length msg))
+                                    (numberp (second msg)))
+                               (let ((n (second msg)))
+                                 (ac:pr (format nil "got :hold-an-election ~A" n))
+                                 (let ((tree (emotiq/elections:hold-trial-election n)))
+                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
+                             (error "bad message to election-faker ~A" msg))))))
+    (emotiq/elections:make-trial-election-beacon election-faker))
+                                         
   (ac:spawn
    (lambda ()
        (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
@@ -334,17 +356,23 @@ This will spawn an actor which will asynchronously do the following:
   "Return the blocks in the chain currently under local simulation."
   (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
 
-#|
-todo:
-- randomness
-- staking
-- election
-x remove ac:spawn from test-network, see if it still works
-x- txn that splits outputs
-- elections
-- insert :fee in transactions (new field)
-- txn dumper
-- get signing to work in sim (not always OK?) [what purpose?]
-- [ignore] investigate why I saw 5 blocks for 3 epochs?  intermittent?  Or temp bug during fixing?
-- uncloaked txouts
-|#
+;; hacked copy of cosi-simgen::assign-bits()
+(defun list-of-nodes ()
+  (let ((collected
+         (um:accum acc
+           (maphash (lambda (k node)
+                      (declare (ignore k))
+                      (acc node))
+                    cosi-simgen::*ip-node-tbl*))))
+    collected))
+
+(defun assign-phony-stake-to-nodes (node-list)
+  ;; set the node-stake slot of every node to a random number <= 100,000
+  (dolist (node node-list)
+        (let ((phony-stake (random 100000)))
+          (setf (cosi-simgen::node-stake node) phony-stake))))
+
+(defun sort-nodes-by-stake (node-list)
+    (sort node-list '< :key #'cosi-simgen::node-stake))
+
+

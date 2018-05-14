@@ -80,3 +80,9 @@
 
   
 
+(defpackage emotiq/elections
+  (:use #:cl)
+  (:export
+   #:set-nodes
+   #:make-trial-election-beacon
+   #:hold-trial-election))

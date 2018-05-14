@@ -158,6 +158,9 @@ THE SOFTWARE.
    #:set-executive-pool
    #:with-borrowed-mailbox
    #:do-nothing
+
+   #:schedule-timer-relative
+   #:unschedule-timer
    ))
 
 (defpackage #:linda
