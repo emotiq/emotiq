@@ -111,12 +111,6 @@
 
 ;; UPSTREAM replies across network
 
-(defun other-tcp-port ()
-  (when *tcp-gossip-socket*
-    (if (= *nominal-gossip-port* *actual-tcp-gossip-port*)
-        (1+ *nominal-gossip-port*)
-        *nominal-gossip-port*)))
-
 (defun setup-client-for-upstream-test (n m other-machine-address)
   "n is starting UID
   m is the UID of a valid node on other-machine-address"

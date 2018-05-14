@@ -3,6 +3,8 @@
 ;; Poll and EOF:
 ;; http://www.greenend.org.uk/rjk/tech/poll.html
 
+(defparameter *pollhup* #$POLLHUP) ; because we can't have #$ in conditional code on other Lisps
+
 #+OPENMCL ; because this method doesn't exist in CCL, and the default doesn't work for udpsockets.
 (defmethod ccl::local-socket-address ((socket ccl::udp-socket))
   (getf (ccl::socket-keys socket) :local-address))

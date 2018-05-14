@@ -33,6 +33,13 @@
 #+:LISPWORKS
 (editor:setup-indent "with-authenticated-packet" 2)
 
+; Patch for usocket to ensure it doesn't see any local IPv6 addresses.
+;  It's a problem specific to Lispworks but this patch doesn't hurt anything in CCL.
+(defun usocket::get-host-by-name (name)
+  (let ((hosts (usocket::get-hosts-by-name name)))
+    (setf hosts (remove-if-not (lambda (vector) (= 4 (length vector))) hosts))
+    (car hosts)))
+
 ; herein we sometimes refer to these things as "connections"
 (defclass socket-actor (ac:actor)
   ()
@@ -53,13 +60,13 @@
                (values nil nil)     ; stream might have data later--it merely timed out
                (values nil :DEAD))) ; stream will never have more data, because fn returned but nil timeout
           ((null success) ; stream will never have more data
-           (if (not (zerop (logand status #$POLLHUP)))
+           (if (not (zerop (logand status CCL::*POLLHUP*)))
                (values nil :POLLHUP) ; other end hung up
                (values nil errno)))
           (t (values stream nil))))
   #+LISPWORKS
   (let ((streams (system:wait-for-input-streams (list stream) :timeout timeout)))
-    (cond ((streams (values (car streams) nil)))
+    (cond (streams (values (car streams) nil))
           (t (if timeout
                  (values nil 
                          (if (open-stream-p stream)
