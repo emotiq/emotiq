@@ -90,6 +90,8 @@ witnesses."
                                                              (list txin-gamma)
                                                              (list new-utxo)
                                                              (list new-utxo-secrets))))
+                (let ((valid (cosi/proofs::validate-transaction transaction)))
+                  (ac:pr (format nil "~%in SPEND-CLOAKED valid txn ~A~%" valid)))
               (broadcast-message :new-transaction transaction)
               transaction))))))
 
@@ -140,58 +142,76 @@ witnesses."
   (unless *genesis-output*
     (error "No genesis account to spend from."))
   (spend-uncloaked *genesis-account* *genesis-output*
-         (pbc:keying-triple-pkey receiver)))  ;; pkey of receiver
+         (pbc:keying-triple-pkey receiver)  ;; pkey of receiver
+         (pbc:keying-triple-skey receiver)))
 
-(defun spend-uncloaked (from-account from-utxo to-pubkey)
+(defun spend-uncloaked (from-account from-utxo to-public-key to-private-key)
   "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
     amount = number, bit-tbl = node's bit table"
   (let ((amount (cosi/proofs::uncloaked-txout-amt from-utxo)))
-    (with-accessors ((from-private-key pbc:keying-triple-skey))
+    (with-accessors ((from-private-key pbc:keying-triple-skey)
+                     (from-public-key pbc:keying-triple-pkey))
         from-account
       (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma-dont-care)  
-          (cosi/proofs:make-uncloaked-txin amount to-pubkey from-private-key)
+          (cosi/proofs:make-uncloaked-txin amount from-public-key from-private-key)
         (declare (ignore uncloaked-txin-gamma-dont-care))
-        (multiple-value-bind (new-uncloaked-utxo new-uncloaked-secrets)
-            (cosi/proofs:make-txout amount nil) ;; pkey=nil -> uncloaked
-          (let ((transaction (cosi/proofs:make-transaction (list uncloaked-txin)
-                                                           (list (cosi/proofs:gam-txin uncloaked-txin)) ;; 0
-                                                           (list new-uncloaked-utxo)
-                                                           (list new-uncloaked-secrets))))
-            (broadcast-message :new-transaction transaction)
-            transaction))))))
+        (multiple-value-bind (uncloaked-txin2 uncloaked-txin-gamma-dont-care2)  
+            (cosi/proofs:make-uncloaked-txin amount to-public-key to-private-key)
+          (declare (ignore uncloaked-txin-gamma-dont-care2))
+          (multiple-value-bind (uncloaked-txin3 uncloaked-txin-gamma-dont-care3)  
+              (cosi/proofs:make-uncloaked-txin amount from-public-key to-private-key)
+            (declare (ignore uncloaked-txin-gamma-dont-care3))
+            (multiple-value-bind (new-uncloaked-utxo new-uncloaked-secrets)
+                (cosi/proofs:make-txout amount nil) ;; pkey=nil -> uncloaked
+              (let ((transaction (cosi/proofs:make-transaction (list uncloaked-txin)
+                                                               (list (cosi/proofs:gam-txin uncloaked-txin)) ;; 0
+                                                               (list new-uncloaked-utxo)
+                                                               (list new-uncloaked-secrets)))
+                    (transaction2 (cosi/proofs:make-transaction (list uncloaked-txin2)
+                                                                (list (cosi/proofs:gam-txin uncloaked-txin)) ;; 0
+                                                                (list new-uncloaked-utxo)
+                                                                (list new-uncloaked-secrets)))
+                    (transaction3 (cosi/proofs:make-transaction (list uncloaked-txin3)
+                                                                (list (cosi/proofs:gam-txin uncloaked-txin)) ;; 0
+                                                                (list new-uncloaked-utxo)
+                                                                (list new-uncloaked-secrets))))
+                (let ((valid (cosi/proofs::validate-transaction transaction)))
+                  (ac:pr (format nil "~%in SPEND-UNCLOAKED valid txn ~A~%" valid)))
+                (let ((valid (cosi/proofs::validate-transaction transaction2)))
+                  (ac:pr (format nil "~%in SPEND-UNCLOAKED valid txn2 ~A~%" valid)))
+                (let ((valid (cosi/proofs::validate-transaction transaction3)))
+                  (ac:pr (format nil "~%in SPEND-UNCLOAKED valid txn2 ~A~%" valid)))
+                (broadcast-message :new-transaction transaction)
+                transaction))))))))
 
-(defun spend-uncloaked-list (from-account from-utxo to-pubkey-list amount-list)
-  "like spend-uncloadek, but allows multiple receivers, returns one transaction with multiple txouts"
+(defun spend-uncloaked-list (from-account from-utxo amount-list)
+  "like spend-uncloaked, but allows multiple receivers, returns one transaction with multiple txouts"
   (let ((amount (cosi/proofs::uncloaked-txout-amt from-utxo))
         (in-amount (reduce #'+ amount-list)))
     (when (< amount in-amount)
       (error (format nil "trying to spend more than input, ins=%a outs=%a" amount in-amount)))
-    (with-accessors ((from-private-key pbc:keying-triple-skey))
+    (with-accessors ((from-private-key pbc:keying-triple-skey)
+                     (from-public-key pbc:keying-triple-pkey))
         from-account
         (let ((new-uncloaked-utxo-list nil)            ;; we will create a list of utxos in the mapc below
-              (new-uncloaked-utxo-secrets-list nil)
-              (uncloaked-txin-gamma-list nil)
-              (txin-list nil))
-          (mapc #'(lambda (amount-out pkey)
-                    ;; we would expect only one txin, but the txin is used
-                    ;; multiple times, forming one hashlock for each "to"
-                    (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma-dont-care)
-                        (cosi/proofs:make-uncloaked-txin amount-out pkey from-private-key)
-                      (declare (ignore uncloaked-txin-gamma-dont-care))
-                      (push uncloaked-txin txin-list)
+              (new-uncloaked-utxo-secrets-list nil))
+          (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma-dont-care)  
+              (cosi/proofs:make-uncloaked-txin amount from-public-key from-private-key)
+            (declare (ignore uncloaked-txin-gamma-dont-care))
+            (mapc #'(lambda (amount-out)
+                      ;; we would expect only one txin, but the txin is used
+                      ;; multiple times, forming one hashlock for each "to"
                       (multiple-value-bind (new-uncloaked-utxo new-uncloaked-utxo-secrets)
                           (cosi/proofs:make-txout amount-out nil) ;; nil -> uncloaked
                         (push new-uncloaked-utxo new-uncloaked-utxo-list)
-                        (push new-uncloaked-utxo-secrets new-uncloaked-utxo-secrets-list)
-                        (push (cosi/proofs:gam-txin uncloaked-txin) uncloaked-txin-gamma-list))))
-                    amount-list
-                    to-pubkey-list)
-          (let ((transaction (cosi/proofs:make-transaction txin-list
-                                                           uncloaked-txin-gamma-list
+                        (push new-uncloaked-utxo-secrets new-uncloaked-utxo-secrets-list)))
+                  amount-list)
+          (let ((transaction (cosi/proofs:make-transaction (list uncloaked-txin)
+                                                           (list (cosi/proofs:gam-txin uncloaked-txin)) ;; 0
                                                            new-uncloaked-utxo-list
                                                            new-uncloaked-utxo-secrets-list)))
             (broadcast-message :new-transaction transaction)
-            transaction)))))
+            transaction))))))
 
 (defparameter *user-1* (pbc:make-key-pair :user-1))
 (defparameter *user-2* (pbc:make-key-pair :user-2))
@@ -221,8 +241,8 @@ This will spawn an actor which will asynchronously do the following:
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-       (send-uncloaked-genesis-utxo :monetary-supply amount)
-       (let ((txn-genesis (spend-from-genesis *user-1* amount)) 
+       (send-genesis-utxo :monetary-supply amount)
+       (let ((txn-genesis (spend-from-genesis *user-1* amount)))
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
            (let ((txn2 (spend *user-1*
@@ -239,7 +259,7 @@ This will spawn an actor which will asynchronously do the following:
                  (force-epoch-end)
                  (setf *tx-1* txn-genesis
                        *tx-2* txn2
-                       *tx-3* txn3))))))))))
+                       *tx-3* txn3)))))))))
 
 (defun urun (&key (amount 1000))
   "Run the block chain simulation entirely within the current process
@@ -271,18 +291,19 @@ This will spawn an actor which will asynchronously do the following:
            (assert (= 1 (length txout-from-genesis-list)))
            (let ((txn2 (spend-uncloaked *user-1*
                                         (first txout-from-genesis-list)       ;; input to txn2 (txout from genesis txn1)
-                                        (pbc:keying-triple-pkey *user-2*))))  ;; destination pkey
+                                        (pbc:keying-triple-pkey *user-2*)
+                                        (pbc:keying-triple-skey *user-2*))))
              (let ((txout2 (cosi/proofs::trans-txouts txn2))
                    (change (floor (/ amount 2))))
-               (let ((txn3 (spend-uncloaked-list *user-2*
-                                                 (first txout2)
-                                                 (list (pbc:keying-triple-pkey *user-3*)
-                                                       (pbc:keying-triple-pkey *user-2*))
-                                                 (list (- amount change) change))))
-                 (force-epoch-end)
-                 (setf *tx-1* txn-genesis
-                       *tx-2* txn2
-                       *tx-3* txn3)))))))))
+               #+nil               (let ((txn3 (spend-uncloaked-list *user-2*
+                                                                     (first txout2)
+;                                                 (list (pbc:keying-triple-pkey *user-3*)
+;                                                       (pbc:keying-triple-pkey *user-2*))
+                                                                     (list (- amount change) change))))
+                                     (force-epoch-end)
+                                     (setf *tx-1* txn-genesis
+                                           *tx-2* txn2
+                                           *tx-3* txn3)))))))))
        
 
 (defun blocks ()
@@ -440,5 +461,63 @@ to recover spend info
 lookups
 - find-txin-for-pkey-hash (pkey-hash txn)
 - find-txout-for-pkey-hash (pkey-hash txn)
+
+|#
+
+
+#|
+I spent a lot of time going over the code in transactions.lisp. It should now be much cleaner, and work properly for you. Code in dbm-0430a branch
+
+DM
+David McClain
+10m
+I invented a third TXOUT class = STAKE-TXOUT which sends the amount to a well-known public key. These UTXOS should only be permitted to be spent by current Leader, or Leader from prior epoch.
+
+DM
+David McClain
+8m
+Uncloaked, as well as cloaked, TXIN now require a gamma argument in second position. That is needed to compute a Pedersen commitment on the amount and should match the gamma advertised in the UTXO.
+
+If gamma is from cloaked TXOUT, then you have to decrypt the secret information in the TXOUT to obtain gamma. If from uncloaked TXOUT, then gamma is available as one of the readers for the class instance object.
+
+DM
+David McClain
+6m
+The reason that we must carry gamma forward is that the resulting Pedersen commitment is folded into the computed hashlock (aka UTXO ID). You have to have a hashlock value that matches one of the UTXO's sitting in the UTXO database/
+
+PT
+Paul Tarvydas
+2m
+I'm currently trying to put together a test case where everything is uncloaked (like BitCoin). (I will look at the new transactions.lisp soon). That brings up and interesting question - should the Genesis UTXO be cloaked or uncloaked? (The answer was easy when everything was cloaked).
+
+DM
+David McClain
+1m
+and the reason we need any gamma at all is to avoid hash collisions with other like-valued UTXOs to the same public key.
+
+Validation of both cloaked and uncloaked TXIN now checks for valid signature from public key holder.
+
+In order to preserve confidentiality for any recipients of TXOUT that desire cloaking, you must provide at least one cloaked TXIN, even if a zero value. An error is triggered if you try to produce a transaction with some cloaked TXOUT and no cloaked TXIN.
+
+At any rate, trying to get uncloaked transactions to work with the old code is pointless. It won't work. The new code cleans up and uniformizes the transactions for both cloaked and uncloaked TXIN/TXOUT.
+
+DM
+David McClain
+18m
+external changes to the API should be minimal, except for that one case of an uncloaked TXIN needing a gamma factor. Its API is now the same as for cloaked TXIN.
+
+DM
+David McClain
+15m
+The code in dbm-0430a was merged with dev branch, as of 20 minutes ago. I notice that Mark's concept of block is now in place and seems to work for TST-BLK. I haven't examined the block to see if all necessary information is present. I will do.
+
+(I mean to say that dev as of 20 minutes ago was merged into dbm-0430a. I haven't touched dev at all.)
+
+DM
+David McClain
+12m
+2
+Genesis cloaked / uncloaked seems to me to be a policy decision. I have no answer to that question.
+
 
 |#
