@@ -112,6 +112,8 @@
   (:export
    :txin
    :make-txin
+   :make-uncloaked-txin
+   :gam-txin
    :txin-hashlock
    :txin-pkey
    :txin-sig
