@@ -1222,48 +1222,43 @@ bother factoring it with NODE-COSI-SIGNING."
              (declare (ignore secrg))
              (send-genesis-to-all (setf *genesis* utxog))
 
-             (let ((minfo (decrypt-txout-info utxog skey)))
-               (multiple-value-bind (utxin info)  ;; spend side
-                   (make-cloaked-txin (txout-secr-amt minfo) ;; spend side
-                                      (txout-secr-gamma minfo)
-                                      pkey skey)
+             (let* ((minfo (decrypt-txout-info utxog skey))
+                    (trans (make-transaction :ins `((:kind :cloaked
+                                                     :amount ,(txout-secr-amt minfo)
+                                                     :gamma  ,(txout-secr-gamma minfo)
+                                                     :pkey   ,pkey
+                                                     :skey   ,skey))
+                                             :outs `((:kind :cloaked
+                                                      :amount 750
+                                                      :pkey   ,pkeym)
+                                                     (:kind :cloaked
+                                                      :amount 240
+                                                      :pkey   ,pkey))
+                                             :fee 10)))
+               
+               ;; send TX to all nodes
+               (send-tx-to-all (setf *trans1* trans))
+               
+               (pr "Find UTX for Mary")
+               (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
+                      (minfo  (decrypt-txout-info utxm skeym)))
                  
-                 (multiple-value-bind (utxo1 secr1) ;; sends
-                     (make-cloaked-txout 750 pkeym)
-                   (multiple-value-bind (utxo2 secr2)
-                       (make-cloaked-txout 240 pkey)
-                     
-                     (let ((trans (make-transaction `(,utxin) `(,info)
-                                                    `(,utxo1 ,utxo2)
-                                                    `(,secr1 ,secr2)
-                                                    :fee 10)))
-                       
-                       ;; send TX to all nodes
-                       (send-tx-to-all (setf *trans1* trans))
-                       
-                       (pr "Find UTX for Mary")
-                       (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
-                              (minfo  (decrypt-txout-info utxm skeym)))
-                         
-                         (pr "Construct 2nd transaction")
-                         (multiple-value-bind (utxin info)  ;; spend side
-                             (make-cloaked-txin (txout-secr-amt minfo)
-                                                (txout-secr-gamma minfo)
-                                                pkeym skeym)
-                           
-                           (multiple-value-bind (utxo1 secr1) ;; sends
-                               (make-cloaked-txout 250 pkeym)
-                             (multiple-value-bind (utxo2 secr2)
-                                 (make-cloaked-txout 490 pkey)
-                               
-                               (let ((trans (make-transaction `(,utxin) `(,info)
-                                                              `(,utxo1 ,utxo2)
-                                                              `(,secr1 ,secr2)
-                                                              :fee 10)))
-                                 ;; send TX to all nodes
-                                 (send-tx-to-all (setf *trans2* trans))
-                                 ))))))
-                     )))))))
+                 (pr "Construct 2nd transaction")
+                 (let ((trans (make-transaction :ins `((:kind :cloaked
+                                                        :amount ,(txout-secr-amt minfo)
+                                                        :gamma  ,(txout-secr-gamma minfo)
+                                                        :pkey   ,pkeym
+                                                        :skey   ,skeym))
+                                                :outs `((:kind :cloaked
+                                                         :amount 250
+                                                         :pkey   ,pkeym)
+                                                        (:kind :cloaked
+                                                         :amount 490
+                                                         :pkey  ,pkey))
+                                                :fee 10)))
+                   ;; send TX to all nodes
+                   (send-tx-to-all (setf *trans2* trans))
+                   ))))))
        ;; ------------------------------------------------------------------------
        (sleep 10)
        (map nil (lambda (node)
