@@ -6,6 +6,7 @@
 (defparameter *aws1* "emq-01.aws.emotiq.ch")
 (defparameter *aws2* "emq-02.aws.emotiq.ch")
 (defparameter *server-address* *aws0*)
+(defparameter *showlog* nil)
 
 ;;; ON SERVER MACHINE
 (defun setup-server (n)
@@ -50,7 +51,8 @@
   (archive-log)
   (multiple-value-prog1
       (solicit-direct localnode :count-alive)
-    (inspect *log*)))
+    (when *showlog*
+      (inspect *log*))))
 
 ; (test-client1)
 
@@ -59,7 +61,8 @@
   (archive-log)
   (multiple-value-prog1
       (solicit-wait localnode :count-alive)
-    (inspect *log*)))
+     (when *showlog*
+      (inspect *log*))))
 
 ; (test-client2)
 
@@ -68,7 +71,8 @@
   (archive-log)
   (multiple-value-prog1
       (solicit-wait localnode :list-alive)
-    (inspect *log*)))
+     (when *showlog*
+      (inspect *log*))))
 
 ; (test-client3)
 
@@ -77,7 +81,8 @@
   (archive-log)
   (multiple-value-prog1
       (solicit-direct localnode :list-alive)
-    (inspect *log*)))
+     (when *showlog*
+      (inspect *log*))))
 
 ; (test-client4)
 
@@ -95,19 +100,15 @@
 
 ; (setup-clientx 100)
 
-
-
 ; only for the actor version of solicit-direct
 (defun test-client1x ()
   (archive-log)
   (multiple-value-prog1
       (solicit-direct rnode :count-alive)
-    (inspect *log*)))
+     (when *showlog*
+      (inspect *log*))))
 
 ; (test-client1x)
-
-
-
 
 ;; UPSTREAM replies across network
 
@@ -133,13 +134,15 @@
   (archive-log)
   (multiple-value-prog1
       (solicit-wait localnode :count-alive)
-    (inspect *log*)))
+     (when *showlog*
+      (inspect *log*))))
 
 (defun test-client-upstream2 ()
   (archive-log)
   (multiple-value-prog1
       (solicit-wait localnode :list-alive)
-    (inspect *log*)))
+     (when *showlog*
+      (inspect *log*))))
 
 ; (ac::kill-executives)
 ; (test-client-upstream1)

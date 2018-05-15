@@ -54,8 +54,8 @@
 (defmethod draw-node ((node proxy-gossip-node) stream edgetable)
   "Draw proxy node showing UID, real address, and real port"
   (declare (ignore edgetable))
-  (format stream "~%  \"~A\" [fontsize=\"12.0\", label=<~A<BR /> ~
-        <FONT POINT-SIZE=\"10\">~A<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
+  (format stream "~%  \"~A\" [fontsize=\"10.0\", label=<~A<BR /> ~
+        <FONT POINT-SIZE=\"8\">~A<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
                      (uid node)
                      (uid node)
                      (real-address node)

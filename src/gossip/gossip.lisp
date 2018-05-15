@@ -786,7 +786,21 @@ dropped on the floor.
                  soluid)))
           (setf (logfn node) old-logger))))))
 
-
+(defun list-uids (address port)
+  "Get a list of all UIDs of nodes at remote address and port"
+  
+  (let ((rnode (ensure-proxy-node :TCP address port 0))
+        (localnode nil)
+        (allnodes nil))
+    (unwind-protect
+        (progn
+          (setf localnode (make-node
+                           :NEIGHBORS (list (uid rnode))))
+          (setf allnodes (solicit-direct localnode :list-alive))
+          ; remove localnode's uid because it will have been included
+          (setf allnodes (remove (uid localnode) allnodes)))
+      (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
+      )))
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
  (format nil "~A~D" prefix (uid node)))
