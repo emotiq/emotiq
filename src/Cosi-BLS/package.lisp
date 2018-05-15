@@ -111,6 +111,7 @@
    :random-between)
   (:export
    :txin
+   :uncloaked-txin
    :make-txin
    :make-uncloaked-txin
    :txin-cloaked-p
@@ -122,6 +123,8 @@
    :get-txin-amount
    
    :txout
+   :uncloaked-txout
+   :stake-txout
    :make-txout
    :make-uncloaked-txout
    :stake-txout
