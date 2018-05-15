@@ -532,6 +532,7 @@ invalid TX."
           
           (t
            ;; remove transaction from mempool
+           (error (format nil "double spend txn ~A" tx)) ;; TODO: 
            (remove-tx-from-mempool tx)
            (unspend-utxos tx)
            nil)
