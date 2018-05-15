@@ -112,6 +112,8 @@
   (:export
    :txin
    :make-txin
+   :make-uncloaked-txin
+   :txin-cloaked-p
    :txin-hashlock
    :txin-pkey
    :txin-sig
@@ -121,14 +123,21 @@
    
    :txout
    :make-txout
+   :make-uncloaked-txout
+   :txout-cloaked-p
    :txout-hashlock
    :txout-hashpkey
    :txout-prf
    :txout-encr
+   :uncloaked-txout-amt
+   :uncloaked-txout-gamma
    
    :transaction
    :trans-txins
    :trans-txouts
+   :trans-fee
+   :trans-gamadj
+   :trans-signature
    :make-transaction
    :validate-transaction
 
