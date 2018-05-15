@@ -10,8 +10,6 @@
               :initarg :prf)
    (pkey      :reader  txin-pkey     ;; P in G_2
               :initarg :pkey)
-   (sig       :reader  txin-sig      ;; Sig(h, P) in G_1
-              :initarg :sig)
    (encr      :reader  txin-encr     ;; Encrypted amount info
               :initarg :encr)
    (cloaked   :reader  txin-cloaked-p
@@ -26,8 +24,6 @@
               :initarg :prf)
    (pkey      :reader  txin-pkey
               :initarg :pkey)
-   (sig       :reader  txin-sig
-              :initarg :sig)
    (amt       :reader  txin-amt
               :initarg :amt)
    (cloaked   :reader  txin-cloaked-p
@@ -122,14 +118,12 @@ the simple commitment to the uncloaked value"
   (need-valid-amt amt)
   (let* ((prf       (range-proofs:make-range-proof amt :gamma gam))
          (hashlock  (make-hashlock prf pkey))
-         (sig       (pbc:sign-hash hashlock skey))
          (encr      (ibe-encrypt amt pkey :spend-amount)))
     (values 
      (make-instance 'txin
                     :hashlock  hashlock
                     :prf       prf
                     :pkey      pkey
-                    :sig       sig
                     :encr      encr)
      gam)))
 
@@ -139,14 +133,12 @@ pre-existing UTXO, e.g., sum of block fees and confiscated stakes,
 only the epoch leader."
   (need-valid-amt amt)
   (let* ((cmt      (make-admin-commit amt gam))
-         (hashlock (make-hashlock cmt pkey))
-         (sig      (pbc:sign-hash hashlock skey)))
+         (hashlock (make-hashlock cmt pkey)))
     (values
      (make-instance 'uncloaked-txin
                     :hashlock  hashlock
                     :prf       (ed-compress-pt cmt)
                     :pkey      pkey
-                    :sig       sig
                     :amt       amt)
      gam)))
 
@@ -242,9 +234,6 @@ correction factor gamadj on curve H for the overall transaction."
                              (txin-pkey utx))))
     (and (= (int hl)
             (int (txin-hashlock utx)))
-         (pbc:check-hash hl
-                         (txin-sig utx)
-                         (txin-pkey utx))
          (range-proofs:validate-range-proof (txin-prf utx))
          )))
 
@@ -254,10 +243,8 @@ correction factor gamadj on curve H for the overall transaction."
                               (txin-pkey utx))))
     (and (check-amt amt)
          (= (int hl)
-            (int (txin-hashlock utx)))
-         (pbc:check-hash hl
-                         (txin-sig utx)
-                         (txin-pkey utx)))))
+            (int (txin-hashlock utx))))
+    ))
 
 (defmethod validate-txout ((utx txout))
   (range-proofs:validate-range-proof (txout-prf utx)))
