@@ -56,7 +56,7 @@ witnesses."
   (multiple-value-bind (utxog secrg)
       (cosi/proofs:make-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
     (declare (ignore secrg))
-    
+    (eassert (cosi/proofs::validate-txout utxog))
     (setf *genesis-output* utxog)
     (broadcast-message :genesis-utxo utxog)))
 
@@ -128,6 +128,7 @@ witnesses."
             transaction))))))
 
 (defun force-epoch-end ()
+  (ac:pr "force-epoch-end")
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
 
 
@@ -138,6 +139,7 @@ witnesses."
   (multiple-value-bind (utxog secrg)
       (cosi/proofs::make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
     (declare (ignore secrg))
+    (eassert (cosi/proofs::validate-txout utxog))
     (setf *genesis-output* utxog)
     (broadcast-message :genesis-utxo utxog)))
 
@@ -170,7 +172,7 @@ witnesses."
                                                              (list new-uncloaked-utxo)
                                                              (list new-uncloaked-utxo-secrets)
                                                              :skey from-private-key)))
-              (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
+              (eassert (cosi/proofs::validate-transaction transaction))
               (broadcast-message :new-transaction transaction)
               transaction)))))))
 
