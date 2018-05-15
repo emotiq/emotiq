@@ -4,7 +4,7 @@
     
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
-    (emotiq/sim:run)
+    (emotiq/sim::urun)
     
 ## Explanation    
     
