@@ -3,7 +3,7 @@
 
 ;; ----------------------------------------------------------------------------------
 
-(defclass txin ()
+(defclass txin () ;; abstract base class
   ((hashlock  :reader   txin-hashlock ;; h = H(C, P)
               :initarg  :hashlock)
    (prf       :reader   txin-prf      ;; Bulletproof on amount - includes C
@@ -31,7 +31,7 @@
 
 ;; ---------------------------------------------------------------------------------------
 
-(defclass txout ()
+(defclass txout () ;; abstract base class
   ((hashpkey  :reader  txout-hashpkey ;; hash of recipient's public key
               :initarg :hashpkey)
    (hashlock  :reader  txout-hashlock ;; h = H(C, P) -- this is the UTX ID, and locks TXOUT to recipient
