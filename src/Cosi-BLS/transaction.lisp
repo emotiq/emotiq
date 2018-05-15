@@ -277,12 +277,12 @@ correction factor gamadj on curve H for the overall transaction."
       (when (and (check-hash hash sig pkey)
                  (every 'validate-txin txins)
                  (every 'validate-txout txouts))
-        (let* ((ctxins  (mapcar 'pedersen-commitment (trans-txins trn)))
+        (let* ((ctxins  (mapcar 'pedersen-commitment txins))
                (ttxin   (reduce 'ed-add ctxins
                                 :initial-value (ed-neutral-point)))
-               (ctxouts   (mapcar 'pedersen-commitment (trans-txouts trn)))
+               (ctxouts   (mapcar 'pedersen-commitment txouts))
                (ttxout    (reduce 'ed-add ctxouts
-                                  :initial-value (ed-nth-pt (trans-fee trn)))))
+                                  :initial-value (ed-nth-pt fee))))
           ;; check that Sum(txin) = Sum(txout) + Fee
           (ed-pt= (ed-mul (range-proofs:hpt) gamadj)
                   (ed-sub ttxout ttxin)))
