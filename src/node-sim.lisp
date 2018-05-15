@@ -2,6 +2,10 @@
  
 (in-package :emotiq/sim)
 
+;; remove for production
+(defun eassert (bool-condition)
+  (assert bool-condition))
+
 (defun initialize (&key
                      (cosi-prepare-timeout 10)
                      (cosi-commit-timeout 10)
@@ -89,7 +93,10 @@ witnesses."
             (let ((transaction (cosi/proofs:make-transaction (list txin)
                                                              (list txin-gamma)
                                                              (list new-utxo)
-                                                             (list new-utxo-secrets))))
+                                                             (list new-utxo-secrets)
+                                                             :skey from-private-key)))
+              
+              (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
               (broadcast-message :new-transaction transaction)
               transaction))))))
 
@@ -116,7 +123,9 @@ witnesses."
           (let ((transaction (cosi/proofs:make-transaction (list txin)
                                                            (list txin-gamma)
                                                            new-utxo-list
-                                                           new-utxo-secrets-list)))
+                                                           new-utxo-secrets-list
+                                                           :skey from-private-key)))
+            (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
             (broadcast-message :new-transaction transaction)
             transaction))))))
 
