@@ -1734,6 +1734,9 @@ gets sent back, and everything will be copacetic.
 ;   gossip-msg
 
 (defun make-ip-key (address port)
+  (declare (ignore port))
+  (usocket::host-to-hbo address) ; ignore port for now. Incoming ports will not in general be from *nominal-gossip-port*.
+  #+IGNORE
   (if (and (integerp address)
            (null port))
       address ; means port is already folded into real-address

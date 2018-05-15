@@ -84,6 +84,9 @@
   (stream:stream-check-eof-no-hang stream))
 
 (defun make-ip-key (address port)
+  (declare (ignore port))
+  (usocket::host-to-hbo address) ; ignore port for now. Cannot in general expect incoming port to match *nominal-gossip-port*.
+  #+IGNORE
   (if (and (integerp address)
            (null port))
       address ; means port is already folded into real-address
