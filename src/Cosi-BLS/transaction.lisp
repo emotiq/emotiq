@@ -109,7 +109,7 @@ the simple commitment to the uncloaked value"
 
 (defun check-amt (amt)
   (and (not (minusp amt))
-       (< amt #.(ash 1 64))))
+       (< amt #.(ash 1 range-proofs:*max-bit-length*))))
 
 (defun need-valid-amt (amt)
   (unless (check-amt amt)
