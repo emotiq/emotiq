@@ -218,7 +218,7 @@ correction factor gamadj on curve H for the overall transaction."
   (when (some 'txout-cloaked-p txouts)
     (unless (some 'txin-cloaked-p txins)
       (error "Cannot preserve TXOUT condfidentiality without cloaked TXIN")))
-  (let* ((hash  (hash/256 txins txouts))
+  (let* ((hash  (hash:hash/256 txins txouts))
          (sig   (sign-hash hash skey))
          (gam-txouts (mapcar 'txout-secr-gamma txout-secrets))
          (gamadj     (with-mod *ed-r*
@@ -272,7 +272,7 @@ correction factor gamadj on curve H for the overall transaction."
                    (gamadj  trans-gamadj)
                    (sig     trans-signature)) trn
     (let ((pkey  (txin-pkey (first txins)))
-          (hash  (hash/256 txins txouts)))
+          (hash  (hash:hash/256 txins txouts)))
       (when (and (check-hash hash sig pkey)
                  (every 'validate-txin txins)
                  (every 'validate-txout txouts))
