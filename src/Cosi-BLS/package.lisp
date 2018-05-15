@@ -124,6 +124,7 @@
    :txout
    :make-txout
    :make-uncloaked-txout
+   :stake-txout
    :txout-cloaked-p
    :txout-hashlock
    :txout-hashpkey
