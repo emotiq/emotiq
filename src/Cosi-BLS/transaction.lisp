@@ -320,7 +320,7 @@ correction factor gamadj on curve H for the overall transaction."
 #|
  ;; Test it out by creating a genesis transaction for 1000 tokens,
  ;; spend 750 on Mary, return 240 to genesis, fees 10. Validate transaction.
- ;;
+ ;; 
  ;; Now Mary searches for her UTX, constructs a 2nd transaction
  ;; sending 240 back to herself, fees 10, and 500 back to genesis. Validate transaction.
  ;;
@@ -344,7 +344,8 @@ correction factor gamadj on curve H for the overall transaction."
         (let ((trans (make-transaction `(,utxin) `(,info)
                                        `(,utxo1 ,utxo2)
                                        `(,secr1 ,secr2)
-                                       :fee 10)))
+                                       :fee 10
+                                       :skey skey)))
           (inspect trans)
           
           (print "Validate transaction")
@@ -371,7 +372,8 @@ correction factor gamadj on curve H for the overall transaction."
                   (let ((trans (make-transaction `(,utxin) `(,info)
                                                  `(,utxo1 ,utxo2)
                                                  `(,secr1 ,secr2)
-                                                 :fee 10)))
+                                                 :fee 10
+                                                 :skey skeym)))
                     (inspect trans)
 
                     (print "Validate 2nd transaction")
