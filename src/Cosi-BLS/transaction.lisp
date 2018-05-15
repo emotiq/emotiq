@@ -218,16 +218,16 @@ correction factor gamadj on curve H for the overall transaction."
   (when (some 'txout-cloaked-p txouts)
     (unless (some 'txin-cloaked-p txins)
       (error "Cannot preserve TXOUT condfidentiality without cloaked TXIN")))
-  (let* ((hash  (hash:hash/256 txins txouts))
-         (sig   (sign-hash hash skey))
-         (gam-txouts (mapcar 'txout-secr-gamma txout-secrets))
+  (let* ((gam-txouts (mapcar 'txout-secr-gamma txout-secrets))
          (gamadj     (with-mod *ed-r*
                        ;; adjustment factor = Sum(gamma_txouts) - Sum(gamma_txinx)
                        ;; so that adding all txin Pedersen commitments,
                        ;; subtracting sum of all txout Pedersen commitents,
                        ;; then adding gamma_adj * Hpt => ECC(0) 
                        (m- (reduce 'm+ gam-txouts)
-                           (reduce 'm+ gam-txins)))))
+                           (reduce 'm+ gam-txins))))
+         (hash  (hash:hash/256 txins txouts fee gamadj))
+         (sig   (sign-hash hash skey)))
     (make-instance 'transaction
                    :txins   txins
                    :txouts  txouts
@@ -270,9 +270,10 @@ correction factor gamadj on curve H for the overall transaction."
   (with-accessors ((txins   trans-txins)
                    (txouts  trans-txouts)
                    (gamadj  trans-gamadj)
-                   (sig     trans-signature)) trn
+                   (sig     trans-signature)
+                   (fee     trans-fee)) trn
     (let ((pkey  (txin-pkey (first txins)))
-          (hash  (hash:hash/256 txins txouts)))
+          (hash  (hash:hash/256 txins txouts fee gamadj)))
       (when (and (check-hash hash sig pkey)
                  (every 'validate-txin txins)
                  (every 'validate-txout txouts))
