@@ -73,16 +73,16 @@ It should be stored in the wallet"))
 
 ;; ---------------------------------------------------------------------
 
-(defmethod hash:hashable ((txin txin))
+(defmethod hashable-contents ((txin txin))
   (list (txin-hashlock txin)
         (txin-prf txin)
         (txin-pkey txin)))
 
-(defmethod hash:hashable :around ((txin cloaked-txin))
+(defmethod hashable-contents :around ((txin cloaked-txin))
   (list* (cloaked-txin-encr txin)
          (call-next-method)))
 
-(defmethod hash:hashable :around ((txin uncloaked-txin))
+(defmethod hashable-contents :around ((txin uncloaked-txin))
   (list* (uncloaked-txin-amt txin)
          (call-next-method)))
 
@@ -217,13 +217,12 @@ Typically used for stakes. Public key is G2, Secret key is 1."
 ;; ---------------------------------------------------------------------
 
 (defmethod hash-trn ((trn transaction))
-  (hash:hash/256 (mapcar 'hash:hash/256 (trans-txins trn))
+  (hash:hash/256 (mapcar 'hashable-contents (trans-txins trn))
                  (trans-txouts trn)
                  (trans-fee trn)
                  (trans-gamadj trn)))
 
-(defun make-transaction (txins gam-txins txouts txout-secrets
-                               &key (fee 0))
+(defun do-make-transaction (txins gam-txins txouts txout-secrets fee)
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
 some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
@@ -253,6 +252,53 @@ correction factor gamadj on curve H for the overall transaction."
           (setf (txin-sig txin) sig))
     (setf (trans-signature trn) (reduce 'add-pts (cdr sigs)
                                         :initial-value (car sigs)))
+    trn))
+
+(defun make-transaction (&key ins outs (fee 0))
+  "Using this declarative interface instead of the more cumbersome
+imperative DO-MAKE-TRANSACTION ensures that the secret keys used
+during TXIN formation will be properly disposed of."
+  (let ((txins     nil)
+        (gam-txins nil)
+        (txouts    nil)
+        (txout-secrets nil)
+        (trn       nil))
+    (unwind-protect
+        (labels
+            ((digest-txin-descr (&key kind amount gamma pkey skey)
+               (multiple-value-bind (txin gam)
+                   (funcall (ecase kind
+                              (:cloaked   'make-cloaked-txin)
+                              (:uncloaked 'make-uncloaked-txin))
+                            amount gamma pkey skey)
+                 (push txin txins)
+                 (push gam  gam-txins)))
+             
+             (digest-txout-descr (&key kind amount pkey)
+               (ecase kind
+                 (:cloaked  (multiple-value-bind (txout secr)
+                                (make-cloaked-txout amount pkey)
+                              (push txout txouts)
+                              (push secr  txout-secrets)))
+                 (:uncloaked (multiple-value-bind (txout secr)
+                                 (make-uncloaked-txout amount pkey)
+                               (push txout txouts)
+                               (push secr  txout-secrets)))
+                 (:stake      (multiple-value-bind (txout secr)
+                                  (make-stake-txout amount)
+                                (push txout txouts)
+                                (push secr  txout-secrets)))
+                 )))
+          (dolist (txin-descr ins)
+            (apply #'digest-txin-descr txin-descr))
+          (dolist (txout-descr outs)
+            (apply #'digest-txout-descr txout-descr))
+          (setf trn (do-make-transaction txins gam-txins txouts txout-secrets fee)))
+      
+      ;; unwind protect...
+      (unless trn
+        (dolist (txin txins)
+          (setf (txin-sig txin) nil))))
     trn))
 
 ;; ---------------------------------------------------------------------
@@ -351,53 +397,48 @@ correction factor gamadj on curve H for the overall transaction."
        (skeym (pbc:keying-triple-skey km)))
   
   (print "Construct Genesis transaction")
-  (multiple-value-bind (utxin info)  ;; spend side
-      (make-txin 1000 1 pkey skey)
+  (let ((trans (make-transaction :ins `((:kind :cloaked
+                                         :amount 1000
+                                         :gamma  1
+                                         :pkey   ,pkey
+                                         :skey   ,skey))
+                                 :outs `((:kind :cloaked
+                                          :amount 750
+                                          :pkey   ,pkeym)
+                                         (:kind :cloaked
+                                          :amount 240
+                                          :pkey   ,pkey))
+                                 :fee 10)))
+    (inspect trans)
     
-    (multiple-value-bind (utxo1 secr1) ;; sends
-        (make-txout 750 pkeym)
-      (multiple-value-bind (utxo2 secr2)
-          (make-txout 240 pkey)
+    (print "Validate transaction")
+    (time (assert (validate-transaction trans))) ;; 7.6s MacBook Pro
+    ;; (inspect utx)
+    ;; (validate-txin utx)
+    
+    (print "Find UTX for Mary")
+    (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
+           (minfo  (decrypt-txout-info utxm skeym)))
+      (inspect minfo)
+      
+      (print "Construct 2nd transaction")
+      (let ((trans (make-transaction :ins `((:kind :cloaked
+                                             :amount ,(txout-secr-amt minfo)
+                                             :gamma  ,(txout-secr-gamma minfo)
+                                             :pkey   ,pkeym
+                                             :skey   ,skeym))
+                                     :outs `((:kind :cloaked
+                                              :amount 240
+                                              :pkey   ,pkeym)
+                                             (:kind :cloaked
+                                              :amount 500
+                                              :pkey  ,pkey))
+                                     :fee 10)))
+        (inspect trans)
         
-        (let ((trans (make-transaction `(,utxin) `(,info)
-                                       `(,utxo1 ,utxo2)
-                                       `(,secr1 ,secr2)
-                                       :fee 10
-                                       :skey skey)))
-          (inspect trans)
-          
-          (print "Validate transaction")
-          (time (assert (validate-transaction trans))) ;; 7.6s MacBook Pro
-          ;; (inspect utx)
-          ;; (validate-txin utx)
-          
-          (print "Find UTX for Mary")
-          (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
-                 (minfo  (decrypt-txout-info utxm skeym)))
-            (inspect minfo)
-            
-            (print "Construct 2nd transaction")
-            (multiple-value-bind (utxin info)  ;; spend side
-                (make-txin (txout-secr-amt minfo)
-                                (txout-secr-gamma minfo)
-                                pkeym skeym)
-              
-              (multiple-value-bind (utxo1 secr1) ;; sends
-                  (make-txout 240 pkeym)
-                (multiple-value-bind (utxo2 secr2)
-                    (make-txout 500 pkey)
-                  
-                  (let ((trans (make-transaction `(,utxin) `(,info)
-                                                 `(,utxo1 ,utxo2)
-                                                 `(,secr1 ,secr2)
-                                                 :fee 10
-                                                 :skey skeym)))
-                    (inspect trans)
-
-                    (print "Validate 2nd transaction")
-                    (time (assert (validate-transaction trans)))
-                    )))))
-          )))))
+        (print "Validate 2nd transaction")
+        (time (assert (validate-transaction trans)))
+        ))))
 
 ;; ------------------------------------------------------------
 ;; test uncloaked TXIN/TXOUT
@@ -411,50 +452,46 @@ correction factor gamadj on curve H for the overall transaction."
        (skeym (pbc:keying-triple-skey km)))
   
   (print "Construct Genesis transaction")
-  (multiple-value-bind (utxin info)  ;; spend side
-      (make-uncloaked-txin 1000 1 pkey skey)
+  (let ((trans (make-transaction :ins `((:kind :uncloaked
+                                         :amount 1000
+                                         :gamma  1
+                                         :pkey   ,pkey
+                                         :skey   ,skey))
+                                 :outs `((:kind :uncloaked
+                                          :amount 750
+                                          :pkey   ,pkeym)
+                                         (:kind :uncloaked
+                                          :amount 240
+                                          :pkey   ,pkey))
+                                 :fee 10)))
+    (inspect trans)
     
-    (multiple-value-bind (utxo1 secr1) ;; sends
-        (make-uncloaked-txout 750 pkeym)
-      (multiple-value-bind (utxo2 secr2)
-          (make-uncloaked-txout 240 pkey)
+    (print "Validate transaction")
+    (time (assert (validate-transaction trans))) ;; 7.6s MacBook Pro
+    ;; (inspect utx)
+    ;; (validate-txin utx)
+    
+    (print "Find UTX for Mary")
+    (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
+           (amt    (uncloaked-txout-amt utxm))
+           (gamma  (uncloaked-txout-gamma utxm)))
+      
+      (print "Construct 2nd transaction")
+      (let ((trans (make-transaction :ins `((:kind :uncloaked
+                                             :amount ,amt
+                                             :gamma  ,gamma
+                                             :pkey   ,pkeym
+                                             :skey   ,skeym))
+                                     :outs `((:kind :uncloaked
+                                              :amount 240
+                                              :pkey   ,pkeym)
+                                             (:kind :uncloaked
+                                              :amount 500
+                                              :pkey  ,pkey))
+                                     :fee 10)))
+        (inspect trans)
         
-        (let ((trans (make-transaction `(,utxin) `(,info)
-                                       `(,utxo1 ,utxo2)
-                                       `(,secr1 ,secr2)
-                                       :fee 10
-                                       :skey skey)))
-          (inspect trans)
-          
-          (print "Validate transaction")
-          (time (assert (validate-transaction trans))) ;; 7.6s MacBook Pro
-          ;; (inspect utx)
-          ;; (validate-txin utx)
-          
-          (print "Find UTX for Mary")
-          (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
-                 (amt    (uncloaked-txout-amt utxm))
-                 (gamma  (uncloaked-txout-gamma utxm)))
-            
-            (print "Construct 2nd transaction")
-            (multiple-value-bind (utxin info)  ;; spend side
-                (make-uncloaked-txin amt gamma pkeym skeym)
-              
-              (multiple-value-bind (utxo1 secr1) ;; sends
-                  (make-uncloaked-txout 240 pkeym)
-                (multiple-value-bind (utxo2 secr2)
-                    (make-uncloaked-txout 500 pkey)
-                  
-                  (let ((trans (make-transaction `(,utxin) `(,info)
-                                                 `(,utxo1 ,utxo2)
-                                                 `(,secr1 ,secr2)
-                                                 :fee 10
-                                                 :skey skeym)))
-                    (inspect trans)
-
-                    (print "Validate 2nd transaction")
-                    (time (assert (validate-transaction trans)))
-                    )))))
-          )))))
-
+        (print "Validate 2nd transaction")
+        (time (assert (validate-transaction trans)))
+        ))))
 |#
