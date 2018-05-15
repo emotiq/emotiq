@@ -49,12 +49,12 @@ witnesses."
   nil
   "Genesis UTXO.")
 
-(defun send-genesis-utxo (to-pubkey &key (monetary-supply 1000))
+(defun send-genesis-utxo (&key (monetary-supply 1000))
   (when *genesis-output*
     (error "Can't create more than one genesis UTXO."))
   (print "Construct Genesis transaction")
   (multiple-value-bind (utxog secrg)
-      (cosi/proofs:make-txout monetary-supply to-pubkey)
+      (cosi/proofs:make-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
     (declare (ignore secrg))
     
     (setf *genesis-output* utxog)
@@ -158,7 +158,7 @@ This will spawn an actor which will asynchronously do the following:
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-       (send-genesis-utxo (pbc:keying-triple-pkey *user-2*) :monetary-supply amount)
+       (send-genesis-utxo :monetary-supply amount)
        (let ((txn-genesis (spend-from-genesis *user-1* amount)))
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
