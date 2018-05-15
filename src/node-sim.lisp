@@ -132,6 +132,64 @@ witnesses."
 (defun force-epoch-end ()
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
 
+
+
+(defparameter *user-1* (pbc:make-key-pair :user-1))
+(defparameter *user-2* (pbc:make-key-pair :user-2))
+(defparameter *user-3* (pbc:make-key-pair :user-3))
+(defparameter *tx-1* nil)
+(defparameter *tx-2* nil)
+(defparameter *tx-3* nil)
+
+(defun run (&key
+              (amount 1000)
+              (cloaked t)) ;;; non-cloaking does not currently work
+  "Run the block chain simulation entirely within the current process
+
+This will spawn an actor which will asynchronously do the following:
+
+  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
+      coins to *USER-1*.  The resulting transaction can be referenced
+      via *tx-1*.
+
+  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
+
+  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
+"
+
+  (setf *genesis-output* nil
+        *tx-1*           nil
+        *tx-2*           nil
+        *tx-3*           nil)
+  (cosi-simgen::reset-nodes) 
+  (ac:spawn
+   (lambda ()
+       (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
+       (let ((txn-genesis (spend-from-genesis *user-1* amount :cloaked cloaked))) 
+         (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
+           (assert (= 1 (length txout2)))
+           (let ((txn2 (spend *user-1*
+                              (first txout2)
+                              (pbc:keying-triple-pkey *user-2*)
+                              amount
+                              :cloaked cloaked)))
+             (let ((txout2 (cosi/proofs::trans-txouts txn2))
+                   (change (floor (/ amount 2))))
+               (let ((txn3 (spend-list *user-2*
+                                       (first txout2)
+                                       (list (pbc:keying-triple-pkey *user-3*)
+                                             (pbc:keying-triple-pkey *user-2*))
+                                       (list (- amount change) change)
+                                       :cloaked cloaked)))
+                 (force-epoch-end)
+                 (setf *tx-1* txn-genesis
+                       *tx-2* txn2
+                       *tx-3* txn3)))))))))
+
+(defun blocks ()
+  "Return the blocks in the chain currently under local simulation."
+  (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
+
 #|
 create a Genesis UTXO: (special case for initialization) AMT0
 
@@ -284,76 +342,4 @@ lookups
 - find-txin-for-pkey-hash (pkey-hash txn)
 - find-txout-for-pkey-hash (pkey-hash txn)
 
-|#
-
-
-(defparameter *user-1* (pbc:make-key-pair :user-1))
-(defparameter *user-2* (pbc:make-key-pair :user-2))
-(defparameter *user-3* (pbc:make-key-pair :user-3))
-(defparameter *tx-1* nil)
-(defparameter *tx-2* nil)
-(defparameter *tx-3* nil)
-
-(defun run (&key
-              (amount 1000)
-              (cloaked t)) ;;; non-cloaking does not currently work
-  "Run the block chain simulation entirely within the current process
-
-This will spawn an actor which will asynchronously do the following:
-
-  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
-      coins to *USER-1*.  The resulting transaction can be referenced
-      via *tx-1*.
-
-  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
-
-  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
-"
-
-  (setf *genesis-output* nil
-        *tx-1*           nil
-        *tx-2*           nil
-        *tx-3*           nil)
-  (cosi-simgen::reset-nodes) 
-  (ac:spawn
-   (lambda ()
-       (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
-       (let ((txn-genesis (spend-from-genesis *user-1* amount :cloaked cloaked))) 
-         (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
-           (assert (= 1 (length txout2)))
-           (let ((txn2 (spend *user-1*
-                              (first txout2)
-                              (pbc:keying-triple-pkey *user-2*)
-                              amount
-                              :cloaked cloaked)))
-             (let ((txout2 (cosi/proofs::trans-txouts txn2))
-                   (change (floor (/ amount 2))))
-               (let ((txn3 (spend-list *user-2*
-                                       (first txout2)
-                                       (list (pbc:keying-triple-pkey *user-3*)
-                                             (pbc:keying-triple-pkey *user-2*))
-                                       (list (- amount change) change)
-                                       :cloaked cloaked)))
-                 (force-epoch-end)
-                 (setf *tx-1* txn-genesis
-                       *tx-2* txn2
-                       *tx-3* txn3)))))))))
-
-(defun blocks ()
-  "Return the blocks in the chain currently under local simulation."
-  (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
-
-#|
-todo:
-- randomness
-- staking
-- election
-x remove ac:spawn from test-network, see if it still works
-x- txn that splits outputs
-- elections
-- insert :fee in transactions (new field)
-- txn dumper
-- get signing to work in sim (not always OK?) [what purpose?]
-- [ignore] investigate why I saw 5 blocks for 3 epochs?  intermittent?  Or temp bug during fixing?
-- uncloaked txouts
 |#
