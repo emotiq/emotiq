@@ -202,13 +202,15 @@ Typically used for stakes. Public key is G2, Secret key is 1."
             :initarg :fee
             :initform 0)
    (gamadj  :reader  trans-gamadj  ;; A curve adjustment to get to zero balance.
-            :initarg :gamadj) 
+            :initarg :gamadj)
+   (sig     :reader  trans-signature
+            :initarg :sig)
    ))
 
 ;; ---------------------------------------------------------------------
 
 (defun make-transaction (txins gam-txins txouts txout-secrets
-                               &key (fee 0))
+                               &key (fee 0) skey)
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
 some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
@@ -216,7 +218,9 @@ correction factor gamadj on curve H for the overall transaction."
   (when (some 'txout-cloaked-p txouts)
     (unless (some 'txin-cloaked-p txins)
       (error "Cannot preserve TXOUT condfidentiality without cloaked TXIN")))
-  (let* ((gam-txouts (mapcar 'txout-secr-gamma txout-secrets))
+  (let* ((hash  (hash/256 txins txouts))
+         (sig   (sign-hash hash skey))
+         (gam-txouts (mapcar 'txout-secr-gamma txout-secrets))
          (gamadj     (with-mod *ed-r*
                        ;; adjustment factor = Sum(gamma_txouts) - Sum(gamma_txinx)
                        ;; so that adding all txin Pedersen commitments,
@@ -228,7 +232,8 @@ correction factor gamadj on curve H for the overall transaction."
                    :txins   txins
                    :txouts  txouts
                    :fee     fee
-                   :gamadj  gamadj)))
+                   :gamadj  gamadj
+                   :sig     sig)))
 
 ;; ---------------------------------------------------------------------
 
@@ -264,19 +269,23 @@ correction factor gamadj on curve H for the overall transaction."
   "Validate amounts and zero balance of transaction, not double txining check"
   (with-accessors ((txins   trans-txins)
                    (txouts  trans-txouts)
-                   (gamadj  trans-gamadj)) trn
-    (when (and (every 'validate-txin txins)
-               (every 'validate-txout txouts))
-      (let* ((ctxins  (mapcar 'pedersen-commitment (trans-txins trn)))
-             (ttxin   (reduce 'ed-add ctxins
-                               :initial-value (ed-neutral-point)))
-             (ctxouts   (mapcar 'pedersen-commitment (trans-txouts trn)))
-             (ttxout    (reduce 'ed-add ctxouts
-                               :initial-value (ed-nth-pt (trans-fee trn)))))
-        ;; check that Sum(txin) = Sum(txout) + Fee
-        (ed-pt= (ed-mul (range-proofs:hpt) gamadj)
-                (ed-sub ttxout ttxin)))
-      )))
+                   (gamadj  trans-gamadj)
+                   (sig     trans-signature)) trn
+    (let ((pkey  (txin-pkey (first txins)))
+          (hash  (hash/256 txins txouts)))
+      (when (and (check-hash hash sig pkey)
+                 (every 'validate-txin txins)
+                 (every 'validate-txout txouts))
+        (let* ((ctxins  (mapcar 'pedersen-commitment (trans-txins trn)))
+               (ttxin   (reduce 'ed-add ctxins
+                                :initial-value (ed-neutral-point)))
+               (ctxouts   (mapcar 'pedersen-commitment (trans-txouts trn)))
+               (ttxout    (reduce 'ed-add ctxouts
+                                  :initial-value (ed-nth-pt (trans-fee trn)))))
+          ;; check that Sum(txin) = Sum(txout) + Fee
+          (ed-pt= (ed-mul (range-proofs:hpt) gamadj)
+                  (ed-sub ttxout ttxin)))
+        ))))
 
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
