@@ -1219,20 +1219,20 @@ bother factoring it with NODE-COSI-SIGNING."
            
            (pr "Construct Genesis transaction")
            (multiple-value-bind (utxog secrg)
-               (make-txout 1000 pkey)
+               (make-cloaked-txout 1000 pkey)
              (declare (ignore secrg))
              (send-genesis-to-all (setf *genesis* utxog))
 
              (let ((minfo (decrypt-txout-info utxog skey)))
                (multiple-value-bind (utxin info)  ;; spend side
-                   (make-txin (txout-secr-amt minfo) ;; spend side
-                              (txout-secr-gamma minfo)
-                              pkey skey)
+                   (make-cloaked-txin (txout-secr-amt minfo) ;; spend side
+                                      (txout-secr-gamma minfo)
+                                      pkey skey)
                  
                  (multiple-value-bind (utxo1 secr1) ;; sends
-                     (make-txout 750 pkeym)
+                     (make-cloaked-txout 750 pkeym)
                    (multiple-value-bind (utxo2 secr2)
-                       (make-txout 240 pkey)
+                       (make-cloaked-txout 240 pkey)
                      
                      (let ((trans (make-transaction `(,utxin) `(,info)
                                                     `(,utxo1 ,utxo2)
@@ -1248,14 +1248,14 @@ bother factoring it with NODE-COSI-SIGNING."
                          
                          (pr "Construct 2nd transaction")
                          (multiple-value-bind (utxin info)  ;; spend side
-                             (make-txin (txout-secr-amt minfo)
-                                        (txout-secr-gamma minfo)
-                                        pkeym skeym)
+                             (make-cloaked-txin (txout-secr-amt minfo)
+                                                (txout-secr-gamma minfo)
+                                                pkeym skeym)
                            
                            (multiple-value-bind (utxo1 secr1) ;; sends
-                               (make-txout 250 pkeym)
+                               (make-cloaked-txout 250 pkeym)
                              (multiple-value-bind (utxo2 secr2)
-                                 (make-txout 490 pkey)
+                                 (make-cloaked-txout 490 pkey)
                                
                                (let ((trans (make-transaction `(,utxin) `(,info)
                                                               `(,utxo1 ,utxo2)
