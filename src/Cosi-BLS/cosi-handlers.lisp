@@ -406,9 +406,6 @@ they will be added to utxo-table"
 (defmethod remove-utxo ((txout txout))
   (remove-utxo (bev (txout-hashlock txout))))
 
-(defmethod remove-utxo ((txout uncloaked-txout))
-  (remove-utxo (bev (txout-hashlock txout))))
-
 
 (defmethod unspend-utxos ((tx transaction))
   (dolist (txin (trans-txins tx))
