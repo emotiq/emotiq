@@ -4,7 +4,7 @@
 (define-test basis-consistency
   (assert-true (hash-check range-proofs::*bp-basis* range-proofs::*chk-bp-basis*)))
 
-(define-test transaction-consistency
+(define-test cloaked-transaction-consistency
   (let* ((k     (make-key-pair :dave)) ;; genesis keying
          (pkey  (keying-triple-pkey k))
          (skey  (keying-triple-skey k))
@@ -15,18 +15,17 @@
   
     (print "Construct Genesis transaction")
     (multiple-value-bind (utxin info)  ;; spend side
-        (make-txin 1000 1 pkey skey)
+        (make-cloaked-txin 1000 1 pkey skey)
     
       (multiple-value-bind (utxo1 secr1) ;; sends
-          (make-txout 750 pkeym)
+          (make-cloaked-txout 750 pkeym)
         (multiple-value-bind (utxo2 secr2)
-            (make-txout 240 pkey)
+            (make-cloaked-txout 240 pkey)
         
           (let ((trans (make-transaction `(,utxin) `(,info)
                                          `(,utxo1 ,utxo2)
                                          `(,secr1 ,secr2)
-                                         :fee 10
-                                         :skey skey)))
+                                         :fee 10)))
 
             (print "Validate transaction")
             (assert-true (validate-transaction trans)) ;; 7.6s MacBook Pro
@@ -37,20 +36,19 @@
 
               (print "Construct 2nd transaction")
               (multiple-value-bind (utxin info)  ;; spend side
-                  (make-txin (txout-secr-amt   minfo)
-                             (txout-secr-gamma minfo)
-                             pkeym skeym)
+                  (make-cloaked-txin (txout-secr-amt   minfo)
+                                     (txout-secr-gamma minfo)
+                                     pkeym skeym)
               
                 (multiple-value-bind (utxo1 secr1) ;; sends
-                    (make-txout 250 pkeym)
+                    (make-cloaked-txout 250 pkeym)
                   (multiple-value-bind (utxo2 secr2)
-                      (make-txout 490 pkey)
+                      (make-cloaked-txout 490 pkey)
                   
                     (let ((trans (make-transaction `(,utxin) `(,info)
                                                    `(,utxo1 ,utxo2)
                                                    `(,secr1 ,secr2)
-                                                   :fee 10
-                                                   :skey skeym)))
+                                                   :fee 10)))
                       (print "Validate 2nd transaction")
                       (assert-true (validate-transaction trans))
                       )))))

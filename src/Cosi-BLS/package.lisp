@@ -112,28 +112,31 @@
    :random-between)
   (:export
    :txin
+   :cloaked-txin
    :uncloaked-txin
-   :make-txin
+   :make-cloaked-txin
    :make-uncloaked-txin
    :txin-cloaked-p
    :txin-hashlock
    :txin-pkey
    :txin-sig
    :txin-prf
-   :txin-amt
+   :uncloaked-txin-amt
+   :cloaked-txin-encr
    :get-txin-amount
    
    :txout
+   :cloaked-txout
    :uncloaked-txout
    :stake-txout
-   :make-txout
+   :make-cloaked-txout
    :make-uncloaked-txout
-   :stake-txout
+   :make-stake-txout
    :txout-cloaked-p
    :txout-hashlock
    :txout-hashpkey
    :txout-prf
-   :txout-encr
+   :cloaked-txout-encr
    :uncloaked-txout-amt
    :uncloaked-txout-gamma
    
