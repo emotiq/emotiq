@@ -58,6 +58,7 @@
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:export
+   :*max-bit-length*
    :hpt
    :range-proof-block
    :range-proof-block-sum-gamma
