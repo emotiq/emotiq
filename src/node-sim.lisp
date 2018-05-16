@@ -76,6 +76,12 @@ witnesses."
          amount))
 |#
 
+(defun spend (trans)
+  (print "Validate transaction")
+  (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
+  (broadcast-message :new-transaction trans)
+  (force-epoch-end))
+
 (defun create-cloaked-genesis-transaction (receiver)
   (print "Construct Genesis transaction")
   (with-accessors ((r-pkey pbc:keying-triple-pkey)) receiver
@@ -98,38 +104,7 @@ witnesses."
                                  :amount 240
                                  :pkey   ,g-pkey))
                         :fee 10)))
-            
-            (print "Validate transaction")
-            (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
-            (broadcast-message :new-transaction trans)
-            (force-epoch-end)))))))
-
-#|
-(defun spend (from from-utxo to-pubkey amount)
-  "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
-    amount = number, bit-tbl = node's bit table"
-  (with-accessors ((from-public-key pbc:keying-triple-pkey)
-                   (from-private-key pbc:keying-triple-skey))
-      from
-    (let ((decrypted-from-utxo
-           (cosi/proofs:decrypt-txout-info from-utxo from-private-key)))
-      ;; decrypt "from" txout, then make a txin for current txn
-      (multiple-value-bind (txin txin-gamma)  
-            (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) 
-                                   (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
-                                   from-public-key from-private-key)
-          (multiple-value-bind (new-utxo new-utxo-secrets) ;; sends
-              (cosi/proofs:make-txout amount to-pubkey)
-            (let ((transaction (cosi/proofs:make-transaction (list txin)
-                                                             (list txin-gamma)
-                                                             (list new-utxo)
-                                                             (list new-utxo-secrets)
-                                                             :skey from-private-key)))
-              
-              (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
-              (broadcast-message :new-transaction transaction)
-              transaction))))))
-|#
+            (spend trans)))))))
 
 #|
 (defun spend-list (from from-utxo to-pubkey-list amount-list)
