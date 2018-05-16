@@ -49,24 +49,23 @@ witnesses."
   nil
   "Genesis UTXO.")
 
-#|
 (defun send-genesis-utxo (&key (monetary-supply 1000))
   (when *genesis-output*
     (error "Can't create more than one genesis UTXO."))
   (print "Construct Genesis transaction")
   (multiple-value-bind (utxog secrg)
-      (cosi/proofs:make-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
+      (cosi/proofs:make-cloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
     (declare (ignore secrg))
     (eassert (cosi/proofs::validate-txout utxog))
     (setf *genesis-output* utxog)
     (broadcast-message :genesis-utxo utxog)))
-|#
 
 (defun broadcast-message (message arg)
   (loop
      :for node :across cosi-simgen::*node-bit-tbl*
      :doing (cosi-simgen::send (cosi-simgen::node-self node)
                                message arg)))
+
 #|  
 (defun spend-from-genesis (receiver amount)
   (unless *genesis-output*
@@ -191,6 +190,8 @@ witnesses."
          (pkeym (pbc:keying-triple-pkey km))
          (skeym (pbc:keying-triple-skey km)))
   
+    (print "Construct Genesis UTXO")
+    (send-genesis-utxo)
     (print "Construct Genesis transaction")
     (multiple-value-bind (utxin info)  ;; spend side
         (cosi/proofs::make-uncloaked-txin 1000 1 pkey skey)
