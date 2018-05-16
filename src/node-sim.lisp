@@ -92,7 +92,7 @@ witnesses."
                                  :amount ,received-amount
                                  :pkey   ,receiver-pkey)))))
             (publish-transaction trans)
-            trans))))))
+            (values trans genesis-utxo)))))))
 
 #|
 (defun spend-list (from from-utxo to-pubkey-list amount-list)
@@ -137,37 +137,18 @@ witnesses."
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
 
-(defun make-cloaked-transaction (&key utxo amount from to-pkey (fee 0))
-  "create a cloaked transaction and return it, all args but fee are mandatory"
-  ;(unless (and (boundp utxo) (numberp amount) (boundp from) (boundp to-pkey))
-  ;  (error "utxo, amount, from and to-key must be specified in make-cloaked-transaction"))
-  (with-accessors ((from-pkey pbc:keying-triple-pkey)
-                   (from-skey pbc:keying-triple-skey))
-      from
-    (let ((info (cosi/proofs::decrypt-txout-info utxo from-skey)))
-      (let ((from-amount (cosi/proofs::txout-secr-amt info))
-            (gamma (cosi/proofs::txout-secr-gamma info)))
-      (eassert (<= (- amount fee) from-amount))
-      (let ((left-over-amount (- from-amount amount fee)))
-        (let ((left-over-list (if (zerop left-over-amount)
-                                  nil
-                                `(:kind :cloaked :amount ,left-over-amount :pkey ,from-pkey)))) ;; send left-overs back
-        (cosi/proofs::make-transaction
-         :ins `((:kind :cloaked
-                 :amount ,amount
-                 :gamma ,gamma
-                 :pkey ,from-pkey
-                 :skey ,from-skey))
-         :outs `((:kind :cloaked
-                 :amount ,amount
-                 :pkey ,to-pkey)
-                 ,left-over-list)
-         :fee fee)))))))
+(defparameter *genesis* nil)
+(defparameter *trans1* nil)
+(defparameter *trans2* nil)
+
 
 ; test helper - in real life, we would already know the pkey of the destination,
 ; here we have special variables holding the various test users
 (defun pkey-of (user)
   (pbc:keying-triple-pkey user))
+
+(defun skey-of (user)
+  (pbc:keying-triple-skey user))
 
 (defun run (&key (amount 100))
   "Run the block chain simulation entirely within the current process
@@ -192,74 +173,68 @@ This will spawn an actor which will asynchronously do the following:
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-     (let ((genesis-tx (create-cloaked-genesis-transaction *user-1*))
-           (fee 10))
-       (setf *tx-1* genesis-tx)
-       (let ((utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 (pkey-of *user-1*)) genesis-tx)))
-         (eassert utxo)
-         (let ((tx2 (make-cloaked-transaction :utxo utxo
-                                              :amount amount
-                                              :from *user-1*
-                                              :to-pkey (pkey-of *user-2*)
-                                              :fee fee)))
-           (setf *tx-2* tx2)
-           (publish-transaction tx2)
-           (let ((utxo2 (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 (pkey-of *user-2*)) tx2)))
-             (eassert utxo2)
-               (let ((tx3 (make-cloaked-transaction :utxo utxo2
-                                                    :amount (/ amount 10)
-                                                    :from *user-2*
-                                                    :to-pkey (pkey-of *user-3*)
-                                                    :fee fee)))
-                 (setf *tx-3* tx3)
-                 (publish-transaction tx3)))))))))
+     (let ((fee 10))
+       (labels
+         ((send-tx-to-all (tx)
+            (map nil (lambda (node)
+                       (ac:send (cosi-simgen::node-self node) :new-transaction tx))
+                 cosi-simgen::*node-bit-tbl*))
+          (send-genesis-to-all (utxo)
+            (map nil (lambda (node)
+                       (ac:send (cosi-simgen::node-self node) :genesis-utxo utxo))
+                 cosi-simgen::*node-bit-tbl*)))
+         (let* (
+                (pkey  (pbc:keying-triple-pkey *genesis-account*))
+                (skey  (pbc:keying-triple-skey *genesis-account*))
+                
+                (pkeym (pbc:keying-triple-pkey *user-1*))
+                (skeym (pbc:keying-triple-skey *user-1*)))
+           
+           (ac:pr "Construct Genesis transaction")
+           (multiple-value-bind (utxog secrg)
+               (cosi/proofs::make-cloaked-txout 1000 pkey)
+             (declare (ignore secrg))
+             (send-genesis-to-all (setf *genesis* utxog))
 
-#|
-       (let ((txn-genesis (spend-from-genesis *user-1* amount)))
-         (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
-           (assert (= 1 (length txout2)))
-           (let ((txn2 (spend *user-1*
-                              (first txout2)
-                              (pbc:keying-triple-pkey *user-2*)
-                              amount)))
-             (let ((txout2 (cosi/proofs::trans-txouts txn2))
-                   (change (floor (/ amount 2))))
-               (let ((txn3 (spend-list *user-2*
-                                       (first txout2)
-                                       (list (pbc:keying-triple-pkey *user-3*)
-                                             (pbc:keying-triple-pkey *user-2*))
-                                       (list (- amount change) change))))
-                 (force-epoch-end)
-                 (setf *tx-1* txn-genesis
-                       *tx-2* txn2
-                       *tx-3* txn3)))))))))
-
-(defun urun (&key (amount 1000))
-  "Run the block chain simulation entirely within the current process
-
-This will spawn an actor which will asynchronously do the following:
-
-  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
-      coins to *USER-1*.  The resulting transaction can be referenced
-      via *tx-1*.
-
-  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
-
-  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
-"
-
-  (setf *genesis-output* nil
-        *tx-1*           nil
-        *tx-2*           nil
-        *tx-3*           nil)
-  (cosi-simgen::reset-nodes) 
-  (ac:spawn
-   (lambda ()
-     (test))))
-       (let ((txn-genesis (make-uncloaked-genesis-transaction *user-1*)))
-                 (force-epoch-end)
-                 (setf *tx-1* txn-genesis)))))
-|#
+             (let* ((minfo (cosi/proofs::decrypt-txout-info utxog skey))
+                    (trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
+                                                     :amount ,(cosi/proofs::txout-secr-amt minfo)
+                                                     :gamma  ,(cosi/proofs::txout-secr-gamma minfo)
+                                                     :pkey   ,pkey
+                                                     :skey   ,skey))
+                                             :outs `((:kind :cloaked
+                                                      :amount 750
+                                                      :pkey   ,pkeym)
+                                                     (:kind :cloaked
+                                                      :amount 240
+                                                      :pkey   ,pkey))
+                                             :fee 10)))
+               
+               ;; send TX to all nodes
+               (publish-transaction (setf *trans1* trans))
+               
+               (ac:pr "Find UTX for Mary")
+               (let* ((utxm   (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
+                      (minfo  (cosi/proofs::decrypt-txout-info utxm skeym)))
+                 
+                 (ac:pr "Construct 2nd transaction")
+                 (let ((trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
+                                                        :amount ,(cosi/proofs::txout-secr-amt minfo)
+                                                        :gamma  ,(cosi/proofs::txout-secr-gamma minfo)
+                                                        :pkey   ,pkeym
+                                                        :skey   ,skeym))
+                                                :outs `((:kind :cloaked
+                                                         :amount 250
+                                                         :pkey   ,pkeym)
+                                                        (:kind :cloaked
+                                                         :amount 490
+                                                         :pkey  ,pkey))
+                                                :fee 10)))
+                   ;; send TX to all nodes
+                   (publish-transaction (setf *trans2* trans))
+                   ))))))
+       ;; ------------------------------------------------------------------------
+       (force-epoch-end)))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
