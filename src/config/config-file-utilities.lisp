@@ -3,6 +3,9 @@
 ; (ql:quickload :illogical-pathnames)
 ; (ipath:define-illogical-host :CONFIG #P(:EMOTIQ ("emotiq" "src" "config")))
 
+;;; THIS FILE IS OBSOLETE. DO NOT USE IN PRODUCTION.
+;;; But code herein may need to be lifted and used elsewhere.
+
 (defparameter *keypair-db-file* #P(:config () "keypairs.conf"))
 (defparameter *hosts-db-file*   #P(:config () "hosts.conf"))
 (defparameter *pubkeys-db-file* #P(:config () "pubkeys.conf"))
@@ -27,7 +30,7 @@
   "Makes an example keypairs.conf file with n keypairs"
   (with-open-file (s pathname :direction :output :if-exists :supersede)
     (format s ";;; Example keypairs config file~%")
-    (format s ";;; Should contain only s-expressions: one 2-list per public/private pair
+    (format s ";;; Should contain only s-expressions: one 2-list per public/private pair~%")
     (dotimes (i n)
       (format s "~S~%" (make-key-integers)))))
 
@@ -53,7 +56,7 @@
         (format s ";;; One integer per line~%")
         (dolist (pair db)
           (format s "~D~%" (first pair)))
-        ))))
+        )))
 
 ; (make-example-pubkeys-file *pubkeys-db-file*)
 
@@ -66,6 +69,7 @@
 
 (defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
 
+; obsolete. Moved to gossip-startup.lisp
 (defun read-hosts-database (pathname)
   "Returns a list of strings, one per host address or domain name"
   (when (probe-file pathname)

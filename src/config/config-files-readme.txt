@@ -11,7 +11,7 @@ In a real (non-simulated) network, there would only be one keypair in this file
 and every machine gets a different file.
 
 hosts.conf
-Known domain names (seeds) of machines that participate.
+Known domain names and ports (seeds) of machines that participate.
 Every machine gets the same file. (Although this is not strictly required.
 It's possible some machines know about hosts that other machines don't know about.
 Gossip can spread this information at startup.)
