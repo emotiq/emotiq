@@ -82,28 +82,26 @@ witnesses."
   (broadcast-message :new-transaction trans)
   (force-epoch-end))
 
-(defun create-cloaked-genesis-transaction (receiver)
+(defun create-cloaked-genesis-transaction (receiver &key (monetary-supply 1000))
   (print "Construct Genesis transaction")
-  (with-accessors ((r-pkey pbc:keying-triple-pkey)) receiver
-    (with-accessors ((g-pkey pbc:keying-triple-pkey)
-                     (g-skey pbc:keying-triple-skey)) *genesis-account*
+  (with-accessors ((receiver-pkey pbc:keying-triple-pkey)) receiver
+    (with-accessors ((genesis-pkey pbc:keying-triple-pkey)
+                     (genesis-skey pbc:keying-triple-skey)) *genesis-account*
       (let* ((genesis-utxo (send-cloaked-genesis-utxo))
-             (decrypted-info (cosi/proofs::decrypt-txout-info genesis-utxo g-skey)))
+             (decrypted-info (cosi/proofs::decrypt-txout-info genesis-utxo genesis-skey)))
         (let ((received-amount (cosi/proofs::txout-secr-amt decrypted-info))
-              (received-gamma (cosi/proofs::txout-secr-gamma decrypted-info)))
+              (received-gamma (cosi/proofs::txout-secr-gamma decrypted-info))
+              (fee 10))
           (let ((trans (cosi/proofs::make-transaction
                         :ins `((:kind :cloaked
                                 :amount ,received-amount
                                 :gamma  ,received-gamma
-                                :pkey   ,g-pkey
-                                :skey   ,g-skey))
+                                :pkey   ,genesis-pkey
+                                :skey   ,genesis-skey))
                         :outs `((:kind :cloaked
-                                 :amount 750
-                                 :pkey   ,r-pkey)
-                                (:kind :cloaked
-                                 :amount 240
-                                 :pkey   ,g-pkey))
-                        :fee 10)))
+                                 :amount ,(- received-amount fee)
+                                 :pkey   ,receiver-pkey))
+                        :fee fee)))
             (spend trans)))))))
 
 #|
