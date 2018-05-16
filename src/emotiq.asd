@@ -50,6 +50,7 @@
 (defsystem "emotiq/wallet"
   :depends-on (emotiq
                ironclad
+               quri
                lisp-object-encoder
                cosi-bls)
   :in-order-to ((test-op (test-op "emotiq-wallet-test")))
