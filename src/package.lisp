@@ -78,5 +78,23 @@
    #:*tx-1* #:*tx-2* #:*tx-3*))
 
 
+(defpackage emotiq/config
+  (:use #:cl)
   
+  (:export
+   #:*keypair-db-file*
+   #:*hosts-db-file*
+   #:*pubkeys-db-file*
+   #:*gossip-db-file*
 
+   #:make-key-integers
+   #:make-keypairs-conf
+   #:read-keypairs-conf
+
+   #:make-pubkeys-conf
+   #:lookup-private-key
+
+   #:read-hosts-conf))
+
+  
+  
