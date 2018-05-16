@@ -62,6 +62,9 @@
    #:*default-wallet-name*
    
    #:emotiq-wallet-path
+
+   #:primary-address
+   #:hexify
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))

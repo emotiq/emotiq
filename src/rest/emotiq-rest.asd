@@ -1,7 +1,8 @@
 (defsystem "emotiq-rest"
-  :depends-on (restas
+  :depends-on (emotiq/wallet
+               restas
                cosi-bls
-               jonathan
+               cl-json
                cl-who
                simple-date-time)
   :components ((:module package
@@ -19,7 +20,9 @@
                         :pathname "./"
                         :depends-on (util)
                         :serial t 
-                        :components ((:file "api-0.0.1")
+                        :components (#+(or)
+                                     (:file "api-0.0.1")
+                                     (:file "dictionary-0.0.1")
                                      (:file "wallet-0.0.1")
                                      (:file "emotiq-0.0.1")))))
 

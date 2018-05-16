@@ -5,13 +5,17 @@
 
 (in-package :route.emotiq/0/0/1)
 
-(restas:mount-module -wallet- (:route.wallet/0)
-  (:url "/wallet/"))
-
+#+(or)
 (restas:mount-module -api- (:route.api/0)
   (:url "/api/"))
 
-(restas:define-route %index ("/"
+(restas:mount-module -wallet- (:route.wallet/0)
+  (:url "/wallet/"))
+
+(restas:mount-module -dictionary- (:route.dictionary/0)
+  (:url "/dictionary/"))
+
+(restas:define-route %api ("/"
                              :content-type "text/html")
     (as-html
       (:html
@@ -20,9 +24,15 @@
               (:h1 "Wallet")
               (:div
                :id "wallet"
-               (:a :href (restas:genurl '-wallet-.%index) "[Index]"))
+               (:a :href (restas:genurl '-wallet-.%api) "[API]"))
 
+              (:div
+               :id "Dictionary"
+               (:a :href (restas:genurl '-dictionary-.%api) "[API]"))
+
+              #+(or)
               (:h1 "API")
+              #+(or)
               (:div
                :id "api"
                (:a :href (restas:genurl '-api-.%index) "[Index]")))))))

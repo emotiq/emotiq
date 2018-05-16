@@ -116,6 +116,18 @@ Returns nil if unsuccessful."
       (o path :direction :input :element-type '(unsigned-byte 8))
     (lisp-object-encoder:deserialize o)))
 
+(defun primary-address (wallet)
+  (hexify
+   (pbc:keying-triple-pkey
+    (emotiq/wallet:keying-triple wallet))))
+
+(defmethod hexify ((object pbc-interface:public-key))
+  (format nil "~x"
+          (vec-repr::convert-vec-to-int
+           (vec-repr:bev-vec
+            (pbc:public-key-val
+             object)))))
+  
 #+(or)
 (defun aes256-key (passphrase salt)
   (let ((kdf
