@@ -49,22 +49,23 @@ witnesses."
   nil
   "Genesis UTXO.")
 
-(defun send-genesis-utxo (&key (monetary-supply 1000))
-  (when *genesis-output*
-    (error "Can't create more than one genesis UTXO."))
-  (print "Construct Genesis transaction")
-  (multiple-value-bind (utxog secrg)
-      (cosi/proofs:make-cloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
-    (declare (ignore secrg))
-    (eassert (cosi/proofs::validate-txout utxog))
-    (setf *genesis-output* utxog)
-    (broadcast-message :genesis-utxo utxog)))
-
 (defun broadcast-message (message arg)
   (loop
      :for node :across cosi-simgen::*node-bit-tbl*
      :doing (cosi-simgen::send (cosi-simgen::node-self node)
                                message arg)))
+
+(defun send-cloaked-genesis-utxo (&key (monetary-supply 1000))
+  (when *genesis-output*
+    (error "Can't create more than one genesis UTXO."))
+  (print "Construct Genesis UTXO")
+  (multiple-value-bind (utxog secrg)
+      (cosi/proofs::make-cloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
+    (declare (ignore secrg))
+    (eassert (cosi/proofs::validate-txout utxog))
+    (setf *genesis-output* utxog)
+    (broadcast-message :genesis-utxo utxog)
+    utxog))
 
 #|  
 (defun spend-from-genesis (receiver amount)
@@ -75,29 +76,33 @@ witnesses."
          amount))
 |#
 
-(defun create-genesis-transaction (receiver)
+(defun create-cloaked-genesis-transaction (receiver)
   (print "Construct Genesis transaction")
   (with-accessors ((r-pkey pbc:keying-triple-pkey)) receiver
     (with-accessors ((g-pkey pbc:keying-triple-pkey)
                      (g-skey pbc:keying-triple-skey)) *genesis-account*
-      (let ((trans (cosi/proofs::make-transaction
-                    :ins `((:kind :cloaked
-                            :amount 1000
-                            :gamma  1
-                            :pkey   ,g-pkey
-                            :skey   ,g-skey))
-                    :outs `((:kind :cloaked
-                             :amount 750
-                             :pkey   ,r-pkey)
-                            (:kind :cloaked
-                             :amount 240
-                             :pkey   ,g-pkey))
-                    :fee 10)))
-        
-    (print "Validate transaction")
-    (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
-    (broadcast-message :new-transaction trans)
-    (force-epoch-end)))))
+      (let* ((genesis-utxo (send-cloaked-genesis-utxo))
+             (decrypted-info (cosi/proofs::decrypt-txout-info genesis-utxo g-skey)))
+        (let ((received-amount (cosi/proofs::txout-secr-amt decrypted-info))
+              (received-gamma (cosi/proofs::txout-secr-gamma decrypted-info)))
+          (let ((trans (cosi/proofs::make-transaction
+                        :ins `((:kind :cloaked
+                                :amount ,received-amount
+                                :gamma  ,received-gamma
+                                :pkey   ,g-pkey
+                                :skey   ,g-skey))
+                        :outs `((:kind :cloaked
+                                 :amount 750
+                                 :pkey   ,r-pkey)
+                                (:kind :cloaked
+                                 :amount 240
+                                 :pkey   ,g-pkey))
+                        :fee 10)))
+            
+            (print "Validate transaction")
+            (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
+            (broadcast-message :new-transaction trans)
+            (force-epoch-end)))))))
 
 #|
 (defun spend (from from-utxo to-pubkey amount)
@@ -262,7 +267,7 @@ witnesses."
 (defparameter *tx-3* nil)
 
 (defun test ()
-  (create-genesis-transaction *user-1*))
+  (create-cloaked-genesis-transaction *user-1*))
 
 #|
 (defun run (&key (amount 1000))
