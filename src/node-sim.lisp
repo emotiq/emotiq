@@ -131,7 +131,7 @@ witnesses."
   (ac:pr "force-epoch-end")
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
 
-
+#|
 (defun send-uncloaked-genesis-utxo (&key (monetary-supply 1000))
   (when *genesis-output*
     (error "Can't create more than one genesis UTXO."))
@@ -149,7 +149,50 @@ witnesses."
   (spend-uncloaked *genesis-account* *genesis-output*
          receiver
          amount))
+|#
 
+(defun test ()
+  (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
+         (pkey  (pbc:keying-triple-pkey k))
+         (skey  (pbc:keying-triple-skey k))
+       
+         (km    (pbc:make-key-pair :mary)) ;; Mary keying
+         (pkeym (pbc:keying-triple-pkey km))
+         (skeym (pbc:keying-triple-skey km)))
+  
+    (print "Construct Genesis transaction")
+    (multiple-value-bind (utxin info)  ;; spend side
+        (cosi/proofs::make-uncloaked-txin 1000 1 pkey skey)
+    
+      (multiple-value-bind (utxo1 secr1) ;; sends
+          (cosi/proofs::make-uncloaked-txout 1000 pkeym)
+          (let ((trans (cosi/proofs::make-transaction `(,utxin) `(,info)
+                                         `(,utxo1)
+                                         `(,secr1)
+                                         :skey skey)))
+            (eassert (cosi/proofs::validate-transaction trans))
+            (broadcast-message :new-transaction trans)
+            (force-epoch-end))))))
+
+#+nil (defun make-uncloaked-genesis-transaction (receiver &key (monetary-supply 1000))
+  (print "Construct Genesis transaction")
+  (with-accessors ((from-public-key pbc:keying-triple-pkey)
+                   (from-private-key pbc:keying-triple-skey))
+      *genesis-account*
+    (multiple-value-bind (genesis-utxin genesis-gamma)  ;; spend side
+        (cosi/proofs::make-uncloaked-txin 1000 1 from-public-key from-private-key)
+      (multiple-value-bind (genesis-utxo genesis-utxo-secrets)
+          (cosi/proofs::make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey receiver))
+        (let ((trans (cosi/proofs:make-transaction (list genesis-utxin)
+                                                   (list genesis-gamma)
+                                                   (list genesis-utxo)
+                                                   (list genesis-utxo-secrets)
+                                                   :skey from-private-key)))
+          (eassert (cosi/proofs::validate-transaction trans))
+          (broadcast-message :new-transaction trans)
+          trans)))))
+
+#|
 (defun spend-uncloaked (from-account from-utxo to-account amount)
   "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
     amount = number, bit-tbl = node's bit table"
@@ -175,7 +218,7 @@ witnesses."
               (eassert (cosi/proofs::validate-transaction transaction))
               (broadcast-message :new-transaction transaction)
               transaction)))))))
-
+|#
 
 
 (defparameter *user-1* (pbc:make-key-pair :user-1))
@@ -247,10 +290,13 @@ This will spawn an actor which will asynchronously do the following:
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-       (send-uncloaked-genesis-utxo :monetary-supply amount)
-       (let ((txn-genesis (spend-uncloaked-from-genesis *user-1* amount)))
+     (test))))
+
+#|
+       (let ((txn-genesis (make-uncloaked-genesis-transaction *user-1*)))
                  (force-epoch-end)
                  (setf *tx-1* txn-genesis)))))
+|#
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
