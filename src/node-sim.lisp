@@ -208,11 +208,14 @@ This will spawn an actor which will asynchronously do the following:
                       (minfo  (cosi/proofs::decrypt-txout-info utxm skeym)))
                  
                  (ac:pr "Construct 2nd transaction")
-                 (let ((trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
-                                                        :amount ,(cosi/proofs::txout-secr-amt minfo)
+;;;                  (let ((trans (create-cloaked-transaction *user-1*
+;;;                                                        utxm 250 10  ; incomplete needs to send 490 back to pkey
+;;;                                                        *user-2*)))
+                  (let ((trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
+                                                   :amount ,(cosi/proofs::txout-secr-amt minfo)
                                                         :gamma  ,(cosi/proofs::txout-secr-gamma minfo)
                                                         :pkey   ,pkeym
-                                                        :skey   ,skeym))
+                                                         :skey   ,skeym))
                                                 :outs `((:kind :cloaked
                                                          :amount 250
                                                          :pkey   ,pkeym)
