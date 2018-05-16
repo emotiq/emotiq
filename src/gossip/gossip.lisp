@@ -837,7 +837,7 @@ dropped on the floor.
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
-(defmethod maybe-log ((node gossip-mixin) logcmd msg &rest args)
+(defmethod node-log ((node gossip-mixin) logcmd msg &rest args)
   (when *log-filter*
     (when (or (eq t *log-filter*)
               (funcall *log-filter* logcmd))
@@ -1048,17 +1048,17 @@ dropped on the floor.
                   (t nil) ; don't log timeouts here. Too much noise.
                   )))
     (when logsym
-      (maybe-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
+      (node-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
     (if *gossip-absorb-errors*
         (handler-case (funcall kindsym msg node srcuid)
-          (error (c) (maybe-log node :ERROR msg c)))
+          (error (c) (node-log node :ERROR msg c)))
         (funcall kindsym msg node srcuid))))
 
 (defmethod locally-receive-msg ((msg system-async) (node gossip-mixin) srcuid)
   (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
     (cond (kindsym ; message accepted
            (locally-dispatch-msg kindsym node msg srcuid))
-          (t (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)))))
+          (t (node-log node :ignore msg :from (briefname srcuid "node") failure-reason)))))
 
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
@@ -1070,7 +1070,7 @@ dropped on the floor.
              (memoize-message node msg srcuid)
              (locally-dispatch-msg kindsym node msg srcuid))
             (t ; not accepted
-             (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)
+             (node-log node :ignore msg :from (briefname srcuid "node") failure-reason)
              (case failure-reason
                (:active-ignore ; RECEIVE an active-ignore. Whomever sent it is telling us they're ignoring us.
                 ; Which means we need to ensure we're not waiting on them to reply.
@@ -1080,9 +1080,9 @@ dropped on the floor.
                       (let ((was-present? (cancel-replier node kind (solicitation-uid msg) srcuid)))
                         (when was-present?
                           ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
-                          (maybe-log node :STOP-WAITING msg srcuid))))
+                          (node-log node :STOP-WAITING msg srcuid))))
                     ; weird. Shouldn't ever happen.
-                    (maybe-log node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
+                    (node-log node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
                (:already-seen ; potentially SEND an active ignore
                 (when (typep msg 'solicitation) ; following is extremely important. See note A below.
                   ; If we're ignoring a message from node X, make sure that we are not in fact
@@ -1093,7 +1093,7 @@ dropped on the floor.
                   (let ((was-present? (cancel-replier node (kind msg) soluid srcuid)))
                     (when was-present?
                       ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
-                      (maybe-log node :STOP-WAITING msg srcuid))
+                      (node-log node :STOP-WAITING msg srcuid))
                     (unless (neighborcast? msg) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
@@ -1134,15 +1134,15 @@ dropped on the floor.
       (let ((timer (kvs:lookup-key (timers node) soluid)))
         (cond (timed-out-p
                ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-               (maybe-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
+               (node-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
               (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                (cond (timer
                       (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
                       ; if no timer, then this is a leaf node
-                      (maybe-log node :DONE-WAITING-WIN msg))
+                      (node-log node :DONE-WAITING-WIN msg))
                      (t ; note: Following log message doesn't necessarily mean anything is wrong.
                       ; If node is singly-connected to the graph, it's to be expected
-                      (maybe-log node :NO-TIMER-FOUND msg)))))
+                      (node-log node :NO-TIMER-FOUND msg)))))
         (coalesce&reply (reply-to msg) node kind soluid)))))
 
 (defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
@@ -1162,13 +1162,13 @@ dropped on the floor.
   "Timeouts are a special kind of message in the gossip protocol,
   and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
-         ;;(maybe-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
+         ;;(node-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
          (let* ((soluid (solicitation-uid msg))
                 (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
            (when timeout-handler
              (funcall timeout-handler t))))
         (t ; log an error and do nothing
-         (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
+         (node-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
 
 (defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
   "Utility function. Can be called by message handlers.
@@ -1321,17 +1321,17 @@ dropped on the floor.
                     (if (eql :UPSTREAM (reply-to msg)) ; See Note D
                         (progn
                           (prepare-repliers thisnode soluid downstream)
-                          (maybe-log thisnode :WAITING msg downstream))
+                          (node-log thisnode :WAITING msg downstream))
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
-                          (maybe-log thisnode :WAITING msg :ANONYMOUS)
+                          (node-log thisnode :WAITING msg :ANONYMOUS)
                           (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
                     (setf timer (schedule-gossip-timeout (ceiling seconds-to-wait) (actor thisnode) soluid))
                     (kvs:relate-unique! (timers thisnode) soluid timer)
                     (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-                    ;(maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
+                    ;(node-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
                     )
                    (t ; just forward the message since there won't be an :UPSTREAM reply
                     (forward msg thisnode downstream)
@@ -1473,7 +1473,7 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (maybe-log srcnode :FINALREPLY (briefname soluid "sol") :to (briefname where-to-send-reply "node") data)
+           (node-log srcnode :FINALREPLY (briefname soluid "sol") :to (briefname where-to-send-reply "node") data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
@@ -1481,9 +1481,9 @@ dropped on the floor.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
           ((null where-to-send-reply)
-           (maybe-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
+           (node-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
           (t
-           (maybe-log srcnode :FINALREPLY (briefname soluid "sol") :TO where-to-send-reply data)
+           (node-log srcnode :FINALREPLY (briefname soluid "sol") :TO where-to-send-reply data)
            (ac:send where-to-send-reply reply)))))
 
 (defun coalesce&reply (reply-to thisnode reply-kind soluid)
@@ -1576,14 +1576,14 @@ gets sent back, and everything will be copacetic.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
                                          :args (list coalesced-data))))
-          (maybe-log thisnode :SEND-INTERIM-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
+          (node-log thisnode :SEND-INTERIM-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
           (send-msg reply
                     where-to-send-reply
                     (uid thisnode)))
         ; if no place left to reply to, just log the result.
         ;   This can mean that thisnode autonomously initiated the request, or
         ;   somebody running the sim told it to.
-        (maybe-log thisnode :INTERIMREPLY (briefname soluid "sol") coalesced-data))))
+        (node-log thisnode :INTERIMREPLY (briefname soluid "sol") coalesced-data))))
 
 (defun send-delayed-interim-reply (thisnode reply-kind soluid)
   "Called by a node actor to tell itself (or another actor, but we never do that now)
@@ -1594,7 +1594,7 @@ gets sent back, and everything will be copacetic.
   (let ((msg (make-solicitation
               :kind :maybe-sir
               :args (list soluid reply-kind))))
-    (maybe-log thisnode :ECHO-MAYBE-SIR nil)
+    (node-log thisnode :ECHO-MAYBE-SIR nil)
     (send-self msg)))
 
 (defun later-reply? (new old)
@@ -1632,7 +1632,7 @@ gets sent back, and everything will be copacetic.
       (declare (ignore store))
       (cond ((zerop (hash-table-count interim-table))
              ; if this is the last reply, kill the whole table for this soluid and return true
-             ;; (maybe-log node :KILL-TABLE-1 nil)
+             ;; (node-log node :KILL-TABLE-1 nil)
              (kvs:remove-key! (repliers-expected node) soluid)
              (values t was-present?))
             (t (values nil was-present?))))))
@@ -1700,12 +1700,12 @@ gets sent back, and everything will be copacetic.
                          (loop for reply being each hash-value of interim-table
                            while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    ;(maybe-log node :COALESCE interim-data local-data)
+    ;(node-log node :COALESCE interim-data local-data)
     (let ((coalesced-output
            (reduce coalescer
                    interim-data
                    :initial-value local-data)))
-      ;(maybe-log node :COALESCED-OUTPUT coalesced-output)
+      ;(node-log node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1721,7 +1721,7 @@ gets sent back, and everything will be copacetic.
                       (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
                         (if timeout-handler ; will be nil for messages that don't expect a reply
                             (funcall timeout-handler nil)
-                            (maybe-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
+                            (node-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
                      (t ; more repliers are expected
                       ; functionally coalesce all known data and send it upstream as another interim reply
                       (if *delay-interim-replies*
@@ -2022,7 +2022,7 @@ original message."
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (cond (*udp-gossip-socket*
-         (maybe-log node :TRANSMIT msg)
+         (node-log node :TRANSMIT msg)
          (let* ((payload (sign-message (list (real-uid node) srcuid *actual-udp-gossip-port* msg)))
                 (packet  (loenc:encode payload))
                 (nb      (length packet)))
@@ -2031,10 +2031,10 @@ original message."
            (internal-send-socket (real-address node) (real-port node) packet)
            ))
         (t
-         (maybe-log node :CANNOT-TRANSMIT "no socket"))))
+         (node-log node :CANNOT-TRANSMIT "no socket"))))
 
 (defmethod transmit-msg :before (msg (node tcp-gossip-node) srcuid)
-  (maybe-log node :TRANSMIT msg srcuid))
+  (node-log node :TRANSMIT msg srcuid))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
   "Send a message across TCP network.
@@ -2044,7 +2044,7 @@ original message."
     (cond ((null errorp)
            (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
              (ac:send socket-actor :send-socket-data payload)))
-          (t (maybe-log node :CANNOT-TRANSMIT "cannot create socket" errorp)))))
+          (t (node-log node :CANNOT-TRANSMIT "cannot create socket" errorp)))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
