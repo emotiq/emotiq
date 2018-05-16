@@ -57,7 +57,7 @@
                             (output *pubkeys-conf*))
   "Makes an pubkeys.conf OUTPUT from keypairs database INPUT."
   (ensure-directories-exist output)
-  (let ((db (read-keypairs-conf input)))
+  (let ((db (read-keypairs-conf :pathname input)))
     (when db
       (with-open-file (s output :direction :output :if-exists :supersede)
         (format s ";;; Example pubkeys config file~%")
