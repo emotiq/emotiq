@@ -49,6 +49,7 @@ witnesses."
   nil
   "Genesis UTXO.")
 
+#|
 (defun send-genesis-utxo (&key (monetary-supply 1000))
   (when *genesis-output*
     (error "Can't create more than one genesis UTXO."))
@@ -59,20 +60,47 @@ witnesses."
     (eassert (cosi/proofs::validate-txout utxog))
     (setf *genesis-output* utxog)
     (broadcast-message :genesis-utxo utxog)))
+|#
 
 (defun broadcast-message (message arg)
   (loop
      :for node :across cosi-simgen::*node-bit-tbl*
      :doing (cosi-simgen::send (cosi-simgen::node-self node)
                                message arg)))
-  
+#|  
 (defun spend-from-genesis (receiver amount)
   (unless *genesis-output*
     (error "No genesis account to spend from."))
   (spend *genesis-account* *genesis-output*
          (pbc:keying-triple-pkey receiver)
          amount))
+|#
 
+(defun create-genesis-transaction (receiver)
+  (print "Construct Genesis transaction")
+  (with-accessors ((r-pkey pbc:keying-triple-pkey)) receiver
+    (with-accessors ((g-pkey pbc:keying-triple-pkey)
+                     (g-skey pbc:keying-triple-skey)) *genesis-account*
+      (let ((trans (cosi/proofs::make-transaction
+                    :ins `((:kind :cloaked
+                            :amount 1000
+                            :gamma  1
+                            :pkey   ,g-pkey
+                            :skey   ,g-skey))
+                    :outs `((:kind :cloaked
+                             :amount 750
+                             :pkey   ,r-pkey)
+                            (:kind :cloaked
+                             :amount 240
+                             :pkey   ,g-pkey))
+                    :fee 10)))
+        
+    (print "Validate transaction")
+    (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
+    (broadcast-message :new-transaction trans)
+    (force-epoch-end)))))
+
+#|
 (defun spend (from from-utxo to-pubkey amount)
   "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
     amount = number, bit-tbl = node's bit table"
@@ -97,7 +125,9 @@ witnesses."
               (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
               (broadcast-message :new-transaction transaction)
               transaction))))))
+|#
 
+#|
 (defun spend-list (from from-utxo to-pubkey-list amount-list)
   " like spend, but allows multiple receivers, returns one transaction with multiple txouts"
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
@@ -126,6 +156,7 @@ witnesses."
             (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
             (broadcast-message :new-transaction transaction)
             transaction))))))
+|#
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
@@ -150,7 +181,7 @@ witnesses."
          receiver
          amount))
 |#
-
+#|
 (defun test ()
   (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
          (pkey  (pbc:keying-triple-pkey k))
@@ -174,7 +205,7 @@ witnesses."
             (broadcast-message :new-transaction trans)
             (force-epoch-end))))))
 
-#+nil (defun make-uncloaked-genesis-transaction (receiver &key (monetary-supply 1000))
+(defun make-uncloaked-genesis-transaction (receiver &key (monetary-supply 1000))
   (print "Construct Genesis transaction")
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
                    (from-private-key pbc:keying-triple-skey))
@@ -191,6 +222,7 @@ witnesses."
           (eassert (cosi/proofs::validate-transaction trans))
           (broadcast-message :new-transaction trans)
           trans)))))
+|#
 
 #|
 (defun spend-uncloaked (from-account from-utxo to-account amount)
@@ -228,6 +260,10 @@ witnesses."
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
 
+(defun test ()
+  (create-genesis-transaction *user-1*))
+
+#|
 (defun run (&key (amount 1000))
   "Run the block chain simulation entirely within the current process
 
@@ -291,8 +327,6 @@ This will spawn an actor which will asynchronously do the following:
   (ac:spawn
    (lambda ()
      (test))))
-
-#|
        (let ((txn-genesis (make-uncloaked-genesis-transaction *user-1*)))
                  (force-epoch-end)
                  (setf *tx-1* txn-genesis)))))
