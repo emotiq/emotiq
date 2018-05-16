@@ -67,16 +67,7 @@ witnesses."
     (broadcast-message :genesis-utxo utxog)
     utxog))
 
-#|  
-(defun spend-from-genesis (receiver amount)
-  (unless *genesis-output*
-    (error "No genesis account to spend from."))
-  (spend *genesis-account* *genesis-output*
-         (pbc:keying-triple-pkey receiver)
-         amount))
-|#
-
-(defun spend (trans)
+(defun publish-transaction (trans)
   (print "Validate transaction")
   (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
   (broadcast-message :new-transaction trans)
@@ -87,11 +78,10 @@ witnesses."
   (with-accessors ((receiver-pkey pbc:keying-triple-pkey)) receiver
     (with-accessors ((genesis-pkey pbc:keying-triple-pkey)
                      (genesis-skey pbc:keying-triple-skey)) *genesis-account*
-      (let* ((genesis-utxo (send-cloaked-genesis-utxo))
+      (let* ((genesis-utxo (send-cloaked-genesis-utxo :monetary-supply monetary-supply))
              (decrypted-info (cosi/proofs::decrypt-txout-info genesis-utxo genesis-skey)))
         (let ((received-amount (cosi/proofs::txout-secr-amt decrypted-info))
-              (received-gamma (cosi/proofs::txout-secr-gamma decrypted-info))
-              (fee 10))
+              (received-gamma (cosi/proofs::txout-secr-gamma decrypted-info)))
           (let ((trans (cosi/proofs::make-transaction
                         :ins `((:kind :cloaked
                                 :amount ,received-amount
@@ -99,10 +89,10 @@ witnesses."
                                 :pkey   ,genesis-pkey
                                 :skey   ,genesis-skey))
                         :outs `((:kind :cloaked
-                                 :amount ,(- received-amount fee)
-                                 :pkey   ,receiver-pkey))
-                        :fee fee)))
-            (spend trans)))))))
+                                 :amount ,received-amount
+                                 :pkey   ,receiver-pkey)))))
+            (publish-transaction trans)
+            trans))))))
 
 #|
 (defun spend-list (from from-utxo to-pubkey-list amount-list)
@@ -139,98 +129,6 @@ witnesses."
   (ac:pr "force-epoch-end")
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
 
-#|
-(defun send-uncloaked-genesis-utxo (&key (monetary-supply 1000))
-  (when *genesis-output*
-    (error "Can't create more than one genesis UTXO."))
-  (print "Construct Genesis transaction")
-  (multiple-value-bind (utxog secrg)
-      (cosi/proofs::make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
-    (declare (ignore secrg))
-    (eassert (cosi/proofs::validate-txout utxog))
-    (setf *genesis-output* utxog)
-    (broadcast-message :genesis-utxo utxog)))
-
-(defun spend-uncloaked-from-genesis (receiver amount)
-  (unless *genesis-output*
-    (error "No genesis account to spend from."))
-  (spend-uncloaked *genesis-account* *genesis-output*
-         receiver
-         amount))
-|#
-#|
-(defun test ()
-  (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
-         (pkey  (pbc:keying-triple-pkey k))
-         (skey  (pbc:keying-triple-skey k))
-       
-         (km    (pbc:make-key-pair :mary)) ;; Mary keying
-         (pkeym (pbc:keying-triple-pkey km))
-         (skeym (pbc:keying-triple-skey km)))
-  
-    (print "Construct Genesis UTXO")
-    (send-genesis-utxo)
-    (print "Construct Genesis transaction")
-    (multiple-value-bind (utxin info)  ;; spend side
-        (cosi/proofs::make-uncloaked-txin 1000 1 pkey skey)
-    
-      (multiple-value-bind (utxo1 secr1) ;; sends
-          (cosi/proofs::make-uncloaked-txout 1000 pkeym)
-          (let ((trans (cosi/proofs::make-transaction `(,utxin) `(,info)
-                                         `(,utxo1)
-                                         `(,secr1)
-                                         :skey skey)))
-            (eassert (cosi/proofs::validate-transaction trans))
-            (broadcast-message :new-transaction trans)
-            (force-epoch-end))))))
-
-(defun make-uncloaked-genesis-transaction (receiver &key (monetary-supply 1000))
-  (print "Construct Genesis transaction")
-  (with-accessors ((from-public-key pbc:keying-triple-pkey)
-                   (from-private-key pbc:keying-triple-skey))
-      *genesis-account*
-    (multiple-value-bind (genesis-utxin genesis-gamma)  ;; spend side
-        (cosi/proofs::make-uncloaked-txin 1000 1 from-public-key from-private-key)
-      (multiple-value-bind (genesis-utxo genesis-utxo-secrets)
-          (cosi/proofs::make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey receiver))
-        (let ((trans (cosi/proofs:make-transaction (list genesis-utxin)
-                                                   (list genesis-gamma)
-                                                   (list genesis-utxo)
-                                                   (list genesis-utxo-secrets)
-                                                   :skey from-private-key)))
-          (eassert (cosi/proofs::validate-transaction trans))
-          (broadcast-message :new-transaction trans)
-          trans)))))
-|#
-
-#|
-(defun spend-uncloaked (from-account from-utxo to-account amount)
-  "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
-    amount = number, bit-tbl = node's bit table"
-  (with-accessors ((from-public-key pbc:keying-triple-pkey)
-                   (from-private-key pbc:keying-triple-skey))
-      from-account
-    (with-accessors ((to-public-key pbc:keying-triple-pkey))
-        to-account
-    (let ((utxo-amt (cosi/proofs::uncloaked-txout-amt from-utxo)))
-      (eassert (<= amount utxo-amt))
-      ; TODO: what to do about fees and left-overs?  If this is running in the wallet, we should
-      ; declare the transaction (the intent) invalid.  If it is running on a node, then the fees+left-overs
-      ; are spent to the leader???
-      (multiple-value-bind (uncloaked-txin uncloaked-txin-gamma)  
-            (cosi/proofs::make-uncloaked-txin amount 1 from-public-key from-private-key)
-          (multiple-value-bind (new-uncloaked-utxo new-uncloaked-utxo-secrets)
-              (cosi/proofs::make-uncloaked-txout amount to-public-key)
-            (let ((transaction (cosi/proofs:make-transaction (list uncloaked-txin)
-                                                             (list uncloaked-txin-gamma)
-                                                             (list new-uncloaked-utxo)
-                                                             (list new-uncloaked-utxo-secrets)
-                                                             :skey from-private-key)))
-              (eassert (cosi/proofs::validate-transaction transaction))
-              (broadcast-message :new-transaction transaction)
-              transaction)))))))
-|#
-
 
 (defparameter *user-1* (pbc:make-key-pair :user-1))
 (defparameter *user-2* (pbc:make-key-pair :user-2))
@@ -239,11 +137,39 @@ witnesses."
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
 
-(defun test ()
-  (create-cloaked-genesis-transaction *user-1*))
+(defun make-cloaked-transaction (&key utxo amount from to-pkey (fee 0))
+  "create a cloaked transaction and return it, all args but fee are mandatory"
+  ;(unless (and (boundp utxo) (numberp amount) (boundp from) (boundp to-pkey))
+  ;  (error "utxo, amount, from and to-key must be specified in make-cloaked-transaction"))
+  (with-accessors ((from-pkey pbc:keying-triple-pkey)
+                   (from-skey pbc:keying-triple-skey))
+      from
+    (let ((info (cosi/proofs::decrypt-txout-info utxo from-skey)))
+      (let ((from-amount (cosi/proofs::txout-secr-amt info))
+            (gamma (cosi/proofs::txout-secr-gamma info)))
+      (eassert (<= (- amount fee) from-amount))
+      (let ((left-over-amount (- from-amount amount fee)))
+        (let ((left-over-list (if (zerop left-over-amount)
+                                  nil
+                                `(:kind :cloaked :amount ,left-over-amount :pkey ,from-pkey)))) ;; send left-overs back
+        (cosi/proofs::make-transaction
+         :ins `((:kind :cloaked
+                 :amount ,amount
+                 :gamma ,gamma
+                 :pkey ,from-pkey
+                 :skey ,from-skey))
+         :outs `((:kind :cloaked
+                 :amount ,amount
+                 :pkey ,to-pkey)
+                 ,left-over-list)
+         :fee fee)))))))
 
-#|
-(defun run (&key (amount 1000))
+; test helper - in real life, we would already know the pkey of the destination,
+; here we have special variables holding the various test users
+(defun pkey-of (user)
+  (pbc:keying-triple-pkey user))
+
+(defun run (&key (amount 100))
   "Run the block chain simulation entirely within the current process
 
 This will spawn an actor which will asynchronously do the following:
@@ -261,10 +187,34 @@ This will spawn an actor which will asynchronously do the following:
         *tx-1*           nil
         *tx-2*           nil
         *tx-3*           nil)
+
+
   (cosi-simgen::reset-nodes) 
   (ac:spawn
    (lambda ()
-       (send-genesis-utxo :monetary-supply amount)
+     (let ((genesis-tx (create-cloaked-genesis-transaction *user-1*))
+           (fee 10))
+       (setf *tx-1* genesis-tx)
+       (let ((utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 (pkey-of *user-1*)) genesis-tx)))
+         (eassert utxo)
+         (let ((tx2 (make-cloaked-transaction :utxo utxo
+                                              :amount amount
+                                              :from *user-1*
+                                              :to-pkey (pkey-of *user-2*)
+                                              :fee fee)))
+           (setf *tx-2* tx2)
+           (publish-transaction tx2)
+           (let ((utxo2 (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 (pkey-of *user-2*)) tx2)))
+             (eassert utxo2)
+               (let ((tx3 (make-cloaked-transaction :utxo utxo2
+                                                    :amount (/ amount 10)
+                                                    :from *user-2*
+                                                    :to-pkey (pkey-of *user-3*)
+                                                    :fee fee)))
+                 (setf *tx-3* tx3)
+                 (publish-transaction tx3)))))))))
+
+#|
        (let ((txn-genesis (spend-from-genesis *user-1* amount)))
          (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
            (assert (= 1 (length txout2)))
