@@ -73,27 +73,6 @@ witnesses."
   (broadcast-message :new-transaction trans)
   (force-epoch-end))
 
-(defun create-cloaked-genesis-transaction (receiver &key (monetary-supply 1000))
-  (print "Construct Genesis transaction")
-  (with-accessors ((receiver-pkey pbc:keying-triple-pkey)) receiver
-    (with-accessors ((genesis-pkey pbc:keying-triple-pkey)
-                     (genesis-skey pbc:keying-triple-skey)) *genesis-account*
-      (let* ((genesis-utxo (send-cloaked-genesis-utxo :monetary-supply monetary-supply))
-             (decrypted-info (cosi/proofs::decrypt-txout-info genesis-utxo genesis-skey)))
-        (let ((received-amount (cosi/proofs::txout-secr-amt decrypted-info))
-              (received-gamma (cosi/proofs::txout-secr-gamma decrypted-info)))
-          (let ((trans (cosi/proofs::make-transaction
-                        :ins `((:kind :cloaked
-                                :amount ,received-amount
-                                :gamma  ,received-gamma
-                                :pkey   ,genesis-pkey
-                                :skey   ,genesis-skey))
-                        :outs `((:kind :cloaked
-                                 :amount ,received-amount
-                                 :pkey   ,receiver-pkey)))))
-            (publish-transaction trans)
-            (values trans genesis-utxo)))))))
-
 #|
 (defun spend-list (from from-utxo to-pubkey-list amount-list)
   " like spend, but allows multiple receivers, returns one transaction with multiple txouts"
@@ -150,7 +129,30 @@ witnesses."
 (defun skey-of (user)
   (pbc:keying-triple-skey user))
 
-(defun run (&key (amount 100))
+(defun create-cloaked-transaction (from-account from-utxo amount fee to-account)
+  (declare (ignore amount))
+  (let ((from-skey (pbc:keying-triple-skey from-account))
+	(from-pkey (pbc:keying-triple-pkey from-account))
+	(to-pkey (pbc:keying-triple-pkey to-account)))
+    (let* ((to-info (cosi/proofs::decrypt-txout-info from-utxo from-skey))
+           (secr-amt (cosi/proofs::txout-secr-amt to-info))
+           (secr-gamma (cosi/proofs::txout-secr-gamma to-info))
+	   (trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
+							       :amount ,secr-amt
+							       :gamma  ,secr-gamma
+							       :pkey   ,from-pkey
+							       :skey   ,from-skey))
+						 :outs `((:kind :cloaked
+								:amount 750
+								:pkey   ,to-pkey)
+							 (:kind :cloaked
+								:amount 240
+								:pkey   ,from-pkey))
+						 :fee fee)))
+      trans)))
+               
+
+(defun run (&key (amount 100) (monetary-supply 1000))
   "Run the block chain simulation entirely within the current process
 
 This will spawn an actor which will asynchronously do the following:
@@ -164,6 +166,8 @@ This will spawn an actor which will asynchronously do the following:
   3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
 "
 
+  (declare (ignore amount))
+
   (setf *genesis-output* nil
         *tx-1*           nil
         *tx-2*           nil
@@ -174,42 +178,28 @@ This will spawn an actor which will asynchronously do the following:
   (ac:spawn
    (lambda ()
      (let ((fee 10))
+       (declare (ignore fee))
        (labels
-         ((send-tx-to-all (tx)
-            (map nil (lambda (node)
-                       (ac:send (cosi-simgen::node-self node) :new-transaction tx))
-                 cosi-simgen::*node-bit-tbl*))
+         (
           (send-genesis-to-all (utxo)
             (map nil (lambda (node)
                        (ac:send (cosi-simgen::node-self node) :genesis-utxo utxo))
                  cosi-simgen::*node-bit-tbl*)))
          (let* (
                 (pkey  (pbc:keying-triple-pkey *genesis-account*))
-                (skey  (pbc:keying-triple-skey *genesis-account*))
+                ;;(skey  (pbc:keying-triple-skey *genesis-account*))
                 
                 (pkeym (pbc:keying-triple-pkey *user-1*))
                 (skeym (pbc:keying-triple-skey *user-1*)))
            
            (ac:pr "Construct Genesis transaction")
-           (multiple-value-bind (utxog secrg)
-               (cosi/proofs::make-cloaked-txout 1000 pkey)
-             (declare (ignore secrg))
-             (send-genesis-to-all (setf *genesis* utxog))
+           (let ((utxog (send-cloaked-genesis-utxo :monetary-supply monetary-supply)))
+             ;; secrg is ignored and not even returned
 
-             (let* ((minfo (cosi/proofs::decrypt-txout-info utxog skey))
-                    (trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
-                                                     :amount ,(cosi/proofs::txout-secr-amt minfo)
-                                                     :gamma  ,(cosi/proofs::txout-secr-gamma minfo)
-                                                     :pkey   ,pkey
-                                                     :skey   ,skey))
-                                             :outs `((:kind :cloaked
-                                                      :amount 750
-                                                      :pkey   ,pkeym)
-                                                     (:kind :cloaked
-                                                      :amount 240
-                                                      :pkey   ,pkey))
-                                             :fee 10)))
-               
+             (let ((trans (create-cloaked-transaction *genesis-account*
+                                                      utxog 1000 10
+                                                      *user-1*)))
+
                ;; send TX to all nodes
                (publish-transaction (setf *trans1* trans))
                
