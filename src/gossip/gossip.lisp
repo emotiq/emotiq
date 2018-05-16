@@ -788,7 +788,6 @@ dropped on the floor.
 
 (defun list-uids (address port)
   "Get a list of all UIDs of nodes at remote address and port"
-  
   (let ((rnode (ensure-proxy-node :TCP address port 0))
         (localnode nil)
         (allnodes nil))
@@ -801,6 +800,10 @@ dropped on the floor.
           (setf allnodes (remove (uid localnode) allnodes)))
       (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
       )))
+
+; (make-graph 10)
+; (run-gossip-sim)
+; (list-uids "localhost" 65002)
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
  (format nil "~A~D" prefix (uid node)))

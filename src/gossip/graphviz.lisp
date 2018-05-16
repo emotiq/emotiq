@@ -55,11 +55,12 @@
   "Draw proxy node showing UID, real address, and real port"
   (declare (ignore edgetable))
   (format stream "~%  \"~A\" [fontsize=\"10.0\", label=<~A<BR /> ~
-        <FONT POINT-SIZE=\"8\">~A<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
+        <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
                      (uid node)
                      (uid node)
                      (real-address node)
-                     (real-port node)))
+                     (real-port node)
+                     (real-uid node)))
 
 #| OLD
 (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
