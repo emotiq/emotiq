@@ -102,8 +102,16 @@
 
 (defun lookup-connection (address port)
   "Returns open pipe to address/port, if any"
-  (let ((key (make-ip-key address port)))
-    (kvs:lookup-key *tcp-connection-table* key)))
+  (let* ((key (make-ip-key address port))
+         (actor (kvs:lookup-key *tcp-connection-table* key))
+         (process (when actor (ac:get-property actor :thread))))
+    (when actor
+      (cond ((and process ; check for valid process/thread
+                  #+OPENMCL (not (ccl::process-exhausted-p process)))
+             actor)
+            (t (ac:set-property actor :thread (make-select-thread actor))
+               actor))
+      actor)))
 
 ;;; Socket-actor property functions. These can be called safely by anybody--not just by the actor itself.
 (defmethod get-socket ((sa socket-actor))
@@ -219,7 +227,7 @@
                (process-kill (get-thread actor))
                (unmemoize-connection address port)))))))))
 
-(defun ensure-open-socket (address port)
+(defun open-active-socket (address port)
   "Open an active TCP connection from this machine to another.
    If second value is non-nil, it indicates some kind of error happened that makes first value invalid."
   (when (debug-level 3)
@@ -254,7 +262,7 @@
    If second value is non-nil, it indicates some kind of error happened that makes first value invalid."
   (or (lookup-connection address port)
       (multiple-value-bind (socket errorp)
-                           (ensure-open-socket address port)
+                           (open-active-socket address port)
         (cond ((not errorp)
                (make-socket-actor socket outbox))
               (t (values socket errorp))))))

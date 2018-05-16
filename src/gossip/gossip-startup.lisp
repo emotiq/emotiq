@@ -4,31 +4,103 @@
 
 (in-package :gossip)
 
-(defparameter *default-config-path* "/usr/local/gossip/config" "Path to default config file")
+(eval-when (:load-toplevel :execute)
+  (setf (ipath:illogical-host-translation :EMOTIQ) #P"/Users/svspire/emotiq/src/emotiq/src/")
+  ;(setf (ipath:illogical-host-translation :EMOTIQ) #P"/work/emotiq/src/")
+  (ipath:define-illogical-host :CONFIG #P(:EMOTIQ ("config"))))
 
-(defun read-config-file (config-path)
+(defparameter *keypair-db-file* #P(:config () "keypairs.conf"))
+(defparameter *hosts-db-file*   #P(:config () "hosts.conf"))
+(defparameter *pubkeys-db-file* #P(:config () "pubkeys.conf"))
+(defparameter *gossip-db-file*  #P(:config () "gossip.conf"))
+
+(defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
+
+(defun read-pairs-database (pathname)
+  (when (probe-file pathname)
+    (let ((pair nil)
+          (pairs nil))
+      (with-open-file (s pathname)
+        (setf pairs
+              (loop while (setf pair (read s nil nil nil)) collect pair)))
+      pairs)))
+
+; (read-pairs-database *keypair-db-file*)
+
+(defun read-gossip-configuration (&optional (config-path *gossip-db-file*))
   (with-open-file (s config-path :direction :input :if-does-not-exist :error)
-    (let ((forms (read s nil nil nil)))
-      (cond (forms
-             (unless (eq :CONFIG (first forms)) ; because we might read :documentation first
-               (setf forms (read s nil nil nil)))
-             (unless (eq :CONFIG (first forms))
-               (error "Can't find :CONFIG form in file ~S" config-path)))
-            (t (error "File ~S is empty" config-path)))
-      forms)))
+    (let ((form (read s nil nil nil)))
+      form)))
 
-(defun gossip-startup (&optional (config-path *default-config-path*))
-  (let ((forms (read-config-file config-path)))
-    (when forms (destructuring-bind (&key eripa
-                                          all-known-addresses
-                                          (gossip-port *nominal-gossip-port*)
-                                          (numnodes 1)
-                                          (preferred-protocol :UDP))
-                                    (second forms)
-                  (when eripa (setf *eripa* (usocket::host-to-hbo eripa)))
-                  (when gossip-port (setf *nominal-gossip-port* gossip-port))
-  (clrhash *nodes*) ; kill local nodes
-  ; Make required number of local nodes
-  ; Clear log, make local node(s) and start server
-  (run-gossip-sim preferred-protocol)
-  ))))
+(defun read-pubkeys-database (&optional (pathname *pubkeys-db-file*))
+  "Returns a list of strings, one per public key"
+  (when (probe-file pathname)
+    (let ((key nil)
+          (keys nil))
+      (with-open-file (s pathname)
+        (setf keys
+              (loop while (setf key (read-line s nil nil nil)) collect key)))
+      (setf keys (mapcar (lambda (key)
+                           (string-trim *whitespace* key))
+                         keys))
+      (when keys
+        (setf keys
+              (remove-if (lambda (key)
+                           (or (zerop (length key))
+                               (eql 0 (position #\; key))))
+                         keys))
+        (setf keys (mapcar (lambda (string)
+                             (parse-integer string))
+                           keys))
+        keys))))
+
+(defun process-eripa-value (ev)
+  (setf *eripa* (if (eq :deduce ev)
+                    (eripa)
+                    (usocket::host-to-hbo ev))))
+
+(defun gossip-startup (&optional (config-path *gossip-db-file*))
+  "Reads initial configuration files. Returns list of lists of host/uids like (address port uid1 uid2 ...)"
+  (let ((form (read-gossip-configuration config-path))
+        (all-pubkeys nil)
+        (hosts nil)
+        (hosts-uids nil))
+    (when form (destructuring-bind (&key eripa
+                                         (gossip-port *nominal-gossip-port*)
+                                         pubkeys)
+                                   form
+                 (when eripa (process-eripa-value eripa))
+                 (cond ((typep gossip-port '(unsigned-byte 16))
+                        (setf *nominal-gossip-port* gossip-port))
+                       (t (error "Invalid gossip-port ~S" gossip-port)))
+                 (cond ((consp pubkeys)
+                        (clrhash *nodes*)) ; kill local nodes
+                       (t (error "Invalid or unspecified public keys ~S" pubkeys)))
+                 
+                 ; Match these against pubkeys in "pubkeys.conf"
+                 (setf all-pubkeys (read-pubkeys-database))
+                 (cond ((every (lambda (local-pubkey)
+                                 (member local-pubkey all-pubkeys :test 'eql))
+                               pubkeys)
+                        ; if every local pubkey is in the database, make nodes for them
+                        (mapc (lambda (pubkey)
+                                (make-node :uid pubkey))
+                              pubkeys))
+                       (t (error "Every local pubkey in ~S does not have a counterpart in ~S"
+                                 config-path
+                                 *pubkeys-db-file*)))
+                 
+                 (setf hosts (read-pairs-database *hosts-db-file*))
+                 ; Clear log, make local node(s) and start server
+                 (cond (hosts
+                        (run-gossip-sim :TCP)
+                        (let ((uids nil))
+                          (setf hosts-uids
+                                (loop for host in hosts
+                                  when (setf uids (apply 'list-uids host))
+                                  collect (append host uids)))))
+                       (t (error "Hosts file hosts.conf not found or invalid")))
+                 hosts-uids))))
+
+; (gossip-startup)
+

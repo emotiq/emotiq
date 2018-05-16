@@ -2044,8 +2044,7 @@ original message."
     (cond ((null errorp)
            (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
              (ac:send socket-actor :send-socket-data payload)))
-          (t (maybe-log node :CANNOT-TRANSMIT "cannot create socket" errorp)
-             (error errorp)))))
+          (t (maybe-log node :CANNOT-TRANSMIT "cannot create socket" errorp)))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
