@@ -160,16 +160,14 @@ This will spawn an actor which will asynchronously do the following:
          (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
            ;; secrg (see tst-blk) is ignored and not even returned
            (let ((trans (create-transaction *genesis-account* genesis-utxo
-                                            ;; 990 total (fee == 10)
-                                            ;;750 240
-                                            ;'(750 240) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
+                                            ; user1 gets 1000 from genesis (fee = 0)
                                             '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
              (publish-transaction (setf *tx-1* trans) "tx-1")
              (ac:pr "Find UTX for user-1")
              (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
                (ac:pr "Construct 2nd transaction")
                (let ((trans (create-transaction *user-1* from-utxo 
-                                                ;; 250 490 == sums to user-1's amount less fee (750-10)
+                                                ; user1 spends 500 to user2, 490 to user3, 10 for fee
                                                 '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
                  (publish-transaction (setf *tx-2* trans) "tx-2")
                  ))))))
