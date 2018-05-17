@@ -54,6 +54,7 @@ else
     gpg2 \
     wget
 
+  sudo ntpdate pool.ntp.org       # Builders running from snapshot have bad clock
   aws s3 cp $LISPWORKS_BASE_URI/$LWTAR.gpg /tmp/$LWTAR.gpg
 
   if test ! -f /tmp/$LWTAR.gpg; then

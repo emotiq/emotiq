@@ -49,19 +49,19 @@ before_script:
 #   variables:
 #     LISP: ccl
 
-# test:macos:lispworks:
-#   <<: *test_definition
-#   tags:
-#     - macos
-#   variables:
-#     LISP: lispworks
-
-test:macos:ccl:
+test:macos:lispworks:
   <<: *test_definition
   tags:
     - macos
   variables:
-    LISP: ccl
+    LISP: lispworks
+
+# test:macos:ccl:
+#   <<: *test_definition
+#   tags:
+#     - macos
+#   variables:
+#     LISP: ccl
 
 release:
   stage: release
