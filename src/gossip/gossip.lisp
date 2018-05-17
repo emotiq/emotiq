@@ -477,7 +477,7 @@ are in place between nodes.
     :fn 
     (lambda (&rest msg)
       (when (debug-level 5)
-        (debug-log "Gossip Actor" (ac::current-actor) "received" msg))
+        (log-event "Gossip Actor" (ac::current-actor) "received" msg))
       (apply 'gossip-dispatcher node msg))))
 
 #+OBSOLETE
@@ -795,6 +795,7 @@ dropped on the floor.
         (progn
           (setf localnode (make-node
                            :NEIGHBORS (list (uid rnode))))
+          (format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
           (setf allnodes (remove (uid localnode) allnodes)))
@@ -835,18 +836,6 @@ dropped on the floor.
   (declare (ignore prefix))
   id)
 
-; Logcmd: Keyword that describes what a node has done with a given message UID
-; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
-(defmethod node-log ((node gossip-mixin) logcmd msg &rest args)
-  (when *log-filter*
-    (when (or (eq t *log-filter*)
-              (funcall *log-filter* logcmd))
-      (when (logfn node)
-        (apply (logfn node)
-               logcmd
-               (briefname node)
-               (briefname msg)
-               args)))))
 
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
@@ -855,29 +844,48 @@ dropped on the floor.
   "Returns a new log space"
   (make-array 10 :adjustable t :fill-pointer 0))
 
-(defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
-
 (defvar *log* (new-log) "Log of gossip actions.")
-(defvar *log-actor* (ac:make-actor (lambda (&rest logmsg) (vector-push-extend logmsg *log*)))
+(defvar *logging-actor* (ac:make-actor
+                         (lambda (cmd &rest logmsg)
+                           (case cmd
+                             (:log (vector-push-extend logmsg *log*))
+                             (:archive (%archive-log)))))
   "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
 
-(defun default-logging-function (logcmd nodename msgname &rest args)
-  (let* ((usec (usec::get-universal-time-usec)) ; important to do this before calling ac:send so it's most accurate
-         (logmsg (if msgname
-                    (list* usec logcmd nodename msgname args)
-                    (list usec logcmd nodename))))
-    (apply 'ac:send *log-actor* logmsg)
+(defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
+
+
+(defun %archive-log ()
+  "Archive existing *log* and start a new one.
+   This function is not thread-safe; should only be called from *logging-actor*."
+  (vector-push-extend *log* *archived-logs*)
+  (setf *log* (new-log)))
+
+(defun archive-log ()
+  "Archive existing *log* and start a new one. Thread-safe."
+  (ac:send *logging-actor* :archive))
+
+(defun log-event (&rest args)
+  "General mechanism for logging events. Sends timestamp and args to *logging-actor*.
+   No filtering is done here.
+   Also returns effective log message."
+  (let ((logmsg (cons (usec::get-universal-time-usec) args)))
+    (apply 'ac:send *logging-actor* :log logmsg)
     logmsg))
 
-(defun debug-log (&rest args)
-  "Freeform version of default-logging-function"
-  (apply 'ac:send *log-actor* (cons (usec::get-universal-time-usec) args)))
+(defun default-logging-function (logcmd &rest args)
+  "Default logger for nodes. Filters using the *log-filter* mechanism."
+  (when *log-filter*
+    (when (or (eq t *log-filter*)
+              (funcall *log-filter* logcmd))
+      (apply 'log-event logcmd args))))
 
-(defun interactive-logging-function (logcmd nodename msgname &rest args)
+(defun interactive-logging-function (logcmd &rest args)
   "Use this logging function for interactive debugging. You'll probably only want to use this
-  in the mode you called #'solicit on.
+  in the mode you called #'solicit on. Note that this merely writes to the REPL _in addition_ to standard logging,
+  not as opposed to it.
   Returns the form that default-logging-function returned."
-  (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
+  (let* ((logmsg (apply 'default-logging-function logcmd args))
          (logstring (format nil "~S~%" logmsg)))
     #+OpenMCL
     (if (find-package :hi)
@@ -886,6 +894,17 @@ dropped on the floor.
     #-OpenMCL
     (write-string logstring *standard-output*)
     logmsg))
+
+; Logcmd: Keyword that describes what a node has done with a given message UID
+; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
+(defmethod node-log ((node gossip-mixin) logcmd msg &rest args)
+  "Log a message-based event that occurred to a node."
+  (when (logfn node)
+    (apply (logfn node)
+           logcmd
+           (briefname node)
+           (briefname msg)
+           args)))
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
@@ -909,7 +928,7 @@ dropped on the floor.
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
     (when (debug-level 5)
-      (debug-log "send-msg" msg destnode srcuid))
+      (log-event "send-msg" msg destnode srcuid))
     (ac:send destactor
            :gossip ; actor-verb
            srcuid  ; first arg of actor-msg
@@ -1826,7 +1845,7 @@ gets sent back, and everything will be copacetic.
       (loenc:decode raw-message-buffer)
     (destructuring-bind (destuid srcuid rem-port msg) packet ;; note: if not what we were expecting, then this will signal error
       (when (debug-level 1)
-        (debug-log :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
+        (log-event :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
       (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
           ;ensure a local node of type proxy-gossip-node exists on this machine with
           ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
@@ -1868,7 +1887,7 @@ gets sent back, and everything will be copacetic.
           (setf socket (ignore-errors (usocket:socket-accept listening-socket)))
           
           (when (debug-level 3)
-            (debug-log "Got connection from " (usocket:get-peer-address socket)))
+            (log-event "Got connection from " (usocket:get-peer-address socket)))
           
           ;; At this point, we have a live incoming stream. Although it may be closing.
           
@@ -1879,8 +1898,8 @@ gets sent back, and everything will be copacetic.
               (setf timed-out? t))
             (when (debug-level 3)
               (if timed-out?
-                  (debug-log "Giving up.")
-                  (debug-log "Got data.")))
+                  (log-event "Giving up.")
+                  (log-event "Got data.")))
             ;; At this point, we have data available. Probably (may be closed or timed out).
             (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
                        timed-out?
@@ -2063,12 +2082,6 @@ original message."
 (defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
   (transmit-msg gossip-msg node srcuid))
-
-(defun archive-log ()
-  "Archive existing *log* and start a new one.
-   This function is not thread-safe, so don't call it if any actors might be using the log."
-  (vector-push-extend *log* *archived-logs*)
-  (setf *log* (new-log)))
 
 (defun run-gossip-sim (&optional (protocol :TCP))
   "Archive the current log and clear it.

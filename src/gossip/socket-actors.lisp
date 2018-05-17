@@ -209,7 +209,7 @@
                  ;      We should probably set a flag in the actor and use a state machine to better coordinate between
                  ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
                  (when (debug-level 4)
-                   (debug-log "Socket receive" actor))
+                   (log-event "Socket receive" actor))
                  (setf object
                        (handler-case (loenc:deserialize stream)
                          (error (c) (handle-stream-error c stream))))
@@ -222,7 +222,7 @@
                    (port (get-peer-port actor))
                    (reason (second msg)))
                (when (debug-level 3)
-                 (debug-log "Socket shutdown" actor reason))
+                 (log-event "Socket shutdown" actor reason))
                (when (usocket:stream-usocket-p socket) (usocket:socket-close socket))
                (process-kill (get-thread actor))
                (unmemoize-connection address port)))))))))
@@ -231,7 +231,7 @@
   "Open an active TCP connection from this machine to another.
    If second value is non-nil, it indicates some kind of error happened that makes first value invalid."
   (when (debug-level 3)
-    (debug-log "Opening socket to " (usocket::host-to-vector-quad address) port))
+    (log-event "Opening socket to " (usocket::host-to-vector-quad address) port))
   (multiple-value-bind (socket errorp)
                        (handler-case (usocket:socket-connect address port :protocol ':stream :element-type '(unsigned-byte 8))
                          (T (e) (values nil e)))
@@ -248,7 +248,7 @@
       object ; has already been deserialized at this point
       (destructuring-bind (destuid srcuid rem-port msg) packet
         (when (debug-level 1)
-          (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
+          (log-event :INCOMING-TCP msg :FROM rem-address :TO destuid))
         ;ensure a local node of type proxy-gossip-node exists on this machine with
         ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
         (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
