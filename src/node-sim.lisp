@@ -98,9 +98,10 @@ witnesses."
 				     :fee fee))))
 
 
-(defun publish-transaction (trans)
+(defun publish-transaction (trans name)
   (print "Validate transaction")
-  (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
+  (unless (cosi/proofs::validate-transaction trans)
+    (error(format nil "transaction ~A did not validate" name)))
   (broadcast-message :new-transaction trans)
   (force-epoch-end))
 
@@ -150,23 +151,29 @@ This will spawn an actor which will asynchronously do the following:
   (ac:spawn
    (lambda ()
      (let ((fee 10))
-       (let* ((genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
-              (user-1-pkey (pbc:keying-triple-pkey *user-1*)))
+       (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
+              (user-1-pkey (pbc:keying-triple-pkey *user-1*))
+              (user-2-pkey (pbc:keying-triple-pkey *user-2*))
+              (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
          
          (ac:pr "Construct Genesis transaction")
          (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
            ;; secrg (see tst-blk) is ignored and not even returned
            (let ((trans (create-transaction *genesis-account* genesis-utxo
-                                            '(750 240) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
-             (publish-transaction (setf *tx-1* trans))
+                                            ;; 990 total (fee == 10)
+                                            ;;750 240
+                                            ;'(750 240) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
+                                            '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
+             (publish-transaction (setf *tx-1* trans) "tx-1")
              (ac:pr "Find UTX for user-1")
              (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
                (ac:pr "Construct 2nd transaction")
-               (let ((trans (create-transaction *user-1* from-utxo
-                                                '(250 490) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
-                 (publish-transaction (setf *tx-2* trans))
+               (let ((trans (create-transaction *user-1* from-utxo 
+                                                ;; 250 490 == sums to user-1's amount less fee (750-10)
+                                                '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
+                 (publish-transaction (setf *tx-2* trans) "tx-2")
                  ))))))
-       (force-epoch-end))))
+     (force-epoch-end))))
 
 
 (defun blocks ()
