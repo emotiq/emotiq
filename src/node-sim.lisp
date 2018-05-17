@@ -173,13 +173,8 @@ This will spawn an actor which will asynchronously do the following:
             (map nil (lambda (node)
                        (ac:send (cosi-simgen::node-self node) :genesis-utxo utxo))
                  cosi-simgen::*node-bit-tbl*)))
-         (let* (
-                (pkey  (pbc:keying-triple-pkey *genesis-account*))
-                ;;(skey  (pbc:keying-triple-skey *genesis-account*))
-                
-                (pkeym (pbc:keying-triple-pkey *user-1*))  ;; pkey of m (Mary)
-;                (skeym (pbc:keying-triple-skey *user-1*))) ;; skey of m (Mary)
-                )
+         (let* ((pkey  (pbc:keying-triple-pkey *genesis-account*))
+                (pkeym (pbc:keying-triple-pkey *user-1*))  ;; pkey of m (Mary))
            
            (ac:pr "Construct Genesis transaction")
            (let ((utxog (send-cloaked-genesis-utxo :monetary-supply monetary-supply)))
@@ -192,8 +187,8 @@ This will spawn an actor which will asynchronously do the following:
                ;; send TX to all nodes
                (publish-transaction (setf *trans1* trans))
                
-               (ac:pr "Find UTX for Mary")
-               (let* ((from-utxo   (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 pkeym) trans)))
+               (ac:pr "Find UTX for user-1")
+               (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 pkeym) trans)))
                  
                  (ac:pr "Construct 2nd transaction")
                   (let ((trans (create-cloaked-transaction-with-multiple-outs
