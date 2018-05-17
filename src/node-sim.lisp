@@ -67,6 +67,18 @@ witnesses."
     (broadcast-message :genesis-utxo utxog)
     utxog))
 
+(defun send-uncloaked-genesis-utxo (&key (monetary-supply 1000))
+  (when *genesis-output*
+    (error "Can't create more than one genesis UTXO."))
+  (print "Construct Genesis UTXO")
+  (multiple-value-bind (utxog secrg)
+      (cosi/proofs::make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
+    (declare (ignore secrg))
+    (eassert (cosi/proofs::validate-txout utxog))
+    (setf *genesis-output* utxog)
+    (broadcast-message :genesis-utxo utxog)
+    utxog))
+
 (defun publish-transaction (trans)
   (print "Validate transaction")
   (eassert (cosi/proofs::validate-transaction trans)) ;; 7.6s MacBook Pro
@@ -102,7 +114,9 @@ witnesses."
   (declare (ignore amount))
   (let ((from-skey (pbc:keying-triple-skey from-account))
 	(from-pkey (pbc:keying-triple-pkey from-account))
-	(to-pkey (pbc:keying-triple-pkey to-account)))
+	(to-pkey (pbc:keying-triple-pkey to-account))
+        (amt1 750)
+        (amt2 240))
     (let* ((to-info (cosi/proofs::decrypt-txout-info from-utxo from-skey))
            (secr-amt (cosi/proofs::txout-secr-amt to-info))
            (secr-gamma (cosi/proofs::txout-secr-gamma to-info))
@@ -112,15 +126,60 @@ witnesses."
 							       :pkey   ,from-pkey
 							       :skey   ,from-skey))
 						 :outs `((:kind :cloaked
-								:amount 750
+								:amount ,amt1
 								:pkey   ,to-pkey)
 							 (:kind :cloaked
-								:amount 240
+								:amount ,amt2
+								:pkey   ,from-pkey))
+						 :fee fee)))
+      trans)))
+
+(defun create-uncloaked-transaction (from-account from-utxo amount fee to-account)
+  (declare (ignore amount))
+  (let ((from-skey (pbc:keying-triple-skey from-account))
+	(from-pkey (pbc:keying-triple-pkey from-account))
+	(to-pkey (pbc:keying-triple-pkey to-account))
+        (amt1 750)
+        (amt2 240))
+    (let* ((to-info (cosi/proofs::decrypt-txout-info from-utxo from-skey))
+           (secr-amt (cosi/proofs::txout-secr-amt to-info))
+           (secr-gamma (cosi/proofs::txout-secr-gamma to-info))
+	   (trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
+							       :amount ,secr-amt
+							       :gamma  ,secr-gamma
+							       :pkey   ,from-pkey
+							       :skey   ,from-skey))
+						 :outs `((:kind :cloaked
+								:amount ,amt1
+								:pkey   ,to-pkey)
+							 (:kind :cloaked
+								:amount ,amt2
 								:pkey   ,from-pkey))
 						 :fee fee)))
       trans)))
                
 (defun create-cloaked-transaction-with-multiple-outs
+    (from-account from-utxo amount-list to-pkey-list fee)
+  (declare (ignore amount))
+  (let ((from-skey (pbc:keying-triple-skey from-account))
+	(from-pkey (pbc:keying-triple-pkey from-account)))
+    (let* ((to-info (cosi/proofs::decrypt-txout-info from-utxo from-skey))
+           (secr-amt (cosi/proofs::txout-secr-amt to-info))
+           (secr-gamma (cosi/proofs::txout-secr-gamma to-info))
+	   (out-list (mapcar #'(lambda (amt to-pkey)
+				 `(:kind :cloaked
+				   :amount ,amt
+				   :pkey ,to-pkey))
+			     amount-list to-pkey-list)))
+      (cosi/proofs::make-transaction :ins `((:kind :cloaked
+					     :amount ,secr-amt
+					     :gamma  ,secr-gamma
+					     :pkey   ,from-pkey
+					     :skey   ,from-skey))
+				     :outs out-list
+				     :fee fee))))
+
+(defun create-uncloaked-transaction-with-multiple-outs
     (from-account from-utxo amount-list to-pkey-list fee)
   (declare (ignore amount))
   (let ((from-skey (pbc:keying-triple-skey from-account))
@@ -181,6 +240,52 @@ This will spawn an actor which will asynchronously do the following:
              (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
                (ac:pr "Construct 2nd transaction")
                (let ((trans (create-cloaked-transaction-with-multiple-outs
+                             *user-1* from-utxo '(250 490) (list user-1-pkey genesis-pkey) fee)))
+                 (publish-transaction (setf *trans2* trans))
+                 ))))))
+     (force-epoch-end))))
+
+(defun urun (&key (amount 100) (monetary-supply 1000))
+  "Run the block chain simulation entirely within the current process
+Entirely with uncloaked transactions
+
+This will spawn an actor which will asynchronously do the following:
+
+  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
+      coins to *USER-1*.  The resulting transaction can be referenced
+      via *tx-1*.
+
+  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
+
+  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
+"
+
+  (declare (ignore amount))
+
+  (setf *genesis-output* nil
+        *tx-1*           nil
+        *tx-2*           nil
+        *tx-3*           nil)
+
+
+  (cosi-simgen::reset-nodes) 
+  (ac:spawn
+   (lambda ()
+     (let ((fee 10))
+       (let* ((genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
+              (user-1-pkey (pbc:keying-triple-pkey *user-1*)))
+         
+         (ac:pr "Construct Genesis transaction")
+         (let ((genesis-utxo (send-uncloaked-genesis-utxo :monetary-supply monetary-supply)))
+           ;; secrg (see tst-blk) is ignored and not even returned
+           #+nil(let ((trans (create-cunloaked-transaction *genesis-account*
+                                                    genesis-utxo 990 10
+                                                    *user-1*)))
+             (publish-transaction (setf *trans1* trans))
+             (ac:pr "Find UTX for user-1")
+             (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
+               (ac:pr "Construct 2nd transaction")
+               (let ((trans (create-uncloaked-transaction-with-multiple-outs
                              *user-1* from-utxo '(250 490) (list user-1-pkey genesis-pkey) fee)))
                  (publish-transaction (setf *trans2* trans))
                  ))))))
