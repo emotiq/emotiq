@@ -35,12 +35,20 @@ before_script:
                :gossip-tests";
         systems=${systems} bash etc/test-harness.bash
 
-test:linux:lispworks:
+# test:linux:lispworks:
+#   <<: *test_definition
+#   tags:
+#     - linux
+#   variables:
+#     LISP: lispworks
+#
+test:linux:ccl:
   <<: *test_definition
   tags:
     - linux
   variables:
-    LISP: lispworks
+    LISP: ccl
+
 
 release:
   stage: release
