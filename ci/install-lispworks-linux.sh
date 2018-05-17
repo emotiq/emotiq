@@ -49,6 +49,7 @@ elif test ! -f "/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`; then
   echo "**********************************************************"
 else
   echo Installing LispWorks from `pwd` in $PREFIX
+  export DEBIAN_FRONTEND=noninteractive
   sudo apt-get update && sudo apt-get install -y \
     autoconf \
     build-essential \
