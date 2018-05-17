@@ -72,26 +72,22 @@ release:
   script:
     - github-release release --tag ${CI_COMMIT_TAG}
 
-# .deploy: &deploy_definition
-#   stage: deploy
-#   script:
-#     - ./sbcl-deploy.sh
-#     - ci/upload-file.sh $(cat /tmp/artifact.txt)
-#
-# deploy:linux:
-#   <<: *deploy_definition
-#   tags:
-#     - linux
-#   only:
-#     - tags
-#   dependencies:
-#     - build:linux
-#
-# deploy:macos:
-#   <<: *deploy_definition
-#   tags:
-#     - macos
-#   only:
-#     - tags
-#   dependencies:
-#     - build:macos
+.deploy: &deploy_definition
+  stage: deploy
+  script:
+    - etc/production.bash
+    - ci/upload-file.sh $(cat /tmp/artifact.txt)
+
+deploy:linux:
+  <<: *deploy_definition
+  tags:
+    - linux
+  only:
+    - tags
+
+deploy:macos:
+  <<: *deploy_definition
+  tags:
+    - macos
+  only:
+    - tags
