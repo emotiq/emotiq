@@ -167,39 +167,24 @@ This will spawn an actor which will asynchronously do the following:
   (ac:spawn
    (lambda ()
      (let ((fee 10))
-       (labels
-         (
-          (send-genesis-to-all (utxo)
-            (map nil (lambda (node)
-                       (ac:send (cosi-simgen::node-self node) :genesis-utxo utxo))
-                 cosi-simgen::*node-bit-tbl*)))
-         (let* ((pkey  (pbc:keying-triple-pkey *genesis-account*))
-                (pkeym (pbc:keying-triple-pkey *user-1*))  ;; pkey of m (Mary))
-           
-           (ac:pr "Construct Genesis transaction")
-           (let ((utxog (send-cloaked-genesis-utxo :monetary-supply monetary-supply)))
-             ;; secrg is ignored and not even returned
-
-             (let ((trans (create-cloaked-transaction *genesis-account*
-                                                      utxog 1000 10
-                                                      *user-1*)))
-
-               ;; send TX to all nodes
-               (publish-transaction (setf *trans1* trans))
-               
-               (ac:pr "Find UTX for user-1")
-               (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 pkeym) trans)))
-                 
-                 (ac:pr "Construct 2nd transaction")
-                  (let ((trans (create-cloaked-transaction-with-multiple-outs
-                                *user-1* from-utxo '(250 490) (list pkeym pkey) fee)))
-
-                   ;; send TX to all nodes
-
-                   (publish-transaction (setf *trans2* trans))
-                   ))))))
-       ;; ------------------------------------------------------------------------
-       (force-epoch-end)))))
+       (let* ((genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
+              (user-1-pkey (pbc:keying-triple-pkey *user-1*)))
+         
+         (ac:pr "Construct Genesis transaction")
+         (let ((genesis-utxo (send-cloaked-genesis-utxo :monetary-supply monetary-supply)))
+           ;; secrg (see tst-blk) is ignored and not even returned
+           (let ((trans (create-cloaked-transaction *genesis-account*
+                                                    genesis-utxo 1000 10
+                                                    *user-1*)))
+             (publish-transaction (setf *trans1* trans))
+             (ac:pr "Find UTX for user-1")
+             (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
+               (ac:pr "Construct 2nd transaction")
+               (let ((trans (create-cloaked-transaction-with-multiple-outs
+                             *user-1* from-utxo '(250 490) (list user-1-pkey genesis-pkey) fee)))
+                 (publish-transaction (setf *trans2* trans))
+                 ))))))
+     (force-epoch-end))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
