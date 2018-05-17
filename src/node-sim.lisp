@@ -174,7 +174,7 @@ This will spawn an actor which will asynchronously do the following:
          (let ((genesis-utxo (send-cloaked-genesis-utxo :monetary-supply monetary-supply)))
            ;; secrg (see tst-blk) is ignored and not even returned
            (let ((trans (create-cloaked-transaction *genesis-account*
-                                                    genesis-utxo 1000 10
+                                                    genesis-utxo 990 10
                                                     *user-1*)))
              (publish-transaction (setf *trans1* trans))
              (ac:pr "Find UTX for user-1")
