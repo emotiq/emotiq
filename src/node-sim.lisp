@@ -73,37 +73,6 @@ witnesses."
   (broadcast-message :new-transaction trans)
   (force-epoch-end))
 
-#|
-(defun spend-list (from from-utxo to-pubkey-list amount-list)
-  " like spend, but allows multiple receivers, returns one transaction with multiple txouts"
-  (with-accessors ((from-public-key pbc:keying-triple-pkey)
-                   (from-private-key pbc:keying-triple-skey))
-      from
-    (let ((decrypted-from-utxo
-           (cosi/proofs:decrypt-txout-info from-utxo from-private-key)))
-      (multiple-value-bind (txin txin-gamma)  
-          (cosi/proofs:make-txin (cosi/proofs:txout-secr-amt decrypted-from-utxo) 
-                                 (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
-                                 from-public-key from-private-key)
-        (let ((new-utxo-list nil)
-              (new-utxo-secrets-list nil))
-          (mapc #'(lambda (to-pubkey amount)
-                    (multiple-value-bind (new-utxo new-utxo-secrets)
-                        (cosi/proofs:make-txout amount to-pubkey)
-                      (push new-utxo new-utxo-list)
-                      (push new-utxo-secrets new-utxo-secrets-list)))
-                to-pubkey-list
-                amount-list)
-          (let ((transaction (cosi/proofs:make-transaction (list txin)
-                                                           (list txin-gamma)
-                                                           new-utxo-list
-                                                           new-utxo-secrets-list
-                                                           :skey from-private-key)))
-            (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
-            (broadcast-message :new-transaction transaction)
-            transaction))))))
-|#
-
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
@@ -151,6 +120,26 @@ witnesses."
 						 :fee fee)))
       trans)))
                
+(defun create-cloaked-transaction-with-multiple-outs
+    (from-account from-utxo amount-list to-pkey-list fee)
+  (declare (ignore amount))
+  (let ((from-skey (pbc:keying-triple-skey from-account))
+	(from-pkey (pbc:keying-triple-pkey from-account)))
+    (let* ((to-info (cosi/proofs::decrypt-txout-info from-utxo from-skey))
+           (secr-amt (cosi/proofs::txout-secr-amt to-info))
+           (secr-gamma (cosi/proofs::txout-secr-gamma to-info))
+	   (out-list (mapcar #'(lambda (amt to-pkey)
+				 `(:kind :cloaked
+				   :amount ,amt
+				   :pkey ,to-pkey))
+			     amount-list to-pkey-list)))
+      (cosi/proofs::make-transaction :ins `((:kind :cloaked
+					     :amount ,secr-amt
+					     :gamma  ,secr-gamma
+					     :pkey   ,from-pkey
+					     :skey   ,from-skey))
+				     :outs out-list
+				     :fee fee))))
 
 (defun run (&key (amount 100) (monetary-supply 1000))
   "Run the block chain simulation entirely within the current process
@@ -178,7 +167,6 @@ This will spawn an actor which will asynchronously do the following:
   (ac:spawn
    (lambda ()
      (let ((fee 10))
-       (declare (ignore fee))
        (labels
          (
           (send-genesis-to-all (utxo)
@@ -189,8 +177,9 @@ This will spawn an actor which will asynchronously do the following:
                 (pkey  (pbc:keying-triple-pkey *genesis-account*))
                 ;;(skey  (pbc:keying-triple-skey *genesis-account*))
                 
-                (pkeym (pbc:keying-triple-pkey *user-1*))
-                (skeym (pbc:keying-triple-skey *user-1*)))
+                (pkeym (pbc:keying-triple-pkey *user-1*))  ;; pkey of m (Mary)
+;                (skeym (pbc:keying-triple-skey *user-1*))) ;; skey of m (Mary)
+                )
            
            (ac:pr "Construct Genesis transaction")
            (let ((utxog (send-cloaked-genesis-utxo :monetary-supply monetary-supply)))
@@ -204,26 +193,14 @@ This will spawn an actor which will asynchronously do the following:
                (publish-transaction (setf *trans1* trans))
                
                (ac:pr "Find UTX for Mary")
-               (let* ((utxm   (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
-                      (minfo  (cosi/proofs::decrypt-txout-info utxm skeym)))
+               (let* ((from-utxo   (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 pkeym) trans)))
                  
                  (ac:pr "Construct 2nd transaction")
-;;;                  (let ((trans (create-cloaked-transaction *user-1*
-;;;                                                        utxm 250 10  ; incomplete needs to send 490 back to pkey
-;;;                                                        *user-2*)))
-                  (let ((trans (cosi/proofs::make-transaction :ins `((:kind :cloaked
-                                                   :amount ,(cosi/proofs::txout-secr-amt minfo)
-                                                        :gamma  ,(cosi/proofs::txout-secr-gamma minfo)
-                                                        :pkey   ,pkeym
-                                                         :skey   ,skeym))
-                                                :outs `((:kind :cloaked
-                                                         :amount 250
-                                                         :pkey   ,pkeym)
-                                                        (:kind :cloaked
-                                                         :amount 490
-                                                         :pkey  ,pkey))
-                                                :fee 10)))
+                  (let ((trans (create-cloaked-transaction-with-multiple-outs
+                                *user-1* from-utxo '(250 490) (list pkeym pkey) fee)))
+
                    ;; send TX to all nodes
+
                    (publish-transaction (setf *trans2* trans))
                    ))))))
        ;; ------------------------------------------------------------------------
