@@ -1,5 +1,10 @@
 Config files:
 
+Ideally, these .conf files should be moved to
+emotiq/var/etc/gossip-config/
+and customized at that location. However, the examples herein
+will be used if that directory does not exist.
+
 keypairs.conf
 Public/private keypair(s) on this machine.
 There could be more than 1 pair in this file for purposes of simulating

@@ -4,14 +4,22 @@
 
 (in-package :gossip)
 
+(defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
+  in which to look for config files, more preferred first")
+
+(defun make-config-host ()
+  "Look for config directory"
+  (some (lambda (subpath)
+          (when (probe-file (asdf:system-relative-pathname :emotiq subpath))
+            (ipath:define-illogical-host :gossip-config (asdf:system-relative-pathname :emotiq subpath))))
+        *config-paths*))
+
 (eval-when (:load-toplevel :execute) 
-  (setf (ipath:illogical-host-translation :var-etc)
-        (asdf:system-relative-pathname :emotiq "../var/etc/"))
-  (ipath:define-illogical-host :gossip-config #P(:var-etc ("gossip-config/")))
-  (defparameter *keypair-db-file* #P(:gossip-config () "keypairs.conf"))
-  (defparameter *hosts-db-file*   #P(:gossip-config () "hosts.conf"))
-  (defparameter *pubkeys-db-file* #P(:gossip-config () "pubkeys.conf"))
-  (defparameter *gossip-db-file*  #P(:gossip-config () "gossip.conf")))
+  (when (make-config-host)
+    (defparameter *keypair-db-file* #P(:gossip-config () "keypairs.conf"))
+    (defparameter *hosts-db-file*   #P(:gossip-config () "hosts.conf"))
+    (defparameter *pubkeys-db-file* #P(:gossip-config () "pubkeys.conf"))
+    (defparameter *gossip-db-file*  #P(:gossip-config () "gossip.conf"))))
 
 (defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
 
