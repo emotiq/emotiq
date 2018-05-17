@@ -73,37 +73,7 @@ witnesses."
     (broadcast-message :genesis-utxo utxog)
     utxog))
 
-(defun create-transaction (from-account from-utxo amount fee to-account &key (cloaked t))
-  (declare (ignore amount))
-  (let ((from-skey (pbc:keying-triple-skey from-account))
-	(from-pkey (pbc:keying-triple-pkey from-account))
-	(to-pkey (pbc:keying-triple-pkey to-account))
-        (amt1 750)
-        (amt2 240))
-    (let* ((to-info (when cloaked (cosi/proofs::decrypt-txout-info from-utxo from-skey)))
-           (amt (if cloaked
-                    (cosi/proofs::txout-secr-amt to-info)
-                  (cosi/proofs::uncloaked-txout-amt from-utxo)))
-           (gamma (if cloaked
-                      (cosi/proofs::txout-secr-gamma to-info)
-                    (cosi/proofs::uncloaked-txout-gamma from-utxo)))
-           (kind (if cloaked :cloaked :uncloaked)))
-
-      (cosi/proofs::make-transaction :ins `((:kind ,kind
-                                             :amount ,amt
-                                             :gamma  ,gamma
-                                             :pkey   ,from-pkey
-                                             :skey   ,from-skey))
-                                     :outs `((:kind ,kind
-                                              :amount ,amt1
-                                              :pkey   ,to-pkey)
-                                             (:kind ,kind
-                                              :amount ,amt2
-                                              :pkey   ,from-pkey))
-                                     :fee fee))))
-
-(defun create-transaction-with-multiple-outs (from-account from-utxo amount-list to-pkey-list fee &key (cloaked t))
-  (declare (ignore amount))
+(defun create-transaction (from-account from-utxo amount-list to-pkey-list fee &key (cloaked t))
   (let ((from-skey (pbc:keying-triple-skey from-account))
 	(from-pkey (pbc:keying-triple-pkey from-account)))
     (let* ((to-info (when cloaked (cosi/proofs::decrypt-txout-info from-utxo from-skey)))
@@ -191,15 +161,14 @@ This will spawn an actor which will asynchronously do the following:
          (ac:pr "Construct Genesis transaction")
          (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
            ;; secrg (see tst-blk) is ignored and not even returned
-           (let ((trans (create-transaction *genesis-account*
-                                            genesis-utxo 990 10
-                                            *user-1* :cloaked cloaked)))
+           (let ((trans (create-transaction *genesis-account* genesis-utxo
+                                            '(750 240) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
              (publish-transaction (setf *trans1* trans))
              (ac:pr "Find UTX for user-1")
              (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
                (ac:pr "Construct 2nd transaction")
-               (let ((trans (create-transaction-with-multiple-outs
-                             *user-1* from-utxo '(250 490) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
+               (let ((trans (create-transaction *user-1* from-utxo
+                                                '(250 490) (list user-1-pkey genesis-pkey) fee :cloaked cloaked)))
                  (publish-transaction (setf *trans2* trans))
                  ))))))
        (force-epoch-end))))
