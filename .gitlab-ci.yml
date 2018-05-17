@@ -69,6 +69,8 @@ release:
     - linux
   only:
     - tags
+  variables:
+    LISP: ccl
   script:
     - github-release release --tag ${CI_COMMIT_TAG}
 
