@@ -4,15 +4,14 @@
 
 (in-package :gossip)
 
-(eval-when (:load-toplevel :execute)
-  (setf (ipath:illogical-host-translation :EMOTIQ) #P"/Users/svspire/emotiq/src/emotiq/src/")
-  ;(setf (ipath:illogical-host-translation :EMOTIQ) #P"/work/emotiq/src/")
-  (ipath:define-illogical-host :CONFIG #P(:EMOTIQ ("config"))))
-
-(defparameter *keypair-db-file* #P(:config () "keypairs.conf"))
-(defparameter *hosts-db-file*   #P(:config () "hosts.conf"))
-(defparameter *pubkeys-db-file* #P(:config () "pubkeys.conf"))
-(defparameter *gossip-db-file*  #P(:config () "gossip.conf"))
+(eval-when (:load-toplevel :execute) 
+  (setf (ipath:illogical-host-translation :var-etc)
+        (asdf:system-relative-pathname :emotiq "../var/etc/"))
+  (ipath:define-illogical-host :gossip-config #P(:var-etc ("gossip-config/")))
+  (defparameter *keypair-db-file* #P(:gossip-config () "keypairs.conf"))
+  (defparameter *hosts-db-file*   #P(:gossip-config () "hosts.conf"))
+  (defparameter *pubkeys-db-file* #P(:gossip-config () "pubkeys.conf"))
+  (defparameter *gossip-db-file*  #P(:gossip-config () "gossip.conf")))
 
 (defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
 
