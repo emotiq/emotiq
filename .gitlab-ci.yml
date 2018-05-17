@@ -1,0 +1,76 @@
+variables:
+  GITHUB_USER: emotiq
+  GITHUB_REPO: emotiq
+  LWPRO: lwpro
+  LWPRO_MACOS_64: lwpro
+
+# cache:
+#   key: "${CI_PIPELINE_ID}"
+#   paths:
+#     - work/
+
+stages:
+  - test
+  - release
+  - deploy
+
+before_script:
+  - export PATH="$HOME/bin:$PATH"
+  - ci/install-lisp.sh
+  - ros -e '(ql-dist:install-dist
+              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
+               :replace t :prompt nil)
+            (ql-dist:install-dist
+              "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
+               :prompt nil)
+            (uiop:quit 0)'
+
+.test: &test_definition
+  stage: test
+  script:
+    - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
+    - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
+    - systems=":cosi-bls-tests
+               :crypto-pairings
+               :gossip-tests";
+        systems=${systems} bash etc/test-harness.bash
+
+test:linux:lispworks:
+  <<: *test_definition
+  tags:
+    - linux
+  variables:
+    LISP: lispworks
+
+release:
+  stage: release
+  tags:
+    - linux
+  only:
+    - tags
+  script:
+    - github-release release --tag ${CI_COMMIT_TAG}
+
+# .deploy: &deploy_definition
+#   stage: deploy
+#   script:
+#     - ./sbcl-deploy.sh
+#     - ci/upload-file.sh $(cat /tmp/artifact.txt)
+#
+# deploy:linux:
+#   <<: *deploy_definition
+#   tags:
+#     - linux
+#   only:
+#     - tags
+#   dependencies:
+#     - build:linux
+#
+# deploy:macos:
+#   <<: *deploy_definition
+#   tags:
+#     - macos
+#   only:
+#     - tags
+#   dependencies:
+#     - build:macos
