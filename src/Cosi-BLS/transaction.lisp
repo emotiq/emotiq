@@ -103,8 +103,8 @@ the simple commitment to the uncloaked value"
 (defun make-uncloaked-txin (amt pkey skey)
   "Make a signed uncloaked TXIN. Someone must sign for it, typically
 the epoch leader."
-  (let ((hashlock (make-hashlock amt pkey))
-        (sig      (pbc:sign-hash hashlock skey)))
+  (let* ((hashlock (make-hashlock amt pkey))
+         (sig      (pbc:sign-hash hashlock skey)))
     (make-instance 'uncloaked-txin
                    :hashlock  hashlock
                    :pkey      pkey
