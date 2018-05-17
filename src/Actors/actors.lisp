@@ -489,13 +489,19 @@ THE SOFTWARE.
   (or (functionp obj)
       (and (symbolp obj)
            (fboundp obj))))
+ 
+(define-condition invalid-send-target (simple-error)
+  ((target :initarg :target :initform nil :accessor target))
+  (:documentation "An error indicating a target of SEND that cannot be resolved into something valid.")
+  (:report (lambda (condition stream)
+	     (format stream "~%Invalid SEND target: ~&  ~S" (target condition)))))
 
 (defmethod send (other-obj &rest message)
   (let ((mfn (car message)))
     (if (funcallable-p mfn)
       (apply mfn other-obj (cdr message))
       ;; else
-      (error "Invalid SEND target"))
+      (error 'invalid-send-target :target other-obj))
     ))
 
 ;; ------------------------------------------

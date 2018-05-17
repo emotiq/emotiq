@@ -787,7 +787,11 @@ dropped on the floor.
           (setf (logfn node) old-logger))))))
 
 (defun list-uids (address port)
-  "Get a list of all UIDs of nodes at remote address and port"
+  "Get a list of all UIDs of nodes at remote address and port.
+   If no error, returned list will look like
+   (address port uid1 uid2 ...)
+   If error, returned list will look like
+   (address port :ERRORMSG arg1 arg2 ...)"
   (let ((rnode (ensure-proxy-node :TCP address port 0))
         (localnode nil)
         (allnodes nil))
@@ -795,7 +799,7 @@ dropped on the floor.
         (progn
           (setf localnode (make-node
                            :NEIGHBORS (list (uid rnode))))
-          (format t "~%Localnode UID = ~D" (uid localnode))
+          ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
           (setf allnodes (remove (uid localnode) allnodes)))
@@ -908,7 +912,7 @@ dropped on the floor.
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
-   This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
+   This is intended to be used by incoming-message-handler methods for bootstrapping messages
    before #'neighbors connectivity has been established.
    See Note D."
   (let ((no-forward-msg (copy-message msg))
@@ -929,10 +933,13 @@ dropped on the floor.
           (error "Cannot find actor for node ~S" destnode)))
     (when (debug-level 5)
       (log-event "send-msg" msg destnode srcuid))
-    (ac:send destactor
-           :gossip ; actor-verb
-           srcuid  ; first arg of actor-msg
-           msg)))  ; second arg of actor-msg
+    (handler-case
+        (ac:send destactor
+                 :gossip ; actor-verb
+                 srcuid  ; first arg of actor-msg
+                 msg)    ; second arg of actor-msg
+      (ac:invalid-send-target () ; if target is invalid, log it and do nothing
+                           (log-event :invalid-send-target destuid msg :from srcuid)))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -2050,7 +2057,7 @@ original message."
            (internal-send-socket (real-address node) (real-port node) packet)
            ))
         (t
-         (node-log node :CANNOT-TRANSMIT "no socket"))))
+         (node-log node :CANNOT-TRANSMIT msg "no socket"))))
 
 (defmethod transmit-msg :before (msg (node tcp-gossip-node) srcuid)
   (node-log node :TRANSMIT msg srcuid))
@@ -2063,7 +2070,16 @@ original message."
     (cond ((null errorp)
            (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
              (ac:send socket-actor :send-socket-data payload)))
-          (t (node-log node :CANNOT-TRANSMIT "cannot create socket" errorp)))))
+          (t (node-log node :CANNOT-TRANSMIT msg "cannot create socket" errorp)
+             (when (and (typep msg 'solicitation)
+                        (or (uid? (reply-to msg))
+                            (eq :UPSTREAM (reply-to msg))))
+               (send-final-reply
+                node
+                (reply-to msg)
+                (uid msg) ; soluid
+                (kind msg)
+                `(:CANNOT-TRANSMIT :to ,(real-address node))))))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
