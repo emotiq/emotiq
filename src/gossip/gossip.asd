@@ -10,12 +10,9 @@
                :mpcompat
                :key-value-store
                :actors ; should be loaded by cosi-BLS
-               :cosi-BLS
-               :illogical-pathnames)
+               :cosi-BLS)
   :serial t
   :components ((:file "package")
-               #+OPENMCL (:file "ccl-sockets-patch")
-               (:file "socket-actors")
                (:file "gossip")
                (:file "http-fetch")
                (:file "graphviz")
