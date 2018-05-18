@@ -4,11 +4,6 @@ variables:
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
 
-# cache:
-#   key: "${CI_PIPELINE_ID}"
-#   paths:
-#     - work/
-
 stages:
   - test
   - release
