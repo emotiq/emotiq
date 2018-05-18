@@ -1285,65 +1285,59 @@ bother factoring it with NODE-COSI-SIGNING."
        
        ;; -------------------------------------------------------------
        ;; manufacture two transactions and send to all nodes
-       (if *trans1*
-           (progn
-             (send-genesis-to-all *genesis*)
-             (send-tx-to-all *trans1*)
-             (send-tx-to-all *trans2*))
-         ;; else
-         (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
-                (pkey  (pbc:keying-triple-pkey k))
-                (skey  (pbc:keying-triple-skey k))
-                
-                (km    (pbc:make-key-pair :mary)) ;; Mary keying
-                (pkeym (pbc:keying-triple-pkey km))
-                (skeym (pbc:keying-triple-skey km)))
+       (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
+              (pkey  (pbc:keying-triple-pkey k))
+              (skey  (pbc:keying-triple-skey k))
+              
+              (km    (pbc:make-key-pair :mary)) ;; Mary keying
+              (pkeym (pbc:keying-triple-pkey km))
+              (skeym (pbc:keying-triple-skey km)))
+         
+         (pr "Construct Genesis transaction")
+         (multiple-value-bind (utxog secrg)
+             (make-uncloaked-txout 1000 pkey)
+           (declare (ignore secrg))
+           (send-genesis-to-all utxog)
            
-           (pr "Construct Genesis transaction")
-           (multiple-value-bind (utxog secrg)
-               (make-uncloaked-txout 1000 pkey)
-             (declare (ignore secrg))
-             (send-genesis-to-all (setf *genesis* utxog))
-
-             (let* ((amt   (uncloaked-txout-amt utxog))
-                    (gamma (uncloaked-txout-gamma utxog))
-                    (trans (make-transaction :ins `((:kind :uncloaked
-                                                     :amount ,amt
-                                                     :gamma  ,gamma
-                                                     :pkey   ,pkey
-                                                     :skey   ,skey))
-                                             :outs `((:kind :uncloaked
-                                                      :amount 750
-                                                      :pkey   ,pkeym)
-                                                     (:kind :uncloaked
-                                                      :amount 240
-                                                      :pkey   ,pkey))
-                                             :fee 10)))
+           (let* ((amt   (uncloaked-txout-amt utxog))
+                  (gamma (uncloaked-txout-gamma utxog))
+                  (trans (make-transaction :ins `((:kind :uncloaked
+                                                   :amount ,amt
+                                                   :gamma  ,gamma
+                                                   :pkey   ,pkey
+                                                   :skey   ,skey))
+                                           :outs `((:kind :uncloaked
+                                                    :amount 750
+                                                    :pkey   ,pkeym)
+                                                   (:kind :uncloaked
+                                                    :amount 240
+                                                    :pkey   ,pkey))
+                                           :fee 10)))
+             
+             ;; send TX to all nodes
+             (send-tx-to-all trans)
+             
+             (pr "Find UTX for Mary")
+             (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
+                    (amt    (uncloaked-txout-amt utxm))
+                    (gamma  (uncloaked-txout-gamma utxm)))
                
-               ;; send TX to all nodes
-               (send-tx-to-all (setf *trans1* trans))
-               
-               (pr "Find UTX for Mary")
-               (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
-                      (amt    (uncloaked-txout-amt utxm))
-                      (gamma  (uncloaked-txout-gamma utxm)))
-                 
-                 (pr "Construct 2nd transaction")
-                 (let ((trans (make-transaction :ins `((:kind :uncloaked
-                                                        :amount ,amt
-                                                        :gamma  ,gamma
-                                                        :pkey   ,pkeym
-                                                        :skey   ,skeym))
-                                                :outs `((:kind :uncloaked
-                                                         :amount 250
-                                                         :pkey   ,pkeym)
-                                                        (:kind :uncloaked
-                                                         :amount 490
-                                                         :pkey  ,pkey))
-                                                :fee 10)))
-                   ;; send TX to all nodes
-                   (send-tx-to-all (setf *trans2* trans))
-                   ))))))
+               (pr "Construct 2nd transaction")
+               (let ((trans (make-transaction :ins `((:kind :uncloaked
+                                                      :amount ,amt
+                                                      :gamma  ,gamma
+                                                      :pkey   ,pkeym
+                                                      :skey   ,skeym))
+                                              :outs `((:kind :uncloaked
+                                                       :amount 250
+                                                       :pkey   ,pkeym)
+                                                      (:kind :uncloaked
+                                                       :amount 490
+                                                       :pkey  ,pkey))
+                                              :fee 10)))
+                 ;; send TX to all nodes
+                 (send-tx-to-all trans)
+                 )))))
        ;; ------------------------------------------------------------------------
        (sleep 10)
        (map nil (lambda (node)
