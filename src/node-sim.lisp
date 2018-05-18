@@ -156,44 +156,33 @@ This will spawn an actor which will asynchronously do the following:
 
   (cosi-simgen::reset-nodes) 
 
-  ;; simulator: fake elections send the timer to this actor, to simulate elections 
-  ;; and print results without actually changing the leader (which must always be a real node)
-  (let ((election-faker (ac:make-actor
-                         (lambda (&rest msg)
-                           (if (and (eq :hold-an-election (first msg))
-                                    (>= 2 (length msg))
-                                    (numberp (second msg)))
-                               (let ((n (second msg)))
-                                 (ac:pr (format nil "got :hold-an-election ~A" n))
-                                 (let ((tree (emotiq/elections:hold-election n)))
-                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
-                             (error "bad message to election-faker ~A" msg))))))
-    (emotiq/elections:make-election-beacon election-faker))
+  (emotiq/elections:make-election-beacon)
                                          
-  (ac:spawn
-   (lambda ()
-     (let ((fee 10))
-       (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
-              (user-1-pkey (pbc:keying-triple-pkey *user-1*))
-              (user-2-pkey (pbc:keying-triple-pkey *user-2*))
-              (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
-         
-         (ac:pr "Construct Genesis transaction")
-         (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
-           ;; secrg (see tst-blk) is ignored and not even returned
-           (let ((trans (create-transaction *genesis-account* genesis-utxo
+  ;(ac:spawn  ;; cosi-handlers assumes that there is one block in the blockchain, if you spawn here,
+  ; you might get errors in cosi-handlers if leader-exec runs before this code...
+  ; (lambda ()
+  (let ((fee 10))
+    (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
+           (user-1-pkey (pbc:keying-triple-pkey *user-1*))
+           (user-2-pkey (pbc:keying-triple-pkey *user-2*))
+           (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
+      
+      (ac:pr "Construct Genesis transaction")
+      (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
+        ;; secrg (see tst-blk) is ignored and not even returned
+        (let ((trans (create-transaction *genesis-account* genesis-utxo
                                             ; user1 gets 1000 from genesis (fee = 0)
-                                            '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-             (publish-transaction (setf *tx-1* trans) "tx-1")
-             (ac:pr "Find UTX for user-1")
-             (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
-               (ac:pr "Construct 2nd transaction")
-               (let ((trans (create-transaction *user-1* from-utxo 
+                                         '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
+          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block
+          (ac:pr "Find UTX for user-1")
+          (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
+            (ac:pr "Construct 2nd transaction")
+            (let ((trans (create-transaction *user-1* from-utxo 
                                                 ; user1 spends 500 to user2, 490 to user3, 10 for fee
-                                                '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
-                 (publish-transaction (setf *tx-2* trans) "tx-2")
-                 ))))))
-     (force-epoch-end))))
+                                             '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
+              ;; allow leader elections to create this block
+              #+nil(publish-transaction (setf *tx-2* trans) "tx-2")
+              )))))))
 
 
 (defun blocks ()
@@ -219,18 +208,4 @@ This will spawn an actor which will asynchronously do the following:
 (defun sort-nodes-by-stake (node-list)
     (sort node-list '< :key #'cosi-simgen::node-stake))
 
-
-#+nil (defun make-dispatcher ()
-  (let ((election-faker (ac:make-actor
-                         (lambda (&rest msg)
-                           (if (and (eq :hold-an-election (first msg))
-                                    (>= 2 (length msg))
-                                    (numberp (second msg)))
-                               (let ((n (second msg)))
-                                 (ac:pr (format nil "got :hold-an-election ~A" n))
-                                 (let ((tree (emotiq/elections:hold-election n)))
-                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
-                             (delegate-handler msg))))))
-    (emotiq/elections:make-election-beacon election-faker)
-    election-faker))
 

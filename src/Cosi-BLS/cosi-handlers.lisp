@@ -1057,7 +1057,8 @@ bother factoring it with NODE-COSI-SIGNING."
   (pr "Assemble new block")
   (let ((new-block 
           (cosi/proofs:create-block
-           (first *blockchain*) *election-proof* *leader*
+           (first *blockchain*)
+           *election-proof* *leader*
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
         (self      (current-actor)))
@@ -1079,8 +1080,7 @@ bother factoring it with NODE-COSI-SIGNING."
                                 (cond ((check-byz-threshold bits new-block)
                                        #+(or)
                                        (inspect new-block)
-                                       (pr "Block committed to blockchain")
-                                       (pr (format nil "Block signatures = ~D" (logcount (cosi/proofs:block-signature-bitmap new-block))))
+                                       (cosi-simgen::send node :block-finished)
                                        )
                                       
                                       (t
