@@ -1,0 +1,30 @@
+
+* Problem compiling clack-20170630-git with Lispworks
+
+#+BEGIN_EXAMPLE
+(defmethod hunchentoot:process-connection :around ((acceptor clack-acceptor) socket)
+  (let ((flex:*substitution-char* #-abcl #\Replacement_Character
+                                  #+abcl #\?)
+        (*client-socket* socket))
+    (call-next-method)))
+#+END_EXAMPLE
+
+Resolved by using local git clone
+<git+ssh://git@github.com:fukamachi/clack.git> which contains Manuel
+Simoni's LispWorks patch.
+
+
+* LispWorks HUNCHENSOCKET times out socket connections quickly
+
+The code path in Hunchentoot for LispWorks is very different from
+other implementations, so the code in set-timeouts.lisp is certainly
+not being used.  `lispworks.lisp` uses the acceptor timeouts to set a
+stream timeout, but it is not clear that this is carried over into the
+underlying socket.  
+
+It is odd that WEBSOCKET-DRIVER using the Hunchensocket backend does
+not seem to do anything additional with sockets but does not evidence
+this problem.
+
+
+
