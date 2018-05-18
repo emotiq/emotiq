@@ -219,6 +219,7 @@ THE SOFTWARE.
 (define-symbol-macro *curve*   (bp-basis-curve  *bp-basis*))
 (define-symbol-macro *nbits*   (bp-basis-nbits  *bp-basis*))
 
+#| ;; for 192 bit security...
 (defvar *bp-basis*
   (make-bp-basis :CURVE :CURVE-E382
                  :NBITS 64
@@ -612,9 +613,9 @@ THE SOFTWARE.
 
 (defvar *chk-bp-basis*
   #xf517bb89109c3b7470a97f0c4b6fc1647e515f9426fbb5aa6f0786065e29c99d)
+|#
 
-
-#|
+#| ;; for 128 bit security |#
 (defvar *bp-basis*
   ;; define fully here for default basis so we have comparable proofs
   ;; across blockchain
@@ -1014,7 +1015,7 @@ THE SOFTWARE.
 
 (defvar *chk-bp-basis*
   #xdbb5d20d21439523959d090d0477ca7f51e5771f031afa0221f8c1faa860fca7)
-|#
+#| |#
 
 ;; --------------------------------------------------------------------------------
 
