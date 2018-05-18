@@ -79,4 +79,9 @@
 
 
   
-
+(defpackage emotiq/elections
+  (:use #:cl)
+  (:export 
+   #:set-nodes
+   #:make-election-beacon
+   #:hold-election))

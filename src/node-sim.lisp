@@ -42,6 +42,13 @@ witnesses."
   (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
   (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
   (cosi-simgen::init-sim)
+
+  ;; should this following code be executed every time or only when a new configuration is created?
+  (let ((node-list (list-of-nodes)))
+    (assert node-list)
+    (assign-phony-stake-to-nodes node-list)
+    (emotiq/elections:set-nodes (sort-nodes-by-stake node-list)))
+
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -148,6 +155,21 @@ This will spawn an actor which will asynchronously do the following:
 
 
   (cosi-simgen::reset-nodes) 
+
+  ;; simulator: fake elections send the timer to this actor, to simulate elections 
+  ;; and print results without actually changing the leader (which must always be a real node)
+  (let ((election-faker (ac:make-actor
+                         (lambda (&rest msg)
+                           (if (and (eq :hold-an-election (first msg))
+                                    (>= 2 (length msg))
+                                    (numberp (second msg)))
+                               (let ((n (second msg)))
+                                 (ac:pr (format nil "got :hold-an-election ~A" n))
+                                 (let ((tree (emotiq/elections:hold-election n)))
+                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
+                             (error "bad message to election-faker ~A" msg))))))
+    (emotiq/elections:make-election-beacon election-faker))
+                                         
   (ac:spawn
    (lambda ()
      (let ((fee 10))
@@ -177,4 +199,38 @@ This will spawn an actor which will asynchronously do the following:
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
   (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
+
+;; hacked copy of cosi-simgen::assign-bits()
+(defun list-of-nodes ()
+  (let ((collected
+         (um:accum acc
+           (maphash (lambda (k node)
+                      (declare (ignore k))
+                      (acc node))
+                    cosi-simgen::*ip-node-tbl*))))
+    collected))
+
+(defun assign-phony-stake-to-nodes (node-list)
+  ;; set the node-stake slot of every node to a random number <= 100,000
+  (dolist (node node-list)
+        (let ((phony-stake (random 100000)))
+          (setf (cosi-simgen::node-stake node) phony-stake))))
+
+(defun sort-nodes-by-stake (node-list)
+    (sort node-list '< :key #'cosi-simgen::node-stake))
+
+
+#+nil (defun make-dispatcher ()
+  (let ((election-faker (ac:make-actor
+                         (lambda (&rest msg)
+                           (if (and (eq :hold-an-election (first msg))
+                                    (>= 2 (length msg))
+                                    (numberp (second msg)))
+                               (let ((n (second msg)))
+                                 (ac:pr (format nil "got :hold-an-election ~A" n))
+                                 (let ((tree (emotiq/elections:hold-election n)))
+                                   (ac:pr (format nil "~%election results(~A) ~A~%" n tree))))
+                             (delegate-handler msg))))))
+    (emotiq/elections:make-election-beacon election-faker)
+    election-faker))
 
