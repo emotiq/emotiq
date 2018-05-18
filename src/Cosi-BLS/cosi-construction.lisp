@@ -170,7 +170,7 @@ THE SOFTWARE.
                               :parent  parent
                               :real-ip *comm-ip*
                               )))
-    (setf (node-self node) (make-node-dispatcher node)
+    (setf (node-self node) (cosi-simgen::make-node-dispatcher node) ;(make-node-dispatcher node)
           (gethash ipstr *ip-node-tbl*)   node
           (gethash pval  *pkey-node-tbl*) node)))
 
