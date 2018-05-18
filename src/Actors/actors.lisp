@@ -489,13 +489,19 @@ THE SOFTWARE.
   (or (functionp obj)
       (and (symbolp obj)
            (fboundp obj))))
+ 
+(define-condition invalid-send-target (simple-error)
+  ((target :initarg :target :initform nil :accessor target))
+  (:documentation "An error indicating a target of SEND that cannot be resolved into something valid.")
+  (:report (lambda (condition stream)
+	     (format stream "~%Invalid SEND target: ~&  ~S" (target condition)))))
 
 (defmethod send (other-obj &rest message)
   (let ((mfn (car message)))
     (if (funcallable-p mfn)
       (apply mfn other-obj (cdr message))
       ;; else
-      (error "Invalid SEND target"))
+      (error 'invalid-send-target :target other-obj))
     ))
 
 ;; ------------------------------------------
@@ -615,16 +621,16 @@ THE SOFTWARE.
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
 (defvar *maximum-age*        3)   ;; how long before watchdog should bark
-(defvar *nbr-execs*               ;; should match the number of CPU Cores
+(defvar *nbr-execs*               ;; should match the number of CPU Cores but never less than 4
   #+(AND :LISPWORKS :MACOSX)
   (load-time-value
    (with-open-stream (s (sys:open-pipe "sysctl -n hw.logicalcpu"))
      (let ((ans (ignore-errors (parse-integer (read-line s nil nil)))))
        (or (and (integerp ans)
                 ans)
-           4))))
+           (max 4 ans)))))
   #+:CLOZURE
-  (ccl:cpu-count)
+  (max 4 (ccl:cpu-count))
   #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
 
 ;; ----------------------------------------------------------------
