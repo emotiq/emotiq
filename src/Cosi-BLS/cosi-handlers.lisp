@@ -867,9 +867,10 @@ check that each TXIN and TXOUT is mathematically sound."
     (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
          (check-block-transactions-hash blk)
          ;; check multisig as valid signature on header
-         (pbc:check-message
-          (make-instance 'pbc:
-                         hash sig mpkey)
+         (pbc:check-message (make-instance 'pbc:signed-message
+                                           :msg  hash
+                                           :pkey mpkey
+                                           :sig  sig))
          ;; ensure multisign pkey is sum of witness pkeys
          (int= mpkey wsum))))
 
