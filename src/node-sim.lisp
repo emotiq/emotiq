@@ -173,7 +173,7 @@ This will spawn an actor which will asynchronously do the following:
         (let ((trans (create-transaction *genesis-account* genesis-utxo
                                             ; user1 gets 1000 from genesis (fee = 0)
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block
+          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
           (ac:pr "Find UTX for user-1")
           (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
             (ac:pr "Construct 2nd transaction")
