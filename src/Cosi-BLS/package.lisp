@@ -173,6 +173,7 @@
    :hash-block 
    :update-block-signature
    :serialize-block-octets
+   :serialize-block-header-octets
    :compute-merkle-root-hash
 
    :block-transactions

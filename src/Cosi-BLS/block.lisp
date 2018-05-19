@@ -104,7 +104,6 @@
    newer block on the blockchain.")
 
 
-
 (defun serialize-block-octets (block)
   "Return a serialization of BLOCK as a list of octet vectors for the slots in
    \*names-of-block-slots-to-serialize*. It is an error to call this before all
@@ -113,6 +112,32 @@
   (loop for slot-name in *names-of-block-slots-to-serialize*
         collect (loenc:encode (slot-value block slot-name))))
 
+
+(defparameter *names-of-block-header-slots-to-serialize*
+  '(protocol-version 
+    epoch
+    prev-block-hash
+    timestamp
+
+    leader-pkey
+
+    election-proof
+
+    witnesses
+    
+    merkle-root-hash)
+  "These slots are serialized and then hashed. The hash is stored as
+   the block-hash on the current block and the prev-block-hash on a
+   newer block on the blockchain. These slots represent the block header only.")
+
+(defun serialize-block-header-octets (block)
+  "Return a serialization of BLOCK header as a list of octet vectors
+for the slots in *names-of-block-slots-to-serialize*. It is an error
+to call this before all slots are bound. This is to be used to hash a
+previous block, i.e., on that has been fully formed and already been
+added to the blockchain."
+  (loop for slot-name in *names-of-block-header-slots-to-serialize*
+        collect (loenc:encode (slot-value block slot-name))))
 
 
 (defvar *unix-epoch-ut* (encode-universal-time 0 0 0 1 1 1970 0)
