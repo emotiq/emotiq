@@ -841,47 +841,71 @@ check that each TXIN and TXOUT is mathematically sound."
       (> (logcount bits)
          (* 2/3 (length (cosi/proofs:block-witnesses blk))))))
 
+(defun check-block-transactions-hash (blk)
+  (int= (block-merkle-root-hash blk) ;; check transaction hash against header
+        (compute-merkle-root-hash
+         (block-transactions blk))))
+  
+(defun check-block-multisignature (blk)
+  (let* ((bits  (block-signature-bitmap blk))
+         (sig   (block-signature blk))
+         (mpkey (block-signature-pkey blk))
+         (wvec  (block-witnesses blk))
+         (hash  (signature-hash-message blk))
+         (wsum  nil))
+
+    ;; compute composite witness key sum
+    (loop for wkey across wvec
+          for tbits = bits then (ash tbits -1)
+          while (plusp tbits)
+          do
+          (when (oddp tbits)
+            (setf wsum (if wsum
+                           (pbc:add-pts wsum wkey)
+                         wkey))))
+
+    (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
+         (check-block-transactions-hash blk)
+         ;; check multisig as valid signature on header
+         (pbc:check-message
+          (make-instance 'pbc:
+                         hash sig mpkey)
+         ;; ensure multisign pkey is sum of witness pkeys
+         (int= mpkey wsum))))
+
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (or (int= (node-pkey node) *leader*)
-         (let ((txs  (get-block-transactions blk)))
-           (or (check-block-transactions txs)
-               ;; back out changes to *utxo-table*
-               (progn
-                 (dolist (tx txs)
-                   (unspend-utxos tx))
-                 nil)))))
+     (and (check-block-transactions-hash blk)
+          (or (int= (node-pkey node) *leader*)
+              (let ((txs  (get-block-transactions blk)))
+                (or (check-block-transactions txs)
+                    ;; back out changes to *utxo-table*
+                    (progn
+                      (dolist (tx txs)
+                        (unspend-utxos tx))
+                      nil))))))
 
     (:commit
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (let ((signed (check-byz-threshold 
-                    (cosi/proofs:block-signature-bitmap blk)
-                    blk)))
-       (unless signed
-         (cleanup-mempool (get-block-transactions blk)))
-       (when (and signed
-                  (or (int= (node-pkey node) *leader*)
-                      (int= (cosi/proofs:block-merkle-root-hash blk)
-                            (compute-merkle-root-hash
-                             (cosi/proofs:block-transactions blk)))
-                      (pbc:check-message (make-instance 'pbc:signed-message
-                                                        :msg  (signature-hash-message  blk)
-                                                        :pkey (cosi/proofs:block-signature-pkey blk)
-                                                        :sig  (cosi/proofs:block-signature blk)))))
-         (push blk *blockchain*)
-         (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
-         ;; clear out *mempool* and spent utxos
-         (dolist (tx (get-block-transactions blk))
-           (remove-tx-from-mempool tx)
-           (dolist (txin (trans-txins tx))
-             (remove-utxo txin)))
-         t ;; return true to validate
-         )))
+     (if (check-block-multisignature blk)
+         (progn
+           (push blk *blockchain*)
+           (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
+           ;; clear out *mempool* and spent utxos
+           (dolist (tx (get-block-transactions blk))
+             (remove-tx-from-mempool tx)
+             (dolist (txin (trans-txins tx))
+               (remove-utxo txin)))
+           t) ;; return true to validate
+       ;; else
+       (progn
+         (cleanup-mempool (get-block-transactions blk))
+         nil)))
     ))
 
 (defun node-cosi-signing (node reply-to consensus-stage blk seq-id timeout)
