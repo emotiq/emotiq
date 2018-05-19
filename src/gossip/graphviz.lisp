@@ -76,7 +76,7 @@
 |#
 
 (defmethod draw-node ((node gossip-node) stream edgetable)
-  (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+  (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\\N\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
           (short (uid node))
           (uid node))
   (dolist (neighbor (neighbors node))
