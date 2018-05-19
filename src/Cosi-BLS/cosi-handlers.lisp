@@ -336,7 +336,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
 
 (defun signature-hash-message (blk)
-  (cosi/proofs:serialize-block-octets blk))
+  (cosi/proofs:serialize-block-header-octets blk))
 
 (defun get-block-transactions (blk)
   "Right now it is a simple partially ordered list of transactions.
@@ -851,7 +851,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (sig   (block-signature blk))
          (mpkey (block-signature-pkey blk))
          (wvec  (block-witnesses blk))
-         (hash  (signature-hash-message blk))
+         (hash  (hash/256 (signature-hash-message blk)))
          (wsum  nil))
 
     ;; compute composite witness key sum
@@ -867,10 +867,7 @@ check that each TXIN and TXOUT is mathematically sound."
     (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
          (check-block-transactions-hash blk)
          ;; check multisig as valid signature on header
-         (pbc:check-message (make-instance 'pbc:signed-message
-                                           :msg  hash
-                                           :pkey mpkey
-                                           :sig  sig))
+         (pbc:check-hash hash sig mpkey)
          ;; ensure multisign pkey is sum of witness pkeys
          (int= mpkey wsum))))
 
