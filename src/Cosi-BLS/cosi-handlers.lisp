@@ -260,11 +260,10 @@ Connecting to #$(NODE "10.0.1.6" 65000)
    (lambda ()
      (let* ((my-ip    (node-real-ip *my-node*))
             (my-port  (start-ephemeral-server))
-            (ret      (make-return-addr my-ip my-port)))
+            (ret      (current-actor)))
          (labels
              ((exit ()
                 (become 'do-nothing)
-                (unregister-return-addr ret)
                 (shutdown-server my-port)))
            (pr :my-port my-port)
            #+:LISPWORKS (inspect ret)
@@ -287,11 +286,10 @@ Connecting to #$(NODE "10.0.1.6" 65000)
    (lambda ()
      (let* ((my-ip    (node-real-ip *my-node*))
             (my-port  (start-ephemeral-server))
-            (ret      (make-return-addr my-ip my-port)))
+            (ret      (current-actor)))
        (labels
            ((exit ()
               (become 'do-nothing)
-              (unregister-return-addr ret)
               (shutdown-server my-port)))
          (pr :my-port my-port)
          #+:LISPWORKS (inspect ret)
@@ -727,13 +725,8 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun sub-signing (my-node consensus-stage msg seq-id timeout)
   (=lambda (node)
-    (let ((start    (get-universal-time))
-          (ret-addr (make-return-addr my-node)))
-      (send node :answer :in-pre-sub-signing)
-      (sleep 1)
-      (send node :answer :in-pre-sub-signing)
-      (send node :signing ret-addr consensus-stage msg seq-id timeout)
-      (send node :answer :in-sub-signing)
+    (let ((start  (get-universal-time)))
+      (send node :signing (current-actor) consensus-stage msg seq-id timeout)
       (labels
           ((!dly ()
                  #+:LISPWORKS
@@ -743,7 +736,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
                (=return (val)
                  (!dly)
-                 (unregister-return-addr ret-addr)
+                 (become 'do-nothing) ;; stop responding to messages
                  (=values val))
                
                (wait ()
@@ -781,20 +774,25 @@ check that each TXIN and TXOUT is mathematically sound."
   (cond ((and *use-gossip*
               (int= (node-pkey my-node) *leader*))
          ;; we are leader node, so fire off gossip spray and await answers
-         (let ((ret-addr (make-return-addr my-node))
-               (start    nil)
-               (g-bits   0)
-               (g-sig    nil))
+         (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
+               (start     nil)
+               (g-cnt     0)
+               (g-bits    0)
+               (g-sig     nil))
            
            (pr "Running Gossip Signing")
-           (gossip-neighborcast my-node :signing ret-addr consensus-stage msg seq-id timeout)
+           (gossip-neighborcast my-node :signing (current-actor) consensus-stage msg seq-id timeout)
            (setf start (get-universal-time))
            
            (labels
                ((=return (val)
-                  (unregister-return-addr ret-addr)
                   (pr "Return from Gossip Signing")
+                  (become 'do-nothing) ;; stop responding to messages
                   (=values val))
+
+                (=finish ()
+                  (=return (and g-sig
+                                (list g-sig g-bits))))
                 
                 (wait ()
                   (let ((stop (get-universal-time)))
@@ -809,15 +807,16 @@ check that each TXIN and TXOUT is mathematically sound."
                              g-sig  (if g-sig
                                         (pbc:combine-signatures g-sig sig)
                                       sig)))
-                     (wait))
+                     (if (> (incf g-cnt) bft-thrsh)
+                         (=finish)
+                       (wait)))
                     
                     (msg
                      (pr (format nil "Gossip-wait got unknown message: ~A" msg))
                      (wait))
                     
                     :TIMEOUT    timeout
-                    :ON-TIMEOUT (=return (and g-sig
-                                              (list g-sig g-bits)))
+                    :ON-TIMEOUT (=finish)
                     )))
              (wait))))
         
@@ -906,6 +905,8 @@ check that each TXIN and TXOUT is mathematically sound."
          (cleanup-mempool (get-block-transactions blk))
          nil)))
     ))
+
+;; ----------------------------------------------------------------------------
 
 (defun node-cosi-signing (node reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
@@ -1165,39 +1166,33 @@ bother factoring it with NODE-COSI-SIGNING."
    (lambda ()
      (send *dly-instr* :clr)
      (send *dly-instr* :pltwin :histo-4)
-     (let ((ret   (make-return-addr *my-node*))
-           (start (get-universal-time)))
-       (labels
-           ((exit ()
-              (unregister-return-addr ret)))
-         (send *leader* :cosi-sign ret "This is a test message!" 10)
-         (recv
-           ((list :answer
-                  (and msg
-                       (list :signature sig bits)))
-            (send *dly-instr* :plt)
-            (ac:pr
-             (format nil "Total Witnesses: ~D" (logcount bits))
-             msg
-             (format nil "Duration = ~A" (- (get-universal-time) start)))
+     (let ((start (get-universal-time))
+           (ret   (current-actor)))
+       (send *leader* :cosi-sign ret "This is a test message!" 10)
+       (recv
+         ((list :answer
+                (and msg
+                     (list :signature sig bits)))
+          (send *dly-instr* :plt)
+          (ac:pr
+           (format nil "Total Witnesses: ~D" (logcount bits))
+           msg
+           (format nil "Duration = ~A" (- (get-universal-time) start)))
+          
+          (send *leader* :validate ret sig bits)
+          (recv
+            ((list :answer :validation t/f)
+             (if t/f
+                 (ac:pr :valid-signature)
+               (ac:pr :invalid-signature)))
             
-            (send *leader* :validate ret sig bits)
-            (recv
-              ((list :answer :validation t/f)
-               (if t/f
-                   (ac:pr :valid-signature)
-                 (ac:pr :invalid-signature))
-               (exit))
-              
-              (msg
-               (error "ValHuh?: ~A" msg)
-               (exit))
-              ))
-           
-           (msg
-            (error "Huh? ~A" msg)
-            (exit))
-           ))))))
+            (msg
+             (error "ValHuh?: ~A" msg))
+            ))
+         
+         (msg
+          (error "Huh? ~A" msg))
+         )))))
 
 ;; -----------------------------------------------------------------------------------
 ;; Test block assembly and verification...

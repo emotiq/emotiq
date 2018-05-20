@@ -1,11 +1,7 @@
 
 (in-package :cosi-simgen)
 
-(defclass return-addr ()
-  ((pkey     :reader   return-addr-pkey ;; node pkey for the actor
-             :initarg  :pkey)
-   (aid      :reader   return-addr-aid  ;; actor id for returns
-             :initarg  :aid)))
+;; -----------------------------------------------------------------
 
 (defparameter *aid-tbl*
   ;; assoc between Actors and AID's
@@ -13,7 +9,8 @@
                 :weak-kind :value)
   #+:ALLEGRO   (make-hash-table
                 :values :weak)
-  #+:CLOZURE   (make-hash-table :weak :value)
+  #+:CLOZURE   (make-hash-table
+                :weak :value)
   )
 
 ;; this is just a sanity check set in (unregister-aid) and checked
@@ -33,6 +30,13 @@
        (remhash aid *aid-tbl*))
      ))
 
+#|
+(defclass return-addr ()
+  ((pkey     :reader   return-addr-pkey ;; node pkey for the actor
+             :initarg  :pkey)
+   (aid      :reader   return-addr-aid  ;; actor id for returns
+             :initarg  :aid)))
+
 (defmethod make-return-addr ((node node))
   (make-return-addr (node-pkey node)))
 
@@ -51,6 +55,30 @@
 
 (defmethod unregister-return-addr ((ret return-addr))
   (unregister-aid (return-addr-aid ret)))
+|#
+;; -----------------------------------------------------------------
+
+(defvar *machine-ip-addr* (comm:get-host-entry (machine-instance) :fields '(:address)))
+(defvar *cosi-port* 65001)
+
+(defstruct actor-return-addr
+  (ip   *machine-ip-addr*)
+  (port *cosi-port*)
+  aid)
+
+(defmethod sdle-store:backend-store-object :around (backend (obj ACTORS:ACTOR) stream)
+  (let* ((aid  (or (ac:get-property obj 'aid)
+                   (setf (ac:get-property obj 'aid) (gen-uuid-int))))
+         (ret  (make-actor-return-addr
+                :aid  aid)))
+    (associate-aid-with-actor aid obj)
+    (call-next-method backend ret stream)))
+
+(defmethod send ((addr actor-return-addr) &rest msg)
+  (socket-send (actor-return-addr-ip   addr)
+               (actor-return-addr-port addr)
+               (actor-return-addr-aid  addr)
+               msg))
 
 ;; -----------------------------------------------------------
 
@@ -83,10 +111,12 @@
   (unless (node-byz node)
     (gossip-send (node-pkey node) nil msg)))
 
+#|
 (defmethod send ((ref return-addr) &rest msg)
   (gossip-send (return-addr-pkey ref)
                (return-addr-aid  ref)
                msg))
+|#
 
 (defmethod send ((node null) &rest msg)
   (ac:pr :sent-to-null msg)
@@ -103,7 +133,6 @@
 ;; --------------------------------------------------------------
 
 (defparameter *local-ip*    "127.0.0.1")
-(defparameter *cosi-port*         65001)
 
 (defmethod translate-pkey-to-ip-port ((pkey pbc:public-key))
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
