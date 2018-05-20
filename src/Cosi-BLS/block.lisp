@@ -13,6 +13,7 @@
       "Version of the protocol/software, an integer.")
 
    (epoch                               ; aka "height"
+    :reader  block-epoch
     :initarg :epoch
     :initform 0
     :documentation
@@ -23,18 +24,22 @@
      epoch subsumes height.")
 
    (prev-block-hash
+    :reader block-prev-block-hash
     :initform nil
     :documentation "Hash of previous block (nil for genesis block).")
 
    (timestamp
+    :reader block-timestamp
     :documentation 
       "Approximate creation time in seconds since Unix epoch. The time zone is UTC.")
 
    (leader-pkey
+    :reader block-leader-pkey
     :documentation
     "Public key for the leader for this epoch.")
 
-   (election-proof)
+   (election-proof
+    :reader block-election-proof)
 
    (signature
     :initform nil
