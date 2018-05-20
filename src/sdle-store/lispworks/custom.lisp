@@ -38,6 +38,7 @@
 |#
 #| |#
 ;; DM/RAL 07/09 -- better accommodation of unkown structure classes on restore
+
 (defstore-sdle-store (obj structure-object stream)
   (output-type-code +structure-object-code+ stream)
   (let* ((slot-names (structure:structure-class-slot-names (class-of obj))))
