@@ -875,15 +875,20 @@ check that each TXIN and TXOUT is mathematically sound."
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (and (check-block-transactions-hash blk)
-          (or (int= (node-pkey node) *leader*)
-              (let ((txs  (get-block-transactions blk)))
-                (or (check-block-transactions txs)
-                    ;; back out changes to *utxo-table*
-                    (progn
-                      (dolist (tx txs)
-                        (unspend-utxos tx))
-                      nil))))))
+     (let ((prevblk (first *blockchain*)))
+       (and (check-block-transactions-hash blk)
+            (or (null prevblk)
+                (and (> (block-epoch blk) (block-epoch prevblk))
+                     (> (block-timestamp blk) (block-timestamp prevblk))
+                     (int= (block-prev-block-hash blk) (hash-block prevblk))))
+            (or (int= (node-pkey node) *leader*)
+                (let ((txs  (get-block-transactions blk)))
+                  (or (check-block-transactions txs)
+                      ;; back out changes to *utxo-table*
+                      (progn
+                        (dolist (tx txs)
+                          (unspend-utxos tx))
+                        nil)))))))
 
     (:commit
      ;; message is a block with multisignature check signature for

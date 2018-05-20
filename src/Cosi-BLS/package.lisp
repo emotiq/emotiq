@@ -176,6 +176,11 @@
    :serialize-block-header-octets
    :compute-merkle-root-hash
 
+   :block-epoch
+   :block-prev-block-hash
+   :block-timestamp
+   :block-leader-pkey
+   :block-election-proof
    :block-transactions
    :block-witnesses
    :block-signature-bitmap
