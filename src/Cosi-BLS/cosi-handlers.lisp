@@ -878,7 +878,7 @@ check that each TXIN and TXOUT is mathematically sound."
      (let ((prevblk (first *blockchain*)))
        (and (check-block-transactions-hash blk)
             (or (null prevblk)
-                (and (> (block-epoch blk) (block-epoch prevblk))
+                (and (> (block-epoch blk)     (block-epoch prevblk))
                      (> (block-timestamp blk) (block-timestamp prevblk))
                      (int= (block-prev-block-hash blk) (hash-block prevblk))))
             (or (int= (node-pkey node) *leader*)
@@ -888,7 +888,8 @@ check that each TXIN and TXOUT is mathematically sound."
                       (progn
                         (dolist (tx txs)
                           (unspend-utxos tx))
-                        nil)))))))
+                        nil))
+                  )))))
 
     (:commit
      ;; message is a block with multisignature check signature for
