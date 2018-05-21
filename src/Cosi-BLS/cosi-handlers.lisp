@@ -110,14 +110,14 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------
 
-(defun make-node-dispatcher (node)
-  ;; use indirection to node-dispatcher for while we are debugging and
-  ;; extending the dispatcher. Saves reconstructing the tree every
-  ;; time the dispatching chanages.
-  (ac:make-actor
-   ;; one of these closures is stored in the SELF slot of every node
-   (lambda (&rest msg)
-     (apply 'node-dispatcher node msg))))
+;;; (defun make-node-dispatcher (node)
+;;;   ;; use indirection to node-dispatcher for while we are debugging and
+;;;   ;; extending the dispatcher. Saves reconstructing the tree every
+;;;   ;; time the dispatching chanages.
+;;;   (ac:make-actor
+;;;    ;; one of these closures is stored in the SELF slot of every node
+;;;    (lambda (&rest msg)
+;;;      (apply 'node-dispatcher node msg))))
 
 (defun crash-recovery ()
   ;; just in case we need to re-make the Actors for the network
@@ -530,6 +530,7 @@ invalid TX."
           
           (t
            ;; remove transaction from mempool
+           (error (format nil "double spend txn ~A" tx)) ;; TODO: 157602158 
            (remove-tx-from-mempool tx)
            (unspend-utxos tx)
            nil)
@@ -1085,7 +1086,8 @@ bother factoring it with NODE-COSI-SIGNING."
   (pr "Assemble new block")
   (let ((new-block 
           (cosi/proofs:create-block
-           (first *blockchain*) *election-proof* *leader*
+           (first *blockchain*)
+           *election-proof* *leader*
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
         (self      (current-actor)))
@@ -1107,8 +1109,7 @@ bother factoring it with NODE-COSI-SIGNING."
                                 (cond ((check-byz-threshold bits new-block)
                                        #+(or)
                                        (inspect new-block)
-                                       (pr "Block committed to blockchain")
-                                       (pr (format nil "Block signatures = ~D" (logcount (cosi/proofs:block-signature-bitmap new-block))))
+                                       (cosi-simgen::send node :block-finished)
                                        )
                                       
                                       (t
