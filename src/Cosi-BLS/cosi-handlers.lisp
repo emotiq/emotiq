@@ -126,7 +126,6 @@ THE SOFTWARE.
              (setf (node-self node) (make-node-dispatcher node)))
            *ip-node-tbl*))
 
-
 ;; -------------------------------------------------------
 ;; New leader node election... tree rearrangement
 
