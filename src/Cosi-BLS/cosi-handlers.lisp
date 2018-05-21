@@ -854,12 +854,13 @@ check that each TXIN and TXOUT is mathematically sound."
          (wsum  nil))
 
     ;; compute composite witness key sum
-    (loop for ix from 0 below (length wits) do
+    (loop for ix from 0
+          for wkey in (coerce wits 'list)
+          do
           (when (ith-witness-signed-p blk ix)
-            (let ((wkey (elt wits ix)))
-              (setf wsum (if wsum
-                             (pbc:add-pts wsum wkey)
-                           wkey)))))
+            (setf wsum (if wsum
+                           (pbc:add-pts wsum wkey)
+                         wkey))))
 
     (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
          (check-block-transactions-hash blk)
