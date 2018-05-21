@@ -37,8 +37,7 @@
         (cosi-simgen:send node :make-block)))))
 
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :make-block)) &key)
-  (when cosi-simgen:*blockchain* ;; don't publish empty blocks
-    (cosi-simgen:leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*)))
+  (cosi-simgen:leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*))
 
 #|
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :block-finished)) &key)

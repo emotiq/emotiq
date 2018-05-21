@@ -1180,68 +1180,70 @@ bother factoring it with NODE-COSI-SIGNING."
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
         (self      (current-actor)))
-    (ac:self-call :cosi-sign-prepare
-                  :reply-to  self
-                  :blk       new-block
-                  :timeout   prepare-timeout)
-    (pr "Waiting for Cosi prepare")
-    (labels
-        ((wait-prep-signing ()
-           (recv
-             ((list :answer (list :signature sig bits))
-              (let ((*current-node* node))
-                (update-block-signature new-block sig bits)
-                (ac:self-call :cosi-sign-commit
-                              :reply-to  self
-                              :blk       new-block
-                              :timeout   commit-timeout)
-                (pr "Waiting for Cosi commit")
-                (labels ((wait-cmt-signing ()
-                           (recv
-                             ((list :answer (list :signature _ bits))
-                              (let ((*current-node* node))
-                                (send *dly-instr* :plt)
-                                (cond ((check-byz-threshold bits new-block)
-                                       #+(or)
-                                       (inspect new-block)
-                                       (pr "Block added to blockchain")
-                                       ;; (cosi-simgen::send node :block-finished)
-                                       )
-                                      
-                                      (t
-                                       (pr "Failed to get sufficient signatures during commit phase"))
-                                      )))
-                             
-                             ((list :answer (list :corrupt-cosi-network))
-                              (pr "Corrupt Cosi network"))
-                             
-                             ((list :answer (list :timeout-cosi-network))
-                              (pr "Timeout waiting for commitment multisignature"))
-                             
-                             ;; ---------------------------------
-                             ((list :new-transaction msg)
-                              ;; allow processing of new transactions while we wait
-                              (let ((*current-node* node))
-                                (node-check-transaction msg)
-                                (wait-cmt-signing))
-                              ))))
-                  (wait-cmt-signing))))
-             
-             ((list :answer (list :corrupt-cosi-network))
-              (pr "Corrupt Cosi network"))
-             
-             ((list :answer (list :timeout-cosi-network))
-              (pr "Timeout waiting for prepare multisignature"))
-             
-             ;; ---------------------------------
-             ((list :new-transaction msg)
-              ;; allow processing of new transactions while we wait
-              (let ((*current-node* node))
-                (node-check-transaction msg)
-                (wait-prep-signing)))
-             )))
-      (wait-prep-signing)
-      )))
+    (when (block-transactions new-block) ;; don't do anything if block is empty
+      (ac:self-call :cosi-sign-prepare
+                    :reply-to  self
+                    :blk       new-block
+                    :timeout   prepare-timeout)
+      (pr "Waiting for Cosi prepare")
+      (labels
+          ((wait-prep-signing ()
+             (recv
+               ((list :answer (list :signature sig bits))
+                (let ((*current-node* node))
+                  (update-block-signature new-block sig bits)
+                  (ac:self-call :cosi-sign-commit
+                                :reply-to  self
+                                :blk       new-block
+                                :timeout   commit-timeout)
+                  (pr "Waiting for Cosi commit")
+                  (labels ((wait-cmt-signing ()
+                             (recv
+                               ((list :answer (list :signature _ bits))
+                                (let ((*current-node* node))
+                                  (send *dly-instr* :plt)
+                                  (cond ((check-byz-threshold bits new-block)
+                                         #+(or)
+                                         (inspect new-block)
+                                         (pr "Block added to blockchain")
+                                         (pr (format nil "Consensus count = ~A" (logcount bits)))
+                                         ;; (cosi-simgen::send node :block-finished)
+                                         )
+                                        
+                                        (t
+                                         (pr "Failed to get sufficient signatures during commit phase"))
+                                        )))
+                               
+                               ((list :answer (list :corrupt-cosi-network))
+                                (pr "Corrupt Cosi network"))
+                               
+                               ((list :answer (list :timeout-cosi-network))
+                                (pr "Timeout waiting for commitment multisignature"))
+                               
+                               ;; ---------------------------------
+                               ((list :new-transaction msg)
+                                ;; allow processing of new transactions while we wait
+                                (let ((*current-node* node))
+                                  (node-check-transaction msg)
+                                  (wait-cmt-signing))
+                                ))))
+                    (wait-cmt-signing))))
+               
+               ((list :answer (list :corrupt-cosi-network))
+                (pr "Corrupt Cosi network"))
+               
+               ((list :answer (list :timeout-cosi-network))
+                (pr "Timeout waiting for prepare multisignature"))
+               
+               ;; ---------------------------------
+               ((list :new-transaction msg)
+                ;; allow processing of new transactions while we wait
+                (let ((*current-node* node))
+                  (node-check-transaction msg)
+                  (wait-prep-signing)))
+               )))
+        (wait-prep-signing)
+        ))))
     
      
 ;; -------------------------------------------------------------------------------------
