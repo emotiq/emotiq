@@ -42,6 +42,10 @@ THE SOFTWARE.
 
 (defvar *current-node*  nil)  ;; for sim = current node running
 
+(defun current-node ()
+  *current-node*)
+
+#|
 (defun node-dispatcher (node &rest msg)
   (let ((*current-node* node))
     (um:dcase msg
@@ -107,8 +111,72 @@ THE SOFTWARE.
       (t (&rest msg)
          (error "Unknown message: ~A~%Node: ~A" msg (short-id node)))
       )))
+|#
 
 ;; -------------------------------------------------------
+
+(defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
+
+(defmethod node-dispatcher (msg-sym &key)
+  (declare (ignore args))
+  (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
+
+(defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
+  (reset-nodes))
+
+(defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
+  (ac:pr args))
+
+(defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
+  (record-new-utxo (bev (txout-hashlock utxo))))
+
+(defmethod node-dispatcher ((msg-sym (eql :make-block)) &key)
+  (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
+
+(defmethod node-dispatcher ((msg-sym (eql :cosi-sign-prepare)) &key reply-to blk timeout)
+  (node-compute-cosi reply-to :prepare blk timeout))
+
+(defmethod node-dispatcher ((msg-sym (eql :cosi-sign-commit)) &key reply-to blk timeout)
+  (node-compute-cosi reply-to :commit blk timeout))
+
+(defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
+  (node-check-transaction trn))
+
+(defmethod node-dispatcher ((msg-sym (eql :validate)) &key reply-to sig bits)
+  (node-validate-cosi reply-to sig bits))
+
+(defmethod node-dispatcher ((msg-sym (eql :public-key)) &key reply-to)
+  (reply reply-to :pkey+zkp (node-pkeyzkp *current-node*)))
+
+(defmethod node-dispatcher ((msg-sym (eql :election)) &key new-leader-pkey)
+  (node-elect-new-leader new-leader-pkey))
+
+(defmethod node-dispatcher ((msg-sym (eql :cosi-sign)) &key reply-to msg timeout)
+  (node-compute-cosi reply-to :notary msg timeout))
+
+(defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
+  (case consensus-stage
+    (:notary 
+     (node-cosi-notary-signing reply-to
+                               consensus-stage blk seq timeout))
+    (t
+     (node-cosi-signing reply-to
+                        consensus-stage blk seq timeout))
+    ))
+
+(defmethod node-dispatcher ((msg-sym (eql :add/change-node)) &key new-node-info)
+  (node-insert-node new-node-info))
+
+(defmethod node-dispatcher ((msg-sym (eql :remove-node)) &key node-pkey)
+  (node-remove-node node-pkey))
+
+;; ------------------------------------------------------------------------------------
+
+(defun make-node-dispatcher (node)
+  (ac:make-actor
+   (lambda (msg-sym &rest args)
+     (let ((*current-node* node))
+       (apply 'node-dispatcher msg-sym args)))))
 
 ;;; (defun make-node-dispatcher (node)
 ;;;   ;; use indirection to node-dispatcher for while we are debugging and
@@ -207,10 +275,11 @@ THE SOFTWARE.
           (increase-loading (node-parent node)))
         ))))
 
-(defun node-insert-node (node new-node-info)
+(defun node-insert-node (new-node-info)
   (destructuring-bind (ipstr port pkeyzkp) new-node-info
     (declare (ignore port)) ;; for now...
-    (let ((new-node (gethash ipstr *ip-node-tbl*)))
+    (let* ((node *current-node*)
+           (new-node (gethash ipstr *ip-node-tbl*)))
       (if new-node ;; already present in tree?
           ;; maybe caller just wants to change keying
           ;; won't be able to sign unless it know skey
@@ -231,8 +300,9 @@ THE SOFTWARE.
     (remhash pcmpr *pkey-node-tbl*)
     (remhash pcmpr *pkey-skey-tbl*)))
 
-(defun node-remove-node (node gone-node-pkey)
-  (let ((gone-node (gethash (int gone-node-pkey) *pkey-node-tbl*)))
+(defun node-remove-node (gone-node-pkey)
+  (let* ((node *current-node*)
+         (gone-node (gethash (int gone-node-pkey) *pkey-node-tbl*)))
     (when gone-node
       (node-model-remove-node gone-node)
       ;; must rebuild tree to absorb node's subnodes
@@ -726,7 +796,12 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun sub-signing (my-node consensus-stage msg seq-id timeout)
   (=lambda (node)
     (let ((start  (get-universal-time)))
-      (send node :signing (current-actor) consensus-stage msg seq-id timeout)
+      (send node :signing
+            :reply-to        (current-actor)
+            :consensus-stage consensus-stage
+            :blk             msg
+            :seq             seq-id
+            :timeout         timeout)
       (labels
           ((!dly ()
                  #+:LISPWORKS
@@ -781,7 +856,12 @@ check that each TXIN and TXOUT is mathematically sound."
                (g-sig     nil))
            
            (pr "Running Gossip Signing")
-           (gossip-neighborcast my-node :signing (current-actor) consensus-stage msg seq-id timeout)
+           (gossip-neighborcast my-node :signing
+                                :reply-to        (current-actor)
+                                :consensus-stage consensus-stage
+                                :blk             msg
+                                :seq             seq-id
+                                :timneout        timeout)
            (setf start (get-universal-time))
            
            (labels
@@ -913,12 +993,13 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ----------------------------------------------------------------------------
 
-(defun node-cosi-signing (node reply-to consensus-stage blk seq-id timeout)
+(defun node-cosi-signing (reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
-  (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
-  (let* ((subs (and (not *use-gossip*)
+  (let* ((node *current-node*)
+         (subs (and (not *use-gossip*)
                     (remove-if 'node-bad (group-subs node)))))
+    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
     (=bind (ans)
         (par
           (let ((*current-node* node))
@@ -979,14 +1060,15 @@ check that each TXIN and TXOUT is mathematically sound."
             (send reply-to :signed seq-id sig bits))
           )))))
 
-(defun node-cosi-notary-signing (node reply-to consensus-stage msg seq-id timeout)
+(defun node-cosi-notary-signing (reply-to consensus-stage msg seq-id timeout)
   "This code is for simple testing. It will disappear shortly. Don't
 bother factoring it with NODE-COSI-SIGNING."
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
-  (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
-  (let* ((subs (and (not *use-gossip*)
+  (let* ((node *current-node*)
+         (subs (and (not *use-gossip*)
                     (remove-if 'node-bad (group-subs node)))))
+    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
     (=bind (ans)
         (par
           (let ((*current-node* node))
@@ -1039,12 +1121,18 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; -----------------------------------------------------------
 
-(defun node-compute-cosi (node reply-to consensus-stage msg timeout)
+(defun node-compute-cosi (reply-to consensus-stage msg timeout)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
-  (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
+  (let ((node *current-node*)
+        (sess (gen-uuid-int)) ;; strictly increasing sequence of integers
         (self (current-actor)))
-    (ac:self-call :signing self consensus-stage msg sess timeout)
+    (ac:self-call :signing
+                  :reply-to        self
+                  :consensus-stage consensus-stage
+                  :blk             msg
+                  :seq             sess
+                  :timeout         timeout)
     (labels
         ((wait-signing ()
            (recv
@@ -1080,18 +1168,22 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
-(defun leader-exec (node prepare-timeout commit-timeout)
+(defun leader-exec (prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
-  (let ((new-block 
+  (let* ((node *current-node*)
+         (new-block 
           (cosi/proofs:create-block
            (first *blockchain*)
            *election-proof* *leader*
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
         (self      (current-actor)))
-    (ac:self-call :cosi-sign-prepare self new-block prepare-timeout)
+    (ac:self-call :cosi-sign-prepare
+                  :reply-to  self
+                  :blk       new-block
+                  :timeout   prepare-timeout)
     (pr "Waiting for Cosi prepare")
     (labels
         ((wait-prep-signing ()
@@ -1099,7 +1191,10 @@ bother factoring it with NODE-COSI-SIGNING."
              ((list :answer (list :signature sig bits))
               (let ((*current-node* node))
                 (update-block-signature new-block sig bits)
-                (ac:self-call :cosi-sign-commit self new-block commit-timeout)
+                (ac:self-call :cosi-sign-commit
+                              :reply-to  self
+                              :blk       new-block
+                              :timeout   commit-timeout)
                 (pr "Waiting for Cosi commit")
                 (labels ((wait-cmt-signing ()
                            (recv
@@ -1174,7 +1269,10 @@ bother factoring it with NODE-COSI-SIGNING."
      (send *dly-instr* :pltwin :histo-4)
      (let ((start (get-universal-time))
            (ret   (current-actor)))
-       (send *leader* :cosi-sign ret "This is a test message!" 10)
+       (send *leader* :cosi-sign
+             :reply-to ret
+             :msg      "This is a test message!"
+             :timeout  10)
        (recv
          ((list :answer
                 (and msg
@@ -1185,7 +1283,10 @@ bother factoring it with NODE-COSI-SIGNING."
            msg
            (format nil "Duration = ~A" (- (get-universal-time) start)))
           
-          (send *leader* :validate ret sig bits)
+          (send *leader* :validate
+                :reply-to ret
+                :sig      sig
+                :bits     bits)
           (recv
             ((list :answer :validation t/f)
              (if t/f
@@ -1214,11 +1315,13 @@ bother factoring it with NODE-COSI-SIGNING."
      (labels
          ((send-tx-to-all (tx)
             (map nil (lambda (node)
-                       (send node :new-transaction tx))
+                       (send node :new-transaction
+                             :trn tx))
                  *node-bit-tbl*))
           (send-genesis-to-all (utxo)
             (map nil (lambda (node)
-                       (send node :genesis-utxo utxo))
+                       (send node :genesis-utxo
+                             :utxo utxo))
                  *node-bit-tbl*)))
        
        ;; -------------------------------------------------------------
@@ -1299,11 +1402,13 @@ bother factoring it with NODE-COSI-SIGNING."
      (labels
          ((send-tx-to-all (tx)
             (map nil (lambda (node)
-                       (send node :new-transaction tx))
+                       (send node :new-transaction
+                             :trn tx))
                  *node-bit-tbl*))
           (send-genesis-to-all (utxo)
             (map nil (lambda (node)
-                       (send node :genesis-utxo utxo))
+                       (send node :genesis-utxo
+                             :utxo utxo))
                  *node-bit-tbl*)))
        
        ;; -------------------------------------------------------------

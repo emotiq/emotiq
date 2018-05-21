@@ -2,13 +2,14 @@
 
 (in-package :cosi-simgen)
 
+#|
 (defun make-node-dispatcher (node)
   "override make-node-dispatcher in cosi-handlers.lisp with our own dispatcher which delegates unknown
    messages to cosi-handlers.lisp"
   (ac:make-actor
    (lambda (&rest msg)
      (apply 'emotiq/sim::node-dispatcher node msg))))
-
+|#
 
 
 (in-package :emotiq/sim)
@@ -25,6 +26,25 @@
 ;; itself that COMMIT is finished (since everything is asynchronous, we can't know when the COMMIT has finished, other
 ;; than by sending a message).
 
+(defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
+  (ac:pr (format nil "got :hold-an-election ~A" n))
+  (let* ((node   (cosi-simgen:current-node))
+         (winner (emotiq/elections:hold-election n)))
+    (let ((me (eq winner node)))
+      (ac:pr (format nil "election results(~A) ~A" n (if me " *ME* " " not me ")))
+      (ac:pr (format nil "winner ~A me=~A" winner node))
+      (when me
+        (cosi-simgen:send node :make-block)))))
+
+(defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :make-block)) &key)
+  (when cosi-simgen:*blockchain* ;; don't publish empty blocks
+    (cosi-simgen:leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*)))
+
+(defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :block-finished)) &key)
+  (when cosi-simgen:*blockchain* ;; don't publish empty blocks
+    (cosi-simgen::leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*)))
+
+#|
 (defun node-dispatcher (node &rest msg)
 
   (if (and (= 2 (length msg))
@@ -54,3 +74,4 @@
         
         ;; else delegate message to cosi-simgen::node-dispatcher
         (apply 'cosi-simgen::node-dispatcher node msg)))))
+|#
