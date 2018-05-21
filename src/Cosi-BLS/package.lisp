@@ -176,6 +176,9 @@
    :serialize-block-header-octets
    :compute-merkle-root-hash
 
+   :ith-witness-signed-p
+   :set-ith-witness-signed-p
+
    :block-epoch
    :block-prev-block-hash
    :block-timestamp
