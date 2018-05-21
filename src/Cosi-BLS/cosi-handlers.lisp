@@ -120,15 +120,6 @@ THE SOFTWARE.
      (let ((*current-node* node))
        (apply 'node-dispatcher msg-sym args)))))
 
-;;; (defun make-node-dispatcher (node)
-;;;   ;; use indirection to node-dispatcher for while we are debugging and
-;;;   ;; extending the dispatcher. Saves reconstructing the tree every
-;;;   ;; time the dispatching chanages.
-;;;   (ac:make-actor
-;;;    ;; one of these closures is stored in the SELF slot of every node
-;;;    (lambda (&rest msg)
-;;;      (apply 'node-dispatcher node msg))))
-
 (defun crash-recovery ()
   ;; just in case we need to re-make the Actors for the network
   (maphash (lambda (k node)
@@ -1142,7 +1133,7 @@ bother factoring it with NODE-COSI-SIGNING."
                                   (cond ((check-byz-threshold bits new-block)
                                          #+(or)
                                          (inspect new-block)
-                                         (cosi-simgen::send node :block-finished))
+                                         (send node :block-finished))
                                         
                                         (t
                                          (pr "Failed to get sufficient signatures during commit phase"))
