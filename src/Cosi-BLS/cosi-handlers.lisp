@@ -45,73 +45,10 @@ THE SOFTWARE.
 (defun current-node ()
   *current-node*)
 
-#|
-(defun node-dispatcher (node &rest msg)
-  (let ((*current-node* node))
-    (um:dcase msg
-      ;; ----------------------------
-      ;; user accessible entry points - directed to leader node
-      
-      (:cosi-sign-prepare (reply-to msg timeout)
-       (node-compute-cosi node reply-to :prepare msg timeout))
-      
-      (:cosi-sign-commit (reply-to msg timeout)
-       (node-compute-cosi node reply-to :commit msg timeout))
-      
-      (:cosi-sign (reply-to msg timeout)
-       (node-compute-cosi node reply-to :notary msg timeout))
-      
-      (:new-transaction (msg)
-       (node-check-transaction msg))
-      
-      (:validate (reply-to sig bits)
-       (node-validate-cosi reply-to sig bits))
-      
-      (:public-key (reply-to)
-       (reply reply-to :pkey+zkp (node-pkeyzkp node)))
-
-      (:add/change-node (new-node-info)
-       (node-insert-node node new-node-info))
-      
-      (:remove-node (node-pkey)
-       (node-remove-node node node-pkey))
-
-      (:election (new-leader-pkey)
-       (node-elect-new-leader new-leader-pkey))
-      
-      ;; -------------------------------
-      ;; internal comms between Cosi nodes
-      
-      (:signing (reply-to consensus-stage msg seq timeout)
-       (case consensus-stage
-         (:notary 
-          (node-cosi-notary-signing node reply-to
-                                    consensus-stage msg seq timeout))
-         (t
-          (node-cosi-signing node reply-to
-                             consensus-stage msg seq timeout))
-         ))
-      
-      ;; -----------------------------------
-      ;; for sim and debug
-      
-      (:make-block ()
-       (leader-exec node *cosi-prepare-timeout* *cosi-commit-timeout*))
-
-      (:genesis-utxo (utxo)
-       (record-new-utxo (bev (txout-hashlock utxo))))
-      
-      (:answer (&rest msg)
-       ;; for round-trip testing
-       (ac:pr msg))
-
-      (:reset ()
-       (reset-nodes))
-      
-      (t (&rest msg)
-         (error "Unknown message: ~A~%Node: ~A" msg (short-id node)))
-      )))
-|#
+(define-symbol-macro *blockchain*     (node-blockchain *current-node*))
+(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
+(define-symbol-macro *mempool*        (node-mempool *current-node*))
+(define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
 
 ;; -------------------------------------------------------
 
@@ -169,6 +106,11 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :remove-node)) &key node-pkey)
   (node-remove-node node-pkey))
+
+(defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
+  (ac:pr "Block committed to blockchain")
+  (ac:pr (format nil "Block signatures = ~D"
+                 (logcount (block-signature-bitmap (first *blockchain*))))))
 
 ;; ------------------------------------------------------------------------------------
 
@@ -394,11 +336,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 
 (defvar *election-proof*   nil)
 (defvar *leader*           nil)
-
-(define-symbol-macro *blockchain*     (node-blockchain *current-node*))
-(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
-(define-symbol-macro *mempool*        (node-mempool *current-node*))
-(define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
@@ -1205,10 +1142,7 @@ bother factoring it with NODE-COSI-SIGNING."
                                   (cond ((check-byz-threshold bits new-block)
                                          #+(or)
                                          (inspect new-block)
-                                         (pr "Block added to blockchain")
-                                         (pr (format nil "Consensus count = ~A" (logcount bits)))
-                                         ;; (cosi-simgen::send node :block-finished)
-                                         )
+                                         (cosi-simgen::send node :block-finished))
                                         
                                         (t
                                          (pr "Failed to get sufficient signatures during commit phase"))
