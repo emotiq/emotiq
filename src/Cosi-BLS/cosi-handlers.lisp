@@ -1204,7 +1204,8 @@ bother factoring it with NODE-COSI-SIGNING."
                                 (cond ((check-byz-threshold bits new-block)
                                        #+(or)
                                        (inspect new-block)
-                                       (cosi-simgen::send node :block-finished)
+                                       (pr "Block added to blockchain")
+                                       ;; (cosi-simgen::send node :block-finished)
                                        )
                                       
                                       (t
