@@ -55,7 +55,6 @@ THE SOFTWARE.
 (defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
 
 (defmethod node-dispatcher (msg-sym &key)
-  (declare (ignore args))
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
