@@ -2,6 +2,10 @@
  
 (in-package :emotiq/sim)
 
+;; remove for production
+(defun eassert (bool-condition)
+  (assert bool-condition))
+
 (defun initialize (&key
                      (cosi-prepare-timeout 10)
                      (cosi-commit-timeout 10)
@@ -45,17 +49,16 @@ witnesses."
   nil
   "Genesis UTXO.")
 
-(defun send-genesis-utxo (&key (monetary-supply 1000) (cloaked t))
+(defun send-genesis-utxo (&key (monetary-supply 1000))
   (when *genesis-output*
     (error "Can't create more than one genesis UTXO."))
-  (let ((pkey  (pbc:keying-triple-pkey *genesis-account*)))
-    (print "Construct Genesis transaction")
-    (multiple-value-bind (utxog secrg)
-        (cosi/proofs:make-txout monetary-supply (if cloaked pkey nil))
-      (declare (ignore secrg))
-
-      (setf *genesis-output* utxog)
-      (broadcast-message :genesis-utxo utxog))))
+  (print "Construct Genesis transaction")
+  (multiple-value-bind (utxog secrg)
+      (cosi/proofs:make-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
+    (declare (ignore secrg))
+    
+    (setf *genesis-output* utxog)
+    (broadcast-message :genesis-utxo utxog)))
 
 (defun broadcast-message (message arg)
   (loop
@@ -63,15 +66,14 @@ witnesses."
      :doing (cosi-simgen::send (cosi-simgen::node-self node)
                                message arg)))
   
-(defun spend-from-genesis (receiver amount &key (cloaked t))
+(defun spend-from-genesis (receiver amount)
   (unless *genesis-output*
     (error "No genesis account to spend from."))
   (spend *genesis-account* *genesis-output*
          (pbc:keying-triple-pkey receiver)
-         amount
-         :cloaked cloaked))
+         amount))
 
-(defun spend (from from-utxo to-pubkey amount &key (cloaked t))
+(defun spend (from from-utxo to-pubkey amount)
   "from = from-account(key-pair), from-utxo = specific utxo to be spent here, to-pubkey = public key of receiver
     amount = number, bit-tbl = node's bit table"
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
@@ -85,15 +87,18 @@ witnesses."
                                    (cosi/proofs:txout-secr-gamma decrypted-from-utxo)
                                    from-public-key from-private-key)
           (multiple-value-bind (new-utxo new-utxo-secrets) ;; sends
-              (cosi/proofs:make-txout amount (if cloaked to-pubkey nil))
+              (cosi/proofs:make-txout amount to-pubkey)
             (let ((transaction (cosi/proofs:make-transaction (list txin)
                                                              (list txin-gamma)
                                                              (list new-utxo)
-                                                             (list new-utxo-secrets))))
+                                                             (list new-utxo-secrets)
+                                                             :skey from-private-key)))
+              
+              (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
               (broadcast-message :new-transaction transaction)
               transaction))))))
 
-(defun spend-list (from from-utxo to-pubkey-list amount-list &key (cloaked t))
+(defun spend-list (from from-utxo to-pubkey-list amount-list)
   " like spend, but allows multiple receivers, returns one transaction with multiple txouts"
   (with-accessors ((from-public-key pbc:keying-triple-pkey)
                    (from-private-key pbc:keying-triple-skey))
@@ -108,7 +113,7 @@ witnesses."
               (new-utxo-secrets-list nil))
           (mapc #'(lambda (to-pubkey amount)
                     (multiple-value-bind (new-utxo new-utxo-secrets)
-                        (cosi/proofs:make-txout amount (if cloaked to-pubkey nil))
+                        (cosi/proofs:make-txout amount to-pubkey)
                       (push new-utxo new-utxo-list)
                       (push new-utxo-secrets new-utxo-secrets-list)))
                 to-pubkey-list
@@ -116,12 +121,66 @@ witnesses."
           (let ((transaction (cosi/proofs:make-transaction (list txin)
                                                            (list txin-gamma)
                                                            new-utxo-list
-                                                           new-utxo-secrets-list)))
+                                                           new-utxo-secrets-list
+                                                           :skey from-private-key)))
+            (emotiq/sim:eassert (cosi/proofs::validate-transaction transaction))
             (broadcast-message :new-transaction transaction)
             transaction))))))
 
 (defun force-epoch-end ()
   (cosi-simgen::send cosi-simgen::*leader* :make-block))
+
+(defparameter *user-1* (pbc:make-key-pair :user-1))
+(defparameter *user-2* (pbc:make-key-pair :user-2))
+(defparameter *user-3* (pbc:make-key-pair :user-3))
+(defparameter *tx-1* nil)
+(defparameter *tx-2* nil)
+(defparameter *tx-3* nil)
+
+(defun run (&key (amount 1000))
+  "Run the block chain simulation entirely within the current process
+
+This will spawn an actor which will asynchronously do the following:
+
+  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
+      coins to *USER-1*.  The resulting transaction can be referenced
+      via *tx-1*.
+
+  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
+
+  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
+"
+
+  (setf *genesis-output* nil
+        *tx-1*           nil
+        *tx-2*           nil
+        *tx-3*           nil)
+  (cosi-simgen::reset-nodes) 
+  (ac:spawn
+   (lambda ()
+       (send-genesis-utxo :monetary-supply amount)
+       (let ((txn-genesis (spend-from-genesis *user-1* amount)))
+         (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
+           (assert (= 1 (length txout2)))
+           (let ((txn2 (spend *user-1*
+                              (first txout2)
+                              (pbc:keying-triple-pkey *user-2*)
+                              amount)))
+             (let ((txout2 (cosi/proofs::trans-txouts txn2))
+                   (change (floor (/ amount 2))))
+               (let ((txn3 (spend-list *user-2*
+                                       (first txout2)
+                                       (list (pbc:keying-triple-pkey *user-3*)
+                                             (pbc:keying-triple-pkey *user-2*))
+                                       (list (- amount change) change))))
+                 (force-epoch-end)
+                 (setf *tx-1* txn-genesis
+                       *tx-2* txn2
+                       *tx-3* txn3)))))))))
+
+(defun blocks ()
+  "Return the blocks in the chain currently under local simulation."
+  (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
 
 #|
 create a Genesis UTXO: (special case for initialization) AMT0
@@ -275,76 +334,4 @@ lookups
 - find-txin-for-pkey-hash (pkey-hash txn)
 - find-txout-for-pkey-hash (pkey-hash txn)
 
-|#
-
-
-(defparameter *user-1* (pbc:make-key-pair :user-1))
-(defparameter *user-2* (pbc:make-key-pair :user-2))
-(defparameter *user-3* (pbc:make-key-pair :user-3))
-(defparameter *tx-1* nil)
-(defparameter *tx-2* nil)
-(defparameter *tx-3* nil)
-
-(defun run (&key
-              (amount 1000)
-              (cloaked t)) ;;; non-cloaking does not currently work
-  "Run the block chain simulation entirely within the current process
-
-This will spawn an actor which will asynchronously do the following:
-
-  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
-      coins to *USER-1*.  The resulting transaction can be referenced
-      via *tx-1*.
-
-  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
-
-  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
-"
-
-  (setf *genesis-output* nil
-        *tx-1*           nil
-        *tx-2*           nil
-        *tx-3*           nil)
-  (cosi-simgen::reset-nodes) 
-  (ac:spawn
-   (lambda ()
-       (send-genesis-utxo :monetary-supply amount :cloaked cloaked)
-       (let ((txn-genesis (spend-from-genesis *user-1* amount :cloaked cloaked))) 
-         (let ((txout2 (cosi/proofs::trans-txouts txn-genesis)))
-           (assert (= 1 (length txout2)))
-           (let ((txn2 (spend *user-1*
-                              (first txout2)
-                              (pbc:keying-triple-pkey *user-2*)
-                              amount
-                              :cloaked cloaked)))
-             (let ((txout2 (cosi/proofs::trans-txouts txn2))
-                   (change (floor (/ amount 2))))
-               (let ((txn3 (spend-list *user-2*
-                                       (first txout2)
-                                       (list (pbc:keying-triple-pkey *user-3*)
-                                             (pbc:keying-triple-pkey *user-2*))
-                                       (list (- amount change) change)
-                                       :cloaked cloaked)))
-                 (force-epoch-end)
-                 (setf *tx-1* txn-genesis
-                       *tx-2* txn2
-                       *tx-3* txn3)))))))))
-
-(defun blocks ()
-  "Return the blocks in the chain currently under local simulation."
-  (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
-
-#|
-todo:
-- randomness
-- staking
-- election
-x remove ac:spawn from test-network, see if it still works
-x- txn that splits outputs
-- elections
-- insert :fee in transactions (new field)
-- txn dumper
-- get signing to work in sim (not always OK?) [what purpose?]
-- [ignore] investigate why I saw 5 blocks for 3 epochs?  intermittent?  Or temp bug during fixing?
-- uncloaked txouts
 |#
