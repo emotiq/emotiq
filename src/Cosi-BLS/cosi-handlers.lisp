@@ -850,19 +850,17 @@ check that each TXIN and TXOUT is mathematically sound."
   (let* ((bits  (block-signature-bitmap blk))
          (sig   (block-signature blk))
          (mpkey (block-signature-pkey blk))
-         (wvec  (block-witnesses blk))
+         (wits  (block-witnesses blk))
          (hash  (hash/256 (signature-hash-message blk)))
          (wsum  nil))
 
     ;; compute composite witness key sum
-    (loop for wkey across wvec
-          for tbits = bits then (ash tbits -1)
-          while (plusp tbits)
-          do
-          (when (oddp tbits)
-            (setf wsum (if wsum
-                           (pbc:add-pts wsum wkey)
-                         wkey))))
+    (loop for ix from 0 below (length wits) do
+          (when (ith-witness-signed-p blk ix)
+            (let ((wkey (elt wits ix)))
+              (setf wsum (if wsum
+                             (pbc:add-pts wsum wkey)
+                           wkey)))))
 
     (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
          (check-block-transactions-hash blk)
@@ -933,10 +931,11 @@ check that each TXIN and TXOUT is mathematically sound."
                    (list (pbc:sign-message (signature-hash-message blk)
                                            (node-pkey node)
                                            (node-skey node))
-                         (node-bitmap node)))
+                         (ash 1 (position (node-pkey node) (block-witnesses blk)
+                                          :test 'int=))))
                (progn
                  (ac:pr (format nil "Trans not validated ~A" (short-id node)))
-                 (list nil 0)))))
+                 (list nil nil)))))
 
           ;; ... and here is where we have all the subnodes in our
           ;; group do the same, recursively down the Cosi tree.

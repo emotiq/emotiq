@@ -268,16 +268,16 @@ added to the blockchain."
 
 (defmethod ith-witness-signed-p (block i)
   "Return true or false (nil) according to whether the ith witness has signed."
-  (with-slots (witness-bitmap) block
-    (logbitp i witness-bitmap)))
+  (with-slots (signature-bitmap) block
+    (logbitp i signature-bitmap)))
 
 (defmethod set-ith-witness-signed-p (block i signed-p)
   "Set signed-p to either true or false (nil) for witness at position i."
-  (with-slots (witness-bitmap) block
-    (setf witness-bitmap
+  (with-slots (signature-bitmap) block
+    (setf signature-bitmap
           (dpb (if signed-p 1 0)
                (byte 1 i)
-               witness-bitmap))))
+               signature-bitmap))))
 
 
 
