@@ -39,11 +39,10 @@
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :make-block)) &key)
   (cosi-simgen:leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*))
 
-#|
-(defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :block-finished)) &key)
-  (when cosi-simgen:*blockchain* ;; don't publish empty blocks
-    (cosi-simgen::leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*)))
-|#
+(defmethod cosi-simgen:node-dispatcher :around ((msg-sym (eql :block-finished)) &key)
+  (emotiq/elections::kill-beacon) ;; for simulator - so that we don't get a periodic call for elections when the simulated run is finished
+  (call-next-method))
+
 #|
 (defun node-dispatcher (node &rest msg)
 
