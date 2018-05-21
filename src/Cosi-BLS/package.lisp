@@ -148,6 +148,7 @@
    :trans-signature
    :make-transaction
    :validate-transaction
+   :validate-txout
 
    :find-txout-for-pkey-hash
    :decrypt-txout-info
@@ -241,8 +242,39 @@
    :with-borrowed-mailbox
    :pr)
   (:export
+   :*current-node*
+   :current-node
+   :node
+   :node-pkey
+   :node-skey
+   :node-stake
+   :node-self
+   :node-blockchain
+   :node-blockchain-tbl
+   :node-mempool
+   :node-utxo-table
+   :*top-node*
+   :*leader*
+   :*blockchain*
+   :*blockchain-tbl*
+   :*mempool*
+   :*utxo-table*
+   :*ip-node-tbl*
+   :*pkey-node-tbl*
+   :*pkey-skey-tbl*
+   :*node-bit-tbl*
+   :send
+   :reply
+   :node-dispatcher
+   :*cosi-prepare-timeout*
+   :*cosi-commit-timeout*
+   :leader-exec
+   :*default-data-file*
+   :*default-key-file*
    :generate-tree
    :reconstruct-tree
+   :init-sim
+   :reset-nodes
    :forwarding))
 
 (defpackage :cosi-keying
