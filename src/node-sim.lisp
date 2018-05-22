@@ -36,12 +36,12 @@ witnesses."
     (setf actors::*nbr-execs*
           executive-threads))
   (when (or new-configuration-p
-              (not (and (probe-file cosi-simgen::*default-data-file*)
-                        (probe-file cosi-simgen::*default-key-file*))))
-    (cosi-simgen::generate-tree :nodes nodes))
-  (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
-  (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
-  (cosi-simgen::init-sim)
+              (not (and (probe-file cosi-simgen:*default-data-file*)
+                        (probe-file cosi-simgen:*default-key-file*))))
+    (cosi-simgen:generate-tree :nodes nodes))
+  (setf cosi-simgen:*cosi-prepare-timeout* cosi-prepare-timeout)
+  (setf cosi-simgen:*cosi-commit-timeout* cosi-commit-timeout)
+  (cosi-simgen:init-sim)
 
   ;; should this following code be executed every time or only when a new configuration is created?
   (let ((node-list (list-of-nodes)))
@@ -60,11 +60,10 @@ witnesses."
   nil
   "Genesis UTXO.")
 
-(defun broadcast-message (message arg)
+(defun broadcast-message (&rest message)
   (loop
-     :for node :across cosi-simgen::*node-bit-tbl*
-     :doing (cosi-simgen::send (cosi-simgen::node-self node)
-                               message arg)))
+     :for node :across cosi-simgen:*node-bit-tbl*
+     :doing (apply 'cosi-simgen:send node message)))
 
 (defun send-genesis-utxo (&key (monetary-supply 1000) (cloaked t))
   (when *genesis-output*
@@ -72,49 +71,51 @@ witnesses."
   (print "Construct Genesis UTXO")
   (multiple-value-bind (utxog secrg)
       (if cloaked
-          (cosi/proofs::make-cloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
-        (cosi/proofs::make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*)))
+          (cosi/proofs:make-cloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*))
+        (cosi/proofs:make-uncloaked-txout monetary-supply (pbc:keying-triple-pkey *genesis-account*)))
     (declare (ignore secrg))
-    (eassert (cosi/proofs::validate-txout utxog))
+    (eassert (cosi/proofs:validate-txout utxog))
     (setf *genesis-output* utxog)
-    (broadcast-message :genesis-utxo utxog)
+    (broadcast-message :genesis-utxo
+                       :utxo utxog)
     utxog))
 
 (defun create-transaction (from-account from-utxo amount-list to-pkey-list fee &key (cloaked t))
   (let ((from-skey (pbc:keying-triple-skey from-account))
 	(from-pkey (pbc:keying-triple-pkey from-account)))
-    (let* ((to-info (when cloaked (cosi/proofs::decrypt-txout-info from-utxo from-skey)))
+    (let* ((to-info (when cloaked (cosi/proofs:decrypt-txout-info from-utxo from-skey)))
            (amt (if cloaked
-                    (cosi/proofs::txout-secr-amt to-info)
-                  (cosi/proofs::uncloaked-txout-amt from-utxo)))
+                    (cosi/proofs:txout-secr-amt to-info)
+                  (cosi/proofs:uncloaked-txout-amt from-utxo)))
            (gamma (if cloaked
-                      (cosi/proofs::txout-secr-gamma to-info)
-                    (cosi/proofs::uncloaked-txout-gamma from-utxo)))
+                      (cosi/proofs:txout-secr-gamma to-info)
+                    (cosi/proofs:uncloaked-txout-gamma from-utxo)))
            (kind (if cloaked :cloaked :uncloaked))
 	   (out-list (mapcar #'(lambda (amt to-pkey)
 				 `(:kind ,kind
 				   :amount ,amt
 				   :pkey ,to-pkey))
 			     amount-list to-pkey-list)))
-      (cosi/proofs::make-transaction :ins `((:kind ,kind
-					     :amount ,amt
-					     :gamma  ,gamma
-					     :pkey   ,from-pkey
-					     :skey   ,from-skey))
-				     :outs out-list
-				     :fee fee))))
+      (cosi/proofs:make-transaction :ins `((:kind ,kind
+                                            :amount ,amt
+                                            :gamma  ,gamma
+                                            :pkey   ,from-pkey
+                                            :skey   ,from-skey))
+                                    :outs out-list
+                                    :fee fee))))
 
 
 (defun publish-transaction (trans name)
   (print "Validate transaction")
-  (unless (cosi/proofs::validate-transaction trans)
+  (unless (cosi/proofs:validate-transaction trans)
     (error(format nil "transaction ~A did not validate" name)))
-  (broadcast-message :new-transaction trans)
+  (broadcast-message :new-transaction
+                     :trn trans)
   (force-epoch-end))
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
-  (cosi-simgen::send cosi-simgen::*leader* :make-block))
+  (cosi-simgen:send cosi-simgen:*leader* :make-block))
 
 
 (defparameter *user-1* (pbc:make-key-pair :user-1))
@@ -154,7 +155,7 @@ This will spawn an actor which will asynchronously do the following:
         *tx-3*           nil)
 
 
-  (cosi-simgen::reset-nodes) 
+  (cosi-simgen:reset-nodes) 
 
   (emotiq/elections:make-election-beacon)
                                          
@@ -175,7 +176,7 @@ This will spawn an actor which will asynchronously do the following:
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
           (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
           (ac:pr "Find UTX for user-1")
-          (let* ((from-utxo (cosi/proofs::find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
+          (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
             (ac:pr "Construct 2nd transaction")
             (let ((trans (create-transaction *user-1* from-utxo 
                                                 ; user1 spends 500 to user2, 490 to user3, 10 for fee
@@ -187,7 +188,7 @@ This will spawn an actor which will asynchronously do the following:
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
-  (cosi-simgen::node-blockchain cosi-simgen::*top-node*))
+  (cosi-simgen:node-blockchain cosi-simgen:*top-node*))
 
 ;; hacked copy of cosi-simgen::assign-bits()
 (defun list-of-nodes ()
@@ -196,16 +197,16 @@ This will spawn an actor which will asynchronously do the following:
            (maphash (lambda (k node)
                       (declare (ignore k))
                       (acc node))
-                    cosi-simgen::*ip-node-tbl*))))
+                    cosi-simgen:*ip-node-tbl*))))
     collected))
 
 (defun assign-phony-stake-to-nodes (node-list)
   ;; set the node-stake slot of every node to a random number <= 100,000
   (dolist (node node-list)
         (let ((phony-stake (random 100000)))
-          (setf (cosi-simgen::node-stake node) phony-stake))))
+          (setf (cosi-simgen:node-stake node) phony-stake))))
 
 (defun sort-nodes-by-stake (node-list)
-    (sort node-list '< :key #'cosi-simgen::node-stake))
+    (sort node-list '< :key #'cosi-simgen:node-stake))
 
 

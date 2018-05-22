@@ -68,7 +68,8 @@ THE SOFTWARE.
                                    (ac:pr (format nil "~%sending :hold-an-election"))
                                    (let ((rand (/ (random 1000000) 1000000)))
                                      (mapc #'(lambda (node)
-                                               (cosi-simgen::send node :hold-an-election rand))
+                                               (cosi-simgen:send node :hold-an-election
+                                                                 :n rand))
                                            *all-nodes*))))))))
   (ac::schedule-timer-relative *beacon-timer* *beacon-interval* *beacon-interval*))
 
@@ -94,10 +95,10 @@ THE SOFTWARE.
 (defmethod node-stake ((node tree-node))
   (tree-node-sum node))
 
-(defmethod node-stake ((node cosi-simgen::node))
-  (cosi-simgen::node-stake node))
+(defmethod node-stake ((node cosi-simgen:node))
+  (cosi-simgen:node-stake node))
   
-;; a tree of stakes, cosi-simgen::nodes at the leaves (very bottom of tree)
+;; a tree of stakes, cosi-simgen:nodes at the leaves (very bottom of tree)
 
 (defun make-tree-node (pair)
   (destructuring-bind (l &optional r) pair
