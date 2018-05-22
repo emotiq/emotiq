@@ -17,6 +17,16 @@
     (assert-true (check-public-key (keying-triple-pkey k)
                                    (keying-triple-sig  k)))))
 
+(define-test child-keying
+  (let* ((k (make-key-pair :test))
+         (c (bev (hash/256 :another-test))))
+    (multiple-value-bind (cskey cchain)
+        (ckd-secret-key (keying-triple-skey k) c 1)
+      (multiple-value-bind (cpkey cchain2)
+          (ckd-public-key (keying-triple-pkey k) c 1)
+        (assert-true (int= (public-of-secret cskey) cpkey))
+        (assert-true (int= cchain cchain2))))))
+
 (define-test signature
   (let* ((k  (make-key-pair :test))
          (sig (sign-message "this is a test"
