@@ -130,6 +130,10 @@ witnesses."
 (defun pkey-of (user)
   (pbc:keying-triple-pkey user))
 
+(defparameter *expected-number-of-blocks* nil
+  "this is mostly for simulation - set this to a non-nil number to kill the election beacon after N blocks have been created,
+   leave it nil for production")
+
 (defun skey-of (user)
   (pbc:keying-triple-skey user))
 
@@ -163,6 +167,9 @@ This will spawn an actor which will asynchronously do the following:
   ; you might get errors in cosi-handlers if leader-exec runs before this code...
   ; (lambda ()
   (let ((fee 10))
+
+    (setf *expected-number-of-blocks* 2)
+
     (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
            (user-1-pkey (pbc:keying-triple-pkey *user-1*))
            (user-2-pkey (pbc:keying-triple-pkey *user-2*))
@@ -212,3 +219,8 @@ This will spawn an actor which will asynchronously do the following:
     (sort node-list '< :key #'cosi-simgen:node-stake))
 
 
+(defun simulation-ended-p ()
+  "called to stop the timer beacon during simulation, return nil to continue running, leaving *expected-number-of-blocks*
+as nil will continue creating blocks (e.g. production)"
+  (when *expected-number-of-blocks*
+    (>= (length (blocks) *expected-number-of-blocks*))))

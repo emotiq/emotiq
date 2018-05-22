@@ -26,7 +26,10 @@
   (cosi-simgen:leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*))
 
 (defmethod cosi-simgen:node-dispatcher :around ((msg-sym (eql :block-finished)) &key)
-  (call-next-method))
+  (prog1
+      (call-next-method)
+    (when (simulation-ended-p)
+      (emotiq/elections:kill-beacon)))) ;; for simulator
 
 #|
 (defun node-dispatcher (node &rest msg)
