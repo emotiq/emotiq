@@ -6,11 +6,12 @@
   (assert-true (hash:hash-check edec::*curve-e382* edec::*chk-curve-e382*))
   (assert-true (hash:hash-check edec::*curve41417* edec::*chk-curve41417*))
   (assert-true (hash:hash-check edec::*curve-e521* edec::*chk-curve-e521*))
-  
+
   (assert-true (hash:hash-check pbc::*curve-default-ar160-params* pbc::*chk-curve-default-ar160-params*))
   (assert-true (hash:hash-check pbc::*curve-fr256-params-old*     pbc::*chk-curve-fr256-params-old*))
   (assert-true (hash:hash-check pbc::*curve-fr256-params*         pbc::*chk-curve-fr256-params*))
-  (assert-true (hash:hash-check pbc::*curve-fr449-params*         pbc::*chk-curve-fr449-params*)))
+  (assert-true (hash:hash-check pbc::*curve-fr449-params*         pbc::*chk-curve-fr449-params*))
+  )
 
 (define-test keying
   (let ((k (make-key-pair :test)))
@@ -67,6 +68,7 @@
   (let* ((proof (make-cloaked-proof 15)))
     (assert-true (validate-cloaked-proof proof))))
 
+#|
 (define-test confidential-purchase
   (let* ((kb  (make-key-pair :buyer))
          (kv  (make-key-pair :vendor))
@@ -88,3 +90,4 @@
                                               (keying-triple-skey kv)))
     (assert-true (check-confidential-purchase ppurch
                                               cost fees))))
+|#
