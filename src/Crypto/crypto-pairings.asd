@@ -29,6 +29,7 @@ THE SOFTWARE.
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
   :components  ((:file "pbc-cffi")
+                (:file "subkey-derivation")
                 (:file "proofs"))
   :depends-on   ("core-crypto"
                  "emotiq"
