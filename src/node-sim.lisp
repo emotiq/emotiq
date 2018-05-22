@@ -80,7 +80,7 @@ witnesses."
                        :utxo utxog)
     utxog))
 
-(defun create-transaction (from-account from-utxo amount-list to-pkey-list fee &key (cloaked t))
+(defun create-transaction (from-account from-utxo amount-list to-pkey-list fee &key (cloaked t) (name ""))
   (let ((from-skey (pbc:keying-triple-skey from-account))
 	(from-pkey (pbc:keying-triple-pkey from-account)))
     (let* ((to-info (when cloaked (cosi/proofs:decrypt-txout-info from-utxo from-skey)))
@@ -102,7 +102,8 @@ witnesses."
                                             :pkey   ,from-pkey
                                             :skey   ,from-skey))
                                     :outs out-list
-                                    :fee fee))))
+                                    :fee fee
+                                    :name name))))
 
 
 (defun publish-transaction (trans name)
@@ -172,7 +173,7 @@ This will spawn an actor which will asynchronously do the following:
         ;; secrg (see tst-blk) is ignored and not even returned
         (let ((trans (create-transaction *genesis-account* genesis-utxo
                                             ; user1 gets 1000 from genesis (fee = 0)
-                                         '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
+                                         '(1000) (list user-1-pkey) 0 :cloaked cloaked :name "genesis tx-1")))
           (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
           (force-epoch-end)
           (ac:pr "Find UTX for user-1")
@@ -180,7 +181,8 @@ This will spawn an actor which will asynchronously do the following:
             (ac:pr "Construct 2nd transaction")
             (let ((trans (create-transaction *user-1* from-utxo 
                                                 ; user1 spends 500 to user2, 490 to user3, 10 for fee
-                                             '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
+                                             '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked
+                                             :name "tx-2")))
               ;; allow leader elections to create this block
               (publish-transaction (setf *tx-2* trans) "tx-2")
               )))))))

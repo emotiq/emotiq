@@ -212,6 +212,8 @@ Typically used for stakes. Public key is G2, Secret key is 1."
             :initarg  :gamadj)
    (sig     :accessor trans-signature
             :initarg  :sig)
+   (name    :accessor trans-name
+            :initform "")
    ))
 
 ;; ---------------------------------------------------------------------
@@ -254,7 +256,7 @@ correction factor gamadj on curve H for the overall transaction."
                                         :initial-value (car sigs)))
     trn))
 
-(defun make-transaction (&key ins outs (fee 0))
+(defun make-transaction (&key ins outs (fee 0) (name ""))
   "Using this declarative interface instead of the more cumbersome
 imperative DO-MAKE-TRANSACTION ensures that the secret keys used
 during TXIN formation will be properly disposed of."
@@ -299,6 +301,7 @@ during TXIN formation will be properly disposed of."
       (unless trn
         (dolist (txin txins)
           (setf (txin-sig txin) nil))))
+    (setf (trans-name trn) name)
     trn))
 
 ;; ---------------------------------------------------------------------
