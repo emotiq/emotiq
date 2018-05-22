@@ -110,8 +110,7 @@ witnesses."
   (unless (cosi/proofs:validate-transaction trans)
     (error(format nil "transaction ~A did not validate" name)))
   (broadcast-message :new-transaction
-                     :trn trans)
-  (force-epoch-end))
+                     :trn trans))
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
@@ -175,6 +174,7 @@ This will spawn an actor which will asynchronously do the following:
                                             ; user1 gets 1000 from genesis (fee = 0)
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
           (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
+          (force-epoch-end)
           (ac:pr "Find UTX for user-1")
           (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
             (ac:pr "Construct 2nd transaction")
