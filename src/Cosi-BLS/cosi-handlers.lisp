@@ -588,7 +588,8 @@ check that each TXIN and TXOUT is mathematically sound."
       (return-from #1# nil))
     ;; add-method TXOUTS to UTX table
     (dolist (txout (trans-txouts tx))
-      (record-new-utxo txout)))
+      (record-new-utxo txout))
+    (ac:pr (format nil "ok transaction ~A" (cosi/proofs::trans-name tx))))
   t) ;; tell caller everything ok
 
 ;; --------------------------------------------------------------------
