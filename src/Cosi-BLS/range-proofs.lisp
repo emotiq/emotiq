@@ -220,6 +220,18 @@ THE SOFTWARE.
 (define-symbol-macro *nbits*   (bp-basis-nbits  *bp-basis*))
 
 #| ;; for 192 bit security...
+  #|
+;; Constants obtained from:
+
+(with-ed-curve :curve-E382
+  (setf *bp-basis* nil)
+  (make-range-proof 15)
+  (with-standard-io-syntax
+    (pprint *bp-basis*)))
+
+;; then copy and paste into here...
+  |#
+  
 (defvar *bp-basis*
   (make-bp-basis :CURVE :CURVE-E382
                  :NBITS 64
@@ -616,6 +628,17 @@ THE SOFTWARE.
 |#
 
 #| ;; for 128 bit security |#
+  #|
+;; Constants obtained from:
+
+(with-ed-curve :curve-1174
+  (setf *bp-basis* nil)
+  (make-range-proof 15)
+  (with-standard-io-syntax
+    (pprint *bp-basis*)))
+
+;; then copy and paste into here...
+  |#
 (defvar *bp-basis*
   ;; define fully here for default basis so we have comparable proofs
   ;; across blockchain
