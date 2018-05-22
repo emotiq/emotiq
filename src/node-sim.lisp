@@ -223,4 +223,7 @@ This will spawn an actor which will asynchronously do the following:
   "called to stop the timer beacon during simulation, return nil to continue running, leaving *expected-number-of-blocks*
 as nil will continue creating blocks (e.g. production)"
   (when *expected-number-of-blocks*
-    (>= (length (blocks)) *expected-number-of-blocks*)))
+    (when (>= (length (blocks)) *expected-number-of-blocks*)
+      (ac:pr "simulation ended")
+      t)))
+    
