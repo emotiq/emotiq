@@ -73,7 +73,7 @@
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
-                             (:file "election-sim")
+                             (:file "election")
                              (:file "node-sim")))))
 
 
