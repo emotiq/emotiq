@@ -134,6 +134,9 @@ witnesses."
   "this is mostly for simulation - set this to a non-nil number to kill the election beacon after N blocks have been created,
    leave it nil for production")
 
+(defparameter *election-number* nil
+  "this is mostly for simulation - set this to a 0 to have the elections counted, leave it nil for production")
+
 (defun skey-of (user)
   (pbc:keying-triple-skey user))
 
@@ -168,7 +171,8 @@ This will spawn an actor which will asynchronously do the following:
   ; (lambda ()
   (let ((fee 10))
 
-    (setf *expected-number-of-blocks* 2)
+    (setf *expected-number-of-blocks* 2
+          *election-number* 0)
 
     (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
            (user-1-pkey (pbc:keying-triple-pkey *user-1*))
@@ -227,3 +231,14 @@ as nil will continue creating blocks (e.g. production)"
       (ac:pr "simulation ended")
       t)))
     
+
+(defun election-number-or-string ()
+  "in simulation, *election-number* is set to 0, then this function returns the incf of *election-number*, in
+production, leave this as nil and it will return ?"
+  (if (numberp *election-number*)
+      *election-number*
+    "?"))
+
+(defun increment-election-number ()
+  (when (numberp *election-number*)
+    (incf *election-number*)))
