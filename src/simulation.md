@@ -5,10 +5,13 @@
     (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
-    (emotiq/sim::run)
+    (emotiq/sim::run) or (emotiq/sim::run :cloaked nil)
     
-    (emotiq/sim:initialize :cosi-prepare-timeout 60 :cosi-commit-timeout 60 :executive-threads 8)  ;; takes several keywords - see node-sim.lisp
-	(emotiq/sim::run :cloaked t)
+    ;; for pt linux
+    (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
+    (ql:quickload :emotiq/sim)
+    (emotiq/sim:initialize :cosi-prepare-timeout 60 :cosi-commit-timeout 60 :executive-threads 8)
+	(emotiq/sim::run :cloaked t) or
 	(emotiq/sim::run :cloaked nil)
 
 ## Explanation    
