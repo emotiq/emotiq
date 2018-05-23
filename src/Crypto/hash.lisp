@@ -35,6 +35,9 @@ THE SOFTWARE.
 (defclass hash/256 (hash)
   ())
 
+(defclass hash/384 (hash)
+  ())
+
 (defclass hash/512 (hash)
   ())
 

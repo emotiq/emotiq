@@ -13,6 +13,7 @@
       "Version of the protocol/software, an integer.")
 
    (epoch                               ; aka "height"
+    :reader  block-epoch
     :initarg :epoch
     :initform 0
     :documentation
@@ -23,18 +24,22 @@
      epoch subsumes height.")
 
    (prev-block-hash
+    :reader block-prev-block-hash
     :initform nil
     :documentation "Hash of previous block (nil for genesis block).")
 
    (timestamp
+    :reader block-timestamp
     :documentation 
       "Approximate creation time in seconds since Unix epoch. The time zone is UTC.")
 
    (leader-pkey
+    :reader block-leader-pkey
     :documentation
     "Public key for the leader for this epoch.")
 
-   (election-proof)
+   (election-proof
+    :reader block-election-proof)
 
    (signature
     :initform nil
@@ -104,7 +109,6 @@
    newer block on the blockchain.")
 
 
-
 (defun serialize-block-octets (block)
   "Return a serialization of BLOCK as a list of octet vectors for the slots in
    \*names-of-block-slots-to-serialize*. It is an error to call this before all
@@ -113,6 +117,32 @@
   (loop for slot-name in *names-of-block-slots-to-serialize*
         collect (loenc:encode (slot-value block slot-name))))
 
+
+(defparameter *names-of-block-header-slots-to-serialize*
+  '(protocol-version 
+    epoch
+    prev-block-hash
+    timestamp
+
+    leader-pkey
+
+    election-proof
+
+    witnesses
+    
+    merkle-root-hash)
+  "These slots are serialized and then hashed. The hash is stored as
+   the block-hash on the current block and the prev-block-hash on a
+   newer block on the blockchain. These slots represent the block header only.")
+
+(defun serialize-block-header-octets (block)
+  "Return a serialization of BLOCK header as a list of octet vectors
+for the slots in *names-of-block-slots-to-serialize*. It is an error
+to call this before all slots are bound. This is to be used to hash a
+previous block, i.e., on that has been fully formed and already been
+added to the blockchain."
+  (loop for slot-name in *names-of-block-header-slots-to-serialize*
+        collect (loenc:encode (slot-value block slot-name))))
 
 
 (defvar *unix-epoch-ut* (encode-universal-time 0 0 0 1 1 1970 0)
@@ -238,16 +268,16 @@
 
 (defmethod ith-witness-signed-p (block i)
   "Return true or false (nil) according to whether the ith witness has signed."
-  (with-slots (witness-bitmap) block
-    (logbitp i witness-bitmap)))
+  (with-slots (signature-bitmap) block
+    (logbitp i signature-bitmap)))
 
 (defmethod set-ith-witness-signed-p (block i signed-p)
   "Set signed-p to either true or false (nil) for witness at position i."
-  (with-slots (witness-bitmap) block
-    (setf witness-bitmap
+  (with-slots (signature-bitmap) block
+    (setf signature-bitmap
           (dpb (if signed-p 1 0)
                (byte 1 i)
-               witness-bitmap))))
+               signature-bitmap))))
 
 
 
