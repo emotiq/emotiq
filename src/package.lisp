@@ -68,9 +68,7 @@
    #:run
 
    #:blocks
-
-   #:spend #:spend-list
-
+   #:create-transaction
    #:force-epoch-end
 
    

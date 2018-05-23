@@ -58,6 +58,7 @@
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:export
+   :*max-bit-length*
    :hpt
    :range-proof-block
    :range-proof-block-sum-gamma
@@ -111,25 +112,31 @@
    :random-between)
   (:export
    :txin
-   :make-txin
+   :cloaked-txin
+   :uncloaked-txin
+   :make-cloaked-txin
    :make-uncloaked-txin
    :txin-cloaked-p
    :txin-hashlock
    :txin-pkey
    :txin-sig
    :txin-prf
-   :txin-amt
+   :uncloaked-txin-amt
+   :cloaked-txin-encr
    :get-txin-amount
    
    :txout
-   :make-txout
-   :make-uncloaked-txout
+   :cloaked-txout
+   :uncloaked-txout
    :stake-txout
+   :make-cloaked-txout
+   :make-uncloaked-txout
+   :make-stake-txout
    :txout-cloaked-p
    :txout-hashlock
    :txout-hashpkey
    :txout-prf
-   :txout-encr
+   :cloaked-txout-encr
    :uncloaked-txout-amt
    :uncloaked-txout-gamma
    
