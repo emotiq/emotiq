@@ -175,6 +175,7 @@ This will spawn an actor which will asynchronously do the following:
                                             ; user1 gets 1000 from genesis (fee = 0)
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
           (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
+          (checktr1 trans)
           (ac:pr "Find UTX for user-1")
           (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
             (ac:pr "Construct 2nd transaction")
@@ -185,6 +186,10 @@ This will spawn an actor which will asynchronously do the following:
               (publish-transaction (setf *tx-2* trans) "tx-2")
               )))))))
 
+(defun checktr1 (txn)
+  (unless (vec-repr:int= (hash:hash/256 *tx-1*) (hash:hash/256 txn))
+    (error "tx-1 has changed"))
+  t)
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
