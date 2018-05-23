@@ -210,3 +210,12 @@ This will spawn an actor which will asynchronously do the following:
     (sort node-list '< :key #'cosi-simgen:node-stake))
 
 
+(defun prdebug ()
+  (let ((blks (emotiq/sim:blocks)))
+    (let ((tx1 (cosi/proofs::block-transactions (first blks))))
+      (format t "blocks: ~A~%" blks)
+      (format t "1st txn: ~A~%" tx1)
+      (format t "tx-1:    ~A~%" emotiq/sim:*tx-1*)
+      (format t "tx1 eq emotiq/sim:*tx-1* ~A~%" 
+	      (vec-repr:int= (hash:hash/256 tx1) (hash:hash/256 emotiq/sim:*tx-1*)))))
+  (values))

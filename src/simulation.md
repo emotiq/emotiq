@@ -1,7 +1,8 @@
 # Running the local node simulation
 
 ## Running
-    
+
+    (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
     (emotiq/sim::run)
