@@ -515,10 +515,21 @@ transaction, and v being the transaction itself."
 sure no double-spending, nor referencing unknown TXOUT. Return nil if
 invalid TX."
   (labels ((txin-ok (txin)
-             (let ((key (bev (txin-hashlock txin))))
-               ;; if not in UTXO table as :SPENDABLE, then it is invalid
-               (when (eq :spendable (lookup-utxo key))
-                 (record-utxo key tx)))))
+             (let* ((key  (bev (txin-hashlock txin)))
+                    (utxo (lookup-utxo key)))
+               
+               (cond ((null utxo)
+                      (pr (format nil "non-existent UTXO spend ~A" tx))
+                      nil)
+                     
+                     ((eq :spendable utxo)
+                      (record-utxo key tx)
+                      t)
+
+                     (t
+                      (pr (format nil "double spend txn ~A" tx)) ;; TODO: 157602158
+                      nil)
+                     ))))
     (cond ((every #'txin-ok (trans-txins tx))
            (dolist (txout (trans-txouts tx))
              (record-new-utxo (bev (txout-hashlock txout))))
@@ -526,7 +537,6 @@ invalid TX."
           
           (t
            ;; remove transaction from mempool
-           (error (format nil "double spend txn ~A" tx)) ;; TODO: 157602158 
            (remove-tx-from-mempool tx)
            (unspend-utxos tx)
            nil)
