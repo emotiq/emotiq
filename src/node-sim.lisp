@@ -122,6 +122,7 @@ witnesses."
 (defparameter *user-2* (pbc:make-key-pair :user-2))
 (defparameter *user-3* (pbc:make-key-pair :user-3))
 (defparameter *tx-1* nil)
+(defparameter *tx-1-hash* nil)
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
 
@@ -174,8 +175,11 @@ This will spawn an actor which will asynchronously do the following:
         (let ((trans (create-transaction *genesis-account* genesis-utxo
                                             ; user1 gets 1000 from genesis (fee = 0)
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
-          (checktr1 trans)
+          (setf *tx-1-hash* (cosi/proofs::trans-idhash trans)
+                *tx-1* trans)
+          (checktr1)
+          (publish-transaction trans "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
+          (checktr1)
           (ac:pr "Find UTX for user-1")
           (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
             (ac:pr "Construct 2nd transaction")
@@ -186,9 +190,12 @@ This will spawn an actor which will asynchronously do the following:
               (publish-transaction (setf *tx-2* trans) "tx-2")
               )))))))
 
-(defun checktr1 (txn)
-  (unless (vec-repr:int= (hash:hash/256 *tx-1*) (hash:hash/256 txn))
-    (error "tx-1 has changed"))
+(defun checktr1 ()
+  (let ((h emotiq/sim::*tx-1-hash*)
+        (tx emotiq/sim::*tx-1*))
+    (unless (cosi/proofs::=hash-trn tx h)
+      (error (format nil "tx-1 has changed hash(*tx-1*)=~A hash(~A)=~A"
+                     h tx (cosi/proofs::trans-idhash tx)))))
   t)
 
 (defun blocks ()

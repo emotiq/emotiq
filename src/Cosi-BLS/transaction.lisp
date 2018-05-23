@@ -338,6 +338,7 @@ during TXIN formation will be properly disposed of."
 
 (defmethod validate-transaction ((trn transaction))
   "Validate amounts and zero balance of transaction, not double txining check"
+  (emotiq/sim::checktr1)
   (with-accessors ((txins   trans-txins)
                    (txouts  trans-txouts)
                    (gamadj  trans-gamadj)
@@ -354,7 +355,9 @@ during TXIN formation will be properly disposed of."
           ;; check that Sum(txin) = Sum(txout) + Fee
           (ed-pt= (ed-mul (range-proofs:hpt) gamadj)
                   (ed-sub ttxout ttxin)))
-        ))))
+        )))
+  (emotiq/sim::checktr1)
+  )
 
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
