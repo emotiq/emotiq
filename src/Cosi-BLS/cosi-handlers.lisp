@@ -519,7 +519,7 @@ invalid TX."
                     (utxo (lookup-utxo key)))
                
                (cond ((null utxo)
-                      (pr (format nil "non-existent UTXO spend ~A" tx))
+                      (pr (format nil "*** non-existent UTXO spend ~A" tx))
                       nil)
                      
                      ((eq :spendable utxo)
@@ -527,7 +527,7 @@ invalid TX."
                       t)
 
                      (t
-                      (pr (format nil "double spend txn ~A" tx)) ;; TODO: 157602158
+                      (pr (format nil "*** double spend txn ~A" tx)) ;; TODO: 157602158
                       nil)
                      ))))
     (cond ((every #'txin-ok (trans-txins tx))
