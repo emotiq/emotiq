@@ -350,6 +350,7 @@ Later it may become an ADS structure"
 ;; testing-version transaction cache
 
 (defmethod cache-transaction ((key bev) val)
+  (emotiq/sim::checktr1)
   (setf (gethash (bev-vec key) *mempool*) val))
 
 (defmethod remove-tx-from-mempool ((key bev))

@@ -152,6 +152,7 @@ This will spawn an actor which will asynchronously do the following:
 
   (setf *genesis-output* nil
         *tx-1*           nil
+        *tx-1-hash*      nil
         *tx-2*           nil
         *tx-3*           nil)
 
@@ -175,8 +176,8 @@ This will spawn an actor which will asynchronously do the following:
         (let ((trans (create-transaction *genesis-account* genesis-utxo
                                             ; user1 gets 1000 from genesis (fee = 0)
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-          (setf *tx-1-hash* (cosi/proofs::trans-idhash trans)
-                *tx-1* trans)
+          (setf *tx-1* trans)
+          (setf *tx-1-hash* (cosi/proofs::trans-idhash trans))
           (checktr1)
           (publish-transaction trans "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
           (checktr1)
@@ -191,11 +192,9 @@ This will spawn an actor which will asynchronously do the following:
               )))))))
 
 (defun checktr1 ()
-  (let ((h emotiq/sim::*tx-1-hash*)
-        (tx emotiq/sim::*tx-1*))
-    (unless (cosi/proofs::=hash-trn tx h)
-      (error (format nil "tx-1 has changed hash(*tx-1*)=~A hash(~A)=~A"
-                     h tx (cosi/proofs::trans-idhash tx)))))
+  (let ((tx1h (cosi/proofs::trans-idhash emotiq/sim:*tx-1*)))
+    (unless (vec-repr:int= tx1h emotiq/sim::*tx-1-hash*)
+      (error "tx-1 has changed")))
   t)
 
 (defun blocks ()
@@ -224,10 +223,18 @@ This will spawn an actor which will asynchronously do the following:
 
 (defun prdebug ()
   (let ((blks (emotiq/sim:blocks)))
-    (let ((tx1 (cosi/proofs::block-transactions (first blks))))
-      (format t "blocks: ~A~%" blks)
-      (format t "1st txn: ~A~%" tx1)
-      (format t "tx-1:    ~A~%" emotiq/sim:*tx-1*)
-      (format t "tx1 eq emotiq/sim:*tx-1* ~A~%" 
-	      (vec-repr:int= (hash:hash/256 tx1) (hash:hash/256 emotiq/sim:*tx-1*)))))
-  (values))
+    (assert (>= (length blks) 1))
+    (let ((txs (cosi/proofs::block-transactions (first blks))))
+      (assert (>= (length txs) 1))
+      (let ((firsttx (first txs)))
+        (format t "blocks: ~A~%" blks)
+        (format t "first txn: ~A~%" firsttx)
+        (format t "*tx-1*:    ~A~%" emotiq/sim:*tx-1*)
+        (format t "tx1 eq emotiq/sim:*tx-1* ~A~%" 
+                (vec-repr:int= (hash:hash/256 firsttx) (hash:hash/256 emotiq/sim:*tx-1*)))
+        (let ((h1 (cosi/proofs::trans-idhash firsttx))
+              (h2 (cosi/proofs::trans-idhash *tx-1*)))
+          (format t "firsttx.idhash = ~a~%" h1)
+          (format t "*tx-1*.idhash  = ~a~%" h2)
+          (format t "firsttx.idhash =? *tx-1*.idhash ~A~%" (vec-repr:int= h1 h2))))))
+  )
