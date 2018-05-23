@@ -1129,9 +1129,11 @@ bother factoring it with NODE-COSI-SIGNING."
                                ((list :answer (list :signature _ bits))
                                 (let ((*current-node* node))
                                   (send *dly-instr* :plt)
+                                  (emotiq/sim::checktr1)
                                   (cond ((check-byz-threshold bits new-block)
                                          #+(or)
                                          (inspect new-block)
+                                         (emotiq/sim::checktr1)
                                          (send node :block-finished))
                                         
                                         (t
