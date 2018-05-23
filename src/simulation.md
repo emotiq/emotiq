@@ -7,7 +7,17 @@
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
     (emotiq/sim::run) or (emotiq/sim::run :cloaked nil)
     
-    ;; for pt linux
+### helpers...
+
+(progn	
+  (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
+  (ql:quickload :emotiq/sim))
+
+(progn
+  (emotiq/sim:initialize)
+  (emotiq/sim::run :cloaked nil))
+    
+## for pt linux
     (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize :cosi-prepare-timeout 60 :cosi-commit-timeout 60 :executive-threads 8)
