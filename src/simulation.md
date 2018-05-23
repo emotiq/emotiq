@@ -6,6 +6,11 @@
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
     (emotiq/sim::run)
     
+for pt's linux:
+    (ql:quickload :emotiq/sim)
+    (emotiq/sim:initialize :cosi-prepare-timeout 90 :cosi-commit-timeout 60 :executive-threads 8)
+    (emotiq/sim::run)
+    
 ## Explanation    
     
 The simulation spawns an actor which will asynchronously to perform
