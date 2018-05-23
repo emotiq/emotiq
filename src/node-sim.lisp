@@ -182,7 +182,7 @@ This will spawn an actor which will asynchronously do the following:
                                                 ; user1 spends 500 to user2, 490 to user3, 10 for fee
                                              '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              #+nil(publish-transaction (setf *tx-2* trans) "tx-2")
+              (publish-transaction (setf *tx-2* trans) "tx-2")
               )))))))
 
 
