@@ -94,13 +94,13 @@ THE SOFTWARE.
   (port *cosi-port*)
   aid)
 
-(defmethod sdle-store:backend-store-object :around (backend (obj ACTORS:ACTOR) stream)
+(defmethod sdle-store:backend-store-object (backend (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
                    (setf (ac:get-property obj 'aid) (gen-uuid-int))))
          (ret  (make-actor-return-addr
                 :aid  aid)))
     (associate-aid-with-actor aid obj)
-    (call-next-method backend ret stream)))
+    (sdle-store:backend-store-object backend ret stream)))
 
 (defmethod send ((addr actor-return-addr) &rest msg)
   (socket-send (actor-return-addr-ip   addr)
