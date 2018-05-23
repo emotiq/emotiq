@@ -86,7 +86,21 @@ THE SOFTWARE.
 |#
 ;; -----------------------------------------------------------------
 
-(defvar *machine-ip-addr* (comm:get-host-entry (machine-instance) :fields '(:address)))
+
+
+;;; TODO use the network transport layer in gossip to resolve this
+;;; need.  For now this is needed to pass cosi messages on the local
+;;; machine.
+(defvar *machine-ip-addr* 
+  #+lispworks
+  (comm:get-host-entry (machine-instance) :fields '(:address))
+  #+ccl
+  (ccl:lookup-hostname (machine-instance))
+  #-(or ccl lispworks)
+  (prog1
+      2887548929 ;; aka "127.0.0.1" as an integer
+    (warn "Unimplemented lookup of machine hostname under this implementation")))
+
 (defvar *cosi-port* 65001)
 
 (defstruct actor-return-addr
@@ -94,7 +108,7 @@ THE SOFTWARE.
   (port *cosi-port*)
   aid)
 
-(defmethod sdle-store:backend-store-object :around (backend (obj ACTORS:ACTOR) stream)
+(defmethod sdle-store:backend-store-object :around ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
                    (setf (ac:get-property obj 'aid) (gen-uuid-int))))
          (ret  (make-actor-return-addr
@@ -225,7 +239,7 @@ THE SOFTWARE.
                  (let ((actor (lookup-actor-for-aid dest)))
                    (unless actor
                      (let ((prev (gethash dest *previously-unregistered*)))
-                       (pr (format nil "~A :non-existent-actor" (if prev "OK: " "ERROR: ") prev dest))))
+                       (pr (format nil "~A :non-existent-actor ~a ~a" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
                      (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
