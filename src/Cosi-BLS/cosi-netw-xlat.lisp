@@ -108,7 +108,6 @@ THE SOFTWARE.
   aid)
 
 (defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
-  ;; (defmethod sdle-store:backend-store-object (backend (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
                    (setf (ac:get-property obj 'aid) (gen-uuid-int))))
          (ret  (make-actor-return-addr
