@@ -86,7 +86,20 @@ THE SOFTWARE.
 |#
 ;; -----------------------------------------------------------------
 
-(defvar *machine-ip-addr* (comm:get-host-entry (machine-instance) :fields '(:address)))
+;;; TODO use the network transport layer in gossip to resolve this
+;;; need.  For now this is needed to pass cosi messages on the local
+;;; machine.
+(defvar *machine-ip-addr* 
+  #+lispworks
+  (comm:get-host-entry (machine-instance) :fields '(:address))
+  #+ccl
+  (ccl:lookup-hostname (machine-instance))
+  #-(or ccl lispworks)
+  (prog1
+      2887548929 ;; aka "127.0.0.1" as an integer
+    (warn "Unimplemented lookup of machine hostname under this implementation")))
+
+
 (defvar *cosi-port* 65001)
 
 (defstruct actor-return-addr
