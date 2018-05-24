@@ -15,7 +15,7 @@
 
 (progn
   (emotiq/sim:initialize)
-  (emotiq/sim::run :cloaked nil))
+  (emotiq/sim::run :cloaked t))
     
 ## for pt linux
     (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
