@@ -1095,7 +1095,12 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
+(defparameter *nleaders* 0) ;; not atomic!  but good enough for a first attempt
+
 (defun leader-exec (prepare-timeout commit-timeout)
+  (incf *nleaders*)
+  (unless (= 1 *nleaders*)
+    (error (format nil "wrong leader count ~A" *nleaders*)))
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
@@ -1134,7 +1139,10 @@ bother factoring it with NODE-COSI-SIGNING."
                                          #+(or)
                                          (inspect new-block)
                                          (emotiq/sim::checktr1)
-                                         (send node :block-finished))
+                                         (send node :block-finished)
+                                         (decf *nleaders*)
+                                         (assert (= 0 *nleaders*))
+                                         )
                                         
                                         (t
                                          (pr "Failed to get sufficient signatures during commit phase"))
