@@ -56,6 +56,21 @@ THE SOFTWARE.
 ;;;           (send (node-ip-addr node) :hold-an-election n))
 ;;;         *all-nodes*))
 
+(defvar *beacon-actor*
+  (ac:make-actor
+   (lambda (&rest msg)
+     (declare (ignore msg))
+     (let ((rand (/ (random 1000000) 1000000)))
+       (ac:pr (format nil "~%sending :hold-an-election = ~A" rand))
+       (mapc #'(lambda (node)
+                 (cosi-simgen:send node :hold-an-election
+                                   :n rand))
+             *all-nodes*)))))
+
+(defun fire-election ()
+  ;; for manual testing...
+  (ac:send *beacon-actor* :doit))
+
 (defun make-election-beacon ()
   (unless *beacon-timer*
     (setf *beacon-timer* (ac::make-timer
@@ -65,12 +80,8 @@ THE SOFTWARE.
                                    (setf *self-destruct* nil
                                          *beacon-timer* nil))
                                   (t
-                                   (ac:pr (format nil "~%sending :hold-an-election"))
-                                   (let ((rand (/ (random 1000000) 1000000)))
-                                     (mapc #'(lambda (node)
-                                               (cosi-simgen:send node :hold-an-election
-                                                                 :n rand))
-                                           *all-nodes*))))))))
+                                   (fire-election))
+                                  )))))
   (ac::schedule-timer-relative *beacon-timer* *beacon-interval* *beacon-interval*))
 
 ;;; ;; --------------------------------------------------

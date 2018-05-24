@@ -49,6 +49,7 @@ THE SOFTWARE.
 (define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
 (define-symbol-macro *mempool*        (node-mempool *current-node*))
 (define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
+(define-symbol-macro *leader*         (node-current-leader *current-node*))
 
 ;; -------------------------------------------------------
 
@@ -64,6 +65,7 @@ THE SOFTWARE.
   (ac:pr args))
 
 (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
+  (pr (format nil "~A got genesis utxo" (short-id (current-node))))
   (record-new-utxo (bev (txout-hashlock utxo))))
 
 (defmethod node-dispatcher ((msg-sym (eql :make-block)) &key)
@@ -324,7 +326,6 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 |#
 
 (defvar *election-proof*   nil)
-(defvar *leader*           nil)
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
 (defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
@@ -700,11 +701,11 @@ check that each TXIN and TXOUT is mathematically sound."
   (send-real-nodes :reset))
 
 (defun reset-nodes ()
-  (setf *leader* (node-pkey *top-node*))
   (loop for node across *node-bit-tbl* do
         (setf (node-bad        node) nil
               (node-blockchain node) nil)
 
+        (setf *leader* (node-pkey *top-node*))
         (setf (node-delivered-trns node) nil) ;; for debug
         (setf (node-spent-utxos node) nil)
         
@@ -1220,7 +1221,7 @@ bother factoring it with NODE-COSI-SIGNING."
      (send *dly-instr* :pltwin :histo-4)
      (let ((start (get-universal-time))
            (ret   (current-actor)))
-       (send *leader* :cosi-sign
+       (send *top-node* :cosi-sign
              :reply-to ret
              :msg      "This is a test message!"
              :timeout  10)
@@ -1234,7 +1235,7 @@ bother factoring it with NODE-COSI-SIGNING."
            msg
            (format nil "Duration = ~A" (- (get-universal-time) start)))
           
-          (send *leader* :validate
+          (send *top-node* :validate
                 :reply-to ret
                 :sig      sig
                 :bits     bits)
@@ -1340,7 +1341,7 @@ bother factoring it with NODE-COSI-SIGNING."
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
-       (send *leader* :make-block)
+       (send *top-node* :make-block)
        ))))
 
 ;; -------------------------------------------------------------
@@ -1423,7 +1424,7 @@ bother factoring it with NODE-COSI-SIGNING."
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
-       (send *leader* :make-block)
+       (send *top-node* :make-block)
        ))))
 
 ;; -------------------------------------------------------------

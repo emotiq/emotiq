@@ -27,12 +27,18 @@
 ;; than by sending a message).
 
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
-  (ac:pr (format nil "got :hold-an-election ~A" n))
   (let* ((node   (cosi-simgen:current-node))
+         (stake  (cosi-simgen:node-stake node))
          (winner (emotiq/elections:hold-election n)))
+    (setf cosi-simgen:*leader* (cosi-simgen:node-pkey winner))
+    (ac:pr (format nil "~%~A got :hold-an-election ~A" (cosi-simgen::short-id node) n))
     (let ((me (eq winner node)))
-      (ac:pr (format nil "election results(~A) ~A" n (if me " *ME* " " not me ")))
-      (ac:pr (format nil "winner ~A me=~A" winner node))
+      (ac:pr (format nil "election results ~A (stake = ~A)"
+                     (if me " *ME* " " not me ")
+                     stake))
+      (ac:pr (format nil "winner ~A me=~A"
+                     (cosi-simgen::short-id winner)
+                     (cosi-simgen::short-id node)))
       (when me
         (cosi-simgen:send node :make-block)))))
 

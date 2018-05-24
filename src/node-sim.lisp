@@ -239,3 +239,6 @@ This will spawn an actor which will asynchronously do the following:
           (format t "*tx-1*.idhash  = ~a~%" h2)
           (format t "firsttx.idhash =? *tx-1*.idhash ~A~%" (vec-repr:int= h1 h2))))))
   )
+
+(defun fire-election ()
+  (emotiq/elections::fire-election))
