@@ -63,19 +63,18 @@ THE SOFTWARE.
   (ac::unschedule-timer (node-hold-off-timer *current-node*))
   (setf *holdoff* nil))
 
-(defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
+(defun set-holdoff ()
   (setf *holdoff* t)
   (ac::schedule-timer-relative (node-hold-off-timer *current-node*)
                                (+ *cosi-prepare-timeout*
                                   *cosi-commit-timeout*
                                   10)))
 
+(defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
+  (set-holdoff))
+
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
-  (setf *holdoff* t)
-  (ac::schedule-timer-relative (node-hold-off-timer *current-node*)
-                               (+ *cosi-prepare-timeout*
-                                  *cosi-commit-timeout*
-                                  10)))
+  (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (reset-nodes))
@@ -128,6 +127,8 @@ THE SOFTWARE.
   (node-remove-node node-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
+  (gossip-neighborcast :end-holdoff)
+  (ac:self-call :end-holdoff)
   (ac:pr "Block committed to blockchain")
   (ac:pr (format nil "Block signatures = ~D"
                  (logcount (block-signature-bitmap (first *blockchain*))))))
@@ -720,6 +721,7 @@ check that each TXIN and TXOUT is mathematically sound."
               (node-blockchain node) nil)
 
         (setf (node-current-leader node) (node-pkey *top-node*))
+        (setf (node-hold-off node)       nil)
         (setf (node-hold-off-timer node)  (let ((this-node node))
                                             (ac::make-timer
                                              (lambda ()

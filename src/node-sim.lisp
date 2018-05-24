@@ -162,8 +162,9 @@ This will spawn an actor which will asynchronously do the following:
 
   (if cloaked
       (progn
-        (setf cosi-simgen::*cosi-prepare-timeout* 30
-              emotiq/elections::*beacon-interval* 60))
+        (setf cosi-simgen::*cosi-prepare-timeout* 40
+              ;; emotiq/elections::*beacon-interval* 60
+              ))
     (progn
         (setf cosi-simgen::*cosi-prepare-timeout* 10
               emotiq/elections::*beacon-interval* 20)))

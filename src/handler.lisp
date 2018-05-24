@@ -27,6 +27,8 @@
 ;; than by sending a message).
 
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
+  (when cosi-simgen::*holdoff*
+    (ac:pr "Election delayed by holdoff"))
   (unless cosi-simgen::*holdoff*
     (let* ((node   (cosi-simgen:current-node))
            (stake  (cosi-simgen:node-stake node))
