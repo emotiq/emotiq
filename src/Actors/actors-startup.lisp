@@ -217,11 +217,11 @@ THE SOFTWARE.
     (install-actor-directory)
     (install-actor-printer)))
 
-#-:LISPWORKS
+#-:lispworks
 (eval-when (:load-toplevel :execute)
   (install-actor-system))
 
-#+:LISPWORKS
+#+:lispworks
 (let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
   
   (lw:define-action "Initialize LispWorks Tools"
