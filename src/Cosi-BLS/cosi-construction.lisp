@@ -107,6 +107,10 @@ THE SOFTWARE.
                    :initform  (make-hash-table
                                :test 'equalp))
 
+   (hold-off       :accessor node-hold-off
+                   :initform nil)
+   (hold-off-timer :accessor node-hold-off-timer)
+
    (current-leader :accessor node-current-leader
                    :initform nil) ;; holds pkey of current leader node
    ;; -------------------------------------

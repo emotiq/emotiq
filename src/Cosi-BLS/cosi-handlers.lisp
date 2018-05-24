@@ -50,6 +50,7 @@ THE SOFTWARE.
 (define-symbol-macro *mempool*        (node-mempool *current-node*))
 (define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
 (define-symbol-macro *leader*         (node-current-leader *current-node*))
+(define-symbol-macro *holdoff*        (node-hold-off *current-node*))
 
 ;; -------------------------------------------------------
 
@@ -57,6 +58,24 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher (msg-sym &key)
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
+
+(defmethod node-dispatcher ((msg-sym (eql :end-holdoff)) &key)
+  (ac::unschedule-timer (node-hold-off-timer *current-node*))
+  (setf *holdoff* nil))
+
+(defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
+  (setf *holdoff* t)
+  (ac::schedule-timer-relative (node-hold-off-timer *current-node*)
+                               (+ *cosi-prepare-timeout*
+                                  *cosi-commit-timeout*
+                                  10)))
+
+(defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
+  (setf *holdoff* t)
+  (ac::schedule-timer-relative (node-hold-off-timer *current-node*)
+                               (+ *cosi-prepare-timeout*
+                                  *cosi-commit-timeout*
+                                  10)))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (reset-nodes))
@@ -222,8 +241,8 @@ THE SOFTWARE.
                     (node-pkey new-node)     pkey ;; cache the decompressed key
                     (node-real-ip new-node)  ipstr)))
         ;; else - not already present
-        (node-model-insert-node *top-node* new-node-info))))
-  (notify-real-descendents node :insert-node new-node-info))
+        (node-model-insert-node *top-node* new-node-info))
+      (notify-real-descendents node :insert-node new-node-info))))
 
 ;; ---------------------------------------------------------
 
@@ -701,6 +720,10 @@ check that each TXIN and TXOUT is mathematically sound."
               (node-blockchain node) nil)
 
         (setf (node-current-leader node) (node-pkey *top-node*))
+        (setf (node-hold-off-timer node)  (let ((this-node node))
+                                            (ac::make-timer
+                                             (lambda ()
+                                               (send this-node :end-holdoff)))))
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
@@ -736,6 +759,7 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; ------------------------------
 
 (defun sub-signing (my-node consensus-stage msg seq-id timeout)
+  (declare (ignore my-node))
   (=lambda (node)
     (let ((start  (get-universal-time)))
       (send node :signing
@@ -1067,8 +1091,7 @@ bother factoring it with NODE-COSI-SIGNING."
 (defun node-compute-cosi (reply-to consensus-stage msg timeout)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
-  (let ((node *current-node*)
-        (sess (gen-uuid-int)) ;; strictly increasing sequence of integers
+  (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
         (self (current-actor)))
     (ac:self-call :signing
                   :reply-to        self
@@ -1097,11 +1120,13 @@ bother factoring it with NODE-COSI-SIGNING."
                   (wait-signing))
                )) ;; end of message pattern
              ;; ---------------------------------
+             #|
              ((list :new-transaction msg)
               ;; allow processing of new transactions while we wait
               (let ((*current-node* node))
                 (node-check-transaction msg)
                 (wait-signing)))
+             |#
              ;; ---------------------------------
              ;; :TIMEOUT 30
              ;; :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
@@ -1129,7 +1154,7 @@ bother factoring it with NODE-COSI-SIGNING."
            *election-proof* *leader*
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
-        (self      (current-actor)))
+         (self      (current-actor)))
     (when (block-transactions new-block) ;; don't do anything if block is empty
       (ac:self-call :cosi-sign-prepare
                     :reply-to  self
@@ -1173,14 +1198,16 @@ bother factoring it with NODE-COSI-SIGNING."
                                
                                ((list :answer (list :timeout-cosi-network))
                                 (pr "Timeout waiting for commitment multisignature"))
-                               
+
+                               #|
                                ;; ---------------------------------
                                ((list :new-transaction msg)
                                 ;; allow processing of new transactions while we wait
                                 (let ((*current-node* node))
                                   (node-check-transaction msg)
-                                  (wait-cmt-signing))
-                                ))))
+                                  (wait-cmt-signing)))
+                               |#
+                               )))
                     (wait-cmt-signing))))
                
                ((list :answer (list :corrupt-cosi-network))
@@ -1188,13 +1215,15 @@ bother factoring it with NODE-COSI-SIGNING."
                
                ((list :answer (list :timeout-cosi-network))
                 (pr "Timeout waiting for prepare multisignature"))
-               
+
+               #|
                ;; ---------------------------------
                ((list :new-transaction msg)
                 ;; allow processing of new transactions while we wait
                 (let ((*current-node* node))
                   (node-check-transaction msg)
                   (wait-prep-signing)))
+               |#
                )))
         (wait-prep-signing)
         ))))
