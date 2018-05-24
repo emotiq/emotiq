@@ -1,4 +1,6 @@
 # Running the local node simulation
+# this version works only with uncloaked transactions
+# (cloaked transactions might cause "double-spend" errors, due to timing issues, etc.  TBD)
 
 ## Running
 
@@ -21,8 +23,8 @@
     (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize :cosi-prepare-timeout 60 :cosi-commit-timeout 60 :executive-threads 8)
-	(emotiq/sim::run :cloaked t) or
-	(emotiq/sim::run :cloaked nil)
+    (emotiq/sim::run :cloaked nil) or
+    (emotiq/sim::run :cloaked t)
 
 ## Explanation    
     
