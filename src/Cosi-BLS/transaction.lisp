@@ -212,6 +212,7 @@ Typically used for stakes. Public key is G2, Secret key is 1."
             :initarg  :gamadj)
    (sig     :accessor trans-signature
             :initarg  :sig)
+   (idhash  :reader   trans-idhash)
    ))
 
 ;; ---------------------------------------------------------------------
@@ -221,6 +222,9 @@ Typically used for stakes. Public key is G2, Secret key is 1."
                  (trans-txouts trn)
                  (trans-fee trn)
                  (trans-gamadj trn)))
+
+(defmethod =hash-trn ((trn transaction) hash)
+  (int= hash (hash-trn trn)))
 
 (defun do-make-transaction (txins gam-txins txouts txout-secrets fee)
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
@@ -246,6 +250,7 @@ correction factor gamadj on curve H for the overall transaction."
          (hash  (hash-trn trn))
          (skeys (mapcar 'txin-sig  txins))
          (sigs  (mapcar (um:curry 'sign-hash hash) skeys)))
+    (setf (slot-value trn 'idhash) hash)
     (loop for sig  in sigs
           for txin in txins
           do
@@ -333,6 +338,7 @@ during TXIN formation will be properly disposed of."
 
 (defmethod validate-transaction ((trn transaction))
   "Validate amounts and zero balance of transaction, not double txining check"
+  (emotiq/sim::checktr1)
   (with-accessors ((txins   trans-txins)
                    (txouts  trans-txouts)
                    (gamadj  trans-gamadj)
@@ -349,7 +355,9 @@ during TXIN formation will be properly disposed of."
           ;; check that Sum(txin) = Sum(txout) + Fee
           (ed-pt= (ed-mul (range-proofs:hpt) gamadj)
                   (ed-sub ttxout ttxin)))
-        ))))
+        )))
+  (emotiq/sim::checktr1)
+  )
 
 ;; ---------------------------------------------------------------------
 ;; Recover spend info

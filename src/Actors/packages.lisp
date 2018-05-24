@@ -111,6 +111,7 @@ THE SOFTWARE.
    :schedule-timer-relative
    :unschedule-timer)
   (:export
+   #:install-actor-system
    #:*nbr-execs*
    #:actor
    #:make-actor

@@ -1,11 +1,31 @@
 # Running the local node simulation
+# this version works only with uncloaked transactions
+# (cloaked transactions might cause "double-spend" errors, due to timing issues, etc.  TBD)
 
 ## Running
-    
+
+    (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
-    (emotiq/sim::run)
+    (emotiq/sim::run :cloaked nil) or (emotiq/sim::run :cloaked t)
     
+### helpers (for copy/pasting to repl)
+
+(progn	
+  (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
+  (ql:quickload :emotiq/sim))
+
+(progn
+  (emotiq/sim:initialize)
+  (emotiq/sim::run :cloaked nil))
+    
+## for pt linux
+    (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
+    (ql:quickload :emotiq/sim)
+    (emotiq/sim:initialize :cosi-prepare-timeout 60 :cosi-commit-timeout 60 :executive-threads 8)
+    (emotiq/sim::run :cloaked nil) or
+    (emotiq/sim::run :cloaked t)
+
 ## Explanation    
     
 The simulation spawns an actor which will asynchronously to perform
