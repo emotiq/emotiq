@@ -253,4 +253,4 @@ This will spawn an actor which will asynchronously do the following:
   (emotiq/elections::fire-election))
 
 (defun kill-beacon ()
-  )(emotiq/elections::kill-beacon)
+  (emotiq/elections::kill-beacon))
