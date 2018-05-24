@@ -30,7 +30,7 @@
   (let* ((node   (cosi-simgen:current-node))
          (stake  (cosi-simgen:node-stake node))
          (winner (emotiq/elections:hold-election n)))
-    (setf cosi-simgen:*leader* (cosi-simgen:node-pkey winner))
+    (setf (cosi-simgen:node-current-leader node) (cosi-simgen:node-pkey winner))
     (ac:pr (format nil "~%~A got :hold-an-election ~A" (cosi-simgen::short-id node) n))
     (let ((me (eq winner node)))
       (ac:pr (format nil "election results ~A (stake = ~A)"

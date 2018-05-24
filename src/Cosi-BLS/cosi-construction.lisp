@@ -108,7 +108,7 @@ THE SOFTWARE.
                                :test 'equalp))
 
    (current-leader :accessor node-current-leader
-                   :initform nil)
+                   :initform nil) ;; holds pkey of current leader node
    ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
              :initarg  :real-ip)

@@ -355,13 +355,11 @@ Later it may become an ADS structure"
 ;; testing-version transaction cache
 
 (defmethod cache-transaction ((key bev) val)
-  (mpcompat:with-lock ((node-glock *current-node*))
-    (emotiq/sim::checktr1)
-    (setf (gethash (bev-vec key) *mempool*) val)))
+  (emotiq/sim::checktr1)
+  (setf (gethash (bev-vec key) *mempool*) val))
 
 (defmethod remove-tx-from-mempool ((key bev))
-  (mpcompat:with-lock ((node-glock *current-node*))
-    (remhash (bev-vec key) *mempool*)))
+  (remhash (bev-vec key) *mempool*))
 
 (defmethod remove-tx-from-mempool ((tx transaction))
   (remove-tx-from-mempool (bev (hash/256 tx))))
@@ -383,27 +381,24 @@ transactions."
 (defmethod record-new-utxo ((key bev))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
-  (mpcompat:with-lock ((node-glock *current-node*))
-    (let ((vkey (bev-vec key)))
-      (multiple-value-bind (x present-p)
-          (gethash vkey *utxo-table*)
-        (declare (ignore x))
-        (when present-p
-          (error "Shouldn't Happen: Effective Hash Collision!!!"))
-        (setf (gethash vkey *utxo-table*) :spendable)))))
+  (let ((vkey (bev-vec key)))
+    (multiple-value-bind (x present-p)
+        (gethash vkey *utxo-table*)
+      (declare (ignore x))
+      (when present-p
+        (error "Shouldn't Happen: Effective Hash Collision!!!"))
+      (setf (gethash vkey *utxo-table*) :spendable))))
 
 (defmethod record-new-utxo ((txout txout))
   (record-new-utxo (bev (txout-hashlock txout))))
 
 
 (defmethod record-utxo ((key bev) val)
-  (mpcompat:with-lock ((node-glock *current-node*))
-    (setf (gethash (bev-vec key) *utxo-table*) val)))
+  (setf (gethash (bev-vec key) *utxo-table*) val))
 
 
 (defmethod remove-utxo ((key bev))
-  (mpcompat:with-lock ((node-glock *current-node*))
-    (remhash (bev-vec key) *utxo-table*)))
+  (remhash (bev-vec key) *utxo-table*))
 
 (defmethod remove-utxo ((txin txin))
   (remove-utxo (bev (txin-hashlock txin))))
@@ -705,10 +700,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (setf (node-bad        node) nil
               (node-blockchain node) nil)
 
-        (setf *leader* (node-pkey *top-node*))
-        (setf (node-delivered-trns node) nil) ;; for debug
-        (setf (node-spent-utxos node) nil)
-        
+        (setf (node-current-leader node) (node-pkey *top-node*))
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
