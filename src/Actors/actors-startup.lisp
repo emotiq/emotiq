@@ -217,12 +217,11 @@ THE SOFTWARE.
     (install-actor-directory)
     (install-actor-printer)))
 
-#+(AND (NOT :COM.RAL)
-       (or :LISPWORKS :ALLEGRO :OPENMCL))
+#-:lispworks
 (eval-when (:load-toplevel :execute)
   (install-actor-system))
 
-#+(AND :LISPWORKS :COM.RAL)
+#+:lispworks
 (let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
   
   (lw:define-action "Initialize LispWorks Tools"
