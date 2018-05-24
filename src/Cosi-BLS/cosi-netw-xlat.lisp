@@ -86,8 +86,6 @@ THE SOFTWARE.
 |#
 ;; -----------------------------------------------------------------
 
-
-
 ;;; TODO use the network transport layer in gossip to resolve this
 ;;; need.  For now this is needed to pass cosi messages on the local
 ;;; machine.
@@ -101,6 +99,7 @@ THE SOFTWARE.
       2887548929 ;; aka "127.0.0.1" as an integer
     (warn "Unimplemented lookup of machine hostname under this implementation")))
 
+
 (defvar *cosi-port* 65001)
 
 (defstruct actor-return-addr
@@ -108,6 +107,7 @@ THE SOFTWARE.
   (port *cosi-port*)
   aid)
 
+;; (defmethod sdle-store:backend-store-object (backend (obj ACTORS:ACTOR) stream)
 (defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
                    (setf (ac:get-property obj 'aid) (gen-uuid-int))))
@@ -239,7 +239,7 @@ THE SOFTWARE.
                  (let ((actor (lookup-actor-for-aid dest)))
                    (unless actor
                      (let ((prev (gethash dest *previously-unregistered*)))
-                       (pr (format nil "~A :non-existent-actor ~a ~a" (if prev "OK: " "ERROR: ") prev dest))))
+                       (pr (format nil "~A :non-existent-actor" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
                      (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
@@ -270,7 +270,8 @@ THE SOFTWARE.
                              (pbc:keying-triple-pkey *keys*)
                              (pbc:keying-triple-skey *keys*)))
          (packet  (loenc:encode payload)))
-    (ac:send *sender* ip port packet)))
+    ;; (ac:send *sender* ip port packet)
+    (ac:send *handler* packet)))
 
 #|
 (defmethod socket-send :around (ip port dest msg)
