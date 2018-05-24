@@ -127,7 +127,7 @@ THE SOFTWARE.
   (node-remove-node node-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
-  (gossip-neighborcast :end-holdoff)
+  (gossip-neighborcast *current-node* :end-holdoff)
   (ac:self-call :end-holdoff)
   (ac:pr "Block committed to blockchain")
   (ac:pr (format nil "Block signatures = ~D"
