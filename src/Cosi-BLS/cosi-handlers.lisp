@@ -59,7 +59,7 @@ THE SOFTWARE.
 (defmethod node-dispatcher (msg-sym &key)
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
 
-(defmethod node-dispatcher ((msg-sym (eql :end-holdoff)) &key)
+(defun end-holdoff ()
   (ac::unschedule-timer (node-hold-off-timer *current-node*))
   (setf *holdoff* nil))
 
@@ -69,6 +69,9 @@ THE SOFTWARE.
                                (+ *cosi-prepare-timeout*
                                   *cosi-commit-timeout*
                                   10)))
+
+(defmethod node-dispatcher ((msg-sym (eql :end-holdoff)) &key)
+  (end-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (set-holdoff))
@@ -127,8 +130,6 @@ THE SOFTWARE.
   (node-remove-node node-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
-  (gossip-neighborcast *current-node* :end-holdoff)
-  (ac:self-call :end-holdoff)
   (ac:pr "Block committed to blockchain")
   (ac:pr (format nil "Block signatures = ~D"
                  (logcount (block-signature-bitmap (first *blockchain*))))))
@@ -805,6 +806,10 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------
 
+(defun end-all-holdoffs ()
+  (loop for node across *node-bit-tbl* do
+        (send node :end-holdoff)))
+
 (defvar *use-gossip* t)
 
 (defun gossip-neighborcast (my-node &rest msg)
@@ -953,10 +958,12 @@ check that each TXIN and TXOUT is mathematically sound."
              (remove-tx-from-mempool tx)
              (dolist (txin (trans-txins tx))
                (remove-utxo txin)))
+           (end-holdoff)
            t) ;; return true to validate
        ;; else
        (progn
          (cleanup-mempool (get-block-transactions blk))
+         (end-holdoff)
          nil)))
     ))
 
@@ -1157,6 +1164,8 @@ bother factoring it with NODE-COSI-SIGNING."
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
          (self      (current-actor)))
+    (unless (block-transactions new-block)
+      (end-all-holdoffs))
     (when (block-transactions new-block) ;; don't do anything if block is empty
       (ac:self-call :cosi-sign-prepare
                     :reply-to  self

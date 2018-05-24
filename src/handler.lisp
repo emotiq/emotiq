@@ -52,7 +52,7 @@
   (cosi-simgen:leader-exec cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*))
 
 (defmethod cosi-simgen:node-dispatcher :around ((msg-sym (eql :block-finished)) &key)
-  (emotiq/elections::kill-beacon) ;; for simulator - so that we don't get a periodic call for elections when the simulated run is finished
+  ;; (emotiq/elections::kill-beacon) ;; for simulator - so that we don't get a periodic call for elections when the simulated run is finished
   (call-next-method))
 
 #|
