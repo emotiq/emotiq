@@ -41,10 +41,6 @@ THE SOFTWARE.
                 :weak :value)
   )
 
-;; this is just a sanity check set in (unregister-aid) and checked
-;; in (port-routing-handler) (:NON-EXISTENT-ACTOR case)
-(defparameter *previously-unregistered* (make-hash-table :test 'equal))
-
 (um:defmonitor
     ((associate-aid-with-actor (aid actor)
        (setf (gethash aid *aid-tbl*) actor))
@@ -196,9 +192,6 @@ THE SOFTWARE.
                      (apply 'ac:send (node-self node) msg))))
                 (t
                  (let ((actor (lookup-actor-for-aid dest)))
-                   (unless actor
-                     (let ((prev (gethash dest *previously-unregistered*)))
-                       (pr (format nil "~A :non-existent-actor" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
                      (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
