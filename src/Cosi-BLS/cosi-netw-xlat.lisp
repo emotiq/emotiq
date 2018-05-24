@@ -51,39 +51,8 @@ THE SOFTWARE.
      
      (lookup-actor-for-aid (aid)
        (gethash aid *aid-tbl*))
-     
-     (unregister-aid (aid)
-       (pr (format nil "unregistering ~A" aid))
-       (setf (gethash aid *previously-unregistered*) t)
-       (remhash aid *aid-tbl*))
      ))
 
-#|
-(defclass return-addr ()
-  ((pkey     :reader   return-addr-pkey ;; node pkey for the actor
-             :initarg  :pkey)
-   (aid      :reader   return-addr-aid  ;; actor id for returns
-             :initarg  :aid)))
-
-(defmethod make-return-addr ((node node))
-  (make-return-addr (node-pkey node)))
-
-(defmethod make-return-addr ((pkey pbc:public-key))
-  ";; can only be called from within an Actor body. Create a unique AID
-  ;; and associate that with the calling Actor for use with received
-  ;; messages directed at the Actor. Also construct and return a
-  ;; return-addr object, which can be used as a network portable
-  ;; reply-to tag."
-  (let ((aid  (gen-uuid-int))
-        (self (current-actor)))
-    (associate-aid-with-actor aid self)
-    (make-instance 'return-addr
-                   :pkey  pkey
-                   :aid   aid)))
-
-(defmethod unregister-return-addr ((ret return-addr))
-  (unregister-aid (return-addr-aid ret)))
-|#
 ;; -----------------------------------------------------------------
 
 ;;; TODO use the network transport layer in gossip to resolve this
@@ -107,7 +76,6 @@ THE SOFTWARE.
   (port *cosi-port*)
   aid)
 
-;; (defmethod sdle-store:backend-store-object (backend (obj ACTORS:ACTOR) stream)
 (defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
                    (setf (ac:get-property obj 'aid) (gen-uuid-int))))
@@ -131,12 +99,6 @@ THE SOFTWARE.
     (let ((dest (or aid pkey)))
       (socket-send ip port dest msg))))
 
-#|
-(defmethod gossip-send :around (pkey aid msg)
-  (pr (format nil "~A ~A ~A"  (short-id pkey) aid msg))
-  (call-next-method))
-|#
-
 (defmethod send ((pkey pbc:public-key) &rest msg)
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
     (unless node
@@ -145,20 +107,17 @@ THE SOFTWARE.
       (when (node-byz node)
         (pr (format nil "Byzantine node: ~A" (short-id pkey))))
       (unless (node-byz node)
-        (gossip-send pkey nil msg)))))
+        (if (eq node *current-node*)
+            (apply 'ac:send (node-self node) msg)
+          (gossip-send pkey nil msg))))))
 
 (defmethod send ((node node) &rest msg)
   (when (node-byz node)
     (pr (format nil "Byzantine-node: ~A" (short-id node))))
   (unless (node-byz node)
-    (gossip-send (node-pkey node) nil msg)))
-
-#|
-(defmethod send ((ref return-addr) &rest msg)
-  (gossip-send (return-addr-pkey ref)
-               (return-addr-aid  ref)
-               msg))
-|#
+    (if (eq node *current-node*)
+        (apply 'ac:send (node-self node) msg)
+      (gossip-send (node-pkey node) nil msg))))
 
 (defmethod send ((node null) &rest msg)
   (ac:pr :sent-to-null msg)
@@ -272,12 +231,6 @@ THE SOFTWARE.
          (packet  (loenc:encode payload)))
     ;; (ac:send *sender* ip port packet)
     (ac:send *handler* packet)))
-
-#|
-(defmethod socket-send :around (ip port dest msg)
-  (pr (format nil "~A ~A ~A ~A" ip port (short-id dest) msg))
-  (call-next-method))
-|#
 
 ;; ------------------------------------------------------------------
 ;; deprecated TCP/IP over Butterfly...
