@@ -788,64 +788,65 @@ check that each TXIN and TXOUT is mathematically sound."
           (apply 'send (node-pkey node) msg))))
 
 (=defun gossip-signing (my-node consensus-stage msg seq-id timeout)
-  (cond ((and *use-gossip*
-              (int= (node-pkey my-node) *leader*))
-         ;; we are leader node, so fire off gossip spray and await answers
-         (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
-               (start     nil)
-               (g-cnt     0)
-               (g-bits    0)
-               (g-sig     nil))
-           
-           (pr "Running Gossip Signing")
-           (gossip-neighborcast my-node :signing
-                                :reply-to        (current-actor)
-                                :consensus-stage consensus-stage
-                                :blk             msg
-                                :seq             seq-id
-                                :timneout        timeout)
-           (setf start (get-universal-time))
-           
-           (labels
-               ((=return (val)
-                  (pr "Return from Gossip Signing")
-                  (become 'do-nothing) ;; stop responding to messages
-                  (=values val))
-
-                (=finish ()
-                  (=return (and g-sig
-                                (list g-sig g-bits))))
-                
-                (wait ()
-                  (let ((stop (get-universal-time)))
-                    (decf timeout (- stop (shiftf start stop))))
-                  (recv
-                    ((list :signed sub-seq sig bits)
-                     (when (and (eql sub-seq seq-id)
-                                sig
-                                (pbc:check-message sig))
-                       (pr (hex bits))
-                       (setf g-bits (logior g-bits bits)
-                             g-sig  (if g-sig
-                                        (pbc:combine-signatures g-sig sig)
-                                      sig)))
-                     (if (> (incf g-cnt) bft-thrsh)
-                         (=finish)
-                       (wait)))
-                    
-                    (msg
-                     (pr (format nil "Gossip-wait got unknown message: ~A" msg))
-                     (wait))
-                    
-                    :TIMEOUT    timeout
-                    :ON-TIMEOUT (=finish)
-                    )))
-             (wait))))
-        
-        (t 
-         ;; else - not leader don't re-gossip request for signatures
-         (=values nil))
-        ))
+  (let ((*current-node* my-node))
+    (cond ((and *use-gossip*
+                (int= (node-pkey my-node) *leader*))
+           ;; we are leader node, so fire off gossip spray and await answers
+           (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
+                 (start     nil)
+                 (g-cnt     0)
+                 (g-bits    0)
+                 (g-sig     nil))
+             
+             (pr "Running Gossip Signing")
+             (gossip-neighborcast my-node :signing
+                                  :reply-to        (current-actor)
+                                  :consensus-stage consensus-stage
+                                  :blk             msg
+                                  :seq             seq-id
+                                  :timneout        timeout)
+             (setf start (get-universal-time))
+             
+             (labels
+                 ((=return (val)
+                    (pr "Return from Gossip Signing")
+                    (become 'do-nothing) ;; stop responding to messages
+                    (=values val))
+                  
+                  (=finish ()
+                    (=return (and g-sig
+                                  (list g-sig g-bits))))
+                  
+                  (wait ()
+                    (let ((stop (get-universal-time)))
+                      (decf timeout (- stop (shiftf start stop))))
+                    (recv
+                      ((list :signed sub-seq sig bits)
+                       (when (and (eql sub-seq seq-id)
+                                  sig
+                                  (pbc:check-message sig))
+                         (pr (hex bits))
+                         (setf g-bits (logior g-bits bits)
+                               g-sig  (if g-sig
+                                          (pbc:combine-signatures g-sig sig)
+                                        sig)))
+                       (if (> (incf g-cnt) bft-thrsh)
+                           (=finish)
+                         (wait)))
+                      
+                      (msg
+                       (pr (format nil "Gossip-wait got unknown message: ~A" msg))
+                       (wait))
+                      
+                      :TIMEOUT    timeout
+                      :ON-TIMEOUT (=finish)
+                      )))
+               (wait))))
+          
+          (t 
+           ;; else - not leader don't re-gossip request for signatures
+           (=values nil))
+          )))
 
 ;; -------------------------------------------------------
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
@@ -1113,9 +1114,11 @@ bother factoring it with NODE-COSI-SIGNING."
 (defparameter *nleaders* 0) ;; not atomic!  but good enough for a first attempt
 
 (defun leader-exec (prepare-timeout commit-timeout)
+  #|
   (incf *nleaders*)
   (unless (= 1 *nleaders*)
     (error (format nil "wrong leader count ~A" *nleaders*)))
+  |#
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
@@ -1155,8 +1158,10 @@ bother factoring it with NODE-COSI-SIGNING."
                                          (inspect new-block)
                                          (emotiq/sim::checktr1)
                                          (send node :block-finished)
+                                         #|
                                          (decf *nleaders*)
                                          (assert (= 0 *nleaders*))
+                                         |#
                                          )
                                         
                                         (t
