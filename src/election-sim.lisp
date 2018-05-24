@@ -30,7 +30,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------
 
 (defvar *beacon-timer* nil)
-(defvar *beacon-interval*  25)
+(defvar *beacon-interval*  60)
 (defvar *self-destruct*    nil)
 
 (defun kill-beacon ()
@@ -77,6 +77,7 @@ THE SOFTWARE.
                           (lambda ()
                             (cond (*self-destruct*
                                    (ac::unschedule-timer *beacon-timer*)
+                                   (ac:pr "Beacon terminated")
                                    (setf *self-destruct* nil
                                          *beacon-timer* nil))
                                   (t

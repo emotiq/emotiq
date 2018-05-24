@@ -158,8 +158,16 @@ This will spawn an actor which will asynchronously do the following:
         *tx-3*           nil)
 
 
-  (cosi-simgen:reset-nodes) 
+  (cosi-simgen:reset-nodes)
 
+  (if cloaked
+      (progn
+        (setf cosi-simgen::*cosi-prepare-timeout* 30
+              emotiq/elections::*beacon-interval* 60))
+    (progn
+        (setf cosi-simgen::*cosi-prepare-timeout* 10
+              emotiq/elections::*beacon-interval* 20)))
+      
   (emotiq/elections:make-election-beacon)
                                          
   ;(ac:spawn  ;; cosi-handlers assumes that there is one block in the blockchain, if you spawn here,

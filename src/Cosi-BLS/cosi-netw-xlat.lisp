@@ -270,7 +270,8 @@ THE SOFTWARE.
                              (pbc:keying-triple-pkey *keys*)
                              (pbc:keying-triple-skey *keys*)))
          (packet  (loenc:encode payload)))
-    (ac:send *sender* ip port packet)))
+    ;; (ac:send *sender* ip port packet)
+    (ac:send *handler* packet)))
 
 #|
 (defmethod socket-send :around (ip port dest msg)
