@@ -344,17 +344,23 @@ Later it may become an ADS structure"
   nil)
 
 (defmethod node-check-transaction ((msg transaction))
-  (check-transaction-math msg))
+  (when (check-transaction-math msg)
+    (let ((key (bev (hash/256 msg))))
+      (when (gethash (bev-vec key) *mempool*)
+        (error "Duplicate transaction delivery"))
+      (cache-transaction key msg))))
 
 ;; -------------------------------
 ;; testing-version transaction cache
 
 (defmethod cache-transaction ((key bev) val)
-  (emotiq/sim::checktr1)
-  (setf (gethash (bev-vec key) *mempool*) val))
+  (mpcompat:with-lock ((node-glock *current-node*))
+    (emotiq/sim::checktr1)
+    (setf (gethash (bev-vec key) *mempool*) val)))
 
 (defmethod remove-tx-from-mempool ((key bev))
-  (remhash (bev-vec key) *mempool*))
+  (mpcompat:with-lock ((node-glock *current-node*))
+    (remhash (bev-vec key) *mempool*)))
 
 (defmethod remove-tx-from-mempool ((tx transaction))
   (remove-tx-from-mempool (bev (hash/256 tx))))
@@ -376,24 +382,27 @@ transactions."
 (defmethod record-new-utxo ((key bev))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
-  (let ((vkey (bev-vec key)))
-    (multiple-value-bind (x present-p)
-        (gethash vkey *utxo-table*)
-      (declare (ignore x))
-      (when present-p
-        (error "Shouldn't Happen: Effective Hash Collision!!!"))
-      (setf (gethash vkey *utxo-table*) :spendable))))
+  (mpcompat:with-lock ((node-glock *current-node*))
+    (let ((vkey (bev-vec key)))
+      (multiple-value-bind (x present-p)
+          (gethash vkey *utxo-table*)
+        (declare (ignore x))
+        (when present-p
+          (error "Shouldn't Happen: Effective Hash Collision!!!"))
+        (setf (gethash vkey *utxo-table*) :spendable)))))
 
 (defmethod record-new-utxo ((txout txout))
   (record-new-utxo (bev (txout-hashlock txout))))
 
 
 (defmethod record-utxo ((key bev) val)
-  (setf (gethash (bev-vec key) *utxo-table*) val))
+  (mpcompat:with-lock ((node-glock *current-node*))
+    (setf (gethash (bev-vec key) *utxo-table*) val)))
 
 
 (defmethod remove-utxo ((key bev))
-  (remhash (bev-vec key) *utxo-table*))
+  (mpcompat:with-lock ((node-glock *current-node*))
+    (remhash (bev-vec key) *utxo-table*)))
 
 (defmethod remove-utxo ((txin txin))
   (remove-utxo (bev (txin-hashlock txin))))
@@ -441,8 +450,7 @@ Return nil if transaction is invalid."
       (ac:pr (format nil "Transaction: ~A checks: ~A"
                      (short-id key)
                      (short-id *current-node*)))
-      (cache-transaction key tx))
-    ))
+      t)))
 
 ;; --------------------------------------------------------------------
 ;; Code to assemble a block - must do full validity checking,
@@ -518,9 +526,9 @@ invalid TX."
   (labels ((txin-ok (txin)
              (let* ((key  (bev (txin-hashlock txin)))
                     (utxo (lookup-utxo key)))
-               
+
                (cond ((null utxo)
-                      (pr (format nil "*** non-existent UTXO spend ~A" tx))
+                      (error (format nil "*** non-existent UTXO spend ~A" tx))
                       nil)
                      
                      ((eq :spendable utxo)
@@ -528,7 +536,7 @@ invalid TX."
                       t)
 
                      (t
-                      (pr (format nil "*** double spend txn ~A" tx)) ;; TODO: 157602158
+                      (error (format nil "*** double spend txn ~A" tx)) ;; TODO: 157602158
                       nil)
                      ))))
     (cond ((every #'txin-ok (trans-txins tx))
@@ -696,6 +704,10 @@ check that each TXIN and TXOUT is mathematically sound."
   (loop for node across *node-bit-tbl* do
         (setf (node-bad        node) nil
               (node-blockchain node) nil)
+
+        (setf (node-delivered-trns node) nil) ;; for debug
+        (setf (node-spent-utxos node) nil)
+        
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))

@@ -111,7 +111,8 @@ witnesses."
     (error(format nil "transaction ~A did not validate" name)))
   (broadcast-message :new-transaction
                      :trn trans)
-  (force-epoch-end))
+  ;; (force-epoch-end)
+  )
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")

@@ -95,6 +95,8 @@ THE SOFTWARE.
              :initform 0)
    ;; -------------------------------------
    ;; pseudo-globals per node
+   (glock    :reader node-glock
+             :initform (mpcompat:make-lock))
    (blockchain     :accessor node-blockchain
                    :initform nil)
    (blockchain-tbl :accessor node-blockchain-tbl
@@ -106,6 +108,11 @@ THE SOFTWARE.
    (utxo-table     :accessor  node-utxo-table
                    :initform  (make-hash-table
                                :test 'equalp))
+
+   (delivered-trns :accessor node-delivered-trns
+                   :initform nil)
+   (spent-utxos    :accessor node-spent-utxos
+                   :initform nil)
    
    ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
