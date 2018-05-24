@@ -269,7 +269,17 @@ are in place between nodes.
    (kind :initarg :kind :initform nil :accessor kind
          :documentation "The verb of the message, indicating what action to take.")
    (args :initarg :args :initform nil :accessor args
-         :documentation "Payload of the message. Arguments to kind.")))
+         :documentation "Payload of the message. Arguments to kind.")
+   (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata
+             :documentation "Alist of (keyword . data) that can be anything")))
+
+(defmethod add-metadata ((msg gossip-message-mixin) key datum)
+  "Adds a metadata pair to message"
+  (kvs:relate! (metadata msg) key datum))
+
+(defmethod get-metadata ((msg gossip-message-mixin) key)
+  "Gets metadata value associated with key, if any"
+  (kvs:lookup-key (metadata msg) key))
 
 (defgeneric copy-message (msg)
   (:documentation "Copies a message object verbatim. Mainly for simulation mode
@@ -286,7 +296,7 @@ are in place between nodes.
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
-  ((forward-to :initarg :forward :initform *use-all-neighbors* :accessor forward-to
+  ((forward-to :initarg :forward-to :initform *use-all-neighbors* :accessor forward-to
              :documentation "Normally true, which means this solicitation should be forwarded to neighbors
              of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
              just reply immediately.
@@ -683,6 +693,7 @@ dropped on the floor.
           (let* ((solicitation (make-solicitation
                                 :reply-to (uid node)
                                 :kind kind
+                                :forward-to ':neighborcast
                                 :args args))
                  (soluid (uid solicitation)))
             (send-msg solicitation
@@ -799,6 +810,30 @@ dropped on the floor.
         (progn
           (setf localnode (make-node
                            :NEIGHBORS (list (uid rnode))))
+          ;(format t "~%Localnode UID = ~D" (uid localnode))
+          (setf allnodes (solicit-direct localnode :list-alive))
+          ; remove localnode's uid because it will have been included
+          (setf allnodes (remove (uid localnode) allnodes)))
+      (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
+      )))
+
+(defun multiple-list-uids (address-port-list)
+  "Get a list of all UIDs of nodes at given remote address and port in
+   list like ((address port) (address port) ...).
+   This uses gossip and works in parallel, while looping on list-uids does not.
+   If no error, returned list will look like
+   (address port uid1 uid2 ...)
+   If error, returned list will look like
+   (address port :ERRORMSG arg1 arg2 ...)"
+  (let ((rnodes nil)
+        (localnode nil)
+        (allnodes nil))
+    (setf rnodes (mapcar (lambda (addressport)
+                           (ensure-proxy-node :TCP (first addressport) (second addressport) 0))
+                         address-port-list))
+    (unwind-protect
+        (progn
+          (setf localnode (make-node :NEIGHBORS (mapcar 'uid rnodes)))
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
@@ -1856,6 +1891,8 @@ gets sent back, and everything will be copacetic.
       (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
           ;ensure a local node of type proxy-gossip-node exists on this machine with
           ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
+        (add-metadata msg :remote-address rem-address)
+        (add-metadata msg :remote-port    rem-port   )
         (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
           ;   on THIS machine.
         ))))

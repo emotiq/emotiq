@@ -103,9 +103,12 @@
                         (run-gossip-sim :TCP)
                         (let ((uids nil))
                           (setf hosts-uids
+                                #+IGNORE
                                 (loop for host in hosts
                                   when (setf uids (apply 'list-uids host))
-                                  collect (append host uids)))))
+                                  collect (append host uids))
+                                (multiple-list-uids hosts)
+                                )))
                        (t (error "Hosts file hosts.conf not found or invalid")))
                  hosts-uids))))
 
