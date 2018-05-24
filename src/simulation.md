@@ -5,9 +5,9 @@
     (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
     (ql:quickload :emotiq/sim)
     (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
-    (emotiq/sim::run) or (emotiq/sim::run :cloaked nil)
+    (emotiq/sim::run :cloaked nil) or (emotiq/sim::run :cloaked t)
     
-### helpers...
+### helpers (for copy/pasting to repl)
 
 (progn	
   (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
@@ -15,7 +15,7 @@
 
 (progn
   (emotiq/sim:initialize)
-  (emotiq/sim::run :cloaked t))
+  (emotiq/sim::run :cloaked nil))
     
 ## for pt linux
     (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
