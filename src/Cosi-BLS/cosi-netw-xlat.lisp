@@ -187,13 +187,10 @@ THE SOFTWARE.
                    (when node
                      (when (eq node *my-node*)
                        (pr (format nil "fowarding-by-default-to-me: ~A" msg)))
-                     (assert (typep node 'node))
-                     (assert (typep (node-self node) 'ac:actor))
                      (apply 'ac:send (node-self node) msg))))
                 (t
                  (let ((actor (lookup-actor-for-aid dest)))
                    (when actor
-                     (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
                      (when (eq actor (node-self *my-node*))
                        (pr (format nil "forwarding-specifically-to-me: ~A" msg)))
