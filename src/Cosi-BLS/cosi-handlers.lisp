@@ -950,23 +950,24 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (if (and (int= *leader* (block-leader-pkey blk))
-              (check-block-multisignature blk))
-         (progn
-           (push blk *blockchain*)
-           (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
-           ;; clear out *mempool* and spent utxos
-           (dolist (tx (get-block-transactions blk))
-             (remove-tx-from-mempool tx)
-             (dolist (txin (trans-txins tx))
-               (remove-utxo txin)))
-           (end-holdoff)
-           t) ;; return true to validate
-       ;; else
-       (progn
-         (cleanup-mempool (get-block-transactions blk))
-         (end-holdoff)
-         nil)))
+     (unwind-protect
+         (if (and (int= *leader* (block-leader-pkey blk))
+                  (check-block-multisignature blk))
+             (progn
+               (push blk *blockchain*)
+               (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
+               ;; clear out *mempool* and spent utxos
+               (dolist (tx (get-block-transactions blk))
+                 (remove-tx-from-mempool tx)
+                 (dolist (txin (trans-txins tx))
+                   (remove-utxo txin)))
+               t) ;; return true to validate
+           ;; else
+           (progn
+             (cleanup-mempool (get-block-transactions blk))
+             nil))
+       ;; unwind
+       (end-holdoff)))
     ))
 
 ;; ----------------------------------------------------------------------------
