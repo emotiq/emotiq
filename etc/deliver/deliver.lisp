@@ -4,7 +4,7 @@
 (load "~/quicklisp/setup.lisp")
 
 (push :delivery *features*)
-(format *standard-output* "~&features: ~A~&" *features*)
+
 (ql:quickload :emotiq/startup)
 
 (deliver 'emotiq:start "emotiq" 0 :multiprocessing t :console t)
