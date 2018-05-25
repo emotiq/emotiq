@@ -226,15 +226,15 @@ THE SOFTWARE.
    :openmcl
    (and :lispworks (not :com.ral) (not :delivery)) )
 (eval-when (:load-toplevel :execute)
-	   (format *standard-output* "~&IN EVAL-WHEN SECTION~&")
+	   #+nil(format *standard-output* "~&IN EVAL-WHEN SECTION~&")
 	   (install-actor-system))
 
 #+(or
    (and :lispworks :com.ral)
    (and :lispworks :DELIVERY))
 (let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
-  (eval-when (:load-toplevel :execute)
-	     (format *standard-output* "~&IN DELIVERY SECTION~&"))
+  #+nil(eval-when (:load-toplevel :execute)
+	     (format *standard-output* "~&IN DELIVERY SECTION features: ~&" *features*))
   (lw:define-action "Initialize LispWorks Tools"
                     "Start up Functional Actors"
                     'install-actor-system
