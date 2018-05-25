@@ -98,87 +98,88 @@ THE SOFTWARE.
   nil)
 
 (defun install-actor-directory ()
-  (setf *actor-directory-manager*
-        (make-actor
-            (let ((directory
-                   #+:LISPWORKS
-                   (make-hash-table
-                    :test 'equal
-                    :single-thread t)
-                   #+:OPENMCL
-                   (make-hash-table
-                    :test 'equal
-                    :lock-free ':shared
-                    :shared t)
-                   #+:SBCL
-                   (make-hash-table
-                    :test 'equal
-                    :synchronized nil)
-                   #+:ALLEGRO
-                   (make-hash-table
-                    :test 'equal))
-                  (rev-directory
-                   #+:LISPWORKS
-                   (make-hash-table
-                    :test 'eq
-                    :single-thread t)
-                   #+:OPENMCL
-                   (make-hash-table
-                    :test 'eq
-                    :lock-free ':shared
-                    :shared t)
-                   #+:SBCL
-                   (make-hash-table
-                    :test 'eq
-                    :synchronized nil)
-                   #+:ALLEGRO
-                   (make-hash-table
-                    :test 'eq)))
-              
-              (labels ((clean-up ()
-                         (setf *actor-directory-manager* 'do-nothing)))
+  (unless (typep *actor-directory-manager* 'actor)
+    (setf *actor-directory-manager*
+          (make-actor
+           (let ((directory
+                  #+:LISPWORKS
+                  (make-hash-table
+                   :test 'equal
+                   :single-thread t)
+                  #+:OPENMCL
+                  (make-hash-table
+                   :test 'equal
+                   :lock-free ':shared
+                   :shared t)
+                  #+:SBCL
+                  (make-hash-table
+                   :test 'equal
+                   :synchronized nil)
+                  #+:ALLEGRO
+                  (make-hash-table
+                   :test 'equal))
+                 (rev-directory
+                  #+:LISPWORKS
+                  (make-hash-table
+                   :test 'eq
+                   :single-thread t)
+                  #+:OPENMCL
+                  (make-hash-table
+                   :test 'eq
+                   :lock-free ':shared
+                   :shared t)
+                  #+:SBCL
+                  (make-hash-table
+                   :test 'eq
+                   :synchronized nil)
+                  #+:ALLEGRO
+                  (make-hash-table
+                   :test 'eq)))
+             
+             (labels ((clean-up ()
+                        (setf *actor-directory-manager* 'do-nothing)))
+               
+               (dlambda
+                (:clear ()
+                        (clrhash directory))
                 
-                (dlambda
-                  (:clear ()
-                   (clrhash directory))
-                  
-                  (:register (actor name)
-                   ;; this simply overwrites any existing entry with actor
-                   (when-let (key (acceptable-key name))
-                     (setf (gethash key directory) actor
-                           (gethash actor rev-directory) key)))
-                  
-                  (:unregister (name-or-actor)
-                   (cond ((typep name-or-actor 'Actor)
-                          (when-let (key (gethash name-or-actor rev-directory))
-                            (remhash key directory)
-                            (remhash name-or-actor rev-directory)))
-                         (t
-                          (when-let (key (acceptable-key name-or-actor))
-                            (when-let (actor (gethash key directory))
-                              (remhash key directory)
-                              (remhash actor rev-directory))))
-                         ))
-                  
-                  (:get-all ()
-                   (let (actors)
-                     (maphash (lambda (k v)
-                                (setf actors (acons k v actors)))
-                              directory)
-                     (sort actors #'string-lessp :key #'car)))
-                  
-                  (:find (name)
-                   (um:when-let (key (acceptable-key name))
-                     (gethash key directory)))
-                  
-                  (:reverse-lookup (actor)
-                   (gethash actor rev-directory))
-                  
-                  (:quit ()
-                   (clean-up))
-                  )))))
-  (register-actor *actor-directory-manager* :ACTOR-DIRECTORY)
-  (pr "Actor Directory created..."))
+                (:register (actor name)
+                           ;; this simply overwrites any existing entry with actor
+                           (when-let (key (acceptable-key name))
+                             (setf (gethash key directory) actor
+                                   (gethash actor rev-directory) key)))
+                
+                (:unregister (name-or-actor)
+                             (cond ((typep name-or-actor 'Actor)
+                                    (when-let (key (gethash name-or-actor rev-directory))
+                                      (remhash key directory)
+                                      (remhash name-or-actor rev-directory)))
+                                   (t
+                                    (when-let (key (acceptable-key name-or-actor))
+                                      (when-let (actor (gethash key directory))
+                                        (remhash key directory)
+                                        (remhash actor rev-directory))))
+                                   ))
+                
+                (:get-all ()
+                          (let (actors)
+                            (maphash (lambda (k v)
+                                       (setf actors (acons k v actors)))
+                                     directory)
+                            (sort actors #'string-lessp :key #'car)))
+                
+                (:find (name)
+                       (um:when-let (key (acceptable-key name))
+                         (gethash key directory)))
+                
+                (:reverse-lookup (actor)
+                                 (gethash actor rev-directory))
+                
+                (:quit ()
+                       (clean-up))
+                )))))
+    (register-actor *actor-directory-manager* :ACTOR-DIRECTORY)
+    (pr "Actor Directory created...")))
 
 ;; --------------------------------------------------------
 ;; Shared printer driver... another instance of something better
@@ -195,35 +196,36 @@ THE SOFTWARE.
   (apply #'send *shared-printer-actor* :print things-to-print))
 
 (defun install-actor-printer ()
-  (setf *shared-printer-actor*
-        (make-actor
-          (dlambda
+  (unless (typep *shared-printer-actor* 'actor)
+    (setf *shared-printer-actor*
+          (make-actor
+           (dlambda
             (:print (&rest things-to-print)
-             (dolist (item things-to-print)
-               (print item)))
+                    (dolist (item things-to-print)
+                      (print item)))
             
             (:quit ()
-             (setf *shared-printer-actor* #'blind-print))
+                   (setf *shared-printer-actor* #'blind-print))
             )))
-  (register-actor *shared-printer-actor* :SHARED-PRINTER))
+    (register-actor *shared-printer-actor* :SHARED-PRINTER)))
 
 ;; --------------------------------------------------------
 
 (defun install-actor-system (&rest ignored)
   (declare (ignore ignored))
-  (install-actor-directory)
-  (install-actor-printer))
+  (unless (directory-manager-p)
+    (install-actor-directory)
+    (install-actor-printer)))
 
-#+(or :ALLEGRO :OPENMCL)
-(install-actor-system)
+#-:lispworks
+(eval-when (:load-toplevel :execute)
+  (install-actor-system))
 
-#||#
-#+:LISPWORKS
-(let ((lw:*handle-existing-action-in-action-list* '(:silent :skip)))
+#+:lispworks
+(let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
   
   (lw:define-action "Initialize LispWorks Tools"
                     "Start up Functional Actors"
                     'install-actor-system
                     :after "Run the environment start up functions"
                     :once))
-#||#

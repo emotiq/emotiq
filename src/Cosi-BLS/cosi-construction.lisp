@@ -50,7 +50,7 @@ THE SOFTWARE.
   (get-local-ipv4 (machine-instance)))
 
 (defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "Arroyo.local"))
+(defvar *leader-node* (get-local-ipv4 "localhost"))
 ;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
 
 (defvar *top-node*   nil) ;; current leader node
@@ -170,7 +170,7 @@ THE SOFTWARE.
                               :parent  parent
                               :real-ip *comm-ip*
                               )))
-    (setf (node-self node) (make-node-dispatcher node)
+    (setf (node-self node) (cosi-simgen::make-node-dispatcher node) ;(make-node-dispatcher node)
           (gethash ipstr *ip-node-tbl*)   node
           (gethash pval  *pkey-node-tbl*) node)))
 

@@ -58,6 +58,7 @@
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
   (:export
+   :*max-bit-length*
    :hpt
    :range-proof-block
    :range-proof-block-sum-gamma
@@ -111,26 +112,43 @@
    :random-between)
   (:export
    :txin
-   :make-txin
+   :cloaked-txin
+   :uncloaked-txin
+   :make-cloaked-txin
+   :make-uncloaked-txin
+   :txin-cloaked-p
    :txin-hashlock
    :txin-pkey
    :txin-sig
    :txin-prf
-   :txin-amt
+   :uncloaked-txin-amt
+   :cloaked-txin-encr
    :get-txin-amount
    
    :txout
-   :make-txout
+   :cloaked-txout
+   :uncloaked-txout
+   :stake-txout
+   :make-cloaked-txout
+   :make-uncloaked-txout
+   :make-stake-txout
+   :txout-cloaked-p
    :txout-hashlock
    :txout-hashpkey
    :txout-prf
-   :txout-encr
+   :cloaked-txout-encr
+   :uncloaked-txout-amt
+   :uncloaked-txout-gamma
    
    :transaction
    :trans-txins
    :trans-txouts
+   :trans-fee
+   :trans-gamadj
+   :trans-signature
    :make-transaction
    :validate-transaction
+   :validate-txout
 
    :find-txout-for-pkey-hash
    :decrypt-txout-info
@@ -156,8 +174,17 @@
    :hash-block 
    :update-block-signature
    :serialize-block-octets
+   :serialize-block-header-octets
    :compute-merkle-root-hash
 
+   :ith-witness-signed-p
+   :set-ith-witness-signed-p
+
+   :block-epoch
+   :block-prev-block-hash
+   :block-timestamp
+   :block-leader-pkey
+   :block-election-proof
    :block-transactions
    :block-witnesses
    :block-signature-bitmap
@@ -215,8 +242,39 @@
    :with-borrowed-mailbox
    :pr)
   (:export
+   :*current-node*
+   :current-node
+   :node
+   :node-pkey
+   :node-skey
+   :node-stake
+   :node-self
+   :node-blockchain
+   :node-blockchain-tbl
+   :node-mempool
+   :node-utxo-table
+   :*top-node*
+   :*leader*
+   :*blockchain*
+   :*blockchain-tbl*
+   :*mempool*
+   :*utxo-table*
+   :*ip-node-tbl*
+   :*pkey-node-tbl*
+   :*pkey-skey-tbl*
+   :*node-bit-tbl*
+   :send
+   :reply
+   :node-dispatcher
+   :*cosi-prepare-timeout*
+   :*cosi-commit-timeout*
+   :leader-exec
+   :*default-data-file*
+   :*default-key-file*
    :generate-tree
    :reconstruct-tree
+   :init-sim
+   :reset-nodes
    :forwarding))
 
 (defpackage :cosi-keying
