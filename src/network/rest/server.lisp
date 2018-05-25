@@ -1,6 +1,6 @@
 (in-package :emotiq-rest)
 
-(defvar *port* 3145)
+(defvar *port* 3140)
 
 (defvar *vc-root* (asdf:system-relative-pathname :emotiq "../"))
 

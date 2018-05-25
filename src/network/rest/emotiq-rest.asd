@@ -2,6 +2,7 @@
   :depends-on (emotiq/wallet
                restas
                cosi-bls
+               parenscript
                cl-json
                cl-who
                simple-date-time)
@@ -20,11 +21,11 @@
                         :pathname "./"
                         :depends-on (util)
                         :serial t 
-                        :components (#+(or)
-                                     (:file "api-0.0.1")
-                                     (:file "dictionary-0.0.1")
-                                     (:file "wallet-0.0.1")
-                                     (:file "emotiq-0.0.1")))))
+                        :components (#+(or)  (:file "api-0.0.1")
+                                       (:file "client-0.0.1")                               
+                                       (:file "dictionary-0.0.1")
+                                       (:file "wallet-0.0.1")
+                                       (:file "emotiq-0.0.1")))))
 
 
 

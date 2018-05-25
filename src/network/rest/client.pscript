@@ -1,0 +1,46 @@
+;;; -*- Mode: lisp; Syntax: common-lisp -*-
+;;;
+;;; source in files of type "pscript" are valid Common Lisp s-exprs
+;;; but are not intended to be read by the compile-time Lisp reader,
+;;; instead one uses PARENSCRIPT:PS* to compile these forms.
+
+(defvar *ws* nil)
+
+(defvar *wallet-uri* "ws://localhost:3145/wallet")
+
+(defun connect ()
+  (let ((ws (ps:new (|WebSocket| *wallet-uri*))))
+    (unless ws
+      (console.log "Failed to make connection to %s" *wallet-uri*))
+    (setf (ps:getprop ws 'onmessage)
+          (lambda (event)
+            (console.log (ps:@ event data))))
+    (setf *ws* ws)))
+
+(defun send (rpc-message)
+  (unless (and *ws*
+               (equal (ps:@ *ws* |readyState|)
+                      (ps:getprop *ws* '*open*)))
+    (connect))
+  (let ((json (ps:chain *json* (stringify rpc-message))))
+    (ps:chain *ws* (send json))))
+
+(defvar *request-id-counter* 0)
+
+(defun form-rpc-request (method params)
+  (ps:create
+   :jsonrpc "2.0"
+   :method method
+   :params params
+   :id (ps:incf *request-id-counter*)))
+
+(defun enumerate-wallets ()
+  (let ((message (form-rpc-request "enumerateWallets" nil)))
+    (send message)))
+
+
+  
+  
+
+
+        

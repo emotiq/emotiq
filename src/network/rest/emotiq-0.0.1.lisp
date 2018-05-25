@@ -5,9 +5,8 @@
 
 (in-package :route.emotiq/0/0/1)
 
-#+(or)
-(restas:mount-module -api- (:route.api/0)
-  (:url "/api/"))
+(restas:mount-module -client- (:route.client/0)
+  (:url "/client/"))
 
 (restas:mount-module -wallet- (:route.wallet/0)
   (:url "/wallet/"))
@@ -15,28 +14,29 @@
 (restas:mount-module -dictionary- (:route.dictionary/0)
   (:url "/dictionary/"))
 
-(restas:define-route %api ("/"
-                             :content-type "text/html")
-    (as-html
-      (:html
-       (:body
-        (:div :id "navigation"
-              (:h1 "Wallet")
-              (:div
-               :id "wallet"
-               (:a :href (restas:genurl '-wallet-.%api) "[API]"))
+(restas:define-route
+ %api
+ ("/"
+  :content-type "text/html")
+ (as-html
+   (:html
+    (:body
+     (:div :id "navigation"
+           (:h1 "Wallet")
+           (:div
+            :id "client"
+            (:a :href (restas:genurl '-client-.%index) "Client"))
 
-              (:div
-               :id "Dictionary"
-               (:a :href (restas:genurl '-dictionary-.%api) "[API]"))
+           (:div
+            :id "wallet"
+            (:a :href (restas:genurl '-wallet-.%api) "Wallet"))
 
-              #+(or)
-              (:h1 "API")
-              #+(or)
-              (:div
-               :id "api"
-               (:a :href (restas:genurl '-api-.%index) "[Index]")))))))
+           (:div
+            :id "dictionary"
+            (:a :href (restas:genurl '-dictionary-.%api) "Dictionary")))))))
 
+
+ 
 
 
 

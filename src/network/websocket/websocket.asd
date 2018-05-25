@@ -14,10 +14,12 @@
                simple-date-time)
   :components ((:file "hunchensocket-serve")))             
 
-
 (defsystem websocket/wallet
-  :depends-on (websocket-driver
-               clack
-               hunchentoot)
+  :depends-on (emotiq/wallet
+               cl-who
+               parenscript
+               cl-json
+               hunchensocket
+               simple-date-time)
   :components ((:file "serve")))             
 
