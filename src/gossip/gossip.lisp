@@ -292,7 +292,8 @@ are in place between nodes.
                    :timestamp (timestamp msg)
                    :hopcount (hopcount msg)
                    :kind (kind msg)
-                   :args (args msg))))
+                   :args (args msg)
+                   :metadata (metadata msg))))
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
@@ -471,6 +472,54 @@ are in place between nodes.
 
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
+
+(defclass augmented-data ()
+  ((content :initarg :content :initform nil :accessor content)
+   (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata))
+  (:documentation "Monad for data augmented with metadata."))
+
+(defun augment (datum &optional (metadata (kvs:make-store ':alist)))
+  "This is unit for the augmented-data monad"
+  (make-instance 'augmented-data :content datum
+    :metadata metadata))
+
+(defmethod bind (fn (ad augmented-data))
+  "Bind for augmented-data. Reverse arguments from typical bind because this way works better for composition in Lisp.
+   Fn must be a function of 2 arguments (data and metadata) and produce an augmented-data object, but this is not strictly enforced.
+   You can use ad-lift to create such a function from one that takes two values and produces two values."
+  (funcall fn (content ad) (metadata ad)))
+
+(defmethod ad-lift (fn)
+  "Lift for augmented-data. Returns a function made from fn that returns an augmented-data monad.
+   Fn must be a function of 2 arguments (data and metadata) and produce 2 values (new-data and new-metadata)"
+  (lambda (data metadata)
+    (multiple-value-call 'augment (funcall fn data metadata))))
+
+#+MONAD-TEST
+; Check to see if monad rules are followed. We're not messing with metadata here. These tests are too simple for that.
+(progn
+
+(defun ainc3 (value md) (values (+ 3 value) md))
+(defun asqrt (value md) (values (sqrt value) md))
+
+; Left-unit [yeah I know. Unit is really on the right here because I reversed the arguments.]
+(bind (ad-lift 'ainc3) (augment 5 '((:foo :bar)))) --> augmented-data with content = 8, metadata = '((:foo :bar))
+
+; Right-unit [ditto]
+(bind 'augment (augment 5 '((:diploid :bather))))  --> New augmented-data with content = 5, metadata = '((:diploid :bather))
+
+; Associative
+;;;  (bind g (bind monad f)) ==== (bind (lambda (value)
+;;;                                       (bind g (f value)))
+;;;                                       monad)
+
+;;; Here, f is (ad-lift 'asqrt) and g is (ad-lift 'ainc3).
+
+(bind (ad-lift 'ainc3) (bind (ad-lift 'asqrt) (augment -3 '((:neg :complex))))) --> augmented-data with content = #C(3.0 1.7320508). So asqrt happened first, then ainc3, as expected
+(bind (lambda (value metadata)
+         (bind (ad-lift 'ainc3) (funcall (ad-lift 'asqrt) value metadata)))
+        (augment -3 '((:neg :complex))))                                        --> Ditto
+)
 
 (defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
