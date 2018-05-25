@@ -349,7 +349,7 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 (defvar *election-proof*   nil)
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
-(defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
+(defvar *in-simulatinon-always-byz-ok* nil) ;; set to nil for non-sim mode, forces consensus
 
 (defun signature-hash-message (blk)
   (cosi/proofs:serialize-block-header-octets blk))
