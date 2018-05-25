@@ -930,7 +930,8 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
      (let ((prevblk (first *blockchain*)))
-       (and (check-block-transactions-hash blk)
+       (and (int= *leader* (block-leader-pkey blk))
+            (check-block-transactions-hash blk)
             (or (null prevblk)
                 (and (> (block-epoch blk)     (block-epoch prevblk))
                      (> (block-timestamp blk) (block-timestamp prevblk))
@@ -949,7 +950,8 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (if (check-block-multisignature blk)
+     (if (and (int= *leader* (block-leader-pkey blk))
+              (check-block-multisignature blk))
          (progn
            (push blk *blockchain*)
            (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
