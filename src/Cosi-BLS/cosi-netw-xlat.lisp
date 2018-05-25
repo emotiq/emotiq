@@ -80,7 +80,7 @@ THE SOFTWARE.
     (associate-aid-with-actor aid obj)
     (sdle-store:backend-store-object backend ret stream)))
 
-(defmethod send ((addr actor-return-addr) &rest msg)
+(defmethod ac:send ((addr actor-return-addr) &rest msg)
   (socket-send (actor-return-addr-ip   addr)
                (actor-return-addr-port addr)
                (actor-return-addr-aid  addr)
@@ -95,7 +95,7 @@ THE SOFTWARE.
     (let ((dest (or aid pkey)))
       (socket-send ip port dest msg))))
 
-(defmethod send ((pkey pbc:public-key) &rest msg)
+(defmethod ac:send ((pkey pbc:public-key) &rest msg)
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
     (unless node
       (pr (format nil "Unknown pkey: ~A" (short-id pkey))))
@@ -107,20 +107,13 @@ THE SOFTWARE.
             (apply 'ac:send (node-self node) msg)
           (gossip-send pkey nil msg))))))
 
-(defmethod send ((node node) &rest msg)
+(defmethod ac:send ((node node) &rest msg)
   (when (node-byz node)
     (pr (format nil "Byzantine-node: ~A" (short-id node))))
   (unless (node-byz node)
     (if (eq node *current-node*)
         (apply 'ac:send (node-self node) msg)
       (gossip-send (node-pkey node) nil msg))))
-
-(defmethod send ((node null) &rest msg)
-  (ac:pr :sent-to-null msg)
-  msg)
-
-(defmethod send (dest &rest msg)
-  (apply 'ac:send dest msg))
 
 ;; -----------------
 

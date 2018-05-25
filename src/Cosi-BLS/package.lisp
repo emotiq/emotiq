@@ -233,6 +233,7 @@
    :smapc
    :spawn
    :current-actor
+   :send
    :recv
    :become
    :par
