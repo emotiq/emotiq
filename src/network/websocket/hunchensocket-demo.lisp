@@ -4,7 +4,10 @@
 ;; First define classes for rooms and users. Make these subclasses of
 ;; `websocket-resource` and `websocket-client`.
 
-(defpackage :my-chat (:use :cl))
+(defpackage :my-chat
+  (:use :cl)
+  (:export :main))
+            
 (in-package :my-chat)
 
 (defclass chat-room (hunchensocket:websocket-resource)
@@ -48,8 +51,9 @@
 
 (defvar *server* nil) 
 
-(defun main ()
-  (make-instance 'hunchensocket:websocket-acceptor :port 6000))
-
-
-  
+(defun main (&key (port 5000))
+  (unless *server*
+    (format *standard-output* "~&Creating new *server*.~&")
+    (setf *server*
+     (make-instance 'hunchensocket:websocket-acceptor :port port)))
+  (hunchentoot:start *server*))
