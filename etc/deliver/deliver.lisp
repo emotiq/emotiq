@@ -5,4 +5,8 @@
 
 (ql:quickload :emotiq/startup)
 
+(push :delivery *features*)
+
+(format t "~&features: ~A~&" *features*)
+
 (deliver 'emotiq:start "emotiq" 0 :multiprocessing t :console t)

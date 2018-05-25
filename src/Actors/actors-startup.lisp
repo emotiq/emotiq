@@ -221,7 +221,16 @@ THE SOFTWARE.
 (eval-when (:load-toplevel :execute)
   (install-actor-system))
 
-#+:lispworks
+#+(or
+   :allegro
+   :openmcl
+   (and :lispworks (not :com.ral) (not :delivery)) )
+(eval-when (:load-toplevel :execute)
+  (install-actor-system))
+
+#+(or
+   (and :lispworks :com.ral)
+   (and :lispworks :delivery))
 (let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
   
   (lw:define-action "Initialize LispWorks Tools"
