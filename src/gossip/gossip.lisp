@@ -270,16 +270,7 @@ are in place between nodes.
          :documentation "The verb of the message, indicating what action to take.")
    (args :initarg :args :initform nil :accessor args
          :documentation "Payload of the message. Arguments to kind.")
-   (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata
-             :documentation "Alist of (keyword . data) that can be anything")))
-
-(defmethod add-metadata ((msg gossip-message-mixin) key datum)
-  "Adds a metadata pair to message"
-  (kvs:relate! (metadata msg) key datum))
-
-(defmethod get-metadata ((msg gossip-message-mixin) key)
-  "Gets metadata value associated with key, if any"
-  (kvs:lookup-key (metadata msg) key))
+   ))
 
 (defgeneric copy-message (msg)
   (:documentation "Copies a message object verbatim. Mainly for simulation mode
@@ -292,8 +283,7 @@ are in place between nodes.
                    :timestamp (timestamp msg)
                    :hopcount (hopcount msg)
                    :kind (kind msg)
-                   :args (args msg)
-                   :metadata (metadata msg))))
+                   :args (args msg))))
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
@@ -473,9 +463,19 @@ are in place between nodes.
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
 
-(defclass augmented-data ()
-  ((data :initarg :data :initform nil :accessor data)
-   (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata))
+(defclass metadata-mixin ()
+  (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata))
+
+(defmethod add-metadata ((thing metadata-mixin) key datum)
+  "Adds a metadata pair to metadata-containing thing"
+  (kvs:relate! (metadata thing) key datum))
+
+(defmethod get-metadata ((thing metadata-mixin) key)
+  "Gets metadata value associated with key, if any"
+  (kvs:lookup-key (metadata thing) key))
+
+(defclass augmented-data (metadata-mixin)
+  ((data :initarg :data :initform nil :accessor data))
   (:documentation "Monad for data augmented with metadata."))
 
 (defun augment (datum &optional (metadata (kvs:make-store ':alist)))
@@ -1981,8 +1981,6 @@ gets sent back, and everything will be copacetic.
       (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
           ;ensure a local node of type proxy-gossip-node exists on this machine with
           ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-        (add-metadata msg :remote-address rem-address)
-        (add-metadata msg :remote-port    rem-port   )
         (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
           ;   on THIS machine.
         ))))
