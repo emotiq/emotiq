@@ -474,20 +474,20 @@ are in place between nodes.
   ())
 
 (defclass augmented-data ()
-  ((content :initarg :content :initform nil :accessor content)
+  ((data :initarg :data :initform nil :accessor data)
    (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata))
   (:documentation "Monad for data augmented with metadata."))
 
 (defun augment (datum &optional (metadata (kvs:make-store ':alist)))
   "This is unit for the augmented-data monad"
-  (make-instance 'augmented-data :content datum
+  (make-instance 'augmented-data :data datum
     :metadata metadata))
 
 (defmethod bind (fn (ad augmented-data))
   "Bind for augmented-data. Reverse arguments from typical bind because this way works better for composition in Lisp.
    Fn must be a function of 2 arguments (data and metadata) and produce an augmented-data object, but this is not strictly enforced.
    You can use ad-lift to create such a function from one that takes two values and produces two values."
-  (funcall fn (content ad) (metadata ad)))
+  (funcall fn (data ad) (metadata ad)))
 
 (defmethod ad-lift (fn)
   "Lift for augmented-data. Returns a function made from fn that returns an augmented-data monad.
@@ -495,30 +495,30 @@ are in place between nodes.
   (lambda (data metadata)
     (multiple-value-call 'augment (funcall fn data metadata))))
 
-#+MONAD-TEST
 ; Check to see if monad rules are followed. We're not messing with metadata here. These tests are too simple for that.
+#+MONAD-TEST
 (progn
 
 (defun ainc3 (value md) (values (+ 3 value) md))
 (defun asqrt (value md) (values (sqrt value) md))
 
 ; Left-unit [yeah I know. Unit is really on the right here because I reversed the arguments.]
-(bind (ad-lift 'ainc3) (augment 5 '((:foo :bar)))) --> augmented-data with content = 8, metadata = '((:foo :bar))
+(bind (ad-lift 'ainc3) (augment 5 '((:foo :bar)))) ; --> augmented-data with data = 8, metadata = '((:foo :bar))
 
 ; Right-unit [ditto]
-(bind 'augment (augment 5 '((:diploid :bather))))  --> New augmented-data with content = 5, metadata = '((:diploid :bather))
+(bind 'augment (augment 5 '((:diploid :bather))))  ; --> New augmented-data with data = 5, metadata = '((:diploid :bather))
 
 ; Associative
-;;;  (bind g (bind monad f)) ==== (bind (lambda (value)
+;;;  (bind g (bind f monad)) ==== (bind (lambda (value)
 ;;;                                       (bind g (f value)))
 ;;;                                       monad)
 
 ;;; Here, f is (ad-lift 'asqrt) and g is (ad-lift 'ainc3).
 
-(bind (ad-lift 'ainc3) (bind (ad-lift 'asqrt) (augment -3 '((:neg :complex))))) --> augmented-data with content = #C(3.0 1.7320508). So asqrt happened first, then ainc3, as expected
+(bind (ad-lift 'ainc3) (bind (ad-lift 'asqrt) (augment -3 '((:neg :complex))))) ; --> augmented-data with data = #C(3.0 1.7320508). So asqrt happened first, then ainc3, as expected
 (bind (lambda (value metadata)
          (bind (ad-lift 'ainc3) (funcall (ad-lift 'asqrt) value metadata)))
-        (augment -3 '((:neg :complex))))                                        --> Ditto
+        (augment -3 '((:neg :complex))))                                        ; --> Ditto
 )
 
 (defmethod gossip-dispatcher (node &rest actor-msg)
@@ -1479,7 +1479,12 @@ dropped on the floor.
     (cancel-replier thisnode kind soluid srcuid)))
 
 (defgeneric initial-reply-value (kind thisnode msgargs)
-  (:documentation "Initial the reply-value for the given kind of message"))
+  (:documentation "Initial the reply-value for the given kind of message. Must return an augmented-data object."))
+
+(defmethod initial-reply-value :around (kind thisnode msgargs)
+  "This will do until we develop a need to produce initial specialized metadata for some messages."
+  (declare (ignore kind thisnode msgargs))
+  (augment (call-next-method)))
 
 (defmethod initial-reply-value ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) msgargs)
   (let* ((key (first msgargs))
@@ -1758,27 +1763,60 @@ gets sent back, and everything will be copacetic.
       (set-previous-reply node soluid srcuid new-reply)
       t)))
 
-(defgeneric coalescer (kind)
-  (:documentation "Reduction function for a particular message kind."))
+(defun metadata-match? (md1 md2)
+  "Returns true if the two metadatas match, or nil if not.
+   Metadata match if they are both nil, or if they both have identical keys and values,
+   but possibly in different orders."
+  (null (set-exclusive-or md1 md2 :test 'equalp)))
 
-(defmethod coalescer ((kind (eql :COUNT-ALIVE)))
+(defun munge-augmented-data (ad ad-list dcfun)
+  "If ad has metadata that matches that of one of the ads in ad-list, coalesce it using dcfun into that list and return the list.
+  If it doesn't match any in the list, return a new list with ad appended to ad-list"
+  (cond ((null ad-list)
+         (list ad))
+        ((metadata-match? (metadata ad) (metadata (car ad-list)))
+         (cons (augment (funcall dcfun (data ad) (data (car ad-list))) (metadata ad))
+               (cdr ad-list)))
+        (t ; no match
+         (cons (car ad-list) (munge-augmented-data ad (cdr ad-list) dcfun)))))
+
+(defgeneric data-coalescer (kind)
+  (:documentation "Reduction function for a particular message kind. Must accept two augmented-data monads and produce a third."))
+
+;; THE PROBLEM HERE is that we need to specifically NOT coalesce the data if the values of similar keys in the metadata differ.
+;; In that case, we should just return a list of both monads. Which means that the function this returns must also
+;; be able to accept a list in its first argument. Second argument will always be a singleton augmented-data object.
+(defun coalescer (kind)
+  (let ((dc (data-coalescer kind)))
+    (lambda (ad1 ad2)
+      (cond ((consp ad1) ; ad1 is a list. So output will always be a list of the same length*, or 1 longer**.
+             ;   * if metadata of ad2 matches one of the ad1 metadatas (it cannot possibly match more than one)***
+             ;  ** if metadata of ad2 doesn't match any of the ad1 metadatas
+             ; *** If it matched more than one, that would mean two of the metadatas in ad1 match each other, and that can never happen.
+             (munge-augmented-data ad2 ad1 dc))
+            (t ; both are singletons. [ad2 will never be a list because this is being called by reduce]
+             (if (metadata-match? (metadata ad1) (metadata ad2))
+                 (augment (funcall dc (data ad1) (data ad2)) (metadata ad1))
+                 (list ad1 ad2)))))))
+
+(defmethod data-coalescer ((kind (eql :COUNT-ALIVE)))
   "Proper coalescer for :count-alive responses."
   '+)
 
-(defmethod coalescer ((kind (eql :LIST-ALIVE)))
+(defmethod data-coalescer ((kind (eql :LIST-ALIVE)))
   "Proper coalescer for :list-alive responses. Might
    want to add a call to remove-duplicates here if we start
    using a gossip protocol not guaranteed to ignore redundancies)."
   'append)
 
-(defmethod coalescer ((kind (eql :LIST-ADDRESSES)))
+(defmethod data-coalescer ((kind (eql :LIST-ADDRESSES)))
   'append)
 
-(defmethod coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
+(defmethod data-coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
   "Proper coalescer for :GOSSIP-LOOKUP-KEY responses."
   'multiple-tally)
 
-(defmethod coalescer ((kind (eql :FIND-MAX)))
+(defmethod data-coalescer ((kind (eql :FIND-MAX)))
   (lambda (x y) (cond ((and (numberp x)
                             (numberp y))
                        (max x y))
@@ -1788,7 +1826,7 @@ gets sent back, and everything will be copacetic.
                        y)
                       (t nil))))
 
-(defmethod coalescer ((kind (eql :FIND-MIN)))
+(defmethod data-coalescer ((kind (eql :FIND-MIN)))
   (lambda (x y) (cond ((and (numberp x)
                             (numberp y))
                        (min x y))
@@ -2165,7 +2203,8 @@ original message."
                 (reply-to msg)
                 (uid msg) ; soluid
                 (kind msg)
-                `(:CANNOT-TRANSMIT :to ,(real-address node))))))))
+                (augment :CANNOT-TRANSMIT `((:remote-address . ,(real-address node))
+                                            (:remote-port    . ,(real-port node))))))))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
