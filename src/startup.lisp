@@ -2,6 +2,7 @@
 
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
+  (actors:install-actor-system)
   (pbc:init-pairing)
   (let ((context (start-blockchain-context)))
     (with-blockchain-context (context)

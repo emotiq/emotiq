@@ -3,7 +3,7 @@
 ;; QuickLisp should be properly configured by now
 (load "~/quicklisp/setup.lisp")
 
-(push :delivery *features*)
+(defparameter cl-user::*performing-binary-build* :performing-binary-delivery)
 
 (ql:quickload :emotiq/startup)
 

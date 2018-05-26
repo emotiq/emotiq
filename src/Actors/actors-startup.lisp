@@ -218,25 +218,34 @@ THE SOFTWARE.
     (install-actor-printer)))
 
 #-:lispworks
-(eval-when (:load-toplevel :execute)
+(eval-when (:load-toplevel)
   (install-actor-system))
 
-#+(or
-   :allegro
-   :openmcl
-   (and :lispworks (not :com.ral) (not :delivery)) )
-(eval-when (:load-toplevel :execute)
-	   #+nil(format *standard-output* "~&IN EVAL-WHEN SECTION~&")
-	   (install-actor-system))
+#+:lispworks
+(eval-when (:load-toplevel)
+  ;; 3 choices, if :COM.RAL is true, use lw:define-action; elsif building-binary, don't install actors; else install actors
+  ;; Cannot install actor system during DELIVERY (since, multitasking not allowed during DELIVERY), must install actors later.
+  ;; *performing-binary-build* is created in delivery.lisp, else it is not created and not BOUNDP
 
-#+(or
-   (and :lispworks :com.ral)
-   (and :lispworks :DELIVERY))
-(let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
-  #+nil(eval-when (:load-toplevel :execute)
-	     (format *standard-output* "~&IN DELIVERY SECTION features: ~&" *features*))
-  (lw:define-action "Initialize LispWorks Tools"
-                    "Start up Functional Actors"
-                    'install-actor-system
-                    :after "Run the environment start up functions"
-                    :once))
+  (let ((com-ral-p #+:COM.RAL t #-:COM.RAL nil)
+        (building-binary-p (boundp 'cl-user::*performing-binary-build*)))
+
+    (flet ((create-lispworks-action-to-install-actors ()
+        (let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
+          (lw:define-action "Initialize LispWorks Tools"
+                            "Start up Functional Actors"
+                            'install-actor-system
+                            :after "Run the environment start up functions"
+                            :once))))
+      
+      (format *standard-output* "~&com-ral-p ~A~&building-binary-p ~A~&"
+              com-ral-p
+              building-binary-p)
+
+      (if com-ral-p
+          (create-lispworks-action-to-install-actors)
+        (if building-binary-p
+            (unintern 'cl-user::*performing-binary-build*) ;; if building binary cleanup and do nothing
+          (install-actor-system))))))                      ;; in all other cases, install actors at LOAD time.
+
+
