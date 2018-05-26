@@ -1487,7 +1487,7 @@ dropped on the floor.
   (let ((datum (call-next-method)))
     (if (typep datum 'augmented-data)
         datum
-        (augment datum `((:kind . ,kind))))))
+        (augment datum `((:kind . ,kind) (:eripa . ,(eripa)) (:port . ,*actual-tcp-gossip-port*))))))
 
 (defmethod initial-reply-value ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) msgargs)
   (let* ((key (first msgargs))
@@ -1506,7 +1506,7 @@ dropped on the floor.
   (declare (ignore msgargs))
   (list (address thisnode)))
 
-(defmethod initial-reply-value ((kind (eql :find-max)) (thisnode gossip-node)  msgargs)
+(defmethod initial-reply-value ((kind (eql :find-max)) (thisnode gossip-node) msgargs)
   (let ((key (first msgargs)))
     (kvs:lookup-key (local-kvs thisnode) key)))
 
