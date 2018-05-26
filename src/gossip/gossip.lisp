@@ -1482,9 +1482,12 @@ dropped on the floor.
   (:documentation "Initial the reply-value for the given kind of message. Must return an augmented-data object."))
 
 (defmethod initial-reply-value :around (kind thisnode msgargs)
-  "This will do until we develop a need to produce initial specialized metadata for some messages."
-  (declare (ignore kind thisnode msgargs))
-  (augment (call-next-method)))
+  "Ensure an augmented-data object is getting returned."
+  (declare (ignore thisnode msgargs))
+  (let ((datum (call-next-method)))
+    (if (typep datum 'augmented-data)
+        datum
+        (augment datum `((:kind . ,kind))))))
 
 (defmethod initial-reply-value ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) msgargs)
   (let* ((key (first msgargs))
