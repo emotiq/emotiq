@@ -23,7 +23,8 @@
                          :port port
                          :acceptor-class 'http-acceptor)))
       (note "Starting REST server for api '~a' listening on port ~a" api port)
-      (note "An index of available services be viewed as <~a>" base-uri))))
+      (note "An index of available services be viewed as <~a>" base-uri)
+      server)))
             
 (defun stop ()
   (ignore-errors

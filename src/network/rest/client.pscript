@@ -38,6 +38,18 @@
   (let ((message (form-rpc-request "enumerateWallets" nil)))
     (send message)))
 
+(defun consensus ()
+  (let ((message (form-rpc-request "consensus" nil)))
+    (send message)))
+
+(defun wallet ()
+  (let ((message (form-rpc-request "wallet" nil)))
+    (send message)))
+
+(defun keyphrase ()
+  (let ((message (form-rpc-request "getRecoveryPhrase" nil)))
+    (send message)))
+
 
   
   

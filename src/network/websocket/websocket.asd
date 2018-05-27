@@ -21,5 +21,17 @@
                cl-json
                hunchensocket
                simple-date-time)
-  :components ((:file "serve")))             
+  :components ((:module package
+                        :pathname "./"
+                        :components ((:file "package")))
+               (:module mock
+                        :pathname "./"
+                        :depends-on (package)
+                        :components ((:file "mock")))
+               (:module source
+                        :pathname "./"
+                        :depends-on (mock)
+                        :components ((:file "serve")))))
+
+
 

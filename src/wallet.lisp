@@ -127,7 +127,23 @@ Returns nil if unsuccessful."
            (vec-repr:bev-vec
             (pbc:public-key-val
              object)))))
-  
+
+(defun key-phrase (wallet)
+  (cosi-keying:convert-int-to-wordlist
+   (vec-repr::convert-vec-to-int
+    (vec-repr:bev-vec (secret-key wallet))
+    :end 31)))
+   
+(defun public-key (wallet)
+  (pbc:public-key-val
+   (pbc:keying-triple-pkey
+    (emotiq/wallet:keying-triple wallet))))
+
+(defun secret-key (wallet)
+  (pbc:secret-key-val
+   (pbc:keying-triple-skey
+    (emotiq/wallet:keying-triple wallet))))
+
 #+(or)
 (defun aes256-key (passphrase salt)
   (let ((kdf

@@ -1,8 +1,4 @@
-(defpackage wallet/server
-  (:use :cl)
-  (:export
-   #:start-server))
-(in-package :wallet/server)
+(in-package :websocket/wallet)
 
 (defun note (message-or-format &rest args)
   "Emit a note of progress to the appropiate logging system."
@@ -48,6 +44,31 @@
         (note "No method specified in message: ~a" message)
         (return-from hunchensocket:text-message-received nil))
       (cond
+        ((string= method "consensus")
+         (let ((response
+                (make-instance 'response
+                               :id (alexandria:assoc-value request :id))))
+           (note "Spawning thread to mock consensus replies.")
+           (bt:make-thread (lambda () (consensus resource response)))))
+        ((string= method "wallet")
+         (let ((response
+                (make-instance 'response
+                               :id (alexandria:assoc-value request :id)
+                               :result `(:object
+                                         (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
+                                         (:amount . 0)))))
+           (broadcast resource (json:with-explicit-encoder
+                                   (cl-json:encode-json-to-string response)))))
+        ((string= method "getRecoveryPhrase")
+         (let ((response
+                (make-instance 'response
+                               :id (alexandria:assoc-value request :id)
+                               :result `(:object
+                                         (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
+                                         (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize))))))))
+
+           (broadcast resource (json:with-explicit-encoder
+                                   (cl-json:encode-json-to-string response)))))
         ((string= method "enumerateWallets")
          (let ((response
                 (make-instance 'response

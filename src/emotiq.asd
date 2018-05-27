@@ -39,8 +39,9 @@
 (defsystem "emotiq/startup"
   ;; add gossip here soon:
   :depends-on (emotiq/blockchain
-               emotiq-rest
                crypto-pairings
+               emotiq/wallet
+               websocket/wallet
                core-crypto)
   :components ((:module source
                 :pathname "./"
