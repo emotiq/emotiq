@@ -45,6 +45,7 @@ THE SOFTWARE.
                         :pathname "./"
                         :serial t
                         :components (#+CLOZURE (:file "clozure")
+                                     (:file "address")
                                      (:file "cosi-blkdef")
                                      (:file "block")
                                      (:file "cosi-keying")
