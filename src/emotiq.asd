@@ -38,7 +38,11 @@
                                        
 (defsystem "emotiq/startup"
   ;; add gossip here soon:
-  :depends-on (emotiq/blockchain crypto-pairings core-crypto)
+  :depends-on (emotiq/blockchain
+               crypto-pairings
+               emotiq/wallet
+               websocket/wallet
+               core-crypto)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -47,6 +51,7 @@
 (defsystem "emotiq/wallet"
   :depends-on (emotiq
                ironclad
+               quri
                lisp-object-encoder
                cosi-bls)
   :in-order-to ((test-op (test-op "emotiq-wallet-test")))
