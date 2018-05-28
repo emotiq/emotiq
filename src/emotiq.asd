@@ -35,9 +35,10 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "blockchain")))))
-                                       
+
 (defsystem "emotiq/startup"
-  :depends-on (crypto-pairings)
+  :depends-on (cosi-bls
+	       crypto-pairings)
   :components ((:module source
                 :pathname "./"
                 :serial t
