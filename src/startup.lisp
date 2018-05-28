@@ -2,8 +2,10 @@
 
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
+  (format *standard-output* "creating pairing~&")
   (pbc:init-pairing)
-  (let ((context (start-blockchain-context)))
+  (format *standard-output* "   done creating pairing~&")
+  #+nil(let ((context (start-blockchain-context)))
     (with-blockchain-context (context)
 			     (let ((genesis-block (make-genesis-block)))
 			       (format *standard-output*
