@@ -463,64 +463,6 @@ are in place between nodes.
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
 
-(defclass metadata-mixin ()
-  (metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata))
-
-(defmethod add-metadata ((thing metadata-mixin) key datum)
-  "Adds a metadata pair to metadata-containing thing"
-  (kvs:relate! (metadata thing) key datum))
-
-(defmethod get-metadata ((thing metadata-mixin) key)
-  "Gets metadata value associated with key, if any"
-  (kvs:lookup-key (metadata thing) key))
-
-(defclass augmented-data (metadata-mixin)
-  ((data :initarg :data :initform nil :accessor data))
-  (:documentation "Monad for data augmented with metadata."))
-
-(defun augment (datum &optional (metadata (kvs:make-store ':alist)))
-  "This is unit for the augmented-data monad"
-  (make-instance 'augmented-data :data datum
-    :metadata metadata))
-
-(defmethod bind (fn (ad augmented-data))
-  "Bind for augmented-data. Reverse arguments from typical bind because this way works better for composition in Lisp.
-   Fn must be a function of 2 arguments (data and metadata) and produce an augmented-data object, but this is not strictly enforced.
-   You can use ad-lift to create such a function from one that takes two values and produces two values."
-  (funcall fn (data ad) (metadata ad)))
-
-(defmethod ad-lift (fn)
-  "Lift for augmented-data. Returns a function made from fn that returns an augmented-data monad.
-   Fn must be a function of 2 arguments (data and metadata) and produce 2 values (new-data and new-metadata)"
-  (lambda (data metadata)
-    (multiple-value-call 'augment (funcall fn data metadata))))
-
-; Check to see if monad rules are followed. We're not messing with metadata here. These tests are too simple for that.
-#+MONAD-TEST
-(progn
-
-(defun ainc3 (value md) (values (+ 3 value) md))
-(defun asqrt (value md) (values (sqrt value) md))
-
-; Left-unit [yeah I know. Unit is really on the right here because I reversed the arguments.]
-(bind (ad-lift 'ainc3) (augment 5 '((:foo :bar)))) ; --> augmented-data with data = 8, metadata = '((:foo :bar))
-
-; Right-unit [ditto]
-(bind 'augment (augment 5 '((:diploid :bather))))  ; --> New augmented-data with data = 5, metadata = '((:diploid :bather))
-
-; Associative
-;;;  (bind g (bind f monad)) ==== (bind (lambda (value)
-;;;                                       (bind g (f value)))
-;;;                                       monad)
-
-;;; Here, f is (ad-lift 'asqrt) and g is (ad-lift 'ainc3).
-
-(bind (ad-lift 'ainc3) (bind (ad-lift 'asqrt) (augment -3 '((:neg :complex))))) ; --> augmented-data with data = #C(3.0 1.7320508). So asqrt happened first, then ainc3, as expected
-(bind (lambda (value metadata)
-         (bind (ad-lift 'ainc3) (funcall (ad-lift 'asqrt) value metadata)))
-        (augment -3 '((:neg :complex))))                                        ; --> Ditto
-)
-
 (defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
@@ -754,7 +696,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   :TIMEOUT)
+                   (except :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -805,7 +747,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   :TIMEOUT)
+                   (except :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -841,8 +783,8 @@ dropped on the floor.
                                                              (lambda () response))))
                 (values 
                  (if win
-                     (first (args response))
-                     :TIMEOUT)
+                     (first (args (first response)))
+                     (except :TIMEOUT))
                  soluid)))
           (setf (logfn node) old-logger))))))
 
@@ -1766,41 +1708,8 @@ gets sent back, and everything will be copacetic.
       (set-previous-reply node soluid srcuid new-reply)
       t)))
 
-(defun metadata-match? (md1 md2)
-  "Returns true if the two metadatas match, or nil if not.
-   Metadata match if they are both nil, or if they both have identical keys and values,
-   but possibly in different orders."
-  (null (set-exclusive-or md1 md2 :test 'equalp)))
-
-(defun munge-augmented-data (ad ad-list dcfun)
-  "If ad has metadata that matches that of one of the ads in ad-list, coalesce it using dcfun into that list and return the list.
-  If it doesn't match any in the list, return a new list with ad appended to ad-list"
-  (cond ((null ad-list)
-         (list ad))
-        ((metadata-match? (metadata ad) (metadata (car ad-list)))
-         (cons (augment (funcall dcfun (data ad) (data (car ad-list))) (metadata ad))
-               (cdr ad-list)))
-        (t ; no match
-         (cons (car ad-list) (munge-augmented-data ad (cdr ad-list) dcfun)))))
-
 (defgeneric data-coalescer (kind)
-  (:documentation "Reduction function for a particular message kind. Must accept two augmented-data monads and produce a third."))
-
-;; THE PROBLEM HERE is that we need to specifically NOT coalesce the data if the values of similar keys in the metadata differ.
-;; In that case, we should just return a list of both monads. Which means that the function this returns must also
-;; be able to accept a list in its first argument. Second argument will always be a singleton augmented-data object.
-(defun coalescer (kind)
-  (let ((dc (data-coalescer kind)))
-    (lambda (ad1 ad2)
-      (cond ((consp ad1) ; ad1 is a list. So output will always be a list of the same length*, or 1 longer**.
-             ;   * if metadata of ad2 matches one of the ad1 metadatas (it cannot possibly match more than one)***
-             ;  ** if metadata of ad2 doesn't match any of the ad1 metadatas
-             ; *** If it matched more than one, that would mean two of the metadatas in ad1 match each other, and that can never happen.
-             (munge-augmented-data ad2 ad1 dc))
-            (t ; both are singletons. [ad2 will never be a list because this is being called by reduce]
-             (if (metadata-match? (metadata ad1) (metadata ad2))
-                 (augment (funcall dc (data ad1) (data ad2)) (metadata ad1))
-                 (list ad1 ad2)))))))
+  (:documentation "Coalescer (reducer) for two arguments for a given kind of reply."))
 
 (defmethod data-coalescer ((kind (eql :COUNT-ALIVE)))
   "Proper coalescer for :count-alive responses."
@@ -2204,7 +2113,9 @@ original message."
                 (reply-to msg)
                 (uid msg) ; soluid
                 (kind msg)
-                (augment :CANNOT-TRANSMIT `((:remote-address . ,(real-address node))
+                (except :name ':CANNOT-TRANSMIT
+                        :condition errorp
+                        :metadata `((:remote-address . ,(real-address node))
                                             (:remote-port    . ,(real-port node))))))))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
