@@ -227,6 +227,10 @@ THE SOFTWARE.
   ;; Cannot install actor system during DELIVERY (since, multitasking not allowed during DELIVERY), must install actors later.
   ;; *performing-binary-build* is created in delivery.lisp, else it is not created and not BOUNDP
 
+  ;; Trying to avoid the use of *features*.  We use a special, cl-user::*performing-binary-build*, set up
+  ;; in emotiq/etc/deliver/deliver.lisp, then write Lisp code to decide which of the 3 cases to perform (at LOAD time).
+  ;; This special is UNINTERNED in emotiq/src/startup.lisp/START.
+
   (let ((com-ral-p #+:COM.RAL t #-:COM.RAL nil)
         (building-binary-p (boundp 'cl-user::*performing-binary-build*)))
 
@@ -245,7 +249,7 @@ THE SOFTWARE.
       (if com-ral-p
           (create-lispworks-action-to-install-actors)
         (if building-binary-p
-            (unintern 'cl-user::*performing-binary-build*) ;; if building binary cleanup and do nothing
+	    nil                                            ;; do nothing, esp. don't try to initialize actors
           (install-actor-system))))))                      ;; in all other cases, install actors at LOAD time.
 
 
