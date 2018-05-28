@@ -24,9 +24,14 @@
   ;; *production*. TEMPORARY! FIX! 4/6/18
   ;; ^^ in this context "production" ONLY means binary build.
   (setq *production* t)
+  (pbc-interface::load-dlls)
+  (actors::install-actor-system)
   (message-running-state "from command line")
   
-  (main))
+  (noop))
 
+(defun noop()
+  (format *standard-output* "~&in noop~&")
+  (main))
 
 

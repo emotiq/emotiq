@@ -213,6 +213,7 @@ THE SOFTWARE.
 
 (defun install-actor-system (&rest ignored)
   (declare (ignore ignored))
+(format *standard-output* "~&installing actor system~&")
   (unless (directory-manager-p)
     (install-actor-directory)
     (install-actor-printer)))
