@@ -2070,13 +2070,13 @@ gets sent back, and everything will be copacetic.
   (defun hmac-keypair ()
     (unless hmac-keypair
       (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
-      hmac-keypair))
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+    hmac-keypair)
   (defun sign-message (msg)
     "Sign and return an authenticated message packet. Packet includes
-original message."
-    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair)
-                                  (pbc:keying-triple-sig  (hmac-keypair)))))
+    original message."
+    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
+                                  (pbc:keying-triple-sig  (hmac-keypair))))
     (pbc:sign-message msg
                       (pbc:keying-triple-pkey (hmac-keypair))
                       (pbc:keying-triple-skey (hmac-keypair)))))

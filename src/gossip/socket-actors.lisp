@@ -137,8 +137,28 @@
 ;;; End of actor property functions
 
 (defun send-socket-receive-message (actor)
-  "Send a socket-receive message to an actor."
-  (ac:send actor :receive-socket-data))
+  "Send a socket-receive message to an actor.
+  But do the deserialize here first because it might block, and we want it to block here in this thread,
+  rather than in the actor."
+  (let* ((socket (get-socket actor))
+         (outbox (get-outbox actor))
+         (stream (usocket:socket-stream socket))
+         (object nil))
+    (flet ((handle-stream-error (errcode stream)
+             (cond ((open-stream-p stream)
+                    (if (stream-eofp stream)
+                        (send-socket-shutdown-message actor :EOF)
+                        (send-socket-shutdown-message actor errcode)
+                        ))
+                   (t (send-socket-shutdown-message actor :CLOSED)))
+             nil))
+      (when (debug-level 4)
+        (log-event "Socket receive" actor))
+      (setf object
+            (handler-case (loenc:deserialize stream)
+              (error (c) (handle-stream-error c stream))))
+      (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
+      )))
 
 (defun send-socket-shutdown-message (actor &optional reason)
   "Send a socket-shutdown message to an actor."
@@ -176,56 +196,27 @@
   "Dispatch function for a socket-actor"
   (let ((socket-cmd (first msg))
         (actor (ac:current-actor)))
-    (labels ((handle-stream-error (errcode stream)
-               (cond ((open-stream-p stream)
-                      (if (stream-eofp stream)
-                          (ac:self-call :shutdown :EOF)
-                          (ac:self-call :shutdown errcode)))
-                     (t (ac:self-call :shutdown :CLOSED)))
-               nil)
-             (safe-listen (stream)
-               (handler-case (listen stream)
-                 (error (c) (handle-stream-error c stream)))))
-      (when actor
-        (let ((socket (get-socket actor)))
-          (case socket-cmd
-            (:send-socket-data
-             (let* ((socket (get-socket actor))
-                    (stream (usocket:socket-stream socket))
-                    (payload (second msg)))
-               (cond ((and (usocket:stream-usocket-p socket)
-                           (open-stream-p stream))
-                      (loenc:serialize payload stream)
-                      (finish-output stream))
-                     (t (ac:self-call :shutdown :CLOSED)))))
-            (:receive-socket-data
-             (let ((outbox (get-outbox actor))
-                   (stream (usocket:socket-stream socket))
-                   (object nil))
-               (when (safe-listen stream) ; it is ****VERY**** important to check listen here.
-                 ; Why? Because many :receive-socket-data messages can pile up because the concurrent select-loop can show the socket has data
-                 ;      _while_ loenc:deserialize is happening. The result will be that (current-actor) will hang in the next loenc:deserialize
-                 ;      because there won't really be any data waiting, because the previous loenc:deserialize used it all up.
-                 ;      We should probably set a flag in the actor and use a state machine to better coordinate between
-                 ;      the select-loop and the code here, and prevent unnecessary :receive-socket-data messages, but for now we'll just check listen.
-                 (when (debug-level 4)
-                   (log-event "Socket receive" actor))
-                 (setf object
-                       (handler-case (loenc:deserialize stream)
-                         (error (c) (handle-stream-error c stream))))
-                 (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
-                 )))
-            (:shutdown
-             ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
-             (let ((socket (get-socket actor))
-                   (address (get-peer-address actor))
-                   (port (get-peer-port actor))
-                   (reason (second msg)))
-               (when (debug-level 3)
-                 (log-event "Socket shutdown" actor reason))
-               (when (usocket:stream-usocket-p socket) (usocket:socket-close socket))
-               (process-kill (get-thread actor))
-               (unmemoize-connection address port)))))))))
+    (when actor
+      (let ((socket (get-socket actor)))
+        (case socket-cmd
+          (:send-socket-data
+           (let* ((stream (usocket:socket-stream socket))
+                  (payload (second msg)))
+             (cond ((and (usocket:stream-usocket-p socket)
+                         (open-stream-p stream))
+                    (loenc:serialize payload stream)
+                    (finish-output stream))
+                   (t (ac:self-call :shutdown :CLOSED)))))
+          (:shutdown
+           ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
+           (let ((address (get-peer-address actor))
+                 (port (get-peer-port actor))
+                 (reason (second msg)))
+             (when (debug-level 3)
+               (log-event "Socket shutdown" actor reason))
+             (when (usocket:stream-usocket-p socket) (usocket:socket-close socket))
+             (process-kill (get-thread actor))
+             (unmemoize-connection address port))))))))
 
 (defun open-active-socket (address port)
   "Open an active TCP connection from this machine to another.
