@@ -28,7 +28,9 @@
   (message-running-state how-started-message?)
   (format *standard-output* "Making key pair…")
   (let ((keypair (pbc:make-key-pair :foo)))
-    (format *standard-output* "  Created ~a~&" keypair)))
+    (format *standard-output* "  Created ~a~&" keypair))
+  (emotiq/sim:initialize)
+  (emotiq/sim:run :cloaked nil))
 
 ;; Entry Point for binary version of the system.
 

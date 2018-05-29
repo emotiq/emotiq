@@ -68,7 +68,7 @@
                 :components ((:file "node")))))
 
 (defsystem "emotiq/sim"  ;; a simulated node
-  :depends-on (emotiq/cli)
+  :depends-on (emotiq/startup emotiq/cli emotiq)
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")

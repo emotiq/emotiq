@@ -20,7 +20,7 @@
 
 (defparameter cl-user::*performing-binary-build* :performing-binary-delivery)
 
-(ql:quickload :emotiq/startup)
+(ql:quickload :emotiq/sim)
 
 
 ;; After loading the Emotiq system into memory, we call DELIVER, which is somewhat
