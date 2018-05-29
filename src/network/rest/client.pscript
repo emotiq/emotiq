@@ -35,7 +35,7 @@
    :id (ps:incf *request-id-counter*)))
 
 (defun enumerate-wallets ()
-  (let ((message (form-rpc-request "enumerateWallets" nil)))
+  (let ((message (form-rpc-request "enumerate-wallets" nil)))
     (send message)))
 
 (defun consensus ()
@@ -47,7 +47,11 @@
     (send message)))
 
 (defun keyphrase ()
-  (let ((message (form-rpc-request "getRecoveryPhrase" nil)))
+  (let ((message (form-rpc-request "recovery-phrase" nil)))
+    (send message)))
+
+(defun transactions ()
+  (let ((message (form-rpc-request "transactions" nil)))
     (send message)))
 
 

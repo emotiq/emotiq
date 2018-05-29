@@ -6,7 +6,10 @@
   (emotiq/wallet:create-wallet)
   ;; Start the websocket interface for the Electron wallet
   ;; listening <ws://localhost:3145/wallet> .
-  (websocket/wallet:start-server))
+  (websocket/wallet:start-server :port 3145)
+  ;; Start the REST server which provides support for testing the
+  ;; WebSocket implementation at <http://localhost:3140/client/>
+  (emotiq-rest:start-server :port 3140))
 
 (defun message-running-state (&optional how-started-message?)
   (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"
@@ -16,7 +19,8 @@
 
 
 (defun argv ()
-#+lispworks system:*line-arguments-list*)
+  #+lispworks
+  system:*line-arguments-list*)
   
 (defun start ()
   ;; This is for running in the binary command line only. For now, if we're

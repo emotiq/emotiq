@@ -1,6 +1,6 @@
 (defsystem "emotiq-rest"
   :depends-on (emotiq/wallet
-               restas
+               restas 
                cosi-bls
                parenscript
                cl-json

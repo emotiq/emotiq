@@ -14,8 +14,24 @@
     (:head
      (:script :src (restas:genurl '%client.js)))
     (:body
-     "Websocket client interface test."))))
+     (:h1
+      "Websocket client interface testing")
+     (:p "This page has loaded Javascript stub functions to assist in
+testing the WebSocket implementation.  Opening a Javascript console
+gives the toplevel definitions of the following functions:")
 
+     (:dl
+      (:dt "connect()")
+      (:dd "Open the websocket connection.  Call this to initialize the connection or if one gets errors about not being connected.")
+      (:dt "consensus()")
+      (:dd "Subscribe to the node consensus message endpoint.")
+      (:dt "wallet()")
+      (:dd "Return information about the default wallet.")
+      (:dt "keyphrase()")
+      (:dd "Return the recovery phrase of the default wallet.")
+      (:dt "transactions()")
+      (:dd "Return all transactions associated with the default wallet."))))))
+           
 (restas:define-route
  %client.js
  ("/client.js"

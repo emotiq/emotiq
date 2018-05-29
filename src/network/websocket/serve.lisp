@@ -51,7 +51,7 @@
            (note "Spawning thread to mock consensus replies.")
            (bt:make-thread (lambda () (consensus resource response)))))
         ((string= method "wallet")
-         (let ((response
+         (let ((response 
                 (make-instance 'response
                                :id (alexandria:assoc-value request :id)
                                :result `(:object
@@ -59,22 +59,28 @@
                                          (:amount . 0)))))
            (broadcast resource (json:with-explicit-encoder
                                    (cl-json:encode-json-to-string response)))))
-        ((string= method "getRecoveryPhrase")
+        ((string= method "recovery-phrase")
          (let ((response
                 (make-instance 'response
                                :id (alexandria:assoc-value request :id)
                                :result `(:object
                                          (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
                                          (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize))))))))
-
            (broadcast resource (json:with-explicit-encoder
                                    (cl-json:encode-json-to-string response)))))
-        ((string= method "enumerateWallets")
+        ((string= method "enumerate-wallets")
          (let ((response
                 (make-instance 'response
                                :id (alexandria:assoc-value request :id)
                                :result (emotiq/wallet:enumerate-wallets))))
-           (broadcast resource (cl-json:encode-json-to-string response))))))))
+           (broadcast resource (cl-json:encode-json-to-string response))))
+        ((string= method "transactions")
+         (let ((response
+                (make-instance 'response
+                               :id (alexandria:assoc-value request :id)
+                               :result (transactions))))
+           (broadcast resource (json:with-explicit-encoder
+                                 (cl-json:encode-json-to-string response)))))))))
 
 (defvar *handlers* nil)
 
@@ -95,9 +101,10 @@
 
 (defun start-server (&key (port 3145))
   (unless *acceptor*
-    (note "Creating new acceptor.")
     (setf *acceptor*
           (make-instance 'hunchensocket:websocket-acceptor :port port)))
+  (note "Starting websocket server on <ws://localhost:~a>"
+        (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
 
 (defclass json-rpc ()
@@ -114,8 +121,3 @@
   ((result :initarg :result)
    (error :initarg :error)))
 
-(defun enumerate-wallets (request)
-  (declare (ignore request))
-  (let ((response (make-instance 'response
-                                 :result (emotiq/wallet:enumerate-wallets))))
-    (cl-json:encode-json-to-string response)))

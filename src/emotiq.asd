@@ -38,6 +38,7 @@
                                        
 (defsystem "emotiq/startup"
   :depends-on (emotiq/wallet
+               emotiq-rest
                websocket/wallet)
   :components ((:module source
                 :pathname "./"
