@@ -23,4 +23,5 @@ case $(uname -s) in
     ;;
 esac
 
+cd ${workingdir}
 exec ${workingdir}/${APP_NAME} $*
