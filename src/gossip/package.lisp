@@ -11,6 +11,7 @@
    #:solicit
    #:solicit-wait
    #:solicit-progress
+   #:solicit-direct
    #:stop-gossip-sim
    #:run-gossip-sim
    #:as-hash-table
@@ -24,4 +25,5 @@
    #:eripa
    #:archive-log
    #:measure-timing
+   #:unwrap
    ))

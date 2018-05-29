@@ -5,24 +5,43 @@
 
 (in-package :gossip)
 
+(defclass monad ()
+  ())
+
 (defclass metadata-mixin ()
   ((metadata :initarg :metadata :initform (kvs:make-store ':alist) :accessor metadata)))
 
-(defclass augmented-data (metadata-mixin)
+(defclass augmented-data (monad metadata-mixin)
   ((data :initarg :data :initform nil :accessor data))
   (:documentation "Monad for data augmented with metadata."))
 
-(defclass exception (metadata-mixin)
+(defclass exception (monad metadata-mixin)
   ((name :initarg :name :initform nil :accessor name)
    (condition :initarg :condition :initform nil :accessor condition
               :documentation "error condition if any"))
   (:documentation "Monad for some kind of exception, such as an error."))
 
-(defmethod bind (fn (ad augmented-data))
-  "Bind for augmented-data. Reverse arguments from typical bind because this way works better for composition in Lisp.
-   Fn must be a function of 2 arguments (data and metadata) and produce an augmented-data object, but this is not strictly enforced.
-   You can use ad-lift to create such a function from one that takes two values and produces two values."
-  (funcall fn (data ad) (metadata ad)))
+(defgeneric unwrap (monad)
+  (:documentation "The inverse of unit. If monad contains more than 1 primitive data slot, this should return
+    them as multiple values."))
+
+(defmethod unwrap ((monad monad))
+  (error "Unwrap must be specified per specific monad type"))
+
+(defmethod unwrap ((ad augmented-data))
+  (values (data ad)
+          (metadata ad)))
+
+(defmethod unwrap ((ex exception))
+  (values (name ex)
+          (condition ex)
+          (metadata ex)))
+
+(defmethod bind (fn (monad monad))
+  "General bind. Reverse arguments from typical bind because this way works better for composition in Lisp.
+   Fn should produce another monad, but this is not strictly enforced.
+   You can use ad-lift to create such a function."
+  (multiple-value-call fn (unwrap monad)))
 
 (defmethod ad-lift (fn)
   "Lift for augmented-data. Returns a function made from fn that returns an augmented-data monad.
