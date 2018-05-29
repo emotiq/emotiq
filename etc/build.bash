@@ -35,13 +35,13 @@ prefix=${var}/local
 lib=${prefix}/lib
 
 production_dir=${prefix}/production
-target_dir=emotiq-${version}-${arch}
 mkdir -p ${production_dir}/${target_dir}
 
 date_now=`/bin/date "+%Y%m%d%H%M%S"`
 hash=$(git rev-parse --short $(git log -1 --pretty=format:"%H"))
 version="${date_now}-${hash}-${arch}"
 echo -n $version > ${production_dir}/version.txt
+target_dir=emotiq-${version}-${arch}
 
 case ${uname_s} in
   Linux*)
