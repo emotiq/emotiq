@@ -117,20 +117,19 @@ release:
   stage: deploy
   variables:
     LISP: lispworks
-  script:
-    - etc/production.bash
-    - ci/upload-file.sh $(cat /tmp/artifact.txt)
-
-deploy:linux:
-  <<: *deploy_definition
   tags:
     - linux
   only:
     - tags
+  script:
+    - ci/publish.sh
+
+deploy:linux:
+  <<: *deploy_definition
+  dependencies:
+    - build:linux
 
 deploy:macos:
   <<: *deploy_definition
-  tags:
-    - macos
-  only:
-    - tags
+  dependencies:
+    - build:macos
