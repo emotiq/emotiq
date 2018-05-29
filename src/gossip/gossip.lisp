@@ -1,11 +1,12 @@
 ;;; gossip.lisp
-;;; 11-May-2018 SVS
 
-;;; Actor-based gossip protocol.
-;;; As far as the actors are concerned,
-;;; we're just sending messages of type :gossip, regardless of whether they're solicitations
-;;; or replies.
+;;; More realistic gossip protocol.
+;;; Minimal changes to use actor concurrency model. As far as the actors are concerned,
+;;;  we're just sending messages of type :gossip, regardless of whether they're solicitations,
+;;;  replies, or timeouts.
 ;;; Gossip messages are simply sent as payload of a lower-level actor message.
+;;; No more process-run-function because actors take care of that.
+;;; No need for locks to access node data structures because they're always accessed from an actor's single thread.
 
 ;;;; TODO:
 ;;;; Change things such that when forward-to is an integer, if a node gets an active ignore back from
@@ -19,8 +20,6 @@
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-(defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
-(defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
@@ -44,20 +43,15 @@
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
 
-(defvar *debug* 3 "True to log debugging information while handling gossip requests. Larger values log more messages.")
+(defvar *debug* 4 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
-(defun debug-level (&optional (level nil level-supplied-p))
-  (cond (level-supplied-p
-         (when *debug*
-           (if (numberp *debug*)
-               (if (numberp level)
-                   (>= *debug* level)
-                   t)
-               t)))
-        (t *debug*)))
-
-(defun (setf debug-level) (val)
-  (setf *debug* val))
+(defun debug-level (&optional level)
+  (when *debug*
+    (if (numberp *debug*)
+      (if (numberp level)
+        (>= *debug* level)
+        t)
+      t)))
 
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
@@ -93,7 +87,7 @@
               (null *active-ignores*))
          :neighborcast)
         (t :unknown)))
-             
+
 ; (set-protocol-style :neighborcast) ; you should expect 100% correct responses most of the time in this mode
 ; (set-protocol-style :gossip)       ; you should expect 100% correct responses very rarely in this mode
 
@@ -103,10 +97,12 @@ Discussion: :gossip style is more realistic for "loose" networks where nodes don
 are in place between nodes.
 |#
 
-(defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
+(defparameter *gossip-absorb-errors* t "True for normal use; nil for debugging")
 (defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
+(defvar *uid-lock* (mpcompat:make-lock) "Lock for *last-uid*")
 
 (defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
+(defvar *tiny-uid-lock* (mpcompat:make-lock) "Lock for *last-tiny-uid*")
 
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *delay-interim-replies* t "True to delay interim replies.
@@ -120,7 +116,7 @@ are in place between nodes.
 ;;; defglobal here makes running tests easier
 #+LISPWORKS
 (hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
-#+OpenMCL
+#+CCL
 (ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
 (defun log-exclude (&rest strings)
@@ -188,8 +184,10 @@ are in place between nodes.
           (ash process-id 32)
           numeric-id))
 
+; Should do this with an actor gatekeeper, but I don't know how to wrap an actor around a read operation
 (defun generate-new-monotonic-id ()
-  (mpcompat:atomic-incf *last-uid*))
+    (mpcompat:with-lock (*uid-lock*)
+      (incf *last-uid*)))
 
 #+LISPWORKS
 (progn
@@ -208,8 +206,10 @@ are in place between nodes.
 (defun long-uid ()
   (uuid::uuid-to-integer (uuid::make-v1-uuid)))
 
+; Should do this with an actor gatekeeper, but I don't know how to wrap an actor around a read operation
 (defun new-tiny-uid ()
-  (mpcompat:atomic-incf *last-tiny-uid*))
+  (mpcompat:with-lock (*tiny-uid-lock*)
+    (incf *last-tiny-uid*)))
 
 (defun new-uid (&optional (style *default-uid-style*))
   "Generate a new UID of the given style"
@@ -217,12 +217,9 @@ are in place between nodes.
     (:long  (long-uid))
     (:short (short-uid))
     (:tiny  (new-tiny-uid))))
-                   
+
 (defun uid? (thing)
   (integerp thing))
-
-(defun uid= (thing1 thing2)
-  (eql thing1 thing2))
 
 (defclass uid-mixin ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
@@ -238,7 +235,7 @@ are in place between nodes.
 (defun all-processes ()
   #+Allegro   mp:*all-processes*
   #+LispWorks (mp:list-all-processes)
-  #+OpenMCL   (ccl:all-processes)
+  #+CCL       (ccl:all-processes)
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of ALL-PROCESSES for this system.")
   )
@@ -246,14 +243,14 @@ are in place between nodes.
 (defun process-name (process)
   #+Allegro                (mp:process-name process)
   #+LispWorks              (mp:process-name process)
-  #+OpenMCL                (ccl:process-name process)
+  #+CCL                    (ccl:process-name process)
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-NAME for this system."))
 
 (defun process-kill (process)
   #+Allegro                (mp:process-kill process)
   #+LispWorks              (mp:process-terminate process)
-  #+OpenMCL                (ccl:process-kill process)
+  #+CCL                    (ccl:process-kill process)
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-KILL for this system."))
 
@@ -296,9 +293,7 @@ are in place between nodes.
    (reply-to :initarg :reply-to :initform nil :accessor reply-to
              :documentation "Nil for no reply expected. :UPSTREAM or :GOSSIP or :NEIGHBORCAST indicate
              replies should happen by one of those mechanisms, or a UID to request a direct reply to
-             a specific node."))
-  (:documentation "An initial message sent to a gossip network or gossip node. Some solicitations require replies;
-    some don't."))
+             a specific node.")))
 
 (defun make-solicitation (&rest args)
   (apply 'make-instance 'solicitation args))
@@ -359,13 +354,13 @@ are in place between nodes.
 (defun make-final-reply (&rest args)
   (apply 'make-instance 'final-reply args))
 
-(defclass system-async (gossip-message-mixin solicitation-uid-mixin)
+(defclass timeout (gossip-message-mixin solicitation-uid-mixin)
   ()
-  (:documentation "Used only for special timeout and socket-wakeup messages. In this case, solicitation-uid field
+  (:documentation "Used only for special timeout messages. In this case, solicitation-uid field
     is used to indicate which solicitation should be timed out at the receiver of this message."))
 
-(defun make-system-async (&rest args)
-  (let ((timeout (apply 'make-instance 'system-async args)))
+(defun make-timeout (&rest args)
+  (let ((timeout (apply 'make-instance 'timeout args)))
     (when (null (solicitation-uid timeout)) (error "No solicitation-uid on timeout"))
     timeout))
 
@@ -374,7 +369,7 @@ are in place between nodes.
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
 
-(defmethod copy-message :around ((msg system-async))
+(defmethod copy-message :around ((msg timeout))
   (let ((new-msg (call-next-method)))
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
@@ -385,7 +380,7 @@ are in place between nodes.
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
-   
+
 (defclass gossip-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works")))
@@ -408,10 +403,9 @@ are in place between nodes.
    (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
                       :accessor repliers-expected
                       :documentation "2-level Hash-table mapping a solicitation id to another hashtable of srcuids
-                     that I expect to reply to that solicitation. Values in second hashtable are either interim replies
+                     that I expect to reply to that solicitation. Values in second hashtable are interim replies
                      that have been received from that srcuid for the given solicitation id.
-                     Only accessed from this node's actor thread. No locking needed.
-                     See Note B below for more info.")
+                     Only accessed from this node's actor thread. No locking needed.")
    (reply-cache :initarg :reply-cache :initform (kvs:make-store ':hashtable :test 'equal)
                :accessor reply-cache
                :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
@@ -441,7 +435,7 @@ are in place between nodes.
 ; We'll use these for real (not simulated on one machine) protocol over the network
 (defclass proxy-gossip-node (gossip-mixin actor-mixin)
   ((real-address :initarg :real-address :initform nil :accessor real-address
-            :documentation "Real IP or DNS address of remote node")
+            :documentation "Real IP address of remote node")
    (real-port :initarg :real-port :initform *nominal-gossip-port* :accessor real-port
               :documentation "Real port of remote node")
    (real-uid :initarg :real-uid :initform nil :accessor real-uid
@@ -474,17 +468,15 @@ are in place between nodes.
 (defmethod make-gossip-actor ((node t))
   (make-instance 'gossip-actor
     :node node
-    :fn 
+    :fn
     (lambda (&rest msg)
-      (when (debug-level 5)
-        (log-event "Gossip Actor" (ac::current-actor) "received" msg))
       (apply 'gossip-dispatcher node msg))))
 
 #+OBSOLETE
 (defmethod make-gossip-actor ((node null))
   (make-instance 'gossip-actor
     :node node
-    :fn 
+    :fn
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
@@ -492,7 +484,7 @@ are in place between nodes.
 (defmethod make-gossip-actor ((node proxy-gossip-node))
   (make-instance 'gossip-network-actor
     :node node
-    :fn 
+    :fn
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
@@ -540,7 +532,7 @@ are in place between nodes.
    we store the edge information twice: Once in each endpoint node."
   (pushnew (uid node1) (neighbors node2))
   (pushnew (uid node2) (neighbors node1)))
-  
+
 (defmethod connected? ((node1 gossip-node) (node2 gossip-node))
   (or (member (uid node2) (neighbors node1) :test 'equal)
       ; redundant if we connected the graph correctly in the first place
@@ -671,35 +663,30 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
-                  (uid node)
-                  node))
-         (mbox (mpcompat:make-mailbox))
-         (actor (ac:make-actor (lambda (&rest msg) (apply 'ac:send mbox msg))))
-         (actor-name (gentemp "OUTPUTTER" :gossip)))
-    (unwind-protect
-        (progn 
-          (ac:register-actor actor actor-name)
-          (let* ((solicitation (make-solicitation
-                                :reply-to (uid node)
-                                :kind kind
-                                :args args))
-                 (soluid (uid solicitation)))
-            (send-msg solicitation
-                      uid                   ; destination
-                      actor-name)
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
-              ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
-              ;   Only after that elapses, will an actor put the value into the mbox.
-              (values 
-               (if success
-                   (first (args (first response))) ; should be a FINAL-REPLY
-                   :TIMEOUT)
-               soluid))))
-      (ac:unregister-actor actor-name))))
+  (let ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
+                 (uid node)
+                 node))
+        (response nil))
+    (flet ((final-continuation (reply)
+             (setf response reply)))
+      (let* ((solicitation (make-solicitation
+                            :reply-to (uid node)
+                            :kind kind
+                            :args args))
+             (soluid (uid solicitation)))
+        (send-msg solicitation
+                  uid      ; destination
+                  #'final-continuation)     ; srcuid
+        (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
+                                                       (lambda () response))))
+          (values
+           (if win
+               (first (args response))
+               :TIMEOUT)
+           soluid))))))
 
 (defun solicit (node kind &rest args)
-  "Send a solicitation to the network starting with given node. This is the primary interface to 
+  "Send a solicitation to the network starting with given node. This is the primary interface to
   the network to start an action from the outside. Nodes shouldn't use this function to initiate an
   action because they should set the srcuid parameter to be their own rather than nil."
   (unless node
@@ -721,34 +708,27 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
-                  (uid node)
-                  node))
-         (mbox (mpcompat:make-mailbox))
-         (actor (ac:make-actor (lambda (&rest msg) (apply 'ac:send mbox msg))))
-         (actor-name (gentemp "OUTPUTTER" :gossip)))
-    (unwind-protect
-        (progn
-          (ac:register-actor actor actor-name)
-          (let* ((solicitation (make-solicitation
-                                :reply-to :UPSTREAM
-                                :kind kind
-                                :args args))
-                 (soluid (uid solicitation)))
-            (send-msg solicitation
-                      uid      ; destination
-                      actor-name)     ; srcuid
-            
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox *max-seconds-to-wait*)
-              ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
-              ;   Only after that elapses, will an actor put the value into the mbox.
-              (values 
-               (if success
-                   (first (args (first response))) ; should be a FINAL-REPLY
-                   :TIMEOUT)
-               soluid))))
-      (ac:unregister-actor actor-name))))
-
+  (let ((uid (if (typep node 'gossip-mixin) ; yeah this is kludgy.
+                 (uid node)
+                 node))
+        (response nil))
+    (flet ((final-continuation (reply)
+             (setf response reply)))
+      (let* ((solicitation (make-solicitation
+                            :reply-to :UPSTREAM
+                            :kind kind
+                            :args args))
+             (soluid (uid solicitation)))
+        (send-msg solicitation
+                  uid      ; destination
+                  #'final-continuation)     ; srcuid
+        (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
+                                                       (lambda () response))))
+          (values
+           (if win
+               (first (args response))
+               :TIMEOUT)
+           soluid))))))
 
 (defun solicit-progress (node kind &rest args)
   "Like solicit-wait but prints periodic progress log messages (if any)
@@ -779,36 +759,25 @@ dropped on the floor.
                         #'final-continuation)     ; srcuid
               (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
                                                              (lambda () response))))
-                (values 
+                (values
                  (if win
                      (first (args response))
                      :TIMEOUT)
                  soluid)))
           (setf (logfn node) old-logger))))))
 
-(defun list-uids (address port)
-  "Get a list of all UIDs of nodes at remote address and port.
-   If no error, returned list will look like
-   (address port uid1 uid2 ...)
-   If error, returned list will look like
-   (address port :ERRORMSG arg1 arg2 ...)"
-  (let ((rnode (ensure-proxy-node :TCP address port 0))
-        (localnode nil)
-        (allnodes nil))
-    (unwind-protect
-        (progn
-          (setf localnode (make-node
-                           :NEIGHBORS (list (uid rnode))))
-          ;(format t "~%Localnode UID = ~D" (uid localnode))
-          (setf allnodes (solicit-direct localnode :list-alive))
-          ; remove localnode's uid because it will have been included
-          (setf allnodes (remove (uid localnode) allnodes)))
-      (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
-      )))
+(defun interactive-logging-function (logcmd nodename msgname &rest args)
+  "Use this logging function for interactive debugging. You'll probably only want to use this
+  in the node you called #'solicit on."
+  (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
+         (logstring (format nil "~S~%" logmsg)))
+    #+CCL
+    (if (find-package :hi)
+        (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
+        (write-string logstring *standard-output*))
+    #-CCL
+    (write-string logstring *standard-output*)))
 
-; (make-graph 10)
-; (run-gossip-sim)
-; (list-uids "localhost" 65002)
 
 (defmethod briefname ((node gossip-node) &optional (prefix "node"))
  (format nil "~A~D" prefix (uid node)))
@@ -819,7 +788,7 @@ dropped on the floor.
 (defmethod briefname ((msg reply) &optional (prefix "rep"))
   (format nil "~A~D" prefix (uid msg)))
 
-(defmethod briefname ((msg system-async) &optional (prefix "timeout"))
+(defmethod briefname ((msg timeout) &optional (prefix "timeout"))
   (format nil "~A~D" prefix (uid msg)))
 
 (defmethod briefname ((id integer) &optional (prefix ""))
@@ -840,6 +809,18 @@ dropped on the floor.
   (declare (ignore prefix))
   id)
 
+; Logcmd: Keyword that describes what a node has done with a given message UID
+; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
+(defmethod maybe-log ((node gossip-mixin) logcmd msg &rest args)
+  (when *log-filter*
+    (when (or (eq t *log-filter*)
+              (funcall *log-filter* logcmd))
+      (when (logfn node)
+        (apply (logfn node)
+               logcmd
+               (briefname node)
+               (briefname msg)
+               args)))))
 
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
@@ -848,98 +829,59 @@ dropped on the floor.
   "Returns a new log space"
   (make-array 10 :adjustable t :fill-pointer 0))
 
-(defvar *log* (new-log) "Log of gossip actions.")
-(defvar *logging-actor* (ac:make-actor
-                         (lambda (cmd &rest logmsg)
-                           (case cmd
-                             (:log (vector-push-extend logmsg *log*))
-                             (:archive (%archive-log)))))
-  "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
-
 (defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 
+(defvar *log* (new-log) "Log of gossip actions.")
+(defvar *log-actor* (ac:make-actor (lambda (&rest logmsg) (vector-push-extend logmsg *log*)))
+  "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
 
-(defun %archive-log ()
-  "Archive existing *log* and start a new one.
-   This function is not thread-safe; should only be called from *logging-actor*."
-  (vector-push-extend *log* *archived-logs*)
-  (setf *log* (new-log)))
-
-(defun archive-log ()
-  "Archive existing *log* and start a new one. Thread-safe."
-  (ac:send *logging-actor* :archive))
-
-(defun log-event (&rest args)
-  "General mechanism for logging events. Sends timestamp and args to *logging-actor*.
-   No filtering is done here.
-   Also returns effective log message."
-  (let ((logmsg (cons (usec::get-universal-time-usec) args)))
-    (apply 'ac:send *logging-actor* :log logmsg)
+(defun default-logging-function (logcmd nodename msgname &rest args)
+  (let* ((usec (usec::get-universal-time-usec)) ; important to do this before calling ac:send so it's most accurate
+         (logmsg (if msgname
+                    (list* usec logcmd nodename msgname args)
+                    (list usec logcmd nodename))))
+    (apply 'ac:send *log-actor* logmsg)
     logmsg))
 
-(defun default-logging-function (logcmd &rest args)
-  "Default logger for nodes. Filters using the *log-filter* mechanism."
-  (when *log-filter*
-    (when (or (eq t *log-filter*)
-              (funcall *log-filter* logcmd))
-      (apply 'log-event logcmd args))))
+(defun debug-log (&rest args)
+  "Freeform version of default-logging-function"
+  (apply 'ac:send *log-actor* (cons (usec::get-universal-time-usec) args)))
 
-(defun interactive-logging-function (logcmd &rest args)
+(defun interactive-logging-function (logcmd nodename msgname &rest args)
   "Use this logging function for interactive debugging. You'll probably only want to use this
-  in the mode you called #'solicit on. Note that this merely writes to the REPL _in addition_ to standard logging,
-  not as opposed to it.
+  in the mode you called #'solicit on.
   Returns the form that default-logging-function returned."
-  (let* ((logmsg (apply 'default-logging-function logcmd args))
+  (let* ((logmsg (apply 'default-logging-function logcmd nodename msgname args))
          (logstring (format nil "~S~%" logmsg)))
-    #+OpenMCL
+    #+CCL
     (if (find-package :hi)
         (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
         (write-string logstring *standard-output*))
-    #-OpenMCL
+    #-CCL
     (write-string logstring *standard-output*)
     logmsg))
 
-; Logcmd: Keyword that describes what a node has done with a given message UID
-; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
-(defmethod node-log ((node gossip-mixin) logcmd msg &rest args)
-  "Log a message-based event that occurred to a node."
-  (when (logfn node)
-    (apply (logfn node)
-           logcmd
-           (briefname node)
-           (briefname msg)
-           args)))
-
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
-   This is intended to be used by incoming-message-handler methods for bootstrapping messages
-   before #'neighbors connectivity has been established.
-   See Note D."
+   This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
+   before #'neighbors connectivity has been established."
   (let ((no-forward-msg (copy-message msg))
         (nodes (listify-nodes)))
     (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
     (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
-    (setf nodes (mapcar 'uid nodes))
     (forward msg srcuid nodes)))
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
-         (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can ac:send to
-                        (actor destnode)
-                        destuid)))
+         (destactor (when destnode (actor destnode))))
     (when (null destactor)
       (if (null destnode)
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
-    (when (debug-level 5)
-      (log-event "send-msg" msg destnode srcuid))
-    (handler-case
-        (ac:send destactor
-                 :gossip ; actor-verb
-                 srcuid  ; first arg of actor-msg
-                 msg)    ; second arg of actor-msg
-      (ac:invalid-send-target () ; if target is invalid, log it and do nothing
-                           (log-event :invalid-send-target destuid msg :from srcuid)))))
+    (ac:send destactor
+           :gossip ; actor-verb
+           srcuid  ; first arg of actor-msg
+           msg)))  ; second arg of actor-msg
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -985,20 +927,18 @@ dropped on the floor.
         (cond (kindsym
                (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
                  (cond (interim-table
-                        (if (eql :ANONYMOUS interim-table) ; accept replies from any srcuid
-                            kindsym
-                            (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
-                              (declare (ignore val))
-                              (if present-p
-                                  kindsym
-                                  (values nil :unexpected-1)))))
+                        (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+                          (declare (ignore val))
+                          (if present-p
+                              kindsym
+                              (values nil :unexpected-1))))
                        (t (values nil :unexpected-2)))))
               (t (values nil failure-reason))))))
 
-(defmethod accept-msg? ((msg system-async) (thisnode gossip-mixin) srcuid)
+(defmethod accept-msg? ((msg timeout) (thisnode gossip-node) srcuid)
   (declare (ignore srcuid))
-  ; system-asyncs are always accepted
-  (intern (symbol-name (kind msg)) :gossip))
+  'timeout ; timeouts are always accepted
+  )
 
 ; TODO: Remove old entries in message-cache, eventually.
 (defmethod memoize-message ((node gossip-node) (msg gossip-message-mixin) srcuid)
@@ -1021,7 +961,7 @@ dropped on the floor.
                    unless (= idx n)
                    collect i)))
     (values (nth n list) newlist)))
-  
+
 (defun make-random-generator (list)
   "Returns a thunk that returns another random member of list
   every time it's called. Never generates same member twice
@@ -1065,27 +1005,6 @@ dropped on the floor.
               to
               from)))
 
-(defun locally-dispatch-msg (kindsym node msg srcuid)
-  "Final dispatcher for messages local to this machine. No validation is done here."
-  (let ((logsym (typecase msg
-                  (solicitation :accepted)
-                  (interim-reply :interim-reply-accepted)
-                  (final-reply :final-reply-accepted)
-                  (t nil) ; don't log timeouts here. Too much noise.
-                  )))
-    (when logsym
-      (node-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
-    (if *gossip-absorb-errors*
-        (handler-case (funcall kindsym msg node srcuid)
-          (error (c) (node-log node :ERROR msg c)))
-        (funcall kindsym msg node srcuid))))
-
-(defmethod locally-receive-msg ((msg system-async) (node gossip-mixin) srcuid)
-  (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
-    (cond (kindsym ; message accepted
-           (locally-dispatch-msg kindsym node msg srcuid))
-          (t (node-log node :ignore msg :from (briefname srcuid "node") failure-reason)))))
-
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
   First checks to see whether this message should be accepted by the node at all, and if so,
@@ -1094,9 +1013,20 @@ dropped on the floor.
     (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
       (cond (kindsym ; message accepted
              (memoize-message node msg srcuid)
-             (locally-dispatch-msg kindsym node msg srcuid))
+             (let ((logsym (typecase msg
+                             (solicitation :accepted)
+                             (interim-reply :interim-reply-accepted)
+                             (final-reply :final-reply-accepted)
+                             (t nil) ; don't log timeouts here. Too much noise.
+                             )))
+               (when logsym
+                 (maybe-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
+               (if *gossip-absorb-errors*
+                   (handler-case (funcall kindsym msg node srcuid)
+                     (error (c) (maybe-log node :ERROR msg c)))
+                   (funcall kindsym msg node srcuid))))
             (t ; not accepted
-             (node-log node :ignore msg :from (briefname srcuid "node") failure-reason)
+             (maybe-log node :ignore msg :from (briefname srcuid "node") failure-reason)
              (case failure-reason
                (:active-ignore ; RECEIVE an active-ignore. Whomever sent it is telling us they're ignoring us.
                 ; Which means we need to ensure we're not waiting on them to reply.
@@ -1106,9 +1036,9 @@ dropped on the floor.
                       (let ((was-present? (cancel-replier node kind (solicitation-uid msg) srcuid)))
                         (when was-present?
                           ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
-                          (node-log node :STOP-WAITING msg srcuid))))
+                          (maybe-log node :STOP-WAITING msg srcuid))))
                     ; weird. Shouldn't ever happen.
-                    (node-log node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
+                    (maybe-log node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
                (:already-seen ; potentially SEND an active ignore
                 (when (typep msg 'solicitation) ; following is extremely important. See note A below.
                   ; If we're ignoring a message from node X, make sure that we are not in fact
@@ -1119,10 +1049,31 @@ dropped on the floor.
                   (let ((was-present? (cancel-replier node (kind msg) soluid srcuid)))
                     (when was-present?
                       ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
-                      (node-log node :STOP-WAITING msg srcuid))
+                      (maybe-log node :STOP-WAITING msg srcuid))
                     (unless (neighborcast? msg) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
+
+; NOTE A:
+; If node X is ignoring a solicitation* from node Y because it already
+; saw that solicitation, then it must also not expect a reply from node Y
+; for that same solicitation.
+; Here's why [In this scenario, imagine #'locally-receive-msg is acting on behalf of node X]:
+; If node X ignores a solicition from node Y -- because it's already seen that solicitation --
+;   then X knows the following:
+;   1. Node Y did not receive the solicition from X. It must have received it from somewhere else,
+;      because nodes *never* forward messages to their upstream.
+;   2. Therefore, if X forwards (or forwarded) the solicitation to Y, Y
+;      is definitely going to ignore it. Because Y has already seen it.
+;   3. Therefore (to recap) if X just ignored a solicitation from Y, then X
+;      knows Y is going to ignore that same solicitation from X.
+;   4. THEREFORE: X must not expect Y to respond, and that's why
+;      we call cancel-replier here. If we don't do this, Y will ignore
+;      and X will eventually time out, which it doesn't need to do.
+;   5. FURTHERMORE: Y knows X knows this. So it knows X will stop waiting for it.
+;
+; * we take no special action for non-solicitation messages because they can't
+;   ever be replied to anyway.
 
 (defmethod locally-receive-msg ((msg t) (thisnode proxy-gossip-node) srcuid)
   (declare (ignore srcuid))
@@ -1140,7 +1091,7 @@ dropped on the floor.
   (ac:send actor
            :gossip
            'ac::*master-timer* ; source of timeout messages is always *master-timer* thread
-           (make-system-async :solicitation-uid soluid
+           (make-timeout :solicitation-uid soluid
                          :kind :timeout)))
 
 (defun schedule-gossip-timeout (delta actor soluid)
@@ -1160,16 +1111,16 @@ dropped on the floor.
       (let ((timer (kvs:lookup-key (timers node) soluid)))
         (cond (timed-out-p
                ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-               (node-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
+               (maybe-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
               (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                (cond (timer
                       (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
                       ; if no timer, then this is a leaf node
-                      (node-log node :DONE-WAITING-WIN msg))
+                      (maybe-log node :DONE-WAITING-WIN msg))
                      (t ; note: Following log message doesn't necessarily mean anything is wrong.
                       ; If node is singly-connected to the graph, it's to be expected
-                      (node-log node :NO-TIMER-FOUND msg)))))
-        (coalesce&reply (reply-to msg) node kind soluid)))))
+                      (maybe-log node :NO-TIMER-FOUND msg)))))
+        (coalesce&replyupstream node kind soluid)))))
 
 (defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
   "Prepare reply tables for given node, solicitation uid, and set of downstream repliers."
@@ -1184,28 +1135,26 @@ dropped on the floor.
 
 ;;; Timeout. Generic message handler for all methods that scheduled a timeout.
 ;;; These never expect a reply but they can happen for methods that did expect one.
-(defmethod timeout ((msg system-async) thisnode srcuid)
+(defmethod timeout ((msg timeout) thisnode srcuid)
   "Timeouts are a special kind of message in the gossip protocol,
   and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
-         ;;(node-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
+         ;;(maybe-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
          (let* ((soluid (solicitation-uid msg))
                 (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
            (when timeout-handler
              (funcall timeout-handler t))))
         (t ; log an error and do nothing
-         (node-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
+         (maybe-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
 
 (defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
   "Utility function. Can be called by message handlers.
-  If whichones is true, returns not just true but an actual list of expected repliers [or nil if none]."
+   If whichones is true, returns not just true but an actual list of expected repliers [or nil if none]."
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (when interim-table
-      (if (eql :ANONYMOUS interim-table)
-          nil
-          (if whichones
-              (loop for key being each hash-key of interim-table collect key)
-              (not (zerop (hash-table-count interim-table))))))))
+      (if whichones
+          (loop for key being each hash-key of interim-table collect key)
+          (not (zerop (hash-table-count interim-table)))))))
 
 (defmethod maybe-sir ((msg solicitation) thisnode srcuid)
   "Maybe-send-interim-reply. The sender of this message will be thisnode itself"
@@ -1238,7 +1187,7 @@ dropped on the floor.
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
    new value will be added to the set; it won't replace them.
-  Sets value on this node and then forwards 
+  Sets value on this node and then forwards
   solicitation to other nodes, if any.
   No reply expected."
   (destructuring-bind (key value &rest other) (args msg)
@@ -1249,7 +1198,7 @@ dropped on the floor.
 
 (defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
-  Sets value on this node and then forwards 
+  Sets value on this node and then forwards
   solicitation to other nodes, if any. This is a destructive operation --
   any node that currently has a value for the given key will have that value replaced.
   No reply expected."
@@ -1260,7 +1209,7 @@ dropped on the floor.
     (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 (defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
-  "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
+  "Remove a global key/value pair. Removes key/value pair on this node and then forwards
    solicitation to other nodes, if any. This is a destructive operation --
    any node that currently has the given key will have that key/value removed.
    There's no harm in calling this more than once with the same key; if key
@@ -1318,15 +1267,15 @@ dropped on the floor.
          (soluid (uid msg))
          (downstream (get-downstream thisnode srcuid (forward-to msg))) ; don't forward to the source of this solicitation
          (timer nil)
-         (seconds-to-wait *max-seconds-to-wait*)
          (cleanup (make-timeout-handler thisnode msg kind)))
     (flet ((initialize-reply-cache ()
              "Set up node's reply-cache with initial-reply-value for this message"
              (kvs:relate-unique! (reply-cache thisnode) soluid (initial-reply-value kind thisnode (args msg))))
-           
+
            (must-coalesce? ()
-             "Returns true if this node must coalesce any incoming replies.
-             If nil, there is no possibility of repliers, so no coalescence is needed."
+             "Returns true if we might expect repliers. (The only reason we wouldn't is
+             if there are no downstream nodes to forward the message to.)
+             If nil, there is no possibility of repliers."
              (or (eql :UPSTREAM (reply-to msg))
                  (and (uid? (reply-to msg)) ; check for potential direct replies back to this node
                       (eql (reply-to msg) (uid thisnode))))))
@@ -1334,32 +1283,28 @@ dropped on the floor.
       ;   node could potentially be replied to, it itself is always considered a participant node of the message.
       (when (must-coalesce?) (initialize-reply-cache))
       ; (if (not (eql 495831281100387564650501 (uid thisnode))) (break))
-      
+
       ;;; It's possible for there to be a downstream but have no potential repliers. In that case
       ;;; we need to go ahead and reply.
-      
+
+
+      ;;; Is it possible to have must-coalesce? true but no downstream? Yes, the way the code is written now. Makes no sense.
+
       ;;; It's never necessary to coalesce when there's no downstream, because there won't be anything TO coalesce in that case.
       ;;; It MAY not be necessary to coalesce even when there IS a downstream (that's the case for direct replies where this node
       ;;;   is not the node to reply to).
-      
+
       (cond (downstream
              (cond ((must-coalesce?)
-                    (if (eql :UPSTREAM (reply-to msg)) ; See Note D
-                        (progn
-                          (prepare-repliers thisnode soluid downstream)
-                          (node-log thisnode :WAITING msg downstream))
-                        (progn ; not :UPSTREAM. Repliers will be anonymous.
-                          (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
-                          (node-log thisnode :WAITING msg :ANONYMOUS)
-                          (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)))
+                    (prepare-repliers thisnode soluid downstream)
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
-                    (setf timer (schedule-gossip-timeout (ceiling seconds-to-wait) (actor thisnode) soluid))
+                    (setf timer (schedule-gossip-timeout (ceiling *max-seconds-to-wait*) (actor thisnode) soluid))
                     (kvs:relate-unique! (timers thisnode) soluid timer)
                     (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-                    ;(node-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
-                    )
-                   (t ; just forward the message since there won't be an :UPSTREAM reply
+                    ;(maybe-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
+                    (maybe-log thisnode :WAITING msg downstream))
+                   (t ; just forward the message if there won't be an :UPSTREAM reply
                     (forward msg thisnode downstream)
                     ; No cleanup necessary because even though we had a downstream, we never expected any replies.
                     (send-final-reply thisnode (reply-to msg) soluid kind (initial-reply-value kind thisnode (args msg))))))
@@ -1374,14 +1319,13 @@ dropped on the floor.
   (let ((kind (kind msg))
         (soluid (solicitation-uid msg)))
     ; First record the data in the reply appropriately
-    (unless (eql :ANONYMOUS (kvs:lookup-key (repliers-expected thisnode) soluid)) ; ignore interim-replies to anonymous expectations
-      (when (record-interim-reply msg thisnode soluid srcuid) ; true if this reply is later than previous
-        ; coalesce all known data and send it upstream as another interim reply.
-        ; (if this reply is not later, drop it on the floor)
-        (if *delay-interim-replies*
-            (send-delayed-interim-reply thisnode kind soluid)
-            (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
-              (send-interim-reply thisnode kind soluid upstream-source)))))))
+    (when (record-interim-reply msg thisnode soluid srcuid) ; true if this reply is later than previous
+      ; coalesce all known data and send it upstream as another interim reply.
+      ; (if this reply is not later, drop it on the floor)
+      (if *delay-interim-replies*
+          (send-delayed-interim-reply thisnode kind soluid)
+          (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
+            (send-interim-reply thisnode kind soluid upstream-source))))))
 
 (defmethod generic-srr-handler ((msg final-reply) (thisnode gossip-node) srcuid)
   (let* ((kind (kind msg))
@@ -1499,20 +1443,21 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (node-log srcnode :FINALREPLY (briefname soluid "sol") :to (briefname where-to-send-reply "node") data)
+           (maybe-log srcnode :SEND-FINAL-REPLY reply :to (briefname where-to-send-reply "node") data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
           ; if no place left to reply to, just log the result.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
+          ((functionp where-to-send-reply)
+           (maybe-log srcnode :FINALREPLY (briefname soluid "sol") data)
+           (funcall where-to-send-reply reply))
           ((null where-to-send-reply)
-           (node-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
-          (t
-           (node-log srcnode :FINALREPLY (briefname soluid "sol") :TO where-to-send-reply data)
-           (ac:send where-to-send-reply reply)))))
+           (maybe-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
+          (t (error "Invalid destination")))))
 
-(defun coalesce&reply (reply-to thisnode reply-kind soluid)
+(defun coalesce&replyupstream (thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or
   timeout has happened. Only for upstream [reduce-style] replies; don't use otherwise.
   Cleans up reply tables and reply upstream with final reply containing coalesced data.
@@ -1525,14 +1470,7 @@ dropped on the floor.
     (kvs:remove-key (timers thisnode) soluid)
     (kvs:remove-key (timeout-handlers thisnode) soluid)
     ; must create a new reply here; cannot reuse an old one because its content has changed
-    (send-final-reply
-     thisnode
-     (if (uid? reply-to)
-         (if (uid= reply-to (uid thisnode)) ; can't send a reply to myself, so punt and send it upstream
-             :UPSTREAM
-             reply-to)
-         reply-to)
-     soluid reply-kind coalesced-data)
+    (send-final-reply thisnode :UPSTREAM soluid reply-kind coalesced-data)
     coalesced-data ; mostly for debugging
     ))
 
@@ -1596,20 +1534,19 @@ gets sent back, and everything will be copacetic.
 
 (defun send-interim-reply (thisnode reply-kind soluid where-to-send-reply)
   "Send an interim reply, right now."
-  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((coalesced-data (coalesce thisnode reply-kind soluid)))
     (if (uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
                                          :args (list coalesced-data))))
-          (node-log thisnode :SEND-INTERIM-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
+          (maybe-log thisnode :SEND-INTERIM-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
           (send-msg reply
                     where-to-send-reply
                     (uid thisnode)))
         ; if no place left to reply to, just log the result.
         ;   This can mean that thisnode autonomously initiated the request, or
         ;   somebody running the sim told it to.
-        (node-log thisnode :INTERIMREPLY (briefname soluid "sol") coalesced-data))))
+        (maybe-log thisnode :INTERIMREPLY (briefname soluid "sol") coalesced-data))))
 
 (defun send-delayed-interim-reply (thisnode reply-kind soluid)
   "Called by a node actor to tell itself (or another actor, but we never do that now)
@@ -1620,7 +1557,7 @@ gets sent back, and everything will be copacetic.
   (let ((msg (make-solicitation
               :kind :maybe-sir
               :args (list soluid reply-kind))))
-    (node-log thisnode :ECHO-MAYBE-SIR nil)
+    (maybe-log thisnode :ECHO-MAYBE-SIR nil)
     (send-self msg)))
 
 (defun later-reply? (new old)
@@ -1631,7 +1568,6 @@ gets sent back, and everything will be copacetic.
 ;;; Memorizing previous replies
 (defmethod set-previous-reply ((node gossip-node) soluid srcuid reply)
   "Remember interim reply indexed by soluid and srcuid"
-  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (unless interim-table
       (setf interim-table (kvs:make-store ':hashtable :test 'equal))
@@ -1640,7 +1576,6 @@ gets sent back, and everything will be copacetic.
 
 (defmethod get-previous-reply ((node gossip-node) soluid srcuid)
   "Retrieve interim reply indexed by soluid and srcuid"
-  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (when interim-table
       (kvs:lookup-key interim-table srcuid))))
@@ -1649,7 +1584,6 @@ gets sent back, and everything will be copacetic.
   "Remove interim reply (if any) indexed by soluid and srcuid from repliers-expected table.
   Return true if table is now empty; false if any other expected repliers remain.
   Second value is true if given soluid and srcuid was indeed present in repliers-expected."
-  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
     (unless interim-table
       (return-from remove-previous-reply (values t nil))) ; no table found. Happens for soluids where no replies were ever expected.
@@ -1658,7 +1592,7 @@ gets sent back, and everything will be copacetic.
       (declare (ignore store))
       (cond ((zerop (hash-table-count interim-table))
              ; if this is the last reply, kill the whole table for this soluid and return true
-             ;; (node-log node :KILL-TABLE-1 nil)
+             ;; (maybe-log node :KILL-TABLE-1 nil)
              (kvs:remove-key! (repliers-expected node) soluid)
              (values t was-present?))
             (t (values nil was-present?))))))
@@ -1667,7 +1601,6 @@ gets sent back, and everything will be copacetic.
   "Record new-reply for given soluid and srcuid on given node.
   If new-reply is later or first one, replace old and return true.
   Otherwise return false."
-  ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
   (let* ((previous-interim (get-previous-reply node soluid srcuid)))
     (when (or (null previous-interim)
               (later-reply? new-reply previous-interim))
@@ -1721,17 +1654,15 @@ gets sent back, and everything will be copacetic.
   This is essentially a reduce operation but of course we can't use that name."
   (let* ((local-data    (kvs:lookup-key (reply-cache node) soluid))
          (interim-table (kvs:lookup-key (repliers-expected node) soluid))
-         (interim-data (when (and interim-table
-                                  (hash-table-p interim-table))
-                         (loop for reply being each hash-value of interim-table
-                           while reply collect (first (args reply)))))
+         (interim-data (when interim-table (loop for reply being each hash-value of interim-table
+                         while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    ;(node-log node :COALESCE interim-data local-data)
+    ;(maybe-log node :COALESCE interim-data local-data)
     (let ((coalesced-output
            (reduce coalescer
-                   interim-data
-                   :initial-value local-data)))
-      ;(node-log node :COALESCED-OUTPUT coalesced-output)
+            interim-data
+            :initial-value local-data)))
+      ;(maybe-log node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1739,22 +1670,19 @@ gets sent back, and everything will be copacetic.
   If no more repliers, reply upstream with final reply.
   If more repliers, reply upstream either immediately or after a yield period with an interim-reply.
   Returns true if a [now-cancelled] reply had been expected from soluid/srcuid."
-  (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) soluid)))
-    (cond ((eql :ANONYMOUS interim-table)
-           nil) ; do nothing and return nil if we're accepting :ANONYMOUS replies
-          (t (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
-               (cond (no-more-repliers
-                      (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
-                        (if timeout-handler ; will be nil for messages that don't expect a reply
-                            (funcall timeout-handler nil)
-                            (node-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
-                     (t ; more repliers are expected
-                      ; functionally coalesce all known data and send it upstream as another interim reply
-                      (if *delay-interim-replies*
-                          (send-delayed-interim-reply thisnode reply-kind soluid)
-                          (let ((upstream-source (get-upstream-source thisnode soluid)))
-                            (send-interim-reply thisnode reply-kind soluid upstream-source)))))
-               was-present?)))))
+  (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
+    (cond (no-more-repliers
+           (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+             (if timeout-handler ; will be nil for messages that don't expect a reply
+               (funcall timeout-handler nil)
+               (maybe-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
+          (t ; more repliers are expected
+           ; functionally coalesce all known data and send it upstream as another interim reply
+           (if *delay-interim-replies*
+               (send-delayed-interim-reply thisnode reply-kind soluid)
+               (let ((upstream-source (get-upstream-source thisnode soluid)))
+                 (send-interim-reply thisnode reply-kind soluid upstream-source)))))
+    was-present?))
 
 ;;;; END OF REPLY SUPPORT ROUTINES
 
@@ -1776,15 +1704,6 @@ gets sent back, and everything will be copacetic.
 ;   srcuid of sending node
 ;   gossip-msg
 
-(defun make-ip-key (address port)
-  (declare (ignore port))
-  (usocket::host-to-hbo address) ; ignore port for now. Incoming ports will not in general be from *nominal-gossip-port*.
-  #+IGNORE
-  (if (and (integerp address)
-           (null port))
-      address ; means port is already folded into real-address
-      (+ (ash (usocket::host-to-hbo address) 16) port)))
-
 (defmethod memoize-proxy ((proxy proxy-gossip-node) &optional subtable)
   "Memoize given proxy for quick lookup. Returns proxy itself."
   (with-slots (real-address real-port real-uid) proxy
@@ -1792,7 +1711,10 @@ gets sent back, and everything will be copacetic.
                    (udp-gossip-node *udp-proxy-table*)
                    (tcp-gossip-node *tcp-proxy-table*))))
       (unless subtable
-        (let ((key (make-ip-key real-address real-port)))
+        (let ((key (if (and (integerp real-address)
+                            (null real-port))
+                       real-address ; means port is already folded into real-address
+                       (+ (ash real-address 16) real-port))))
           (setf subtable (gethash key table))
           (unless subtable (setf subtable (setf (gethash key table) (make-hash-table))))))
       (setf (gethash real-uid subtable) proxy))))
@@ -1801,8 +1723,12 @@ gets sent back, and everything will be copacetic.
   "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
    Returns newly-created or old proxy-gossip-node.
    Found or newly-created proxy will be added to *nodes* database for this process."
-  (check-type real-port integer) ; might want to support lookup of port-name to port-number eventually
-  (let* ((key (make-ip-key real-address real-port))
+  (let* ((key (if (and (integerp real-address)
+                       (null real-port))
+                  real-address ; means port is already folded into real-address
+                  (progn
+                    (setf real-address (usocket::host-to-hbo real-address))
+                    (+ (ash real-address 16) real-port))))
          (table (case mode
                    (:udp *udp-proxy-table*)
                    (:tcp *tcp-proxy-table*)))
@@ -1820,45 +1746,83 @@ gets sent back, and everything will be copacetic.
                                    :proxy-subtable proxy-subtable)))
     proxy))
 
-(defmethod incoming-message-handler ((msg solicitation) srcuid destuid)
+(defun incoming-message-handler (msg srcuid destuid)
   "Locally dispatch messages received from network"
   ;; srcuid will be that of a proxy-gossip-node on receiver (this) machine
   ;; destuid will be that of a true gossip-node on receiver (this) machine
-  (when (uid? (reply-to msg)) ; deal with direct replies properly
-          (setf (reply-to msg) srcuid))
   (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-  (send-msg msg destuid srcuid)
-  t)
+  (send-msg msg destuid srcuid))
 
-(defmethod incoming-message-handler ((msg reply) srcuid destuid)
-  "Locally dispatch messages received from network"
-  ;; proxy will be a proxy-gossip-node on receiver (this) machine
-  ;; destuid will be that of a true gossip-node on receiver (this) machine
-  (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-  (send-msg msg destuid srcuid)
-  t)
+;; ------------------------------------------------------------------------------
+;; Generic handling for expected authenticated messages. Check for
+;; valid deserialization, check deserialization is a
+;; pbc:signed-message, check for valid signature, then call user's
+;; handler with embedded authenticated message. If any failure along
+;; the way, just drop the message on the floor.
+
+(defun do-process-authenticated-packet (deserialize-fn body-fn)
+  "Handle decoding and authentication. If fails in either case just do nothing."
+  (let ((decoded (ignore-errors
+                   ;; might not be a valid serialization
+                   (funcall deserialize-fn))))
+    (when (and decoded
+               (ignore-errors
+                 ;; might not be a pbc:signed-message
+                 (pbc:check-message decoded)))
+      (funcall body-fn (pbc:signed-message-msg decoded)))))
+
+(defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
+  "Macro to simplify decoding and authentication"
+  `(do-process-authenticated-packet (lambda ()
+                                      ,deserializer)
+                                    (lambda (,packet-arg)
+                                      ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-authenticated-packet" 2)
 
 ;; ------------------------------------------------------------------------------
 
-(defun incoming-message-handler-udp (raw-message-buffer rem-address)
-  "Deserialize a raw message string, srcuid, rem-port and destuid.
+(defun incoming-message-handler-udp (raw-message-buffer rem-address rem-port)
+  "Deserialize a raw message string, srcuid, and destuid.
   srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
   respectively."
-  ;                                                v--- Port at which passive listener is running
-  ;network message: (list (real-uid node) srcuid rem-port msg)
+  ;network message: (list (real-uid node) srcuid msg)
   ;                     uid  --^            ^-- source uid
   ;             on local machine            on destination machine
   (with-authenticated-packet (packet)
       (loenc:decode raw-message-buffer)
-    (destructuring-bind (destuid srcuid rem-port msg) packet ;; note: if not what we were expecting, then this will signal error
+    (destructuring-bind (destuid srcuid msg) packet ;; note: if not what we were expecting, then this will signal error
       (when (debug-level 1)
-        (log-event :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
+        (debug-log :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
       (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
           ;ensure a local node of type proxy-gossip-node exists on this machine with
           ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
         (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
           ;   on THIS machine.
         ))))
+
+; TCP not done yet
+(defun incoming-message-handler-tcp (stream)
+  "Deserialize a raw message string, srcuid, and destuid.
+  srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
+  respectively."
+  ;network message: (list (real-uid node) srcuid msg)
+  ;                    uid  --^            ^-- source uid
+  ;             on local machine     on destination machine
+  (with-authenticated-packet (packet)
+      (loenc:deserialize stream)
+    (let ((rem-address (usocket:get-peer-address stream))
+          (rem-port    (usocket:get-peer-port stream)))
+      (destructuring-bind (destuid srcuid msg) packet ;; if not what we expected, this will signal error
+        (when (debug-level 1)
+          (debug-log :INCOMING-TCP msg :FROM rem-address :TO destuid))
+        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
+        ;ensure a local node of type proxy-gossip-node exists on this machine with
+        ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
+          (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
+        ;   on THIS machine.
+          )))))
 
 (defmethod serve-gossip-port ((mode (eql :UDP)) socket)
   "UDP gossip port server loop"
@@ -1869,7 +1833,7 @@ gets sent back, and everything will be copacetic.
             (when (eql :SHUTDOWN-SERVER *shutting-down*)
                 (setf *shutting-down* nil)
                 (return-from serve-gossip-port))
-	    (multiple-value-bind (buf buf-len rem-ip)
+	    (multiple-value-bind (buf buf-len rem-ip rem-port)
 		(usocket:socket-receive socket maxbuf (length maxbuf))
               (let* ((saf-buf (if (eq buf maxbuf)
                                   (subseq buf 0 buf-len)
@@ -1878,43 +1842,42 @@ gets sent back, and everything will be copacetic.
                 (when shutdown-msg?
                   (setf *shutting-down* nil)
                   (return-from serve-gossip-port))
-                (incoming-message-handler-udp saf-buf rem-ip))))
-        (usocket:socket-shutdown socket ':IO)
+                (incoming-message-handler-udp saf-buf rem-ip rem-port))))
         (usocket:socket-close socket))))
 
+; TCP not done yet
 (defmethod serve-gossip-port ((mode (eql :TCP)) listening-socket)
-  "TCP gossip port server loop. This runs in its own thread, not in an actor."
+  "TCP gossip port server loop"
   (unwind-protect
       (loop
         (when (eql :SHUTDOWN-SERVER *shutting-down*)
           (setf *shutting-down* nil)
           (return-from serve-gossip-port))
-        (let ((socket nil)
+        (let ((stream nil)
               (timed-out? nil))
-          (setf socket (ignore-errors (usocket:socket-accept listening-socket)))
-          
+          ; Following always returns T in CCL. Thus sockets are "born blocking"
+          ;(format t "~%Blocking status of socket: ~S" (ccl::get-socket-fd-blocking (ccl::socket-device listening-socket)))
+          (setf stream (ignore-errors (usocket:socket-accept listening-socket)))
+
           (when (debug-level 3)
-            (log-event "Got connection from " (usocket:get-peer-address socket)))
-          
+            (debug-log "Got connection from " (usocket:get-peer-address stream)))
+
           ;; At this point, we have a live incoming stream. Although it may be closing.
-          
-          (multiple-value-bind (success errorp)
-                               (wait-for-stream-input (usocket:socket-stream socket) 10) ; should have data within 10 seconds
-            (when (and (null success)
-                       (null errorp))
-              (setf timed-out? t))
-            (when (debug-level 3)
-              (if timed-out?
-                  (log-event "Giving up.")
-                  (log-event "Got data.")))
-            ;; At this point, we have data available. Probably (may be closed or timed out).
-            (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
-                       timed-out?
-                       errorp)
-                   (when socket (usocket:socket-close socket)))
-                  ;; Really should have data at this point...
-                  (t ; establish a socket-actor for this new incoming connection
-                   (make-socket-actor socket 'ofsag))))))
+
+          (setf stream (usocket:wait-for-input stream :timeout 10 :ready-only t))
+          (setf timed-out? (not (eql :READ (usocket::state stream))))
+
+          (when (debug-level 4)
+            (if timed-out?
+                (debug-log "Giving up.")
+                (debug-log "Got data.")))
+          ;; At this point, we have data available. Probably (may be closed or timed out).
+          (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
+                     timed-out?)
+                 (when stream (usocket:socket-close stream)))
+                ;; Really should have data at this point...
+                (t
+                 (incoming-message-handler-tcp stream)))))
     (when listening-socket (usocket:socket-close listening-socket))))
 
 (defun open-passive-udp-socket (port)
@@ -1927,6 +1890,7 @@ gets sent back, and everything will be copacetic.
   (USOCKET:ADDRESS-IN-USE-ERROR ()
                                 :ADDRESS-IN-USE)))
 
+; TCP not done yet
 (defun open-passive-tcp-socket (port)
   "Open a passive tcp socket. Returns socket if successful.
   Returns a keyword if some kind of error."
@@ -1956,41 +1920,40 @@ gets sent back, and everything will be copacetic.
                    ; otherwise, assume process exists for serving UDP on some OTHER lisp image, which means we can retry
                    (start-gossip-server mode (1+ port) (1+ try-count)))))))))
 
+; TCP not done yet
 (defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*) (try-count 0))
-  (when (< try-count *max-server-tries*)
-    (unless (find-process *tcp-gossip-server-name*)
-      (setf *shutting-down* nil)
-      (let* ((socket (open-passive-tcp-socket port)))
-        (cond ((usocket:stream-server-usocket-p socket)
-               (mpcompat:process-run-function *tcp-gossip-server-name* nil
-                 'serve-gossip-port mode socket)
-               (values (setf *tcp-gossip-socket* socket)
-                       (setf *actual-tcp-gossip-port* (usocket:get-local-port socket))))
-              ((eql :ADDRESS-IN-USE socket)
-               (if (find-process *tcp-gossip-server-name*)
-                   ; if process exists for serving TCP in THIS LISP IMAGE, we're done
-                   nil
-                   ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
-                   (start-gossip-server mode (1+ port) (1+ try-count)))))))))
+  (unless (find-process *tcp-gossip-server-name*)
+    (setf *shutting-down* nil)
+    (let* ((socket open-passive-tcp-socket))
+      (cond ((usocket:stream-server-usocket-p socket)
+             (mpcompat:process-run-function *tcp-gossip-server-name* nil
+               'serve-gossip-port mode socket)
+             (values (setf *tcp-gossip-socket* socket)
+                     (setf *actual-tcp-gossip-port* (usocket:get-local-port socket))))
+            ((eql :ADDRESS-IN-USE socket)
+             (if (find-process *tcp-gossip-server-name*)
+                 ; if process exists for serving TCP in THIS LISP IMAGE, we're done
+                 nil
+                 ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
+                 (start-gossip-server mode (1+ port) (1+ try-count))))))))
 
 ;;; This is different from cosi-simgen::internal-send-socket.
 ;;; Don't create a new socket, and don't close it when we're done.
 ;;; Rather, reuse the one we already have. This is critical to ensure the
 ;;;   other end sees the proper port to respond to.
-
 (let ((sender (ac:make-actor
-               (lambda (socket packet nb addr port)
+               (lambda (socket packet nb ip port)
                  (unless (eql nb (usocket:socket-send socket packet nb
-                                                      :host addr :port port))
-                   (ac::pr :socket-send-error addr packet))))))
-  
-  (defun internal-send-socket (addr port packet)
+                                                      :host ip :port port))
+                   (ac::pr :socket-send-error ip packet))))))
+
+  (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
       (when (> nb cosi-simgen::*max-buffer-length*)
         (error "Packet too large for UDP transmission"))
       (let ((socket *udp-gossip-socket*))
-        ;; (pr :sock-send (length packet) addr packet)
-        (ac:send sender socket packet nb addr port)))))
+        ;; (pr :sock-send (length packet) real-ip packet)
+        (ac:send sender socket packet nb ip port)))))
 
 (defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
   (declare (ignore port))
@@ -2031,7 +1994,7 @@ gets sent back, and everything will be copacetic.
 ;; from this running Lisp image. Give us some signing keys to do so...
 
 ;;; The need for this is rather dubious.  No one other than the
-;;; signing node can authenticate this HMAC. 
+;;; signing node can authenticate this HMAC.
 (let (hmac-keypair)
   (defun hmac-keypair ()
     (unless hmac-keypair
@@ -2053,8 +2016,8 @@ original message."
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
   (cond (*udp-gossip-socket*
-         (node-log node :TRANSMIT msg)
-         (let* ((payload (sign-message (list (real-uid node) srcuid *actual-udp-gossip-port* msg)))
+         (maybe-log node :TRANSMIT msg)
+         (let* ((payload (sign-message (list (real-uid node) srcuid msg)))
                 (packet  (loenc:encode payload))
                 (nb      (length packet)))
            (when (> nb cosi-simgen::*max-buffer-length*)
@@ -2062,29 +2025,34 @@ original message."
            (internal-send-socket (real-address node) (real-port node) packet)
            ))
         (t
-         (node-log node :CANNOT-TRANSMIT msg "no socket"))))
-
-(defmethod transmit-msg :before (msg (node tcp-gossip-node) srcuid)
-  (node-log node :TRANSMIT msg srcuid))
+         (maybe-log node :CANNOT-TRANSMIT "no socket"))))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
-  "Send a message across TCP network.
+  "Send message across network.
   srcuid is that of the (real) local gossip-node that sent message to this node."
-  (multiple-value-bind (socket-actor errorp)
-                       (ensure-connection (real-address node) (real-port node))
-    (cond ((null errorp)
-           (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
-             (ac:send socket-actor :send-socket-data payload)))
-          (t (node-log node :CANNOT-TRANSMIT msg "cannot create socket" errorp)
-             (when (and (typep msg 'solicitation)
-                        (or (uid? (reply-to msg))
-                            (eq :UPSTREAM (reply-to msg))))
-               (send-final-reply
-                node
-                (reply-to msg)
-                (uid msg) ; soluid
-                (kind msg)
-                `(:CANNOT-TRANSMIT :to ,(real-address node))))))))
+  (let ((stream (ensure-open-stream (real-address node) (real-port node))))
+    (when (streamp stream)
+      (let ((payload (sign-message ;; (list (uid node) (real-uid node) srcuid msg)
+                                   ;; DBM - the above does not match recv expectations
+                                   (list (real-uid node) srcuid msg))))
+        (loenc:serialize payload stream)))))
+
+#|
+(defun ensure-open-stream (ip port)
+  (let* ((integer-ip (usocket::host-to-hbo ip))
+         (key (if integer-ip
+                  (+ (ash integer-ip 16) port)))
+         (stream nil))
+    (mpcompat:with-lock *stream-lock*
+      (setf stream (gethash key *open-streams*))
+      (when stream
+        (remhash key *open-streams*)))
+
+
+  (handler-case (usocket:socket-connect ip port :protocol :stream
+			 :element-type '(unsigned-byte 8))
+    (USOCKET:CONNECTION-REFUSED-ERROR () :CONNECTION-REFUSED)))
+|#
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
@@ -2093,18 +2061,17 @@ original message."
   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
   (locally-receive-msg gossip-msg node srcuid))
 
-(defmethod deliver-gossip-msg ((gossip-msg system-async) (node gossip-mixin) srcuid)
-  (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
-  ;  modify the original without affecting other threads.
-  (incf (hopcount gossip-msg))
-  ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
-  (locally-receive-msg gossip-msg node srcuid))
-
 (defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
-  (transmit-msg gossip-msg node srcuid))
+   (transmit-msg gossip-msg node srcuid))
 
-(defun run-gossip-sim (&optional (protocol :TCP))
+(defun archive-log ()
+  "Archive existing *log* and start a new one.
+   This function is not thread-safe, so don't call it if any actors might be using the log."
+  (vector-push-extend *log* *archived-logs*)
+  (setf *log* (new-log)))
+
+(defun run-gossip-sim (&optional (protocol :UDP))
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
@@ -2156,41 +2123,35 @@ original message."
 ; (visualize-nodes *nodes*)
 ; (inspect *log*)
 
-(defun other-udp-port ()
+#+CCL ; because this method doesn't exist in CCL, and the default doesn't work for udpsockets.
+(defmethod ccl::local-socket-address ((socket ccl::udp-socket))
+  (getf (ccl::socket-keys socket) :local-address))
+
+(defun other-port ()
   (when *udp-gossip-socket*
-    (if (= *nominal-gossip-port* *actual-udp-gossip-port*)
-        (1+ *nominal-gossip-port*)
-        *nominal-gossip-port*)))
+    (if (= 65002 *actual-udp-gossip-port*)
+        65003
+        65002)))
 
-(defun other-tcp-port ()
-  "Deduce proper port for other end of connection based on whether this process
-   has already established one. Only used for testing two processes communicating on one machine."
-  (when *tcp-gossip-socket*
-    (if (= *nominal-gossip-port* *actual-tcp-gossip-port*)
-        (1+ *nominal-gossip-port*)
-        *nominal-gossip-port*)))
-
-    
 ; UDP TESTS
-; Test 1
 ; ON SERVER MACHINE
 ; (clrhash *nodes*)
-#+TEST1
+#+TEST
 (setf localnode (make-node
   :UID 200
   :NEIGHBORS nil))
-; (run-gossip-sim :UDP)
+; (run-gossip-sim)
 
 ; ON CLIENT MACHINE
 ; (clrhash *nodes*)
-; (run-gossip-sim :UDP)
+; (run-gossip-sim)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node :UDP "localhost" (other-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
 (setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
 
 
-#+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
+#+TEST ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
   :UID 201
@@ -2201,60 +2162,6 @@ original message."
 ; (solicit localnode :gossip-relate-unique :foo :bar)
 ; (solicit-wait localnode :gossip-lookup-key :foo)
 
-; Test 2: List live nodes at given address
-; ; ON SERVER MACHINE
-; (clrhash *nodes*)
-; (make-graph 10)
-; (run-gossip-sim :UDP)
-
-; ON CLIENT MACHINE
-; (clrhash *nodes*)
-; (run-gossip-sim :UDP)
-; (set-protocol-style :neighborcast)
-#+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
-#+TEST-AMAZON
-(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
-
-#+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
-       ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node
-  :UID 201
-  :NEIGHBORS (list (uid rnode))))
-; (solicit-direct localnode :count-alive)
-; (solicit-direct localnode :list-alive)
-; (inspect *log*)
-
-
-; Test 3: List live nodes at given address via TCP
-; ; ON SERVER MACHINE
-; (clrhash *nodes*)
-; (make-graph 1)
-; (run-gossip-sim :TCP)
-
-; ON CLIENT MACHINE
-; (clrhash *nodes*)
-; (run-gossip-sim :TCP)
-; (archive-log)
-; (set-protocol-style :neighborcast)
-#+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
-#+TEST-AMAZON
-(setf rnode (ensure-proxy-node :TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
-
-#+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
-       ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node
-  :UID 201
-  :NEIGHBORS (list (uid rnode))))
-; (visualize-nodes *nodes*)
-; (solicit-direct localnode :count-alive)
-; (solicit-direct localnode :list-alive)
-; (solicit-wait localnode :count-alive)
-; (solicit-wait localnode :list-alive)
-; (solicit-wait localnode :list-addresses)
-; (inspect *log*)
-
 ; (run-gossip-sim)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
 ; (solicit-direct (first (listify-nodes)) :list-alive)
@@ -2263,7 +2170,7 @@ original message."
 ; (solicit-wait (first (listify-nodes)) :count-alive)
 ; (solicit (first (listify-nodes)) :announce :foo)
 ; (solicit-wait 340 :list-alive) ; if there happens to be a node with UID 340
-; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.) 
+; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.)
 
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
@@ -2423,7 +2330,7 @@ is expecting direct replies to itself. See generic-srr-handler method for solici
 NOTE E: Debugging Actor code
 If it seems like -- contrary to all expectations -- messages are never getting delivered to a given actor,
 check the processes window. If a given Actor Executive shows "Active" rather than "Waiting for Actor", that's
-a HUGE red flag. It means some Actor's code body never exited. And that actor will appear to have stopped 
+a HUGE red flag. It means some Actor's code body never exited. And that actor will appear to have stopped
 receiving messages.
 In ccl, you can interrupt and backtrace a background process like so:
 (ccl::force-break-in-listener (gossip::find-process <process-name>))

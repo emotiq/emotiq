@@ -115,7 +115,6 @@ THE SOFTWARE.
    #:actor
    #:make-actor
    #:send
-   #:invalid-send-target
    #:ask
    #:aska
    #:current-actor

@@ -51,7 +51,7 @@ inc=${prefix}/include
 date_now=`/bin/date "+%Y%m%d%H%M%S"`
 hash=$(git rev-parse --short $(git log -1 --pretty=format:"%H"))
 
-version="${date_now}-${hash}"
+version="${date_now}-${hash}-${arch}"
 
 tar_dir=${prefix}/production
 tdir=emotiq-${version}-${arch}
@@ -99,7 +99,8 @@ cp ${etc}/emotiq.bash.${arch} ${production_dir}/emotiq.bash
 
 # this seems stupid, but I don't know enough about tar's options to make it include the subdir name
 cd ${tar_dir}
-tar cfj emotiq-${version}-${arch}.tar.bz2 ${emotiqfiles} ${libs}
+tar cfj emotiq-${version}.tar.bz2 ${emotiqfiles} ${libs}
+echo "$(pwd)/emotiq-${version}.tar.bz2" >/tmp/artifact.txt
 # remove libs to avoid possibly incorrect loading
 # no, don't remove, rm -rf ${lib_dir}
 

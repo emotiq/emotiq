@@ -49,7 +49,7 @@ elif test ! -f "/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`; then
   echo "**********************************************************"
 else
   echo Installing LispWorks from `pwd` in $PREFIX
-  sudo apt-get update && sudo apt-get install -y \
+  sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y  \
     autoconf \
     build-essential \
     libcurl3-dev \
