@@ -53,7 +53,7 @@ witnesses."
     (emotiq/cli:main)))
 
 (defvar *genesis-account*
-  (pbc:make-key-pair :genesis)
+  nil
   "Genesis account.")
 
 (defvar *genesis-output*
@@ -117,13 +117,26 @@ witnesses."
   (ac:pr "force-epoch-end")
   (cosi-simgen:send cosi-simgen:*leader* :make-block))
 
-
-(defparameter *user-1* (pbc:make-key-pair :user-1))
-(defparameter *user-2* (pbc:make-key-pair :user-2))
-(defparameter *user-3* (pbc:make-key-pair :user-3))
+(defparameter *user-1* nil)
+(defparameter *user-2* nil)
+(defparameter *user-3* nil)
 (defparameter *tx-1* nil)
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
+
+(defun ensure-simulation-keys ()
+  (unless (and *genesis-account* *user-1* *user-2* *user-3*)
+    (setf *genesis-account*
+          (pbc:make-key-pair :genesis)
+          
+          *user-1*
+          (pbc:make-key-pair :user-1)
+
+          *user-2*
+          (pbc:make-key-pair :user-2)
+          
+          *user-3*
+          (pbc:make-key-pair :user-3))))
 
 ; test helper - in real life, we would already know the pkey of the destination,
 ; here we have special variables holding the various test users
@@ -148,12 +161,12 @@ This will spawn an actor which will asynchronously do the following:
 "
 
   (declare (ignore amount))
+  (ensure-simulation-keys)
 
   (setf *genesis-output* nil
         *tx-1*           nil
         *tx-2*           nil
         *tx-3*           nil)
-
 
   (cosi-simgen:reset-nodes) 
 
