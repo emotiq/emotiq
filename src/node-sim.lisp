@@ -53,7 +53,7 @@ witnesses."
     (emotiq/cli:main)))
 
 (defvar *genesis-account*
-  (pbc:make-key-pair :genesis)
+  nil
   "Genesis account.")
 
 (defvar *genesis-output*
@@ -111,21 +111,32 @@ witnesses."
     (error(format nil "transaction ~A did not validate" name)))
   (broadcast-message :new-transaction
                      :trn trans)
-  ;; (force-epoch-end)
-  )
+  (force-epoch-end))
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
   (cosi-simgen:send cosi-simgen:*leader* :make-block))
 
-
-(defparameter *user-1* (pbc:make-key-pair :user-1))
-(defparameter *user-2* (pbc:make-key-pair :user-2))
-(defparameter *user-3* (pbc:make-key-pair :user-3))
+(defparameter *user-1* nil)
+(defparameter *user-2* nil)
+(defparameter *user-3* nil)
 (defparameter *tx-1* nil)
-(defparameter *tx-1-hash* nil)
 (defparameter *tx-2* nil)
 (defparameter *tx-3* nil)
+
+(defun ensure-simulation-keys ()
+  (unless (and *genesis-account* *user-1* *user-2* *user-3*)
+    (setf *genesis-account*
+          (pbc:make-key-pair :genesis)
+          
+          *user-1*
+          (pbc:make-key-pair :user-1)
+
+          *user-2*
+          (pbc:make-key-pair :user-2)
+          
+          *user-3*
+          (pbc:make-key-pair :user-3))))
 
 ; test helper - in real life, we would already know the pkey of the destination,
 ; here we have special variables holding the various test users
@@ -150,25 +161,15 @@ This will spawn an actor which will asynchronously do the following:
 "
 
   (declare (ignore amount))
+  (ensure-simulation-keys)
 
   (setf *genesis-output* nil
         *tx-1*           nil
-        *tx-1-hash*      nil
         *tx-2*           nil
         *tx-3*           nil)
 
+  (cosi-simgen:reset-nodes) 
 
-  (cosi-simgen:reset-nodes)
-
-  (if cloaked
-      (progn
-        (setf cosi-simgen::*cosi-prepare-timeout* 40
-              ;; emotiq/elections::*beacon-interval* 60
-              ))
-    (progn
-        (setf cosi-simgen::*cosi-prepare-timeout* 10
-              emotiq/elections::*beacon-interval* 20)))
-      
   (emotiq/elections:make-election-beacon)
                                          
   ;(ac:spawn  ;; cosi-handlers assumes that there is one block in the blockchain, if you spawn here,
@@ -186,11 +187,7 @@ This will spawn an actor which will asynchronously do the following:
         (let ((trans (create-transaction *genesis-account* genesis-utxo
                                             ; user1 gets 1000 from genesis (fee = 0)
                                          '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-          (setf *tx-1* trans)
-          (setf *tx-1-hash* (cosi/proofs::trans-idhash trans))
-          (checktr1)
-          (publish-transaction trans "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
-          (checktr1)
+          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
           (ac:pr "Find UTX for user-1")
           (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
             (ac:pr "Construct 2nd transaction")
@@ -198,14 +195,9 @@ This will spawn an actor which will asynchronously do the following:
                                                 ; user1 spends 500 to user2, 490 to user3, 10 for fee
                                              '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")
+              #+nil(publish-transaction (setf *tx-2* trans) "tx-2")
               )))))))
 
-(defun checktr1 ()
-  (let ((tx1h (cosi/proofs::trans-idhash emotiq/sim:*tx-1*)))
-    (unless (vec-repr:int= tx1h emotiq/sim::*tx-1-hash*)
-      (error "tx-1 has changed")))
-  t)
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation."
@@ -231,26 +223,3 @@ This will spawn an actor which will asynchronously do the following:
     (sort node-list '< :key #'cosi-simgen:node-stake))
 
 
-(defun prdebug ()
-  (let ((blks (emotiq/sim:blocks)))
-    (assert (>= (length blks) 1))
-    (let ((txs (cosi/proofs::block-transactions (first blks))))
-      (assert (>= (length txs) 1))
-      (let ((firsttx (first txs)))
-        (format t "blocks: ~A~%" blks)
-        (format t "first txn: ~A~%" firsttx)
-        (format t "*tx-1*:    ~A~%" emotiq/sim:*tx-1*)
-        (format t "tx1 eq emotiq/sim:*tx-1* ~A~%" 
-                (vec-repr:int= (hash:hash/256 firsttx) (hash:hash/256 emotiq/sim:*tx-1*)))
-        (let ((h1 (cosi/proofs::trans-idhash firsttx))
-              (h2 (cosi/proofs::trans-idhash *tx-1*)))
-          (format t "firsttx.idhash = ~a~%" h1)
-          (format t "*tx-1*.idhash  = ~a~%" h2)
-          (format t "firsttx.idhash =? *tx-1*.idhash ~A~%" (vec-repr:int= h1 h2))))))
-  )
-
-(defun fire-election ()
-  (emotiq/elections::fire-election))
-
-(defun kill-beacon ()
-  (emotiq/elections::kill-beacon))

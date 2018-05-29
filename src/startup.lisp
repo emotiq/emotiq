@@ -2,13 +2,9 @@
 
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
-  (pbc:init-pairing)
-  (let ((context (start-blockchain-context)))
-    (with-blockchain-context (context)
-			     (let ((genesis-block (make-genesis-block)))
-			       (format *standard-output*
-				       "~&Here is the first transaction of the genesis block:~%  ~a~%"
-				       genesis-block)))))
+  (format *standard-output* "Making key pair…")
+  (let ((keypair (pbc:make-key-pair :foo)))
+    (format *standard-output* "  Created ~a~&" keypair)))
 
 (defun message-running-state (&optional how-started-message?)
   (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"

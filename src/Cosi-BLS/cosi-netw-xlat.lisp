@@ -197,23 +197,37 @@ THE SOFTWARE.
 (defun port-router (buf)
   (send *handler* (copy-seq buf)))
 
-(defvar *keys*   (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
 (defvar *sender* (make-actor (lambda (ip port packet)
                                ;; (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
                                (internal-send-socket ip port packet))))
-  
+
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *socket-open*
     (setf *socket-open* nil)
     (ac:send *sender* *local-ip* port "ShutDown")))
 
-(defmethod socket-send (ip port dest msg)
-  (let* ((payload (make-hmac (list* dest msg)
-                             (pbc:keying-triple-pkey *keys*)
-                             (pbc:keying-triple-skey *keys*)))
-         (packet  (loenc:encode payload)))
-    ;; (ac:send *sender* ip port packet) ;; for now ... short circuit UDP, all nodes on single host
-    (ac:send *handler* packet)))
+;;; For binary delivery, we need to allocate keypair memory at
+;;; runtime.  
+(let (hmac-keypair)
+  (defun hmac-keypair ()
+    (unless hmac-keypair
+      (setf hmac-keypair
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+    hmac-keypair)
+  (defmethod socket-send (ip port dest msg)
+    (let* ((payload (make-hmac (list* dest msg)
+                               (pbc:keying-triple-pkey (hmac-keypair))
+                               (pbc:keying-triple-skey (hmac-keypair))))
+           (packet  (loenc:encode payload)))
+      ;; (ac:send *sender* ip port packet) ;; for now, while testing...
+      (ac:send *handler* packet)
+      )))
+
+#|
+(defmethod socket-send :around (ip port dest msg)
+  (pr (format nil "~A ~A ~A ~A" ip port (short-id dest) msg))
+  (call-next-method))
+|#
 
 ;; ------------------------------------------------------------------
 ;; deprecated TCP/IP over Butterfly...
