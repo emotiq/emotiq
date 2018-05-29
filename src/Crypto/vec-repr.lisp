@@ -320,22 +320,21 @@ THE SOFTWARE.
 (defmethod base58 ((x base58))
   x)
 
-(defmethod base58 (x)
-  (cond
-    ((typep x 'vector)
-     (let* ((length (length x))
-            (int (int x))
-            (npad
-              ;; count the leading 0 bytes to pad:
-              (loop for i from 0 below length
-                    while (zerop (aref x i))
-                    count t)))
-       (make-instance
-        'base58
-        :str (integer-to-base58-with-pad int npad))))
-    (t (base58 x))))
+(defmethod base58 ((x vector))
+  (let* ((length (length x))
+         (int (int x))
+         (npad
+           ;; count the leading 0 bytes to pad:
+           (loop for i from 0 below length
+                 while (zerop (aref x i))
+                 count t)))
+    (make-instance
+     'base58
+     :str (integer-to-base58-with-pad int npad))))
 
 (defun integer-to-base58-with-pad (x npad)
+  "Return a string representation of integer X preceded by NPAD Base58
+   encodings of 0 as leading zero 'padding'."
   (let ((cs nil))
     (um:nlet-tail iter ((v x))
                   (when (plusp v)
@@ -347,6 +346,9 @@ THE SOFTWARE.
             repeat npad
             do (push char-for-0 cs)))
     (coerce cs 'string)))
+
+(defmethod base58 (x)
+  (base58 (int x)))
 
 ;; -------------------------------------------------------------
 ;; Vector Conversions
