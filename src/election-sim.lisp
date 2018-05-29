@@ -30,7 +30,7 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------
 
 (defvar *beacon-timer* nil)
-(defvar *beacon-interval*  60)
+(defvar *beacon-interval*  20)
 (defvar *self-destruct*    nil)
 
 (defun kill-beacon ()

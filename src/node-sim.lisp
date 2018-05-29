@@ -111,7 +111,8 @@ witnesses."
     (error(format nil "transaction ~A did not validate" name)))
   (broadcast-message :new-transaction
                      :trn trans)
-  (force-epoch-end))
+  ;; (force-epoch-end)
+  )
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
@@ -222,4 +223,7 @@ This will spawn an actor which will asynchronously do the following:
 (defun sort-nodes-by-stake (node-list)
     (sort node-list '< :key #'cosi-simgen:node-stake))
 
+
+(defun kill-beacon ()
+  (emotiq/elections::kill-beacon))
 
