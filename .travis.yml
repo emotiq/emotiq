@@ -60,6 +60,12 @@ script:
              :gossip-tests";
       systems=${systems} bash etc/test-harness.bash
 
+# was:  (removed/commented out :gossip-tests pending fix to actors initialization issue.  -mhd, 5/28/18)
+#  - systems=":cosi-bls-tests
+#             :crypto-pairings
+#             :gossip-tests";
+#      systems=${systems} bash etc/test-harness.bash
+
 jobs:
   include:
     - env: LISP=lispworks-bin
