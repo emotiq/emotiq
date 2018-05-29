@@ -11,7 +11,7 @@
 #     export LISPWORKS_SERIAL={hidden}
 #     export LISPWORKS_LICENSE=[hidden]
 #
-set -x
+# set -x
 
 FILE="/tmp/."`/bin/date '+%d%m%y'`"lispworks"`id -u`
 touch $FILE

@@ -25,7 +25,6 @@ before_script:
   stage: test
   script:
     - echo ${SYSTEMS}
-    - echo ${SYSTEMS2}
     - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
     - etc/test-harness.bash
