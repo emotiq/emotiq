@@ -28,8 +28,7 @@
   (message-running-state how-started-message?)
   (format *standard-output* "Making key pair…")
   (let ((keypair (pbc:make-key-pair :foo)))
-    (format *standard-output* "  Created ~a~&" keypair))
-  #+lispworks(lispworks:quit))
+    (format *standard-output* "  Created ~a~&" keypair)))
 
 ;; Entry Point for binary version of the system.
 
