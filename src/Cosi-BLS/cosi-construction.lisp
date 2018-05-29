@@ -113,6 +113,8 @@ THE SOFTWARE.
 
    (current-leader :accessor node-current-leader
                    :initform nil) ;; holds pkey of current leader node
+   (tx-changes     :accessor node-tx-changes
+                   :initform nil)
    ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
              :initarg  :real-ip)
