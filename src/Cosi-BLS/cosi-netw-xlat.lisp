@@ -223,12 +223,6 @@ THE SOFTWARE.
       (ac:send *handler* packet)
       )))
 
-#|
-(defmethod socket-send :around (ip port dest msg)
-  (pr (format nil "~A ~A ~A ~A" ip port (short-id dest) msg))
-  (call-next-method))
-|#
-
 ;; ------------------------------------------------------------------
 ;; deprecated TCP/IP over Butterfly...
 
