@@ -1,3 +1,8 @@
 
 (defpackage :pbc-test
-  (:use :cl :pbc :lisp-unit))
+  (:use :cl
+   :vec-repr
+   :hash
+   :pbc
+   :subkey-derivation
+   :lisp-unit))

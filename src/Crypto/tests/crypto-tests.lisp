@@ -6,16 +6,27 @@
   (assert-true (hash:hash-check edec::*curve-e382* edec::*chk-curve-e382*))
   (assert-true (hash:hash-check edec::*curve41417* edec::*chk-curve41417*))
   (assert-true (hash:hash-check edec::*curve-e521* edec::*chk-curve-e521*))
-  
+
   (assert-true (hash:hash-check pbc::*curve-default-ar160-params* pbc::*chk-curve-default-ar160-params*))
   (assert-true (hash:hash-check pbc::*curve-fr256-params-old*     pbc::*chk-curve-fr256-params-old*))
   (assert-true (hash:hash-check pbc::*curve-fr256-params*         pbc::*chk-curve-fr256-params*))
-  (assert-true (hash:hash-check pbc::*curve-fr449-params*         pbc::*chk-curve-fr449-params*)))
+  (assert-true (hash:hash-check pbc::*curve-fr449-params*         pbc::*chk-curve-fr449-params*))
+  )
 
 (define-test keying
   (let ((k (make-key-pair :test)))
     (assert-true (check-public-key (keying-triple-pkey k)
                                    (keying-triple-sig  k)))))
+
+(define-test child-keying
+  (let* ((k (make-key-pair :test))
+         (c (bev (hash/256 :another-test))))
+    (multiple-value-bind (cskey cchain)
+        (ckd-secret-key (keying-triple-skey k) c 1)
+      (multiple-value-bind (cpkey cchain2)
+          (ckd-public-key (keying-triple-pkey k) c 1)
+        (assert-true (int= (public-of-secret cskey) cpkey))
+        (assert-true (int= cchain cchain2))))))
 
 (define-test signature
   (let* ((k  (make-key-pair :test))
@@ -57,6 +68,7 @@
   (let* ((proof (make-cloaked-proof 15)))
     (assert-true (validate-cloaked-proof proof))))
 
+#|
 (define-test confidential-purchase
   (let* ((kb  (make-key-pair :buyer))
          (kv  (make-key-pair :vendor))
@@ -78,3 +90,4 @@
                                               (keying-triple-skey kv)))
     (assert-true (check-confidential-purchase ppurch
                                               cost fees))))
+|#

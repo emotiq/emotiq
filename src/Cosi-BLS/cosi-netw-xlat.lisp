@@ -1,11 +1,35 @@
+;; cosi-netw-xlat.lisp -- Interrim layer for comms until Gossip is fully absorbed
+;;
+;; DM/Emotiq  04/18
+;; ---------------------------------------------------------------
+#|
+The MIT License
+
+Copyright (c) 2018 Emotiq AG
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+|#
+
 
 (in-package :cosi-simgen)
 
-(defclass return-addr ()
-  ((pkey     :reader   return-addr-pkey ;; node pkey for the actor
-             :initarg  :pkey)
-   (aid      :reader   return-addr-aid  ;; actor id for returns
-             :initarg  :aid)))
+;; -----------------------------------------------------------------
 
 (defparameter *aid-tbl*
   ;; assoc between Actors and AID's
@@ -13,7 +37,8 @@
                 :weak-kind :value)
   #+:ALLEGRO   (make-hash-table
                 :values :weak)
-  #+:CLOZURE   (make-hash-table :weak :value)
+  #+:CLOZURE   (make-hash-table
+                :weak :value)
   )
 
 ;; this is just a sanity check set in (unregister-aid) and checked
@@ -33,6 +58,13 @@
        (remhash aid *aid-tbl*))
      ))
 
+#|
+(defclass return-addr ()
+  ((pkey     :reader   return-addr-pkey ;; node pkey for the actor
+             :initarg  :pkey)
+   (aid      :reader   return-addr-aid  ;; actor id for returns
+             :initarg  :aid)))
+
 (defmethod make-return-addr ((node node))
   (make-return-addr (node-pkey node)))
 
@@ -51,6 +83,44 @@
 
 (defmethod unregister-return-addr ((ret return-addr))
   (unregister-aid (return-addr-aid ret)))
+|#
+;; -----------------------------------------------------------------
+
+
+
+;;; TODO use the network transport layer in gossip to resolve this
+;;; need.  For now this is needed to pass cosi messages on the local
+;;; machine.
+(defvar *machine-ip-addr* 
+  #+lispworks
+  (comm:get-host-entry (machine-instance) :fields '(:address))
+  #+ccl
+  (ccl:lookup-hostname (machine-instance))
+  #-(or ccl lispworks)
+  (prog1
+      2887548929 ;; aka "127.0.0.1" as an integer
+    (warn "Unimplemented lookup of machine hostname under this implementation")))
+
+(defvar *cosi-port* 65001)
+
+(defstruct actor-return-addr
+  (ip   *machine-ip-addr*)
+  (port *cosi-port*)
+  aid)
+
+(defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
+  (let* ((aid  (or (ac:get-property obj 'aid)
+                   (setf (ac:get-property obj 'aid) (gen-uuid-int))))
+         (ret  (make-actor-return-addr
+                :aid  aid)))
+    (associate-aid-with-actor aid obj)
+    (sdle-store:backend-store-object backend ret stream)))
+
+(defmethod send ((addr actor-return-addr) &rest msg)
+  (socket-send (actor-return-addr-ip   addr)
+               (actor-return-addr-port addr)
+               (actor-return-addr-aid  addr)
+               msg))
 
 ;; -----------------------------------------------------------
 
@@ -83,10 +153,12 @@
   (unless (node-byz node)
     (gossip-send (node-pkey node) nil msg)))
 
+#|
 (defmethod send ((ref return-addr) &rest msg)
   (gossip-send (return-addr-pkey ref)
                (return-addr-aid  ref)
                msg))
+|#
 
 (defmethod send ((node null) &rest msg)
   (ac:pr :sent-to-null msg)
@@ -103,7 +175,6 @@
 ;; --------------------------------------------------------------
 
 (defparameter *local-ip*    "127.0.0.1")
-(defparameter *cosi-port*         65001)
 
 (defmethod translate-pkey-to-ip-port ((pkey pbc:public-key))
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
@@ -168,7 +239,7 @@
                  (let ((actor (lookup-actor-for-aid dest)))
                    (unless actor
                      (let ((prev (gethash dest *previously-unregistered*)))
-                       (pr (format nil "~A :non-existent-actor" (if prev "OK: " "ERROR: ") prev dest))))
+                       (pr (format nil "~A :non-existent-actor ~a ~a" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
                      (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
@@ -184,22 +255,29 @@
 (defun port-router (buf)
   (send *handler* (copy-seq buf)))
 
-(defvar *keys*   (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
 (defvar *sender* (make-actor (lambda (ip port packet)
                                ;; (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
                                (internal-send-socket ip port packet))))
-  
+
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *socket-open*
     (setf *socket-open* nil)
     (ac:send *sender* *local-ip* port "ShutDown")))
 
-(defmethod socket-send (ip port dest msg)
-  (let* ((payload (make-hmac (list* dest msg)
-                             (pbc:keying-triple-pkey *keys*)
-                             (pbc:keying-triple-skey *keys*)))
-         (packet  (loenc:encode payload)))
-    (ac:send *sender* ip port packet)))
+;;; For binary delivery, we need to allocate keypair memory at
+;;; runtime.  
+(let (hmac-keypair)
+  (defun hmac-keypair ()
+    (unless hmac-keypair
+      (setf hmac-keypair
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+    hmac-keypair)
+  (defmethod socket-send (ip port dest msg)
+    (let* ((payload (make-hmac (list* dest msg)
+                               (pbc:keying-triple-pkey (hmac-keypair))
+                               (pbc:keying-triple-skey (hmac-keypair))))
+           (packet  (loenc:encode payload)))
+      (ac:send *sender* ip port packet))))
 
 #|
 (defmethod socket-send :around (ip port dest msg)

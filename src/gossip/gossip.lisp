@@ -2064,17 +2064,22 @@ gets sent back, and everything will be copacetic.
 ;; We need to authenticate all messages being sent over socket ports
 ;; from this running Lisp image. Give us some signing keys to do so...
 
-(defvar *this-lisp-key*
-  (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid))))
-
-(defun sign-message (msg)
-  "Sign and return an authenticated message packet. Packet includes
+;;; The need for this is rather dubious.  No one other than the
+;;; signing node can authenticate this HMAC. 
+(let (hmac-keypair)
+  (defun hmac-keypair ()
+    (unless hmac-keypair
+      (setf hmac-keypair
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
+      hmac-keypair))
+  (defun sign-message (msg)
+    "Sign and return an authenticated message packet. Packet includes
 original message."
-  (assert (pbc:check-public-key (pbc:keying-triple-pkey *this-lisp-key*)
-                                (pbc:keying-triple-sig  *this-lisp-key*)))
-  (pbc:sign-message msg
-                    (pbc:keying-triple-pkey *this-lisp-key*)
-                    (pbc:keying-triple-skey *this-lisp-key*)))
+    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair)
+                                  (pbc:keying-triple-sig  (hmac-keypair)))))
+    (pbc:sign-message msg
+                      (pbc:keying-triple-pkey (hmac-keypair))
+                      (pbc:keying-triple-skey (hmac-keypair)))))
 
 ;; ------------------------------------------------------------------------------
 

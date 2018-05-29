@@ -4,9 +4,15 @@
 
 (in-package :pbc/x)
 
+#|  FIXME:  PBC:MAKE-KEY-PAIR cannot be called at compile time for delivery under LispWorks
+
+The following code doesn't appear to be referenced
+
 (defparameter k (make-key-pair :dave))
 (defparameter pkey (keying-triple-pkey k))
 (defparameter skey (keying-triple-skey k))
+
+|#
 
 (defparameter beta   76600213043964638334639432839350561620586998450651561245322304548751832163977)
 (defparameter alpha0 82889197335545133675228720470117632986673257748779594473736828145653330099944)

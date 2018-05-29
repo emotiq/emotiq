@@ -213,15 +213,15 @@ THE SOFTWARE.
 
 (defun install-actor-system (&rest ignored)
   (declare (ignore ignored))
-  (install-actor-directory)
-  (install-actor-printer))
+  (unless (directory-manager-p)
+    (install-actor-directory)
+    (install-actor-printer)))
 
-#+(or :LISPWORKS :ALLEGRO :OPENMCL)
+#-:lispworks
 (eval-when (:load-toplevel :execute)
   (install-actor-system))
 
-#| DOESN'T WORK RELIABLY
-#+:LISPWORKS
+#+:lispworks
 (let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
   
   (lw:define-action "Initialize LispWorks Tools"
@@ -229,4 +229,3 @@ THE SOFTWARE.
                     'install-actor-system
                     :after "Run the environment start up functions"
                     :once))
-|#

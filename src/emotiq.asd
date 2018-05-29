@@ -37,8 +37,7 @@
                 :components ((:file "blockchain")))))
                                        
 (defsystem "emotiq/startup"
-  ;; add gossip here soon:
-  :depends-on (emotiq/blockchain crypto-pairings core-crypto)
+  :depends-on (crypto-pairings)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -72,6 +71,8 @@
   :depends-on (emotiq/cli)
   :components ((:module source
                 :pathname "./"
-                :components ((:file "node-sim")))))
+                :components ((:file "handler")
+                             (:file "election-sim")
+                             (:file "node-sim")))))
 
 
