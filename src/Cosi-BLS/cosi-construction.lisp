@@ -106,7 +106,15 @@ THE SOFTWARE.
    (utxo-table     :accessor  node-utxo-table
                    :initform  (make-hash-table
                                :test 'equalp))
-   
+
+   (hold-off       :accessor node-hold-off
+                   :initform nil)
+   (hold-off-timer :accessor node-hold-off-timer)
+
+   (current-leader :accessor node-current-leader
+                   :initform nil) ;; holds pkey of current leader node
+   (tx-changes     :accessor node-tx-changes
+                   :initform nil)
    ;; -------------------------------------
    (real-ip  :accessor node-real-ip  ;; real node for this node
              :initarg  :real-ip)

@@ -49,6 +49,15 @@ THE SOFTWARE.
 (define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
 (define-symbol-macro *mempool*        (node-mempool *current-node*))
 (define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
+(define-symbol-macro *leader*         (node-current-leader *current-node*))
+(define-symbol-macro *holdoff*        (node-hold-off *current-node*))
+(define-symbol-macro *tx-changes*     (node-tx-changes *current-node*))
+
+(defstruct tx-changes
+  ;; all lists contain key vectors
+  tx-dels    ;; list of pending transation removals from mempool
+  utxo-adds  ;; list of pending new utxos
+  utxo-dels) ;; list of pending spent utxos
 
 ;; -------------------------------------------------------
 
@@ -57,6 +66,28 @@ THE SOFTWARE.
 (defmethod node-dispatcher (msg-sym &key)
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
 
+(defun end-holdoff ()
+  (ac::unschedule-timer (node-hold-off-timer *current-node*))
+  (setf *holdoff* nil))
+
+(defun set-holdoff ()
+  (setf *holdoff* t)
+  (ac::schedule-timer-relative (node-hold-off-timer *current-node*)
+                               (+ *cosi-prepare-timeout*
+                                  *cosi-commit-timeout*
+                                  10)))
+
+(defmethod node-dispatcher ((msg-sym (eql :end-holdoff)) &key)
+  (end-holdoff))
+
+(defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
+  (setf *tx-changes* (make-tx-changes))
+  (set-holdoff))
+
+(defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
+  (setf *tx-changes* (make-tx-changes))
+  (set-holdoff))
+
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (reset-nodes))
 
@@ -64,7 +95,8 @@ THE SOFTWARE.
   (ac:pr args))
 
 (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
-  (record-new-utxo (bev (txout-hashlock utxo))))
+  (pr (format nil "~A got genesis utxo" (short-id (current-node))))
+  (really-record-new-utxo utxo))
 
 (defmethod node-dispatcher ((msg-sym (eql :make-block)) &key)
   (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
@@ -220,8 +252,8 @@ THE SOFTWARE.
                     (node-pkey new-node)     pkey ;; cache the decompressed key
                     (node-real-ip new-node)  ipstr)))
         ;; else - not already present
-        (node-model-insert-node *top-node* new-node-info))))
-  (notify-real-descendents node :insert-node new-node-info))
+        (node-model-insert-node *top-node* new-node-info))
+      (notify-real-descendents node :insert-node new-node-info))))
 
 ;; ---------------------------------------------------------
 
@@ -324,10 +356,9 @@ Connecting to #$(NODE "10.0.1.6" 65000)
 |#
 
 (defvar *election-proof*   nil)
-(defvar *leader*           nil)
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
-(defvar *in-simulatinon-always-byz-ok* t) ;; set to nil for non-sim mode, forces consensus
+(defvar *in-simulatinon-always-byz-ok* nil) ;; set to nil for non-sim mode, forces consensus
 
 (defun signature-hash-message (blk)
   (cosi/proofs:serialize-block-header-octets blk))
@@ -344,38 +375,81 @@ Later it may become an ADS structure"
   nil)
 
 (defmethod node-check-transaction ((msg transaction))
-  (check-transaction-math msg))
+  (when (check-transaction-math msg)
+    (let ((key (bev-vec (hash/256 msg))))
+      (when (gethash key *mempool*)
+        (error "Duplicate transaction delivery"))
+      (setf (gethash key *mempool*) msg))))
 
 ;; -------------------------------
 ;; testing-version transaction cache
 
-(defmethod cache-transaction ((key bev) val)
-  (setf (gethash (bev-vec key) *mempool*) val))
+;; MEMPOOL is only affected by Leader node at block assembly time,
+;; and by all witness nodes only at end of successful commit phase.
 
 (defmethod remove-tx-from-mempool ((key bev))
-  (remhash (bev-vec key) *mempool*))
+  "Record tx to be removed at sync"
+  (push (bev-vec key) (tx-changes-tx-dels *tx-changes*)))
 
 (defmethod remove-tx-from-mempool ((tx transaction))
   (remove-tx-from-mempool (bev (hash/256 tx))))
 
-(defun cleanup-mempool (txs)
-  "Undo changes to mempool and utxo database resulting from these
-transactions."
-  (dolist (tx txs)
-    (let ((key (bev (hash/256 tx))))
-      (cache-transaction key tx))
-    (unspend-utxos tx)))
-      
+(defun replay-remove-txs-from-mempool (blk)
+  "Called at successful commit to remove transaction from mempool.
+Here, we rebuild the lists of UTXO changes to ensure that everyone is
+playing on the same field.
+
+It doesn't matter whether witness node agreed during :PREPARE phase of
+consensus. As long as the :COMMIT phase has been entered, and
+everything up to here checks out, we play the changes to the utxo
+database indicated by the transactions in the block."
+  (reset-transaction-changes)
+  (dolist (tx (get-block-transactions blk))
+    (remove-tx-from-mempool tx)
+    (dolist (txin (trans-txins tx))
+      (record-spent-utxo txin))
+    (dolist (txout (trans-txouts tx))
+      (record-new-utxo txout))))
+
+(defun sync-database ()
+  "Perform all pending transaction removals from mempool. Remove spent
+utxos, add new utxos."
+  (with-accessors ((tx-dels   tx-changes-tx-dels)
+                   (utxo-dels tx-changes-utxo-dels)
+                   (utxo-adds tx-changes-utxo-adds)) *tx-changes*
+    (dolist (tx tx-dels)
+      (remhash tx *mempool*))
+    (dolist (utx utxo-dels)
+      (remhash utx *utxo-table*))
+    (dolist (utx utxo-adds)
+      (setf (gethash utx *utxo-table*) :spendable))
+    ))
+
 ;; -------------------------------
 ;; testing-version TXOUT log
 
-(defmethod lookup-utxo  ((key bev))
-  (gethash (bev-vec key) *utxo-table*))
+(defmethod lookup-utxo ((key bev))
+  "Lookup utxo by key. Return :spendable, :spent, or nil if missing"
+  (with-accessors ((utxo-dels  tx-changes-utxo-dels)
+                   (utxo-adds  tx-changes-utxo-adds)) *tx-changes*
+    (let ((vkey (bev-vec key)))
+      (cond ((find vkey utxo-dels
+                   :test 'equalp)
+             :spent)
+            
+            ((find vkey utxo-adds
+                   :test 'equalp)
+             :spendable)
+            
+            (t
+             ;; return either nil if missing, or :spendable as present
+             (gethash vkey *utxo-table*))
+            ))))
 
-(defmethod record-new-utxo ((key bev))
+(defmethod really-record-new-utxo ((txout txout))
   "KEY is Hash(P,C) of TXOUT - record tentative TXOUT. Once finalized,
 they will be added to utxo-table"
-  (let ((vkey (bev-vec key)))
+  (let ((vkey (bev-vec (txout-hashlock txout))))
     (multiple-value-bind (x present-p)
         (gethash vkey *utxo-table*)
       (declare (ignore x))
@@ -384,31 +458,51 @@ they will be added to utxo-table"
       (setf (gethash vkey *utxo-table*) :spendable))))
 
 (defmethod record-new-utxo ((txout txout))
-  (record-new-utxo (bev (txout-hashlock txout))))
+  "Accumulate txout as new utxo"
+  (with-accessors ((utxo-adds  tx-changes-utxo-adds)) *tx-changes*
+    (let ((key (bev-vec (txout-hashlock txout))))
+      (when (or (find key utxo-adds
+                      :test 'equalp)
+                (gethash key *utxo-table*))
+        (error "Shouldn't happen: Effective hash collision"))
+      (push key utxo-adds))))
 
+(defmethod record-spent-utxo ((txin txin))
+  "Record utxo key as spent"
+  (with-accessors ((utxo-adds  tx-changes-utxo-adds)
+                   (utxo-dels  tx-changes-utxo-dels)) *tx-changes*
+    (let ((vkey (bev-vec (txin-hashlock txin))))
+      (setf utxo-adds (delete vkey utxo-adds
+                              :test 'equalp))
+      (push vkey utxo-dels))))
 
-(defmethod record-utxo ((key bev) val)
-  (setf (gethash (bev-vec key) *utxo-table*) val))
+(defmethod back-out-transaction ((tx transaction))
+  "Unrecord UTXO create/destroy resulting from this transaction"
+  (with-accessors ((utxo-adds  tx-changes-utxo-adds)
+                   (utxo-dels  tx-changes-utxo-dels)) *tx-changes*
+    (dolist (txin (trans-txins tx))
+      (let ((vkey (bev-vec (txin-hashlock txin))))
+        (when (find vkey utxo-dels
+                    :test 'equalp)
+          (setf utxo-dels (delete vkey utxo-dels
+                                  :test 'equalp))
+          (unless (gethash vkey *utxo-table*)
+            (push vkey utxo-adds))
+          )))
+    
+    (dolist (txout (trans-txouts tx))
+      (let ((key (bev-vec (txout-hashlock txout))))
+        (setf utxo-adds (delete key utxo-adds
+                                :test 'equalp))
+        ))))
 
-
-(defmethod remove-utxo ((key bev))
-  (remhash (bev-vec key) *utxo-table*))
-
-(defmethod remove-utxo ((txin txin))
-  (remove-utxo (bev (txin-hashlock txin))))
-
-(defmethod remove-utxo ((txout txout))
-  (remove-utxo (bev (txout-hashlock txout))))
-
-
-(defmethod unspend-utxos ((tx transaction))
-  (dolist (txin (trans-txins tx))
-    (let ((key (bev (txin-hashlock txin))))
-      (when (eql tx (lookup-utxo key))
-        (record-utxo key :spendable))))
-  (dolist (txout (trans-txouts tx))
-    (remove-utxo txout)))
-
+(defun reset-transaction-changes ()
+  "Reset the UTXO add/del for this session"
+  (with-accessors ((utxo-adds  tx-changes-utxo-adds)
+                   (utxo-dels  tx-changes-utxo-dels)) *tx-changes*
+    (setf utxo-adds nil
+          utxo-dels nil)))
+  
 ;; -------------------------------------------------------------------
 ;; Code to check incoming transactions for self-validity, not
 ;; inter-transactional validity like double-spend
@@ -440,8 +534,7 @@ Return nil if transaction is invalid."
       (ac:pr (format nil "Transaction: ~A checks: ~A"
                      (short-id key)
                      (short-id *current-node*)))
-      (cache-transaction key tx))
-    ))
+      t)))
 
 ;; --------------------------------------------------------------------
 ;; Code to assemble a block - must do full validity checking,
@@ -515,20 +608,30 @@ transaction, and v being the transaction itself."
 sure no double-spending, nor referencing unknown TXOUT. Return nil if
 invalid TX."
   (labels ((txin-ok (txin)
-             (let ((key (bev (txin-hashlock txin))))
-               ;; if not in UTXO table as :SPENDABLE, then it is invalid
-               (when (eq :spendable (lookup-utxo key))
-                 (record-utxo key tx)))))
+             (let* ((key  (bev (txin-hashlock txin)))
+                    (utxo (lookup-utxo key)))
+
+               (cond ((null utxo)
+                      (error (format nil "*** non-existent UTXO spend ~A" tx))
+                      nil)
+                     
+                     ((eq :spendable utxo)
+                      (record-spent-utxo txin)
+                      t)
+
+                     (t
+                      (error (format nil "*** double spend txn ~A" tx)) ;; TODO: 157602158
+                      nil)
+                     ))))
     (cond ((every #'txin-ok (trans-txins tx))
            (dolist (txout (trans-txouts tx))
-             (record-new-utxo (bev (txout-hashlock txout))))
+             (record-new-utxo txout))
            t)
           
           (t
            ;; remove transaction from mempool
-           (error (format nil "double spend txn ~A" tx)) ;; TODO: 157602158 
+           (back-out-transaction tx)
            (remove-tx-from-mempool tx)
-           (unspend-utxos tx)
            nil)
           )))
 
@@ -559,7 +662,7 @@ topo-sorted partial order"
         (um:split *max-transactions* tx-pairs)
       (dolist (tx tl)
         ;; put these back in the pond for next round
-        (unspend-utxos tx))
+        (back-out-transaction tx))
       ;; now hd represents the actual transactions going into the next block
       (pr (format nil "~D Transactions" (length hd)))
       hd)))
@@ -567,7 +670,7 @@ topo-sorted partial order"
 ;; ----------------------------------------------------------------------
 ;; Code run by Cosi block validators...
 
-(defun #1=check-block-transactions (tlst)
+(defun #1=check-block-transactions (blk)
   "TLST is list of transactions from current pending block. Return nil
 if invalid block.
 
@@ -577,12 +680,12 @@ blockchain.
 
 Check that there are no forward references in spend position, then
 check that each TXIN and TXOUT is mathematically sound."
-  (dolist (tx tlst)
+  (dolist (tx (get-block-transactions blk))
     (dolist (txin (trans-txins tx))
       (let ((key  (bev (txin-hashlock txin))))
         (unless (eql :SPENDABLE (lookup-utxo key))
           (return-from #1# nil)) ;; caller must back out the changes made so far...
-        (record-utxo key tx)))   ;; mark as spend in this TX
+        (record-spent-utxo txin)))   ;; mark as spend in this TX
     ;; now check for valid transaction math
     (unless (check-transaction-math tx)
       (return-from #1# nil))
@@ -681,10 +784,16 @@ check that each TXIN and TXOUT is mathematically sound."
   (send-real-nodes :reset))
 
 (defun reset-nodes ()
-  (setf *leader* (node-pkey *top-node*))
   (loop for node across *node-bit-tbl* do
         (setf (node-bad        node) nil
               (node-blockchain node) nil)
+
+        (setf (node-current-leader node) (node-pkey *top-node*))
+        (setf (node-hold-off node)       nil)
+        (setf (node-hold-off-timer node)  (let ((this-node node))
+                                            (ac::make-timer
+                                             (lambda ()
+                                               (send this-node :end-holdoff)))))
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
@@ -720,6 +829,7 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; ------------------------------
 
 (defun sub-signing (my-node consensus-stage msg seq-id timeout)
+  (declare (ignore my-node))
   (=lambda (node)
     (let ((start  (get-universal-time)))
       (send node :signing
@@ -763,6 +873,10 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------
 
+(defun end-all-holdoffs ()
+  (loop for node across *node-bit-tbl* do
+        (send node :end-holdoff)))
+
 (defvar *use-gossip* t)
 
 (defun gossip-neighborcast (my-node &rest msg)
@@ -772,64 +886,65 @@ check that each TXIN and TXOUT is mathematically sound."
           (apply 'send (node-pkey node) msg))))
 
 (=defun gossip-signing (my-node consensus-stage msg seq-id timeout)
-  (cond ((and *use-gossip*
-              (int= (node-pkey my-node) *leader*))
-         ;; we are leader node, so fire off gossip spray and await answers
-         (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
-               (start     nil)
-               (g-cnt     0)
-               (g-bits    0)
-               (g-sig     nil))
-           
-           (pr "Running Gossip Signing")
-           (gossip-neighborcast my-node :signing
-                                :reply-to        (current-actor)
-                                :consensus-stage consensus-stage
-                                :blk             msg
-                                :seq             seq-id
-                                :timneout        timeout)
-           (setf start (get-universal-time))
-           
-           (labels
-               ((=return (val)
-                  (pr "Return from Gossip Signing")
-                  (become 'do-nothing) ;; stop responding to messages
-                  (=values val))
-
-                (=finish ()
-                  (=return (and g-sig
-                                (list g-sig g-bits))))
-                
-                (wait ()
-                  (let ((stop (get-universal-time)))
-                    (decf timeout (- stop (shiftf start stop))))
-                  (recv
-                    ((list :signed sub-seq sig bits)
-                     (when (and (eql sub-seq seq-id)
-                                sig
-                                (pbc:check-message sig))
-                       (pr (hex bits))
-                       (setf g-bits (logior g-bits bits)
-                             g-sig  (if g-sig
-                                        (pbc:combine-signatures g-sig sig)
-                                      sig)))
-                     (if (> (incf g-cnt) bft-thrsh)
-                         (=finish)
-                       (wait)))
-                    
-                    (msg
-                     (pr (format nil "Gossip-wait got unknown message: ~A" msg))
-                     (wait))
-                    
-                    :TIMEOUT    timeout
-                    :ON-TIMEOUT (=finish)
-                    )))
-             (wait))))
-        
-        (t 
-         ;; else - not leader don't re-gossip request for signatures
-         (=values nil))
-        ))
+  (let ((*current-node* my-node))
+    (cond ((and *use-gossip*
+                (int= (node-pkey my-node) *leader*))
+           ;; we are leader node, so fire off gossip spray and await answers
+           (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
+                 (start     nil)
+                 (g-cnt     0)
+                 (g-bits    0)
+                 (g-sig     nil))
+             
+             (pr "Running Gossip Signing")
+             (gossip-neighborcast my-node :signing
+                                  :reply-to        (current-actor)
+                                  :consensus-stage consensus-stage
+                                  :blk             msg
+                                  :seq             seq-id
+                                  :timneout        timeout)
+             (setf start (get-universal-time))
+             
+             (labels
+                 ((=return (val)
+                    (pr "Return from Gossip Signing")
+                    (become 'do-nothing) ;; stop responding to messages
+                    (=values val))
+                  
+                  (=finish ()
+                    (=return (and g-sig
+                                  (list g-sig g-bits))))
+                  
+                  (wait ()
+                    (let ((stop (get-universal-time)))
+                      (decf timeout (- stop (shiftf start stop))))
+                    (recv
+                      ((list :signed sub-seq sig bits)
+                       (when (and (eql sub-seq seq-id)
+                                  sig
+                                  (pbc:check-message sig))
+                         (pr (hex bits))
+                         (setf g-bits (logior g-bits bits)
+                               g-sig  (if g-sig
+                                          (pbc:combine-signatures g-sig sig)
+                                        sig)))
+                       (if (> (incf g-cnt) bft-thrsh)
+                           (=finish)
+                         (wait)))
+                      
+                      (msg
+                       (pr (format nil "Gossip-wait got unknown message: ~A" msg))
+                       (wait))
+                      
+                      :TIMEOUT    timeout
+                      :ON-TIMEOUT (=finish)
+                      )))
+               (wait))))
+          
+          (t 
+           ;; else - not leader don't re-gossip request for signatures
+           (=values nil))
+          )))
 
 ;; -------------------------------------------------------
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
@@ -855,7 +970,6 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun check-block-multisignature (blk)
   (let* ((bits  (block-signature-bitmap blk))
          (sig   (block-signature blk))
-         (mpkey (block-signature-pkey blk))
          (wits  (block-witnesses blk))
          (hash  (hash/256 (signature-hash-message blk)))
          (wsum  nil))
@@ -872,49 +986,40 @@ check that each TXIN and TXOUT is mathematically sound."
     (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
          (check-block-transactions-hash blk)
          ;; check multisig as valid signature on header
-         (pbc:check-hash hash sig mpkey)
-         ;; ensure multisign pkey is sum of witness pkeys
-         (int= mpkey wsum))))
+         (pbc:check-hash hash sig (change-class wsum 'pbc:public-key)))
+    ))
 
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (let ((prevblk (first *blockchain*)))
-       (and (check-block-transactions-hash blk)
+     (and (int= *leader* (block-leader-pkey blk))
+          (check-block-transactions-hash blk)
+          (let ((prevblk (first *blockchain*)))
             (or (null prevblk)
                 (and (> (block-epoch blk)     (block-epoch prevblk))
                      (> (block-timestamp blk) (block-timestamp prevblk))
-                     (int= (block-prev-block-hash blk) (hash-block prevblk))))
-            (or (int= (node-pkey node) *leader*)
-                (let ((txs  (get-block-transactions blk)))
-                  (or (check-block-transactions txs)
-                      ;; back out changes to *utxo-table*
-                      (progn
-                        (dolist (tx txs)
-                          (unspend-utxos tx))
-                        nil))
-                  )))))
+                     (int= (block-prev-block-hash blk) (hash-block prevblk)))))
+          (or (int= (node-pkey node) *leader*)
+              (check-block-transactions blk))
+          ))
 
     (:commit
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (if (check-block-multisignature blk)
-         (progn
+     (unwind-protect
+         (when (and (int= *leader* (block-leader-pkey blk))
+                    (check-block-multisignature blk))
            (push blk *blockchain*)
            (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
            ;; clear out *mempool* and spent utxos
-           (dolist (tx (get-block-transactions blk))
-             (remove-tx-from-mempool tx)
-             (dolist (txin (trans-txins tx))
-               (remove-utxo txin)))
+           (replay-remove-txs-from-mempool blk)
+           (sync-database)
            t) ;; return true to validate
-       ;; else
-       (progn
-         (cleanup-mempool (get-block-transactions blk))
-         nil)))
+       ;; unwind
+       (end-holdoff)))
     ))
 
 ;; ----------------------------------------------------------------------------
@@ -935,14 +1040,14 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; to decide for themselves
              (if (validate-cosi-message node consensus-stage blk)
                  (progn
-                   (ac:pr (format nil "Trans validated ~A" (short-id node)))
+                   (ac:pr (format nil "Block validated ~A" (short-id node)))
                    (list (pbc:sign-message (signature-hash-message blk)
                                            (node-pkey node)
                                            (node-skey node))
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
                                           :test 'int=))))
                (progn
-                 (ac:pr (format nil "Trans not validated ~A" (short-id node)))
+                 (ac:pr (format nil "Block not validated ~A" (short-id node)))
                  (list nil nil)))))
 
           ;; ... and here is where we have all the subnodes in our
@@ -1050,8 +1155,7 @@ bother factoring it with NODE-COSI-SIGNING."
 (defun node-compute-cosi (reply-to consensus-stage msg timeout)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
-  (let ((node *current-node*)
-        (sess (gen-uuid-int)) ;; strictly increasing sequence of integers
+  (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
         (self (current-actor)))
     (ac:self-call :signing
                   :reply-to        self
@@ -1080,11 +1184,13 @@ bother factoring it with NODE-COSI-SIGNING."
                   (wait-signing))
                )) ;; end of message pattern
              ;; ---------------------------------
+             #|
              ((list :new-transaction msg)
               ;; allow processing of new transactions while we wait
               (let ((*current-node* node))
                 (node-check-transaction msg)
                 (wait-signing)))
+             |#
              ;; ---------------------------------
              ;; :TIMEOUT 30
              ;; :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
@@ -1094,7 +1200,14 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; ------------------------------------------------------------------------------------------------
 
+(defparameter *nleaders* 0) ;; not atomic!  but good enough for a first attempt
+
 (defun leader-exec (prepare-timeout commit-timeout)
+  #|
+  (incf *nleaders*)
+  (unless (= 1 *nleaders*)
+    (error (format nil "wrong leader count ~A" *nleaders*)))
+  |#
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
@@ -1105,7 +1218,9 @@ bother factoring it with NODE-COSI-SIGNING."
            *election-proof* *leader*
            (map 'vector 'node-pkey *node-bit-tbl*)
            (get-transactions-for-new-block)))
-        (self      (current-actor)))
+         (self      (current-actor)))
+    (unless (block-transactions new-block)
+      (end-all-holdoffs))
     (when (block-transactions new-block) ;; don't do anything if block is empty
       (ac:self-call :cosi-sign-prepare
                     :reply-to  self
@@ -1131,7 +1246,12 @@ bother factoring it with NODE-COSI-SIGNING."
                                   (cond ((check-byz-threshold bits new-block)
                                          #+(or)
                                          (inspect new-block)
-                                         (send node :block-finished))
+                                         (send node :block-finished)
+                                         #|
+                                         (decf *nleaders*)
+                                         (assert (= 0 *nleaders*))
+                                         |#
+                                         )
                                         
                                         (t
                                          (pr "Failed to get sufficient signatures during commit phase"))
@@ -1142,14 +1262,16 @@ bother factoring it with NODE-COSI-SIGNING."
                                
                                ((list :answer (list :timeout-cosi-network))
                                 (pr "Timeout waiting for commitment multisignature"))
-                               
+
+                               #|
                                ;; ---------------------------------
                                ((list :new-transaction msg)
                                 ;; allow processing of new transactions while we wait
                                 (let ((*current-node* node))
                                   (node-check-transaction msg)
-                                  (wait-cmt-signing))
-                                ))))
+                                  (wait-cmt-signing)))
+                               |#
+                               )))
                     (wait-cmt-signing))))
                
                ((list :answer (list :corrupt-cosi-network))
@@ -1157,13 +1279,15 @@ bother factoring it with NODE-COSI-SIGNING."
                
                ((list :answer (list :timeout-cosi-network))
                 (pr "Timeout waiting for prepare multisignature"))
-               
+
+               #|
                ;; ---------------------------------
                ((list :new-transaction msg)
                 ;; allow processing of new transactions while we wait
                 (let ((*current-node* node))
                   (node-check-transaction msg)
                   (wait-prep-signing)))
+               |#
                )))
         (wait-prep-signing)
         ))))
@@ -1195,7 +1319,7 @@ bother factoring it with NODE-COSI-SIGNING."
      (send *dly-instr* :pltwin :histo-4)
      (let ((start (get-universal-time))
            (ret   (current-actor)))
-       (send *leader* :cosi-sign
+       (send *top-node* :cosi-sign
              :reply-to ret
              :msg      "This is a test message!"
              :timeout  10)
@@ -1209,7 +1333,7 @@ bother factoring it with NODE-COSI-SIGNING."
            msg
            (format nil "Duration = ~A" (- (get-universal-time) start)))
           
-          (send *leader* :validate
+          (send *top-node* :validate
                 :reply-to ret
                 :sig      sig
                 :bits     bits)
@@ -1315,7 +1439,7 @@ bother factoring it with NODE-COSI-SIGNING."
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
-       (send *leader* :make-block)
+       (send *top-node* :make-block)
        ))))
 
 ;; -------------------------------------------------------------
@@ -1398,7 +1522,7 @@ bother factoring it with NODE-COSI-SIGNING."
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
-       (send *leader* :make-block)
+       (send *top-node* :make-block)
        ))))
 
 ;; -------------------------------------------------------------
