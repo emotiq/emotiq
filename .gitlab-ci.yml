@@ -23,10 +23,7 @@ before_script:
 .test: &test_definition
   stage: test
   variables:
-    systems:
-      - :cosi-bls-tests
-      - :crypto-pairings
-      - :gossip-tests
+    systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
   script:
     - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
