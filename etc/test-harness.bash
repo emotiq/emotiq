@@ -28,7 +28,7 @@ DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 lisp=${lisp:-'ros'}
 
 # The default whitespace list of systems to test
-systems=${systems:-":emotiq/blockchain
+systems=${SYSTEMS:-":emotiq/blockchain
                     :crypto-pairings/t
                     :core-crypto"}
 
@@ -48,4 +48,3 @@ for system in ${systems}; do
     fi
     echo "<== ASDF:TEST-SYSTEM on ${system} succeeded."
 done
-                                      

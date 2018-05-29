@@ -3,6 +3,11 @@ variables:
   GITHUB_REPO: emotiq
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
+  SYSTEMS: ":cosi-bls-tests :crypto-pairings :gossip-tests"
+  SYSTEMS2:
+    - :cosi-bls-tests
+    - :crypto-pairings
+    - :gossip-tests"
 
 stages:
   - test
@@ -22,15 +27,9 @@ before_script:
 
 .test: &test_definition
   stage: test
-  variables:
-    systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
-    systems2:
-      - :cosi-bls-tests
-      - :crypto-pairings
-      - :gossip-tests"
   script:
-    - echo ${systems}
-    - echo ${systems2}
+    - echo ${SYSTEMS}
+    - echo ${SYSTEMS2}
     - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
     - etc/test-harness.bash
