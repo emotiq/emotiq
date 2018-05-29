@@ -4,10 +4,6 @@ variables:
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
   SYSTEMS: ":cosi-bls-tests :crypto-pairings :gossip-tests"
-  SYSTEMS2:
-    - :cosi-bls-tests
-    - :crypto-pairings
-    - :gossip-tests"
 
 stages:
   - test
