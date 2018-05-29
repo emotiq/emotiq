@@ -61,51 +61,51 @@ test:macos:ccl:
   variables:
     LISP: ccl
 
-.build_test: &build_test_definition
-  stage: build_test
-  variables:
-    LISP: lispworks
-  except:
-    - tags
-  script:
-    - etc/build.bash testing
-  artifacts:
-    expire_in: 1 week
-    paths:
-      - var/
-
-build_test:linux:
-  <<: *build_test_definition
-  tags:
-    - linux
-
-build_test:macos:
-  <<: *build_test_definition
-  tags:
-    - macos
-
-.testbin: &testbin_definition
-  stage: test_binary
-  variables:
-    LISP: lispworks
-  except:
-    - tags
-  script:
-    - var/local/production/emotiq-$(cat var/local/production/version.txt)/emotiq.bash
-
-test_binary:linux:
-  <<: *testbin_definition
-  tags:
-    - linux
-  dependencies:
-    - build_test:linux
-
-test_binary:macos:
-  <<: *testbin_definition
-  tags:
-    - macos
-  dependencies:
-    - build_test:macos
+# .build_test: &build_test_definition
+#   stage: build_test
+#   variables:
+#     LISP: lispworks
+#   except:
+#     - tags
+#   script:
+#     - etc/build.bash testing
+#   artifacts:
+#     expire_in: 1 week
+#     paths:
+#       - var/
+#
+# build_test:linux:
+#   <<: *build_test_definition
+#   tags:
+#     - linux
+#
+# build_test:macos:
+#   <<: *build_test_definition
+#   tags:
+#     - macos
+#
+# .testbin: &testbin_definition
+#   stage: test_binary
+#   variables:
+#     LISP: lispworks
+#   except:
+#     - tags
+#   script:
+#     - var/local/production/emotiq-$(cat var/local/production/version.txt)/emotiq.bash
+#
+# test_binary:linux:
+#   <<: *testbin_definition
+#   tags:
+#     - linux
+#   dependencies:
+#     - build_test:linux
+#
+# test_binary:macos:
+#   <<: *testbin_definition
+#   tags:
+#     - macos
+#   dependencies:
+#     - build_test:macos
 
 .build_release: &build_release_definition
   stage: build_release

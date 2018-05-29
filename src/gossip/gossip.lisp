@@ -87,7 +87,7 @@
               (null *active-ignores*))
          :neighborcast)
         (t :unknown)))
-             
+
 ; (set-protocol-style :neighborcast) ; you should expect 100% correct responses most of the time in this mode
 ; (set-protocol-style :gossip)       ; you should expect 100% correct responses very rarely in this mode
 
@@ -217,7 +217,7 @@ are in place between nodes.
     (:long  (long-uid))
     (:short (short-uid))
     (:tiny  (new-tiny-uid))))
-                   
+
 (defun uid? (thing)
   (integerp thing))
 
@@ -380,7 +380,7 @@ are in place between nodes.
    (logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")))
-   
+
 (defclass gossip-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works")))
@@ -468,7 +468,7 @@ are in place between nodes.
 (defmethod make-gossip-actor ((node t))
   (make-instance 'gossip-actor
     :node node
-    :fn 
+    :fn
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
@@ -476,7 +476,7 @@ are in place between nodes.
 (defmethod make-gossip-actor ((node null))
   (make-instance 'gossip-actor
     :node node
-    :fn 
+    :fn
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
@@ -484,7 +484,7 @@ are in place between nodes.
 (defmethod make-gossip-actor ((node proxy-gossip-node))
   (make-instance 'gossip-network-actor
     :node node
-    :fn 
+    :fn
     (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
@@ -532,7 +532,7 @@ are in place between nodes.
    we store the edge information twice: Once in each endpoint node."
   (pushnew (uid node1) (neighbors node2))
   (pushnew (uid node2) (neighbors node1)))
-  
+
 (defmethod connected? ((node1 gossip-node) (node2 gossip-node))
   (or (member (uid node2) (neighbors node1) :test 'equal)
       ; redundant if we connected the graph correctly in the first place
@@ -679,14 +679,14 @@ dropped on the floor.
                   #'final-continuation)     ; srcuid
         (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
                                                        (lambda () response))))
-          (values 
+          (values
            (if win
                (first (args response))
                :TIMEOUT)
            soluid))))))
 
 (defun solicit (node kind &rest args)
-  "Send a solicitation to the network starting with given node. This is the primary interface to 
+  "Send a solicitation to the network starting with given node. This is the primary interface to
   the network to start an action from the outside. Nodes shouldn't use this function to initiate an
   action because they should set the srcuid parameter to be their own rather than nil."
   (unless node
@@ -724,7 +724,7 @@ dropped on the floor.
                   #'final-continuation)     ; srcuid
         (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
                                                        (lambda () response))))
-          (values 
+          (values
            (if win
                (first (args response))
                :TIMEOUT)
@@ -759,7 +759,7 @@ dropped on the floor.
                         #'final-continuation)     ; srcuid
               (let ((win (mpcompat:process-wait-with-timeout "Waiting for reply" *max-seconds-to-wait*
                                                              (lambda () response))))
-                (values 
+                (values
                  (if win
                      (first (args response))
                      :TIMEOUT)
@@ -860,7 +860,7 @@ dropped on the floor.
     #-CCL
     (write-string logstring *standard-output*)
     logmsg))
-  
+
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler-xxx methods for bootstrapping messages
@@ -961,7 +961,7 @@ dropped on the floor.
                    unless (= idx n)
                    collect i)))
     (values (nth n list) newlist)))
-  
+
 (defun make-random-generator (list)
   "Returns a thunk that returns another random member of list
   every time it's called. Never generates same member twice
@@ -1187,7 +1187,7 @@ dropped on the floor.
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
    new value will be added to the set; it won't replace them.
-  Sets value on this node and then forwards 
+  Sets value on this node and then forwards
   solicitation to other nodes, if any.
   No reply expected."
   (destructuring-bind (key value &rest other) (args msg)
@@ -1198,7 +1198,7 @@ dropped on the floor.
 
 (defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
-  Sets value on this node and then forwards 
+  Sets value on this node and then forwards
   solicitation to other nodes, if any. This is a destructive operation --
   any node that currently has a value for the given key will have that value replaced.
   No reply expected."
@@ -1209,7 +1209,7 @@ dropped on the floor.
     (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
 
 (defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
-  "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
+  "Remove a global key/value pair. Removes key/value pair on this node and then forwards
    solicitation to other nodes, if any. This is a destructive operation --
    any node that currently has the given key will have that key/value removed.
    There's no harm in calling this more than once with the same key; if key
@@ -1271,7 +1271,7 @@ dropped on the floor.
     (flet ((initialize-reply-cache ()
              "Set up node's reply-cache with initial-reply-value for this message"
              (kvs:relate-unique! (reply-cache thisnode) soluid (initial-reply-value kind thisnode (args msg))))
-           
+
            (must-coalesce? ()
              "Returns true if we might expect repliers. (The only reason we wouldn't is
              if there are no downstream nodes to forward the message to.)
@@ -1283,17 +1283,17 @@ dropped on the floor.
       ;   node could potentially be replied to, it itself is always considered a participant node of the message.
       (when (must-coalesce?) (initialize-reply-cache))
       ; (if (not (eql 495831281100387564650501 (uid thisnode))) (break))
-      
+
       ;;; It's possible for there to be a downstream but have no potential repliers. In that case
       ;;; we need to go ahead and reply.
-      
-      
+
+
       ;;; Is it possible to have must-coalesce? true but no downstream? Yes, the way the code is written now. Makes no sense.
-      
+
       ;;; It's never necessary to coalesce when there's no downstream, because there won't be anything TO coalesce in that case.
       ;;; It MAY not be necessary to coalesce even when there IS a downstream (that's the case for direct replies where this node
       ;;;   is not the node to reply to).
-      
+
       (cond (downstream
              (cond ((must-coalesce?)
                     (prepare-repliers thisnode soluid downstream)
@@ -1858,15 +1858,15 @@ gets sent back, and everything will be copacetic.
           ; Following always returns T in CCL. Thus sockets are "born blocking"
           ;(format t "~%Blocking status of socket: ~S" (ccl::get-socket-fd-blocking (ccl::socket-device listening-socket)))
           (setf stream (ignore-errors (usocket:socket-accept listening-socket)))
-          
+
           (when (debug-level 3)
             (debug-log "Got connection from " (usocket:get-peer-address stream)))
-          
+
           ;; At this point, we have a live incoming stream. Although it may be closing.
-          
+
           (setf stream (usocket:wait-for-input stream :timeout 10 :ready-only t))
           (setf timed-out? (not (eql :READ (usocket::state stream))))
-          
+
           (when (debug-level 4)
             (if timed-out?
                 (debug-log "Giving up.")
@@ -1946,7 +1946,7 @@ gets sent back, and everything will be copacetic.
                  (unless (eql nb (usocket:socket-send socket packet nb
                                                       :host ip :port port))
                    (ac::pr :socket-send-error ip packet))))))
-  
+
   (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
       (when (> nb cosi-simgen::*max-buffer-length*)
@@ -1993,17 +1993,22 @@ gets sent back, and everything will be copacetic.
 ;; We need to authenticate all messages being sent over socket ports
 ;; from this running Lisp image. Give us some signing keys to do so...
 
-(defvar *this-lisp-key*
-  (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid))))
-
-(defun sign-message (msg)
-  "Sign and return an authenticated message packet. Packet includes
+;;; The need for this is rather dubious.  No one other than the
+;;; signing node can authenticate this HMAC.
+(let (hmac-keypair)
+  (defun hmac-keypair ()
+    (unless hmac-keypair
+      (setf hmac-keypair
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
+      hmac-keypair))
+  (defun sign-message (msg)
+    "Sign and return an authenticated message packet. Packet includes
 original message."
-  (assert (pbc:check-public-key (pbc:keying-triple-pkey *this-lisp-key*)
-                                (pbc:keying-triple-sig  *this-lisp-key*)))
-  (pbc:sign-message msg
-                    (pbc:keying-triple-pkey *this-lisp-key*)
-                    (pbc:keying-triple-skey *this-lisp-key*)))
+    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair)
+                                  (pbc:keying-triple-sig  (hmac-keypair)))))
+    (pbc:sign-message msg
+                      (pbc:keying-triple-pkey (hmac-keypair))
+                      (pbc:keying-triple-skey (hmac-keypair)))))
 
 ;; ------------------------------------------------------------------------------
 
@@ -2042,8 +2047,8 @@ original message."
       (setf stream (gethash key *open-streams*))
       (when stream
         (remhash key *open-streams*)))
-    
-      
+
+
   (handler-case (usocket:socket-connect ip port :protocol :stream
 			 :element-type '(unsigned-byte 8))
     (USOCKET:CONNECTION-REFUSED-ERROR () :CONNECTION-REFUSED)))
@@ -2127,7 +2132,7 @@ original message."
     (if (= 65002 *actual-udp-gossip-port*)
         65003
         65002)))
-    
+
 ; UDP TESTS
 ; ON SERVER MACHINE
 ; (clrhash *nodes*)
@@ -2165,7 +2170,7 @@ original message."
 ; (solicit-wait (first (listify-nodes)) :count-alive)
 ; (solicit (first (listify-nodes)) :announce :foo)
 ; (solicit-wait 340 :list-alive) ; if there happens to be a node with UID 340
-; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.) 
+; (inspect *log*) --> Should see :FINALREPLY with all nodes (or something slightly less, depending on network delays, etc.)
 
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (solicit-wait (first (listify-nodes)) :gossip-lookup-key :foo)
@@ -2216,3 +2221,124 @@ original message."
 (setf msg (make-solicitation :kind :list-alive))
 #+TESTING
 (copy-message msg)
+
+#| NOTES
+
+NOTE A: About proactive reply cancellation
+If node X is ignoring a solicitation* from node Y because it already
+saw that solicitation, then it must also not expect a reply from node Y
+for that same solicitation.
+Here's why [In this scenario, imagine #'locally-receive-msg is acting on behalf of node X]:
+If node X ignores a solicition from node Y -- because it's already seen that solicitation --
+  then X knows the following:
+  1. Node Y did not receive the solicition from X. It must have received it from somewhere else,
+     because nodes *never* forward messages to their upstream.
+  2. Therefore, if X forwards (or forwarded) the solicitation to Y, Y
+     is definitely going to ignore it. Because Y has already seen it.
+  3. Therefore (to recap) if X just ignored a solicitation from Y, then X
+     knows Y is going to ignore that same solicitation from X.
+  4. THEREFORE: X must not expect Y to respond, and that's why
+     we call cancel-replier here. If we don't do this, Y will ignore
+     and X will eventually time out, which it doesn't need to do.
+  5. FURTHERMORE: Y knows X knows this. So it knows X will stop waiting for it.
+* we take no special action for non-solicitation messages because they can't
+  ever be replied to anyway.
+
+NOTE B: About the repliers-expected slot.
+This slot always contains a hashtable mapping a soluid to a value.
+The value can be:
+--Another hashtable, which maps srcuid to a subvalue. If subvalue is nil, it means this node
+  expects a reply from srcuid for the soluid that represents this table. If the subvalue is non-nil,
+  it can only be an interim-reply that srcuid has already sent. Future interim-replies from that srcuid
+  will supersede older ones. (They will not be coalesced with older interim-replies; they replace them.)
+  Subvalue will never be a final-reply because those don't get stored--they get coalesced with the value
+  in reply-cache and stored in the reply-cache.
+--The keyword :ANONYMOUS which indicates that replies from any srcuid are accepted. We don't expect to
+  receive interim-replies from :ANONYMOUS repliers, so if we do receive any, they simply get dropped on
+  the floor rather than stored. See Note C for more info.
+--The value NIL, which indicates that no replies (or no further replies) are expected for this soluid.
+
+
+NOTE C: About :ANONYMOUS expectations.
+We have a mechanism to allow replies to a node to occur from unpredictable sources. This can happen
+when we send a message with forward-to :NEIGHBORCAST or :GOSSIP but whose reply-to slot is a single UID.
+In this case, there's no way to know who might reply in advance, so we have to allow replies (to this soluid)
+from any srcuid. So in that case, we do
+(kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)
+to prepare for replies.
+There are several implications here:
+1. We cannot know in advance when we have received all possible replies. Thus we have to depend on a timeout
+as the only mechanism to know when to ignore further replies (and to reply ourselves, if necessary).
+Thus for a node expecting :ANONYMOUS replies, we must not call #'prepare-repliers for that node.
+2. We don't allow interim-replies to :ANONYMOUS expectations, because we're not creating a table to keep them
+(because in place of that table, we just have the keyword :ANONYMOUS), and because I don't think we'll ever need
+interim-replies in this case.
+3. We still allow coalescence at the node expecting :ANONYMOUS replies; they just always come from final-replies.
+4. There's a possible hazard condition here: If a single node sends us two final-replies with the same soluid,
+we won't know to reject the second one, and we'll coalesce a value from that node twice, which would cause
+an incorrect coalescence result. We may have to care about this in future, but I'm not going to worry about
+it now. In working code, there's no code path that would cause a node to respond with a final-reply for a given
+soluid twice.
+
+NOTE D: About :ANONYMOUS nodes
+
+#'prepare-repliers is solely for use by a given node X when it is passing along a message whose reply-to slot
+is :UPSTREAM. It should never be used for any other kind of reply-to, and in some cases it should not use even
+in the :UPSTREAM case. Read on.
+
+An :ANONYMOUS node is a proxy-node whose real-uid slot contains 0. It stands in for "every node" on some remote
+machine. A regular proxy-node on machine A masquerades as the source of messages to local nodes on machine A, where
+the actual source is actually on machine B. #'ensure-proxy-node is what makes this happen. But it NEVER happens
+for :ANONYMOUS nodes. When a remote node on B responds to A, its message always comes in through a regular proxy-node
+(which has a nonzero real-uid). Said proxy-node will be automatically created if it doesn't already exist.
+Thus :ANONYMOUS nodes are always created manually -- never automatically -- and they're used for bootstrapping
+a gossip network. And they're only used for outgoing messages -- never incoming.
+
+Any regular gossip-node X which has an :ANONYMOUS node in its immediate downstream (its neighbors slot) MUST only
+expect :ANONYMOUS replies. This is because the presence of even one :ANONYMOUS node in node X's downstream
+means that node X can never be sure when all replies have occurred. Thus node X MUST NOT call #'prepare-repliers
+in this case -- even if the reply-to happens to be :UPSTREAM.
+
+Note that :ANONYMOUS nodes are essential for bootstrapping a gossip network that spans multiple machines--we
+cannot just disallow them.
+
+So why not just let all replies and all proxy-nodes be :ANONYMOUS?
+Because with :ANONYMOUS replies, you can't ever be sure when you're done. You have to rely on timeouts to stop
+waiting for replies. This is acceptable at boot time, but as proxy nodes for unique remote nodes are automatically
+created, it's best to wire those into the gossip network as neighbors rather than :ANONYMOUS nodes, simply
+because non-anonymous proxy nodes can have expectations set up for replies and thus not rely solely on timeouts.
+Bottom line: Non-anonymous nodes are faster than anonymous ones.
+
+This leads to another observation: Don't put :ANONYMOUS nodes into the neighbors slot of any node. That way,
+you won't have to worry about :ANONYMOUS nodes being downstream, ever.
+
+Furthermore, if node X passes along a direct-reply message (that is, its reply-to slot contains a UID), it must
+never call #'prepare-repliers. This is pretty obvious at first glance, because in the case of direct replies,
+node X is probably not going to be the replyee anyway. But what if it is? What if node X _is_ the replyee?
+Even in that case, we can't always be sure that every downstream node is going to reply. If one of those
+downstream nodes is an :ANONYMOUS node, it'll never reply (because anonymous nodes never masquerade as the source of
+reply messages). And direct messages can be weird: Any given downstream node may or may not choose to even accept
+the message, let alone reply to it. Direct messages are in some sense intended to be weird. They're for bootstrapping
+or out-of-band status purposes or whatever. The point is, only :UPSTREAM solicitations should ever definitively
+expect replies from specific downstream nodes, and even then, only in the case where there's no :ANONYMOUS node in
+the downstream set.
+
+A subtlety: Note that coalescence is a different issue than expectations. It's possible that a node will want to coalesce
+its replies without having any expectations as to who will reply. This is precisely the case for node X, where node X
+is expecting direct replies to itself. See generic-srr-handler method for solicitations for how this is coded.
+
+NOTE E: Debugging Actor code
+If it seems like -- contrary to all expectations -- messages are never getting delivered to a given actor,
+check the processes window. If a given Actor Executive shows "Active" rather than "Waiting for Actor", that's
+a HUGE red flag. It means some Actor's code body never exited. And that actor will appear to have stopped
+receiving messages.
+In ccl, you can interrupt and backtrace a background process like so:
+(ccl::force-break-in-listener (gossip::find-process <process-name>))
+
+
+TODO:
+Ensure that anonymous nodes can never be in neighbors slot.
+Figure out a way to make solicit-direct work in that case.
+
+
+|#
