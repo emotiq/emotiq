@@ -68,15 +68,20 @@
    #:run
 
    #:blocks
-
-   #:spend #:spend-list
-
+   #:create-transaction
    #:force-epoch-end
 
    
    #:*user-1* #:*user-2* #:*user-3*
-   #:*tx-1* #:*tx-2* #:*tx-3*))
+   #:*tx-1* #:*tx-2* #:*tx-3*
+
+   #:eassert))
 
 
   
-
+(defpackage emotiq/elections
+  (:use #:cl)
+  (:export 
+   #:set-nodes
+   #:make-election-beacon
+   #:hold-election))

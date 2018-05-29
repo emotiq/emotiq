@@ -103,6 +103,7 @@ THE SOFTWARE.
    :hash-bytes
    :hash-length
    :hash/256
+   :hash/384
    :hash/512
    :get-hash-nbytes
    :hashable

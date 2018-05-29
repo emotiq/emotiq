@@ -60,7 +60,7 @@ THE SOFTWARE.
 (defmethod register-actor ((actor actor) name)
   (when (acceptable-key name)
     (send *actor-directory-manager* :register actor name)))
-  
+
 (defun unregister-actor (name-or-actor)
   (send *actor-directory-manager* :unregister name-or-actor))
 
@@ -134,20 +134,20 @@ THE SOFTWARE.
                    #+:ALLEGRO
                    (make-hash-table
                     :test 'eq)))
-              
+
               (labels ((clean-up ()
                          (setf *actor-directory-manager* 'do-nothing)))
-                
+
                 (dlambda
                   (:clear ()
                    (clrhash directory))
-                  
+
                   (:register (actor name)
                    ;; this simply overwrites any existing entry with actor
                    (when-let (key (acceptable-key name))
                      (setf (gethash key directory) actor
                            (gethash actor rev-directory) key)))
-                  
+
                   (:unregister (name-or-actor)
                    (cond ((typep name-or-actor 'Actor)
                           (when-let (key (gethash name-or-actor rev-directory))
@@ -159,21 +159,21 @@ THE SOFTWARE.
                               (remhash key directory)
                               (remhash actor rev-directory))))
                          ))
-                  
+
                   (:get-all ()
                    (let (actors)
                      (maphash (lambda (k v)
                                 (setf actors (acons k v actors)))
                               directory)
                      (sort actors #'string-lessp :key #'car)))
-                  
+
                   (:find (name)
                    (um:when-let (key (acceptable-key name))
                      (gethash key directory)))
-                  
+
                   (:reverse-lookup (actor)
                    (gethash actor rev-directory))
-                  
+
                   (:quit ()
                    (clean-up))
                   )))))
@@ -201,7 +201,7 @@ THE SOFTWARE.
             (:print (&rest things-to-print)
              (dolist (item things-to-print)
                (print item)))
-            
+
             (:quit ()
              (setf *shared-printer-actor* #'blind-print))
             )))
@@ -211,19 +211,19 @@ THE SOFTWARE.
 
 (defun install-actor-system (&rest ignored)
   (declare (ignore ignored))
-  (install-actor-directory)
-  (install-actor-printer))
+  (unless (directory-manager-p)
+    (install-actor-directory)
+    (install-actor-printer)))
 
-#+(or :ALLEGRO :OPENMCL)
-(install-actor-system)
+#-:lispworks
+(eval-when (:load-toplevel :execute)
+  (install-actor-system))
 
-#||#
-#+:LISPWORKS
-(let ((lw:*handle-existing-action-in-action-list* '(:silent :skip)))
-  
+#+:lispworks
+(let ((lw:*handle-existing-action-in-action-list* '(:warn :skip)))
+
   (lw:define-action "Initialize LispWorks Tools"
                     "Start up Functional Actors"
                     'install-actor-system
                     :after "Run the environment start up functions"
                     :once))
-#||#
