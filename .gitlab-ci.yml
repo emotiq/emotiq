@@ -92,14 +92,14 @@ test_binary:linux:
   <<: *testbin_definition
   tags:
     - linux
-  depends_on:
+  dependencies:
     - build:linux
 
 test_binary:macos:
   <<: *testbin_definition
   tags:
     - macos
-  depends_on:
+  dependencies:
     - build:macos
 
 release:
