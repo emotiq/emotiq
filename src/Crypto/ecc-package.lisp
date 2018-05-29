@@ -102,6 +102,8 @@ THE SOFTWARE.
    :hash-val
    :hash-bytes
    :hash-length
+   :hash/ripemd/160
+   :hash/sha2/256
    :hash/256
    :hash/384
    :hash/512
