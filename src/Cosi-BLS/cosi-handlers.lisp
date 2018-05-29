@@ -986,7 +986,7 @@ check that each TXIN and TXOUT is mathematically sound."
     (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
          (check-block-transactions-hash blk)
          ;; check multisig as valid signature on header
-         (pbc:check-hash hash sig (clos:change-class wsum 'pbc:public-key)))
+         (pbc:check-hash hash sig (change-class wsum 'pbc:public-key)))
     ))
 
 (defun validate-cosi-message (node consensus-stage blk)
