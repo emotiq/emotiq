@@ -24,7 +24,13 @@ before_script:
   stage: test
   variables:
     systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
+    systems2:
+      - :cosi-bls-tests
+      - :crypto-pairings
+      - :gossip-tests"
   script:
+    - echo ${systems}
+    - echo ${systems2}
     - ros -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - ros -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
     - etc/test-harness.bash
