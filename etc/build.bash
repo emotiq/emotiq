@@ -4,7 +4,6 @@ set -x
 KIND=${1:-production}
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=${DIR}/..
-var=${BASE}/var
 
 if [ ${var} ]
 then
@@ -27,6 +26,7 @@ esac
 
 ${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
 
+var=${BASE}/var
 etc=${BASE}/etc
 etcdeliver=${etc}/deliver
 
@@ -39,10 +39,10 @@ production_dir=${prefix}/production
 date_now=`/bin/date "+%Y%m%d%H%M%S"`
 hash=$(git rev-parse --short $(git log -1 --pretty=format:"%H"))
 version="${date_now}-${hash}-${arch}"
-echo -n $version > ${production_dir}/version.txt
-
-target_dir=emotiq-${version}-${arch}
+target_dir=emotiq-${version}
 mkdir -p ${production_dir}/${target_dir}
+
+echo -n $version > ${production_dir}/version.txt
 
 case ${uname_s} in
   Linux*)
