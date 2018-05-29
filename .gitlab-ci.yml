@@ -52,7 +52,7 @@ test:macos:lispworks:
     - macos
   variables:
     LISP: lispworks
-    SYSTEMS: ":cosi-bls-tests :crypto-pairings"
+    # SYSTEMS: ":cosi-bls-tests :crypto-pairings"
 
 test:macos:ccl:
   <<: *test_definition
