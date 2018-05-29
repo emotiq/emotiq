@@ -7,8 +7,9 @@ variables:
 
 stages:
   - test
-  - build
+  - build_test
   - test_binary
+  - build_release
   - release
   - deploy
 
@@ -60,10 +61,12 @@ test:macos:ccl:
   variables:
     LISP: ccl
 
-.build: &build_definition
-  stage: build
+.build_test: &build_test_definition
+  stage: build_test
   variables:
     LISP: lispworks
+  except:
+    - tags
   script:
     - etc/build.bash testing
   artifacts:
@@ -71,13 +74,13 @@ test:macos:ccl:
     paths:
       - var/
 
-build:linux:
-  <<: *build_definition
+build_test:linux:
+  <<: *build_test_definition
   tags:
     - linux
 
-build:macos:
-  <<: *build_definition
+build_test:macos:
+  <<: *build_test_definition
   tags:
     - macos
 
@@ -85,6 +88,8 @@ build:macos:
   stage: test_binary
   variables:
     LISP: lispworks
+  except:
+    - tags
   script:
     - var/local/production/emotiq-$(cat var/local/production/version.txt)/emotiq.bash
 
@@ -93,14 +98,37 @@ test_binary:linux:
   tags:
     - linux
   dependencies:
-    - build:linux
+    - build_test:linux
 
 test_binary:macos:
   <<: *testbin_definition
   tags:
     - macos
   dependencies:
-    - build:macos
+    - build_test:macos
+
+.build_release: &build_release_definition
+  stage: build_release
+  variables:
+    LISP: lispworks
+  only:
+    - tags
+  script:
+    - etc/build.bash production
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - var/
+
+build_release:linux:
+  <<: *build_release_definition
+  tags:
+    - linux
+
+build_release:macos:
+  <<: *build_release_definition
+  tags:
+    - macos
 
 release:
   stage: release
@@ -127,9 +155,9 @@ release:
 deploy:linux:
   <<: *deploy_definition
   dependencies:
-    - build:linux
+    - build_release:linux
 
 deploy:macos:
   <<: *deploy_definition
   dependencies:
-    - build:macos
+    - build_release:macos
