@@ -41,52 +41,15 @@ THE SOFTWARE.
                 :weak :value)
   )
 
-;; this is just a sanity check set in (unregister-aid) and checked
-;; in (port-routing-handler) (:NON-EXISTENT-ACTOR case)
-(defparameter *previously-unregistered* (make-hash-table :test 'equal))
-
 (um:defmonitor
     ((associate-aid-with-actor (aid actor)
        (setf (gethash aid *aid-tbl*) actor))
      
      (lookup-actor-for-aid (aid)
        (gethash aid *aid-tbl*))
-     
-     (unregister-aid (aid)
-       (pr (format nil "unregistering ~A" aid))
-       (setf (gethash aid *previously-unregistered*) t)
-       (remhash aid *aid-tbl*))
      ))
 
-#|
-(defclass return-addr ()
-  ((pkey     :reader   return-addr-pkey ;; node pkey for the actor
-             :initarg  :pkey)
-   (aid      :reader   return-addr-aid  ;; actor id for returns
-             :initarg  :aid)))
-
-(defmethod make-return-addr ((node node))
-  (make-return-addr (node-pkey node)))
-
-(defmethod make-return-addr ((pkey pbc:public-key))
-  ";; can only be called from within an Actor body. Create a unique AID
-  ;; and associate that with the calling Actor for use with received
-  ;; messages directed at the Actor. Also construct and return a
-  ;; return-addr object, which can be used as a network portable
-  ;; reply-to tag."
-  (let ((aid  (gen-uuid-int))
-        (self (current-actor)))
-    (associate-aid-with-actor aid self)
-    (make-instance 'return-addr
-                   :pkey  pkey
-                   :aid   aid)))
-
-(defmethod unregister-return-addr ((ret return-addr))
-  (unregister-aid (return-addr-aid ret)))
-|#
 ;; -----------------------------------------------------------------
-
-
 
 ;;; TODO use the network transport layer in gossip to resolve this
 ;;; need.  For now this is needed to pass cosi messages on the local
@@ -100,6 +63,7 @@ THE SOFTWARE.
   (prog1
       2887548929 ;; aka "127.0.0.1" as an integer
     (warn "Unimplemented lookup of machine hostname under this implementation")))
+
 
 (defvar *cosi-port* 65001)
 
@@ -116,7 +80,7 @@ THE SOFTWARE.
     (associate-aid-with-actor aid obj)
     (sdle-store:backend-store-object backend ret stream)))
 
-(defmethod send ((addr actor-return-addr) &rest msg)
+(defmethod ac:send ((addr actor-return-addr) &rest msg)
   (socket-send (actor-return-addr-ip   addr)
                (actor-return-addr-port addr)
                (actor-return-addr-aid  addr)
@@ -131,13 +95,7 @@ THE SOFTWARE.
     (let ((dest (or aid pkey)))
       (socket-send ip port dest msg))))
 
-#|
-(defmethod gossip-send :around (pkey aid msg)
-  (pr (format nil "~A ~A ~A"  (short-id pkey) aid msg))
-  (call-next-method))
-|#
-
-(defmethod send ((pkey pbc:public-key) &rest msg)
+(defmethod ac:send ((pkey pbc:public-key) &rest msg)
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
     (unless node
       (pr (format nil "Unknown pkey: ~A" (short-id pkey))))
@@ -145,27 +103,17 @@ THE SOFTWARE.
       (when (node-byz node)
         (pr (format nil "Byzantine node: ~A" (short-id pkey))))
       (unless (node-byz node)
-        (gossip-send pkey nil msg)))))
+        (if (eq node *current-node*)
+            (apply 'ac:send (node-self node) msg)
+          (gossip-send pkey nil msg))))))
 
-(defmethod send ((node node) &rest msg)
+(defmethod ac:send ((node node) &rest msg)
   (when (node-byz node)
     (pr (format nil "Byzantine-node: ~A" (short-id node))))
   (unless (node-byz node)
-    (gossip-send (node-pkey node) nil msg)))
-
-#|
-(defmethod send ((ref return-addr) &rest msg)
-  (gossip-send (return-addr-pkey ref)
-               (return-addr-aid  ref)
-               msg))
-|#
-
-(defmethod send ((node null) &rest msg)
-  (ac:pr :sent-to-null msg)
-  msg)
-
-(defmethod send (dest &rest msg)
-  (apply 'ac:send dest msg))
+    (if (eq node *current-node*)
+        (apply 'ac:send (node-self node) msg)
+      (gossip-send (node-pkey node) nil msg))))
 
 ;; -----------------
 
@@ -232,16 +180,10 @@ THE SOFTWARE.
                    (when node
                      (when (eq node *my-node*)
                        (pr (format nil "fowarding-by-default-to-me: ~A" msg)))
-                     (assert (typep node 'node))
-                     (assert (typep (node-self node) 'ac:actor))
                      (apply 'ac:send (node-self node) msg))))
                 (t
                  (let ((actor (lookup-actor-for-aid dest)))
-                   (unless actor
-                     (let ((prev (gethash dest *previously-unregistered*)))
-                       (pr (format nil "~A :non-existent-actor ~a ~a" (if prev "OK: " "ERROR: ") prev dest))))
                    (when actor
-                     (assert (typep actor 'ac:actor))
                      ;; for debug... -------------------
                      (when (eq actor (node-self *my-node*))
                        (pr (format nil "forwarding-specifically-to-me: ~A" msg)))
@@ -262,7 +204,7 @@ THE SOFTWARE.
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *socket-open*
     (setf *socket-open* nil)
-    (ac:send *sender* *local-ip* port "ShutDown")))
+    (send *sender *local-ip* port "ShutDown")))
 
 ;;; For binary delivery, we need to allocate keypair memory at
 ;;; runtime.  
@@ -277,13 +219,9 @@ THE SOFTWARE.
                                (pbc:keying-triple-pkey (hmac-keypair))
                                (pbc:keying-triple-skey (hmac-keypair))))
            (packet  (loenc:encode payload)))
-      (ac:send *sender* ip port packet))))
-
-#|
-(defmethod socket-send :around (ip port dest msg)
-  (pr (format nil "~A ~A ~A ~A" ip port (short-id dest) msg))
-  (call-next-method))
-|#
+      ;; (ac:send *sender* ip port packet) ;; for now, while testing...
+      (ac:send *handler* packet)
+      )))
 
 ;; ------------------------------------------------------------------
 ;; deprecated TCP/IP over Butterfly...

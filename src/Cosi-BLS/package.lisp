@@ -235,6 +235,7 @@
    :smapc
    :spawn
    :current-actor
+   :send
    :recv
    :become
    :par
@@ -255,6 +256,7 @@
    :node-blockchain-tbl
    :node-mempool
    :node-utxo-table
+   :node-current-leader
    :*top-node*
    :*leader*
    :*blockchain*
