@@ -4,7 +4,7 @@ variables:
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
   lisp: lisp-wrapper.sh
-  SYSTEMS: ":cosi-bls-tests :crypto-pairings :gossip-tests"
+  systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
 
 
 stages:
@@ -69,7 +69,7 @@ test:macos:ccl:
   variables:
     LISP: lispworks
   script:
-    - etc/build.bash
+    - etc/build-binary.bash
   artifacts:
     expire_in: 1 week
     paths:
