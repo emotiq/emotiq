@@ -95,6 +95,7 @@ THE SOFTWARE.
    #:<shared-plist>
    #:get-kv
    #:symb)
+
   #+:LISPWORKS
   (:import-from :mp
    :make-timer
@@ -160,6 +161,9 @@ THE SOFTWARE.
    #:set-executive-pool
    #:with-borrowed-mailbox
    #:do-nothing
+
+   #:install-actor-system
+
    ))
 
 (defpackage #:linda
