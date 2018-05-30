@@ -39,6 +39,8 @@ test:linux:lispworks:
     - linux
   variables:
     LISP: lispworks
+    systems: ":cosi-bls-tests :crypto-pairings"
+
 
 test:linux:ccl:
   <<: *test_definition
