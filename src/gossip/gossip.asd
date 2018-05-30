@@ -16,6 +16,7 @@
   :components ((:file "package")
                #+OPENMCL (:file "ccl-sockets-patch")
                (:file "socket-actors")
+               (:file "monads")
                (:file "gossip")
                (:file "http-fetch")
                (:file "graphviz")

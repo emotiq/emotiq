@@ -4,15 +4,16 @@
 
 (in-package :gossip)
 
-(defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
-  in which to look for config files, more preferred first")
-
-(defun make-config-host ()
-  "Look for config directory"
-  (some (lambda (subpath)
-          (when (probe-file (asdf:system-relative-pathname :emotiq subpath))
-            (ipath:define-illogical-host :gossip-config (asdf:system-relative-pathname :emotiq subpath))))
-        *config-paths*))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
+    in which to look for config files, more preferred first")
+  
+  (defun make-config-host ()
+    "Look for config directory"
+    (some (lambda (subpath)
+            (when (probe-file (asdf:system-relative-pathname :emotiq subpath))
+              (ipath:define-illogical-host :gossip-config (asdf:system-relative-pathname :emotiq subpath))))
+          *config-paths*)))
 
 (eval-when (:load-toplevel :execute) 
   (when (make-config-host)
@@ -103,9 +104,12 @@
                         (run-gossip-sim :TCP)
                         (let ((uids nil))
                           (setf hosts-uids
+                                #+IGNORE
                                 (loop for host in hosts
                                   when (setf uids (apply 'list-uids host))
-                                  collect (append host uids)))))
+                                  collect (append host uids))
+                                (multiple-list-uids hosts)
+                                )))
                        (t (error "Hosts file hosts.conf not found or invalid")))
                  hosts-uids))))
 

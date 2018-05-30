@@ -51,16 +51,24 @@
          (dotfile (merge-pathnames (make-pathname :name name :type "dot") folder)))
     dotfile))
 
+(defun short (n)
+  "Returns a (possibly shortened) string version of integer n."
+  (let ((orig (format nil "~D" n)))
+    (cond ((> (length orig) 12)
+           (concatenate 'string (subseq orig 0 4) "..." (subseq orig (- (length orig) 4))))
+          (t orig))))
+
 (defmethod draw-node ((node proxy-gossip-node) stream edgetable)
   "Draw proxy node showing UID, real address, and real port"
   (declare (ignore edgetable))
-  (format stream "~%  \"~A\" [fontsize=\"10.0\", label=<~A<BR /> ~
+  (format stream "~%  \"~A\" [fontsize=\"10.0\", tooltip=\"~A\", label=<~A<BR /> ~
         <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
+                     (short (uid node))
                      (uid node)
-                     (uid node)
+                     (short (uid node))
                      (real-address node)
                      (real-port node)
-                     (real-uid node)))
+                     (short (real-uid node))))
 
 #| OLD
 (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
@@ -68,14 +76,15 @@
 |#
 
 (defmethod draw-node ((node gossip-node) stream edgetable)
-  (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+  (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\\N\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+          (short (uid node))
           (uid node))
   (dolist (neighbor (neighbors node))
     (let* ((minuid (min neighbor (uid node)))
            (maxuid (max neighbor (uid node)))
            (key (cons minuid maxuid)))
       (unless (gethash key edgetable) ; don't draw links twice
-        (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
+        (format stream "~%  \"~A\" -- \"~A\";" (short (uid node)) neighbor)
         (setf (gethash key edgetable) t)))))
 
 (defun write-inner-commands (stream nodelist)

@@ -269,7 +269,8 @@ are in place between nodes.
    (kind :initarg :kind :initform nil :accessor kind
          :documentation "The verb of the message, indicating what action to take.")
    (args :initarg :args :initform nil :accessor args
-         :documentation "Payload of the message. Arguments to kind.")))
+         :documentation "Payload of the message. Arguments to kind.")
+   ))
 
 (defgeneric copy-message (msg)
   (:documentation "Copies a message object verbatim. Mainly for simulation mode
@@ -286,7 +287,7 @@ are in place between nodes.
     new-msg))
 
 (defclass solicitation (gossip-message-mixin)
-  ((forward-to :initarg :forward :initform *use-all-neighbors* :accessor forward-to
+  ((forward-to :initarg :forward-to :initform *use-all-neighbors* :accessor forward-to
              :documentation "Normally true, which means this solicitation should be forwarded to neighbors
              of the one that originally received it. If nil, it means never forward. In that case, if a reply is expected,
              just reply immediately.
@@ -683,6 +684,7 @@ dropped on the floor.
           (let* ((solicitation (make-solicitation
                                 :reply-to (uid node)
                                 :kind kind
+                                :forward-to ':neighborcast
                                 :args args))
                  (soluid (uid solicitation)))
             (send-msg solicitation
@@ -694,7 +696,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   :TIMEOUT)
+                   (except :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -745,7 +747,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   :TIMEOUT)
+                   (except :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -781,8 +783,8 @@ dropped on the floor.
                                                              (lambda () response))))
                 (values 
                  (if win
-                     (first (args response))
-                     :TIMEOUT)
+                     (first (args (first response)))
+                     (except :TIMEOUT))
                  soluid)))
           (setf (logfn node) old-logger))))))
 
@@ -799,6 +801,30 @@ dropped on the floor.
         (progn
           (setf localnode (make-node
                            :NEIGHBORS (list (uid rnode))))
+          ;(format t "~%Localnode UID = ~D" (uid localnode))
+          (setf allnodes (solicit-direct localnode :list-alive))
+          ; remove localnode's uid because it will have been included
+          (setf allnodes (remove (uid localnode) allnodes)))
+      (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
+      )))
+
+(defun multiple-list-uids (address-port-list)
+  "Get a list of all UIDs of nodes at given remote address and port in
+   list like ((address port) (address port) ...).
+   This uses gossip and works in parallel, while looping on list-uids does not.
+   If no error, returned list will look like
+   (address port uid1 uid2 ...)
+   If error, returned list will look like
+   (address port :ERRORMSG arg1 arg2 ...)"
+  (let ((rnodes nil)
+        (localnode nil)
+        (allnodes nil))
+    (setf rnodes (mapcar (lambda (addressport)
+                           (ensure-proxy-node :TCP (first addressport) (second addressport) 0))
+                         address-port-list))
+    (unwind-protect
+        (progn
+          (setf localnode (make-node :NEIGHBORS (mapcar 'uid rnodes)))
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
@@ -1395,7 +1421,15 @@ dropped on the floor.
     (cancel-replier thisnode kind soluid srcuid)))
 
 (defgeneric initial-reply-value (kind thisnode msgargs)
-  (:documentation "Initial the reply-value for the given kind of message"))
+  (:documentation "Initial the reply-value for the given kind of message. Must return an augmented-data object."))
+
+(defmethod initial-reply-value :around (kind thisnode msgargs)
+  "Ensure an augmented-data object is getting returned."
+  (declare (ignore thisnode msgargs))
+  (let ((datum (call-next-method)))
+    (if (typep datum 'augmented-data)
+        datum
+        (augment datum `((:kind . ,kind) (:eripa . ,(eripa)) (:port . ,*actual-tcp-gossip-port*))))))
 
 (defmethod initial-reply-value ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) msgargs)
   (let* ((key (first msgargs))
@@ -1414,7 +1448,7 @@ dropped on the floor.
   (declare (ignore msgargs))
   (list (address thisnode)))
 
-(defmethod initial-reply-value ((kind (eql :find-max)) (thisnode gossip-node)  msgargs)
+(defmethod initial-reply-value ((kind (eql :find-max)) (thisnode gossip-node) msgargs)
   (let ((key (first msgargs)))
     (kvs:lookup-key (local-kvs thisnode) key)))
 
@@ -1674,27 +1708,27 @@ gets sent back, and everything will be copacetic.
       (set-previous-reply node soluid srcuid new-reply)
       t)))
 
-(defgeneric coalescer (kind)
-  (:documentation "Reduction function for a particular message kind."))
+(defgeneric data-coalescer (kind)
+  (:documentation "Coalescer (reducer) for two arguments for a given kind of reply."))
 
-(defmethod coalescer ((kind (eql :COUNT-ALIVE)))
+(defmethod data-coalescer ((kind (eql :COUNT-ALIVE)))
   "Proper coalescer for :count-alive responses."
   '+)
 
-(defmethod coalescer ((kind (eql :LIST-ALIVE)))
+(defmethod data-coalescer ((kind (eql :LIST-ALIVE)))
   "Proper coalescer for :list-alive responses. Might
    want to add a call to remove-duplicates here if we start
    using a gossip protocol not guaranteed to ignore redundancies)."
   'append)
 
-(defmethod coalescer ((kind (eql :LIST-ADDRESSES)))
+(defmethod data-coalescer ((kind (eql :LIST-ADDRESSES)))
   'append)
 
-(defmethod coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
+(defmethod data-coalescer ((kind (eql :GOSSIP-LOOKUP-KEY)))
   "Proper coalescer for :GOSSIP-LOOKUP-KEY responses."
   'multiple-tally)
 
-(defmethod coalescer ((kind (eql :FIND-MAX)))
+(defmethod data-coalescer ((kind (eql :FIND-MAX)))
   (lambda (x y) (cond ((and (numberp x)
                             (numberp y))
                        (max x y))
@@ -1704,7 +1738,7 @@ gets sent back, and everything will be copacetic.
                        y)
                       (t nil))))
 
-(defmethod coalescer ((kind (eql :FIND-MIN)))
+(defmethod data-coalescer ((kind (eql :FIND-MIN)))
   (lambda (x y) (cond ((and (numberp x)
                             (numberp y))
                        (min x y))
@@ -2084,7 +2118,10 @@ original message."
                 (reply-to msg)
                 (uid msg) ; soluid
                 (kind msg)
-                `(:CANNOT-TRANSMIT :to ,(real-address node))))))))
+                (except :name ':CANNOT-TRANSMIT
+                        :condition errorp
+                        :metadata `((:remote-address . ,(real-address node))
+                                            (:remote-port    . ,(real-port node))))))))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
