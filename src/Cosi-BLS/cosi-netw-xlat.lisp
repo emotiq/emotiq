@@ -204,7 +204,7 @@ THE SOFTWARE.
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *socket-open*
     (setf *socket-open* nil)
-    (send *sender *local-ip* port "ShutDown")))
+    (send *sender* *local-ip* port "ShutDown")))
 
 ;;; For binary delivery, we need to allocate keypair memory at
 ;;; runtime.  
