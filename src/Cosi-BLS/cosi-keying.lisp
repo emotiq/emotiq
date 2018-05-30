@@ -194,7 +194,7 @@ THE SOFTWARE.
   (check-type val (integer 0))
   (assert (<= (integer-length val) 256))
   (let* ((h  (hash:hash/256 (vec-repr:levn val 32)))
-         (v  (dpb (aref h 0) (byte 8 256) val)))
+         (v  (dpb (aref (vec-repr:lev-vec h) 0) (byte 8 256) val)))
     (loop for ct from 0 below 24
           for pos from 0 by 11
           collect (aref wref (ldb (byte 11 pos) v)))
@@ -222,7 +222,7 @@ THE SOFTWARE.
                                                 :test 'string-equal)))
     (let* ((val (ldb (byte 256 0) v))
            (h   (hash:hash/256 (vec-repr:levn val 32))))
-      (unless (= (aref h 0) (ldb (byte 8 256) v))
+      (unless (= (aref (vec-repr:lev-vec h) 0) (ldb (byte 8 256) v))
         (error "Invalid wordlist"))
       val)))
 
