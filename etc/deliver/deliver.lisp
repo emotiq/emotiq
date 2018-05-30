@@ -4,8 +4,6 @@
 ;; QuickLisp should be properly configured by now
 (load "~/quicklisp/setup.lisp")
 
-<<<<<<< variant A
->>>>>>> variant B
 ;; This Lisp code loads memory with the Emotiq system and call DELIVER to build
 ;; a binary version of Emotiq.  The binary must call the entry point EMOTIQ:START
 ;; (or a reasonable facsimile).  Building the binary requires "special treatment",
@@ -22,9 +20,11 @@
 
 (defparameter cl-user::*performing-binary-build* :performing-binary-delivery)
 
-(ql:quickload :emotiq/startup)
 (ql:quickload :swank) ;; HACK: Needed for implicit dependency in the
-                      ;; RESTAS dependency of EMOTIQ-REST
+                      ;; RESTAS dependency of EMOTIQ-REST.  Needs to
+                      ;; occur before other quickload of
+                      ;; EMOTIQ/STARTUP dependencies.
+(ql:quickload :emotiq/startup)
 
 ;; After loading the Emotiq system into memory, we call DELIVER, which is somewhat
 ;; like SAVE-IMAGE.  DELIVER can perform various optimizations (tree-shaking, symbol-removal)
