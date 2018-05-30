@@ -1,4 +1,8 @@
-* Developement notes
+* Implementation notes
+
+Use JSON-RPC 2.0 with notifications for publish/subscribe events
+
+* Development notes
 ** Problem compiling clack-20170630-git with Lispworks
 
 #+BEGIN_EXAMPLE

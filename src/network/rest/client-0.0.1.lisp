@@ -29,6 +29,8 @@ gives the toplevel definitions of the following functions:")
        (:dd "Return information about the default wallet.")
        (:dt "keyphrase()")
        (:dd "Return the recovery phrase of the default wallet.")
+       (:dt "ping()")
+       (:dd "Ping service test.")
        (:dt "transactions()")
        (:dd "Return all transactions associated with the default wallet."))))))
 
@@ -82,6 +84,10 @@ gives the toplevel definitions of the following functions:")
 
     (defun keyphrase ()
       (let ((message (form-rpc-request "recovery-phrase" nil)))
+        (send message)))
+
+    (defun ping ()
+      (let ((message (form-rpc-request "ping" nil)))
         (send message)))
 
     (defun transactions ()

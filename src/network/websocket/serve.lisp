@@ -50,6 +50,13 @@
                                :id (alexandria:assoc-value request :id))))
            (note "Spawning thread to mock consensus replies.")
            (bt:make-thread (lambda () (consensus resource response)))))
+        ((string= method "ping")
+         (let ((response 
+                (make-instance 'response
+                               :id (alexandria:assoc-value request :id)
+                               :result "pong")))
+           (broadcast resource (json:with-explicit-encoder
+                                   (cl-json:encode-json-to-string response)))))
         ((string= method "wallet")
          (let ((response 
                 (make-instance 'response
