@@ -3,7 +3,7 @@ variables:
   GITHUB_REPO: emotiq
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
-  lisp: $HOME/bin/lisp-wrapper.sh
+  lisp: $$HOME/bin/lisp-wrapper.sh
   SYSTEMS: ":cosi-bls-tests :crypto-pairings :gossip-tests"
 
 
