@@ -17,7 +17,7 @@
 
 (defclass exception (monad metadata-mixin)
   ((name :initarg :name :initform nil :accessor name)
-   (condition :initarg :condition :initform nil :accessor condition
+   (exception-condition :initarg :exception-condition :initform nil :accessor exception-condition
               :documentation "error condition if any"))
   (:documentation "Monad for some kind of exception, such as an error."))
 
@@ -34,7 +34,7 @@
 
 (defmethod unwrap ((ex exception))
   (values (name ex)
-          (condition ex)
+          (exception-condition ex)
           (metadata ex)))
 
 (defmethod bind (fn (monad monad))

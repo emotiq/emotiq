@@ -2119,7 +2119,7 @@ gets sent back, and everything will be copacetic.
                 (uid msg) ; soluid
                 (kind msg)
                 (except :name ':CANNOT-TRANSMIT
-                        :condition errorp
+                        :exception-condition errorp
                         :metadata `((:remote-address . ,(real-address node))
                                             (:remote-port    . ,(real-port node))))))))))
 
