@@ -1363,17 +1363,18 @@ bother factoring it with NODE-COSI-SIGNING."
   (spawn
    (lambda ()
      (labels
-         ((send-tx-to-all (tx)
+         ((bcast-msg (&rest msg)
             (map nil (lambda (node)
-                       (send node :new-transaction
-                             :trn tx))
+                       (apply 'send node msg))
                  *node-bit-tbl*))
+          (send-tx-to-all (tx)
+            (bcast-msg :new-transaction :trn tx))
           (send-genesis-to-all (utxo)
-            (map nil (lambda (node)
-                       (send node :genesis-utxo
-                             :utxo utxo))
-                 *node-bit-tbl*)))
+            (bcast-msg :genesis-utxo :utxo utxo))
+          (become-witness ()
+            (bcast-msg :become-witness)))
        
+       (become-witness)
        ;; -------------------------------------------------------------
        ;; manufacture two transactions and send to all nodes
        (if *trans1*
@@ -1436,9 +1437,11 @@ bother factoring it with NODE-COSI-SIGNING."
        ;; ------------------------------------------------------------------------
        (sleep 10)
        (map nil (lambda (node)
+                  (setf (node-current-leader node) (node-pkey *top-node*))
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
+       (send *top-node* :become-leader)
        (send *top-node* :make-block)
        ))))
 
@@ -1450,17 +1453,18 @@ bother factoring it with NODE-COSI-SIGNING."
   (spawn
    (lambda ()
      (labels
-         ((send-tx-to-all (tx)
+         ((bcast-msg (&rest msg)
             (map nil (lambda (node)
-                       (send node :new-transaction
-                             :trn tx))
+                       (apply 'send node msg))
                  *node-bit-tbl*))
+          (send-tx-to-all (tx)
+            (bcast-msg :new-transaction :trn tx))
           (send-genesis-to-all (utxo)
-            (map nil (lambda (node)
-                       (send node :genesis-utxo
-                             :utxo utxo))
-                 *node-bit-tbl*)))
+            (bcast-msg :genesis-utxo :utxo utxo))
+          (become-witness ()
+            (bcast-msg :become-witness)))
        
+       (become-witness)
        ;; -------------------------------------------------------------
        ;; manufacture two transactions and send to all nodes
        (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
@@ -1519,9 +1523,11 @@ bother factoring it with NODE-COSI-SIGNING."
        ;; ------------------------------------------------------------------------
        (sleep 10)
        (map nil (lambda (node)
+                  (setf (node-current-leader node) (node-pkey *top-node*))
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
+       (send *top-node* :become-leader)
        (send *top-node* :make-block)
        ))))
 
