@@ -46,11 +46,6 @@
     :reader block-signature
     :documentation
     "A signature over the whole block authorizing all transactions.")
-   (signature-pkey
-    :initform nil
-    :reader block-signature-pkey
-    :documentation
-    "Public key for block-signature")
    (signature-bitmap
     :reader block-signature-bitmap
     :initform 0
@@ -98,7 +93,6 @@
     election-proof
 
     signature
-    signature-pkey
     signature-bitmap
 
     witnesses
@@ -285,8 +279,7 @@ added to the blockchain."
   "Update BLOCK, an eblock instance, slots per SIG, an instance of
    pbc:signed-message, and BITS, a bitmap with format as documented
    for the signature-bitmap slot of eblock."
-  (with-slots (signature signature-pkey signature-bitmap)
+  (with-slots (signature signature-bitmap)
       block
     (setf signature (pbc:signed-message-sig sig))
-    (setf signature-pkey (pbc:signed-message-pkey sig))
     (setf signature-bitmap bits)))

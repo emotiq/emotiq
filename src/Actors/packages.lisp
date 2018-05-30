@@ -95,6 +95,7 @@ THE SOFTWARE.
    #:<shared-plist>
    #:get-kv
    #:symb)
+
   #+:LISPWORKS
   (:import-from :mp
    :make-timer
@@ -111,6 +112,7 @@ THE SOFTWARE.
    :schedule-timer-relative
    :unschedule-timer)
   (:export
+   #:install-actor-system
    #:*nbr-execs*
    #:actor
    #:make-actor
@@ -159,6 +161,9 @@ THE SOFTWARE.
    #:set-executive-pool
    #:with-borrowed-mailbox
    #:do-nothing
+
+   #:install-actor-system
+
    ))
 
 (defpackage #:linda
