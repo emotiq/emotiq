@@ -29,12 +29,7 @@ THE SOFTWARE.
 (in-package :emotiq/elections)
 ;; ---------------------------------------------------------------
 
-(defvar *beacon-timer* nil)
 (defvar *beacon-interval*  20)
-(defvar *self-destruct*    nil)
-
-(defun kill-beacon ()
-  (setf *self-destruct* t))
 
 ;; ordered list/vector of all known stakeholders
 ;; in real life, this should be an ordered list/vector of *real-nodes*
@@ -56,36 +51,62 @@ THE SOFTWARE.
 ;;;           (send (node-ip-addr node) :hold-an-election n))
 ;;;         *all-nodes*))
 
-(defvar *beacon-actor*
-  (ac:make-actor
-   (lambda (&rest msg)
-     (declare (ignore msg))
-     (let ((rand (/ (random 1000000) 1000000)))
-       (ac:pr (format nil "~%sending :hold-an-election = ~A" rand))
-       (mapc #'(lambda (node)
-                 (cosi-simgen:send node :hold-an-election
-                                   :n rand))
-             *all-nodes*)))))
+(defvar *beacon-actor* nil)
+
+(defun beacon-loop (&rest msg)
+  (labels ((hold-election ()
+             (let ((rand (/ (random 1000000) 1000000)))
+               (ac:pr (format nil "~%sending :hold-an-election = ~A" rand))
+               (mapc #'(lambda (node)
+                         (ac:send node :hold-an-election
+                                  :n rand))
+                     *all-nodes*)))
+           (doit ()
+             ;; calling doit also restarts the clock
+             (ac:recv
+               ((list :start)
+                (ac:pr "Beacon already running")
+                (doit))
+               
+               ((list :kill)
+                (ac:pr "Beacon terminated"))
+               
+               ((list :hold-election)
+                (hold-election)
+                (doit))
+               
+               :TIMEOUT    *beacon-interval*
+               :ON-TIMEOUT (progn
+                             (hold-election)
+                             (doit))
+               )))
+    (um:dcase msg
+      (:start ()
+       (ac:pr "Beacon started")
+       (doit))
+
+      (:kill ()
+       (ac:pr "Beacon wasn't running"))
+
+      (:hold-election ()
+       (hold-election))
+      )))
 
 (defun fire-election ()
   ;; for manual testing...
-  (ac:send *beacon-actor* :doit))
+  (when *beacon-actor*
+    (ac:send *beacon-actor* :hold-election)))
 
 (defun make-election-beacon ()
-  (unless *beacon-timer*
-    (setf *beacon-timer* (ac::make-timer
-                          (lambda ()
-                            (cond (*self-destruct*
-                                   (ac::unschedule-timer *beacon-timer*)
-                                   (ac:pr "Beacon terminated")
-                                   (setf *self-destruct* nil
-                                         *beacon-timer* nil))
-                                  (t
-                                   (fire-election))
-                                  )))))
-  (ac::schedule-timer-relative *beacon-timer* *beacon-interval* *beacon-interval*))
+  (if *beacon-actor*
+      (ac:send *beacon-actor* :start)
+    (setf *beacon-actor* (ac:spawn 'beacon-loop :start))))
 
-;;; ;; --------------------------------------------------
+(defun kill-beacon ()
+  (when *beacon-actor*
+    (ac:send *beacon-actor* :kill)))
+
+;; --------------------------------------------------
 
 (defclass tree-node ()
   ((l   :reader tree-node-l
