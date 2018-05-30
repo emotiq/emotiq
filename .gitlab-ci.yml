@@ -1,0 +1,118 @@
+variables:
+  GITHUB_USER: emotiq
+  GITHUB_REPO: emotiq
+  LWPRO: lwpro
+  LWPRO_MACOS_64: lwpro
+  lisp: $HOME/bin/lisp-wrapper.sh
+  SYSTEMS: ":cosi-bls-tests :crypto-pairings :gossip-tests"
+
+
+stages:
+  - test
+  - build_test
+  - test_binary
+  - build_release
+  - release
+  - deploy
+
+before_script:
+  - export PATH="$HOME/bin:$PATH"
+  - ci/install-lisp.sh
+  - lisp-wrapper.sh -e '(ql-dist:install-dist
+              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
+               :replace t :prompt nil)
+            (ql-dist:install-dist
+              "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
+               :prompt nil)
+            (uiop:quit 0)'
+
+.test: &test_definition
+  stage: test
+  script:
+    - lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
+    - lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
+    - etc/test-harness.bash
+
+test:linux:lispworks:
+  <<: *test_definition
+  tags:
+    - linux
+  variables:
+    LISP: lispworks
+
+test:linux:ccl:
+  <<: *test_definition
+  tags:
+    - linux
+  variables:
+    LISP: ccl
+
+# :gossip-tests stuck forever with LispWorks/macOS
+test:macos:lispworks:
+  <<: *test_definition
+  tags:
+    - macos
+  variables:
+    LISP: lispworks
+    # SYSTEMS: ":cosi-bls-tests :crypto-pairings"
+
+test:macos:ccl:
+  <<: *test_definition
+  tags:
+    - macos
+  variables:
+    LISP: ccl
+
+
+.build_release: &build_release_definition
+  stage: build_release
+  variables:
+    LISP: lispworks
+  script:
+    - etc/build.bash
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - var/
+
+build_release:linux:
+  <<: *build_release_definition
+  tags:
+    - linux
+
+build_release:macos:
+  <<: *build_release_definition
+  tags:
+    - macos
+
+release:
+  stage: release
+  tags:
+    - linux
+  only:
+    - tags
+  variables:
+    LISP: ccl
+  script:
+    - github-release release --tag ${CI_COMMIT_TAG} -c ${CI_COMMIT_SHA} -d "${CI_COMMIT_MESSAGE}"
+
+.deploy: &deploy_definition
+  stage: deploy
+  variables:
+    LISP: lispworks
+  tags:
+    - linux
+  only:
+    - tags
+  script:
+    - ci/publish.sh
+
+deploy:linux:
+  <<: *deploy_definition
+  dependencies:
+    - build_release:linux
+
+deploy:macos:
+  <<: *deploy_definition
+  dependencies:
+    - build_release:macos
