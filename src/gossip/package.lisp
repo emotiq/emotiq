@@ -5,6 +5,7 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:gossip-startup
    #:*nodes*
    #:*log-filter*
    #:make-graph
