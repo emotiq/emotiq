@@ -85,7 +85,8 @@ THE SOFTWARE.
   (unless (sdle-store:find-backend 'loe-back-end)
     (sdle-store:defbackend loe-back-end
                            :magic-number (um:magic-word "RALE") ;; RAL Encoding
-                           :extends      (sdle-store:sdle-store))))
+                           :extends      (sdle-store:sdle-store)
+                           )))
 
 ;; ---------------------------------------------------------
 
