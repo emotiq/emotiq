@@ -14,7 +14,8 @@
              (setf local-epoch 
                    (if (> i iterations-until-sync)
                        epoch
-                       (random (- epoch local-epoch))))
+                       (+ local-epoch
+                          (random (- epoch local-epoch)))))
              (setf i (1+ i))))
       (loop
          :do (let ((notification
