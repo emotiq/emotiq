@@ -28,28 +28,51 @@
   (declare (ignore client))
   (note "~a has disconnected." resource))
 
-(defvar *messages* nil)
-
 (defun broadcast (resource json)
   (loop :for peer :in (hunchensocket:clients resource)
      :doing (hunchensocket:send-text-message peer json)))
 
+(defun send-as-json (client cl-json-object)
+  (let ((json (json:with-explicit-encoder
+                (cl-json:encode-json-to-string cl-json-object))))
+    (hunchensocket:send-text-message client json)))
+
+         
+
 (defmethod hunchensocket:text-message-received ((resource wallet-server) client message)
-  (declare (ignore client))
-  (note "~a sent message ~a." resource message)
-  (push message *messages*)
+  (note "~a-->~a:~&~t~a~&" client resource message)
   (let ((request  (cl-json:decode-json-from-string message)))
     (let ((method (alexandria:assoc-value request :method)))
       (unless method
         (note "No method specified in message: ~a" message)
         (return-from hunchensocket:text-message-received nil))
       (cond
-        ((string= method "consensus")
+        ((string= method "subscribe")
+         (let ((response
+                (make-instance 'response
+                               :result `(:true)
+                               :id (alexandria:assoc-value request :id))))
+           ;;; FIXME: locking under load
+           ;;; FIXME: only subscribe to consensus events
+           (pushnew client *consensus-clients*)
+           (unless *consensus-thread*
+             (note "Spawning thread to mock consensus replies.")
+             (bt:make-thread (lambda () (consensus)))
+             (setf *consensus-thread* t))
+           (send-as-json client response)))
+        ((string= method "unsubscribe")
          (let ((response
                 (make-instance 'response
                                :id (alexandria:assoc-value request :id))))
-           (note "Spawning thread to mock consensus replies.")
-           (bt:make-thread (lambda () (consensus resource response)))))
+           (if (not (find client *consensus-clients*))
+               (setf (slot-value response 'error)
+                     "No such subscription.")
+               (progn 
+           ;;; FIXME: locking under load
+                 (setf *consensus-clients* (remove client *consensus-clients*))
+                 (setf (slot-value response 'result)
+                       '(:true))))
+           (send-as-json client response)))
         ((string= method "ping")
          (let ((response 
                 (make-instance 'response
@@ -118,11 +141,11 @@
   ((jsonrpc
     :initform "2.0")
    (id :initarg :id
-    :initform 0)))
+       :initform nil)))
    
 (defclass request (json-rpc)
-  ((method)
-   (params)))
+  ((method :initarg :method)
+   (params :initarg :params)))
 
 (defclass response (json-rpc)
   ((result :initarg :result)

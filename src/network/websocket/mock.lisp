@@ -1,35 +1,35 @@
 (in-package :websocket/wallet)
 
 (defvar *consensus-thread* nil)
+(defvar *consensus-clients*  nil)
 
-(defun consensus (resource response)
-  (let ((epoch (random 10000))
+(defun consensus ()
+  (let ((epoch (+ 1000 (random 10000)))
         (local-epoch 0)
-        (iterations 10))
+        (iterations-until-sync 20)
+        (i 0))
     (flet ((advance ()
              (setf epoch
                    (+ epoch (random 2)))
-             (setf local-epoch
-                   (+ local-epoch
-                      (random (- epoch local-epoch))))))
-      (loop 
-         :for i :upto iterations
-         ;;; Ensure that synchronization succeeds on the last iteration of the mock
-         :when (= i iterations)
-         :do (setf local-epoch epoch)
-         :do
-         (progn 
-           (setf (slot-value response 'result)
-                 `(:object
-                   (:epoch . ,epoch)
-                   (:local-epoch . ,local-epoch)
-                   (:synchronized . ,(cl-json:json-bool (= local-epoch epoch)))))
-           (broadcast
-            resource
-            (json:with-explicit-encoder
-              (cl-json:encode-json-to-string response)))
-           (sleep (random 5))
-           (advance))))))
+             (setf local-epoch 
+                   (if (> i iterations-until-sync)
+                       epoch
+                       (random (- epoch local-epoch))))
+             (setf i (1+ i))))
+      (loop
+         :do (let ((notification
+                    (make-instance 'request
+                                   :method "consensus"
+                                   :params
+                                   `(:object
+                                     (:epoch . ,epoch)
+                                     (:local-epoch . ,local-epoch)
+                                     (:synchronized . ,(cl-json:json-bool (= local-epoch epoch)))))))
+               (loop
+                  :for client :in *consensus-clients*
+                  :do (send-as-json client notification))
+         :do (sleep (random 5))
+         :do (advance))))))
 
 (defun transactions ()
   (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))
