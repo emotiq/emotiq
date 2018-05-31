@@ -1083,7 +1083,7 @@ check that each TXIN and TXOUT is mathematically sound."
               (cond
                ((eql seq sess)
                 (if (and sig
-                         (> (logcount bits) (* 2/3 (length (block-witnesses blk))))
+                         (check-byz-threshold bits blk)
                          (let ((hash (hash/256 (signature-hash-message blk))))
                            (pbc:check-hash hash sig (composite-pkey blk bits))))
                     ;; we completed successfully
@@ -1099,13 +1099,6 @@ check that each TXIN and TXOUT is mathematically sound."
                   (wait-signing))
                )) ;; end of message pattern
              ;; ---------------------------------
-             #|
-             ((list :new-transaction msg)
-              ;; allow processing of new transactions while we wait
-              (let ((*current-node* node))
-                (node-check-transaction msg)
-                (wait-signing)))
-             |#
              ;; ---------------------------------
              ;; :TIMEOUT 30
              ;; :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
@@ -1177,15 +1170,6 @@ check that each TXIN and TXOUT is mathematically sound."
                                
                                ((list :answer (list :timeout-cosi-network))
                                 (pr "Timeout waiting for commitment multisignature"))
-
-                               #|
-                               ;; ---------------------------------
-                               ((list :new-transaction msg)
-                                ;; allow processing of new transactions while we wait
-                                (let ((*current-node* node))
-                                  (node-check-transaction msg)
-                                  (wait-cmt-signing)))
-                               |#
                                )))
                     (wait-cmt-signing))))
                
@@ -1194,15 +1178,6 @@ check that each TXIN and TXOUT is mathematically sound."
                
                ((list :answer (list :timeout-cosi-network))
                 (pr "Timeout waiting for prepare multisignature"))
-
-               #|
-               ;; ---------------------------------
-               ((list :new-transaction msg)
-                ;; allow processing of new transactions while we wait
-                (let ((*current-node* node))
-                  (node-check-transaction msg)
-                  (wait-prep-signing)))
-               |#
                )))
         (wait-prep-signing)
         ))))
