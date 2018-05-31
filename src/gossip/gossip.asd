@@ -9,8 +9,7 @@
 	       :uiop
                :mpcompat
                :key-value-store
-               :actors ; should be loaded by cosi-BLS
-               :cosi-BLS
+               :actors
                :illogical-pathnames)
   :serial t
   :components ((:file "package")

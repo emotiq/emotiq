@@ -21,6 +21,7 @@
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
+(defparameter *max-buffer-length* 65500)
 
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
@@ -231,7 +232,7 @@ are in place between nodes.
 
 (defmethod print-object ((thing uid-mixin) stream)
    (with-slots (uid) thing
-       (print-unreadable-object (thing stream :type t :identity t)
+       (print-unreadable-object (thing stream :type t :identity nil)
           (when uid (princ uid stream)))))
 
 ;;; Should move these to mpcompat
@@ -836,37 +837,6 @@ dropped on the floor.
 ; (run-gossip-sim)
 ; (list-uids "localhost" 65002)
 
-(defmethod briefname ((node gossip-node) &optional (prefix "node"))
- (format nil "~A~D" prefix (uid node)))
-
-(defmethod briefname ((msg solicitation) &optional (prefix "sol"))
-  (format nil "~A~D" prefix (uid msg)))
-
-(defmethod briefname ((msg reply) &optional (prefix "rep"))
-  (format nil "~A~D" prefix (uid msg)))
-
-(defmethod briefname ((msg system-async) &optional (prefix "timeout"))
-  (format nil "~A~D" prefix (uid msg)))
-
-(defmethod briefname ((id integer) &optional (prefix ""))
-  (format nil "~A~D" prefix id))
-
-(defmethod briefname ((id symbol) &optional (prefix ""))
-  (declare (ignore prefix))
-  (format nil "~A" id))
-
-(defmethod briefname ((id string) &optional (prefix ""))
-  (format nil "~A~A" prefix id))
-
-(defmethod briefname ((id null) &optional (prefix ""))
-  (declare (ignore prefix))
-  nil)
-
-(defmethod briefname ((id t) &optional (prefix ""))
-  (declare (ignore prefix))
-  id)
-
-
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
 
@@ -932,8 +902,8 @@ dropped on the floor.
   (when (logfn node)
     (apply (logfn node)
            logcmd
-           (briefname node)
-           (briefname msg)
+           node
+           msg
            args)))
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
@@ -1100,7 +1070,7 @@ dropped on the floor.
                   (t nil) ; don't log timeouts here. Too much noise.
                   )))
     (when logsym
-      (node-log node logsym msg (kind msg) :from (briefname srcuid "node") (args msg)))
+      (node-log node logsym msg (kind msg) :from srcuid (args msg)))
     (if *gossip-absorb-errors*
         (handler-case (funcall kindsym msg node srcuid)
           (error (c) (node-log node :ERROR msg c)))
@@ -1110,7 +1080,7 @@ dropped on the floor.
   (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
     (cond (kindsym ; message accepted
            (locally-dispatch-msg kindsym node msg srcuid))
-          (t (node-log node :ignore msg :from (briefname srcuid "node") failure-reason)))))
+          (t (node-log node :ignore msg :from srcuid failure-reason)))))
 
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
@@ -1122,7 +1092,7 @@ dropped on the floor.
              (memoize-message node msg srcuid)
              (locally-dispatch-msg kindsym node msg srcuid))
             (t ; not accepted
-             (node-log node :ignore msg :from (briefname srcuid "node") failure-reason)
+             (node-log node :ignore msg :from srcuid failure-reason)
              (case failure-reason
                (:active-ignore ; RECEIVE an active-ignore. Whomever sent it is telling us they're ignoring us.
                 ; Which means we need to ensure we're not waiting on them to reply.
@@ -1214,7 +1184,7 @@ dropped on the floor.
   "Timeouts are a special kind of message in the gossip protocol,
   and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
-         ;;(node-log thisnode :timing-out msg :from (briefname srcuid "node") (solicitation-uid msg))
+         ;;(node-log thisnode :timing-out msg :from srcuid (solicitation-uid msg))
          (let* ((soluid (solicitation-uid msg))
                 (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
            (when timeout-handler
@@ -1533,7 +1503,7 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (node-log srcnode :FINALREPLY (briefname soluid "sol") :to (briefname where-to-send-reply "node") data)
+           (node-log srcnode :FINALREPLY soluid :to where-to-send-reply data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
@@ -1541,9 +1511,9 @@ dropped on the floor.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
           ((null where-to-send-reply)
-           (node-log srcnode :NO-REPLY-DESTINATION! (briefname soluid "sol") data))
+           (node-log srcnode :NO-REPLY-DESTINATION! soluid data))
           (t
-           (node-log srcnode :FINALREPLY (briefname soluid "sol") :TO where-to-send-reply data)
+           (node-log srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (ac:send where-to-send-reply reply)))))
 
 (defun coalesce&reply (reply-to thisnode reply-kind soluid)
@@ -1636,14 +1606,14 @@ gets sent back, and everything will be copacetic.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
                                          :args (list coalesced-data))))
-          (node-log thisnode :SEND-INTERIM-REPLY reply :to (briefname where-to-send-reply "node") coalesced-data)
+          (node-log thisnode :SEND-INTERIM-REPLY reply :to where-to-send-reply coalesced-data)
           (send-msg reply
                     where-to-send-reply
                     (uid thisnode)))
         ; if no place left to reply to, just log the result.
         ;   This can mean that thisnode autonomously initiated the request, or
         ;   somebody running the sim told it to.
-        (node-log thisnode :INTERIMREPLY (briefname soluid "sol") coalesced-data))))
+        (node-log thisnode :INTERIMREPLY soluid coalesced-data))))
 
 (defun send-delayed-interim-reply (thisnode reply-kind soluid)
   "Called by a node actor to tell itself (or another actor, but we never do that now)
@@ -1896,7 +1866,7 @@ gets sent back, and everything will be copacetic.
 
 (defmethod serve-gossip-port ((mode (eql :UDP)) socket)
   "UDP gossip port server loop"
-    (let ((maxbuf (make-array cosi-simgen::*max-buffer-length*
+    (let ((maxbuf (make-array *max-buffer-length*
                               :element-type '(unsigned-byte 8))))
       (unwind-protect
           (loop
@@ -2020,7 +1990,7 @@ gets sent back, and everything will be copacetic.
   
   (defun internal-send-socket (addr port packet)
     (let ((nb (length packet)))
-      (when (> nb cosi-simgen::*max-buffer-length*)
+      (when (> nb *max-buffer-length*)
         (error "Packet too large for UDP transmission"))
       (let ((socket *udp-gossip-socket*))
         ;; (pr :sock-send (length packet) addr packet)
@@ -2091,7 +2061,7 @@ gets sent back, and everything will be copacetic.
          (let* ((payload (sign-message (list (real-uid node) srcuid *actual-udp-gossip-port* msg)))
                 (packet  (loenc:encode payload))
                 (nb      (length packet)))
-           (when (> nb cosi-simgen::*max-buffer-length*)
+           (when (> nb *max-buffer-length*)
              (error "Packet too large for UDP transmission"))
            (internal-send-socket (real-address node) (real-port node) packet)
            ))
