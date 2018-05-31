@@ -49,14 +49,12 @@ test:linux:ccl:
   variables:
     LISP: ccl
 
-# :gossip-tests stuck forever with LispWorks/macOS
 test:macos:lispworks:
   <<: *test_definition
   tags:
     - macos
   variables:
     LISP: lispworks
-    # SYSTEMS: ":cosi-bls-tests :crypto-pairings"
 
 test:macos:ccl:
   <<: *test_definition

@@ -1,35 +1,31 @@
 #!/usr/bin/env bash
-set -x
 
 KIND=${1:-production}
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=${DIR}/..
 
-if [ ${var} ]
-then
-    rm -rf ${var}
-fi
-
-uname_s=$(uname -s)
-case ${uname_s} in
-    Linux*)
-	deliveryscript=deliv-linux.bash
-	makesuffix=
-	arch=linux
-        ;;
-    Darwin*)
-	deliveryscript=deliv-macos.bash
-	makesuffix=".production"
-	arch=macos
-        ;;
+case $(uname -s) in
+  Linux*)
+    libs="libgmp.so libgmp.so.10 libgmp.so.10.3.2 libLispPBCIntf.so libpbc.so libpbc.so.1 libpbc.so.1.0.0"
+    deliveryscript=deliv-linux.bash
+    makesuffix=
+    arch=linux
+    ;;
+  Darwin*)
+    libs="libLispPBCIntf.dylib libgmp.10.dylib libgmp.dylib libpbc.1.dylib libpbc.dylib"
+    deliveryscript=deliv-macos.bash
+    makesuffix=".production"
+    arch=macos
+    ;;
+  *)
+    echo "Unknown platform $(uname -s)"
+    exit 1
+    ;;
 esac
-
-${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
 
 var=${BASE}/var
 etc=${BASE}/etc
 etcdeliver=${etc}/deliver
-
 # where make install will install stuff
 prefix=${var}/local
 lib=${prefix}/lib
@@ -44,18 +40,16 @@ mkdir -p ${production_dir}/${target_dir}
 
 echo -n $version > ${production_dir}/version.txt
 
-case ${uname_s} in
-  Linux*)
-    libs="libgmp.so libgmp.so.10 libgmp.so.10.3.2 libLispPBCIntf.so libpbc.so libpbc.so.1 libpbc.so.1.0.0"
-    ;;
-  Darwin*)
-    libs="libLispPBCIntf.dylib libgmp.10.dylib libgmp.dylib libpbc.1.dylib libpbc.dylib"
-    ;;
-esac
-
 #
 # Build binary
 #
+if [ ${var} ]
+then
+    rm -rf ${var}
+fi
+
+${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
+
 pushd ${production_dir}/${target_dir}
 ${etcdeliver}/${deliveryscript}
 if [ $? -ne 0 ] ; then
@@ -67,4 +61,4 @@ popd
 # we use tar to preserve hard links (this can be rewritten)
 pushd ${lib}
 tar cf - ${libs} | tar xfC - ${production_dir}/${target_dir}
-cp ${etc}/run-emotiq.bash ${production_dir}/${target_dir}/emotiq.bash
+cp ${etc}/emotiq.bash ${production_dir}/${target_dir}/emotiq.bash
