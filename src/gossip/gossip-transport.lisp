@@ -1,27 +1,10 @@
-;;; socket-actors-transport.lisp
-;;; Transport (TCP) layer of the socket-actors implementation.
+;;; gossip-transport.lisp
 
-;;; This is a network transport implementation for Gossip messages
-;;; sent between actors on different nodes. The implementation is
-;;; modelled closely on the Erlang distribution protocol.
+;;; The GOSSIP/TRANSPORT API delivers messages between Gossip nodes
+;;; asynchronously over the network with best-effort ("send and pray")
+;;; semantics.
 ;;;
-;;; Key points:
-;;;
-;;; - Each node is identified by its ADDRESS:PORT endpoint.
-;;;
-;;; - Message can be sent asynchronously to the ADDRESS:PORT of any
-;;;   node at any time with best-effort ("send and pray") delivery.
-;;;
-;;; - Connections to other nodes are automatically made when needed to
-;;;   deliver a message.
-;;;
-;;; - Callbacks are invoked whenever connectivity with a peer is
-;;;   established or broken.
-;;;
-;;; - Incoming messages are dispatched via a callback function.
-;;;
-;;; - One dedicated process performs all of the asynchronous
-;;;   processing efficiently.
+;;; See also https://en.wikipedia.org/wiki/Best-effort_delivery.
 
 (in-package :gossip/transport)
 
@@ -29,51 +12,85 @@
 ;;; High-level interface functions.
 ;;;
 
-(defun start-node (&key address
-                        port
-                        message-received-hook
-                        peer-up-hook
-                        peer-down-hook)
+(defun start-transport (&rest backend-parameters
+                        &key (backend :tcp)
+                             address
+                             port
+                             message-received-hook
+                             peer-up-hook
+                             peer-down-hook
+                        &allow-other-keys)
   "Start a new transport node that accepts connections on ADDRESS:PORT.
-   The transport node runs asynchronously on a dedicated process and
-   runs callback functions when relevant events occur.
+   The transport node executes asynchronously in the background and
+   runs callback functions when important events occur. The callback
+   functions are assumed to return promptly without blocking.
 
-   The function (MESSAGE-RECEIVED-HOOK ADDRESS PORT MESSAGE) is called
-   each time a message is received from a peer.
+   The callback (MESSAGE-RECEIVED-HOOK ADDRESS PORT MESSAGE) is called
+   each time a message is received from a peer. The message is a byte
+   array and the hook function is assumed to perform all necessary
+   processing for the message.
 
-   The function (PEER-UP-HOOK ADDRESS PORT) is called each time a new
-   connection with a peer is established (whether inbound or
-   outbound.)
+   The callback (PEER-UP-HOOK ADDRESS PORT) is called each time a new
+   connection with a peer is (re)established. The connection can be
+   triggered by either an outbound or an inbound connection.
 
-   The function (PEER-DOWN-HOOK ADDRESS PORT) is called each time an
-   existing connection goes down (e.g. due to timeout or connectivity
-   trouble) and also whenever a new outgoing connection cannot be
-   established (e.g. peer address is not reachable.)"
-  (start-tcp-node address port message-received-hook peer-up-hook peer-down-hook))
+   The callback (PEER-DOWN-HOOK ADDRESS PORT REASON) is called each
+   time an existing connection goes down (e.g. due to timeout or
+   connectivity trouble) and also whenever a new outgoing connection
+   cannot be established (e.g. peer address is not reachable within a
+   reasonable timeframe.) 
+   The reason is a human-readable string suitable for logging.
 
-(defun stop-node (node)
+   BACKEND and BACKEND-PARAMETERS optionally specify additional
+   low-level and implementation-specific parameters.
+
+   Returns an object representing the transport node or raises an
+   error if the node could not be started (e.g. because the
+   address/port was not available.)"
+  (start address port message-received-hook peer-up-hook peer-down-hook
+         backend backend-parameters))
+
+(defun stop-transport (node)
   "Stop NODE by closing its network connection and discarding state."
   (stop node))
 
-(defun print-node-status (node &key (stream *standard-output*))
-  "Print status information about NODE and its connections to peers."
-  (print-status node stream))
+(defun status (node)
+  "Return status information about NODE as a property list."
+  (status-of node))
 
-(defun send (transport address port message)
-  "Transmits MESSAGE to TRANSPORT's peer at ADDRESS:PORT.
-   If no connection to the peer exists then one is created
-   asynchronously and the message is queued for delivery once the
-   connection is established.
-   If the message cannot be delivered then it is silently dropped (but
-   the connectivity error will be reported separately via
-   PEER-DOWN-HOOK.)"
-  (send-message transport address port message))
+(defun transmit (transport to-address to-port message)
+  "Transmit a message to another node with best-effort delivery.
+
+   The message is a byte array that will be delivered verbatum to
+   the other node's MESSAGE-RECEIVED-HOOK without interpretation in
+   this transport layer.
+
+   The transport layer will take pains to deliver the message
+   promptly, including automatically (re)establishing connectivity
+   with the node and queueing the message during temporary
+   connectivity problems, but no guarantee is made.
+
+   The transport layer does not provide message delivery
+   receipts (ack/nak). This means that the layer above is responsible
+   for handling the possibility that any given message is not
+   delivered (e.g. using timeouts and explicitly acknowledgement
+   messages.)"
+  (transmit-message transport to-address to-port message))
 
 ;;;
-;;; Internal implementation functions.
+;;; Generic functions supporting multiple transport implementations.
 ;;;
 
-(defclass tcp-transport ()
+(defgeneric start (address port msg peer-up peer-down backend backend-parameters))
+(defgeneric stop (transport))
+(defgeneric transmit-message (transport address port message))
+(defgeneric status-of (transport))
+
+;;;
+;;; TCP transport implementation based on thread-per-connection model.
+;;;
+
+(defclass tcp-threads-transport ()
   (;; Operational state.
    (listen-socket :initarg :listen-socket :initform nil :accessor listen-socket
                   :documentation "Listen socket that our peers can connect to.")
@@ -85,18 +102,16 @@
    (peer-up-hook :initarg :peer-up-hook :initform nil :accessor peer-up-hook)
    (peer-down-hook :initarg :peer-down-hook :initform nil :accessor peer-down-hook)))
 
-
 (defstruct peer
   ;; Remote address.
   ip port
   ;; Queue of messages waiting to be delivered.
   transmit-queue)
 
-(defun start-tcp-node (address port message-received peer-up peer-down)
+(defmethod start (address port msg peer-up peer-down
+                          (backend (eql :tcp)) backend-parameters)
+  (declare (ignore address port msg peer-up peer-down backend backend-parameters))
   (cerror "NYI" nil))
 
-(defgeneric stop (node))
-(defgeneric send-message (transport address port message))
-(defgeneric print-status (node stream))
 
 

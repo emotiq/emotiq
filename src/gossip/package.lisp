@@ -29,8 +29,8 @@
 (defpackage :gossip/transport
   (:use :cl)
   (:export
-   #:start-node
-   #:stop-node
-   #:print-node-status
-   #:send))
+   #:start-transport
+   #:stop-transport
+   #:status
+   #:transmit))
 
