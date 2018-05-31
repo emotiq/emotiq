@@ -30,6 +30,11 @@ etcdeliver=${etc}/deliver
 prefix=${var}/local
 lib=${prefix}/lib
 
+if [ ${var} ]
+then
+    rm -rf ${var}
+fi
+
 production_dir=${prefix}/production
 
 date_now=`/bin/date "+%Y%m%d%H%M%S"`
@@ -43,11 +48,6 @@ echo -n $version > ${production_dir}/version.txt
 #
 # Build binary
 #
-if [ ${var} ]
-then
-    rm -rf ${var}
-fi
-
 ${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
 
 pushd ${production_dir}/${target_dir}
