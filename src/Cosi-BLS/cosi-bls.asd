@@ -50,10 +50,10 @@ THE SOFTWARE.
                                      (:file "block")
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
-                                     (:file "cosi-netw-xlat")
                                      (:file "range-proofs")
                                      (:file "transaction")
-                                     (:file "cosi-handlers")))))
+                                     (:file "cosi-handlers")
+                                     (:file "cosi-netw-xlat")))))
 
 
 

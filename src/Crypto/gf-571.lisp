@@ -324,6 +324,10 @@ THE SOFTWARE.
                 (setf ans (logxor ans a)))) )
         ))
 
+
+(defstub c-gf571-mul)
+(defstub c-gf128-mul)
+
 (defun bin-gf* (a b)
   (cond
    ((or (zerop a)
@@ -425,6 +429,9 @@ THE SOFTWARE.
     g1))
 
   
+(defstub c-gf128-inv)
+(defstub c-gf571-inv)
+
 (defun gfinv (x)
   (case x
     (0  (error "Division by zero"))
@@ -458,6 +465,9 @@ THE SOFTWARE.
                   ans (gf* ans x)))
       ans)))
 |#
+
+(defstub c-gf128-div)
+(defstub c-gf571-div)
 
 (defun bin-gf/ (a b)
   (case b

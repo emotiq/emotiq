@@ -27,6 +27,35 @@ THE SOFTWARE.
 
 (in-package :ecc-crypto-b571)
 
+
+
+;;;; Stubs for Unimplemented Functions
+
+;;; DEFSTUB: define a stub function named FUNCTION-NAME. There are a
+;;; set of functions that, for purposes of code clarity, need to exist
+;;; in regularly compiled code, but which shall, for the forseeable
+;;; future, never actually be called and therefore need not defined.
+;;; We are free, however, to define them as "stub" functions. A `stub
+;;; function' should never be called. If it is called at runtime, its
+;;; behavior is undefined in production. (It's OK for it to behave the
+;;; same as in development, but that is not required and should not be
+;;; relied upon.)  In development, it's highly desireable that calling
+;;; a stub function should result in a runtime error being signaled.
+;;; The main purpose and benefit of using defstub is to prevent the
+;;; compiler from complaining about unimplemented functions every
+;;; single compile, when you have no intention of ever fixing the
+;;; situation in the present development period.
+
+(defmacro defstub (function-name)
+  `(defun ,function-name (&rest args)
+     (declare (ignore args))
+     (error "~s, a stub function, called at run time, but it should not be."
+            ',function-name)))
+
+
+
+
+
 ;; -----------------------------------------------------------------------------
 ;;
 
@@ -419,6 +448,9 @@ THE SOFTWARE.
                 x             (ash x -8)))
     ans))
 
+
+(defstub sha2_file)
+
 #+:LISPWORKS
 (defun fast-sha2-file (fname)
   (fli:with-dynamic-foreign-objects ()
@@ -432,11 +464,15 @@ THE SOFTWARE.
                   (fli:dereference carr :index ix)))
       ans)))
   
+
 (defun sha2-file (fname)
   (with-fast-impl
    (fast-sha2-file fname)
    (let ((dig (ironclad:make-digest :sha256)))
      (ironclad:digest-file dig fname))))
+
+
+(defstub shad2_file)
 
 #+:LISPWORKS
 (defun fast-shad2-file (fname)
@@ -639,6 +675,9 @@ THE SOFTWARE.
 (defmethod ecc-projective-pt-p (pt)
   nil)
   
+
+(defstub gf-random-k*)
+
 (defun make-ecc-projective-pt (&key x y (z 1) alpha)
   (let* ((alpha   (or alpha
                       (gf-random-k*)))
