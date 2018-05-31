@@ -315,18 +315,37 @@ THE SOFTWARE.
 
 (defmethod base58 ((x integer))
   ;; encode integer as a base58 string
-  (make-instance 'base58
-                 :str (let ((cs nil))
-                        (um:nlet-tail iter ((v x))
-                          (when (plusp v)
-                            (multiple-value-bind (vf vr) (floor v +len-58+)
-                              (push (char +alphabet-58+ vr) cs)
-                              (iter vf))))
-                        (coerce cs 'string))
-                 ))
+  (make-instance 'base58 :str (integer-to-base58-with-pad x 0)))
 
 (defmethod base58 ((x base58))
   x)
+
+(defmethod base58 ((x vector))
+  (let* ((length (length x))
+         (int (int x))
+         (npad
+           ;; count the leading 0 bytes to pad:
+           (loop for i from 0 below length
+                 while (zerop (aref x i))
+                 count t)))
+    (make-instance
+     'base58
+     :str (integer-to-base58-with-pad int npad))))
+
+(defun integer-to-base58-with-pad (x npad)
+  "Return a string representation of integer X preceded by NPAD Base58
+   encodings of 0 as leading zero 'padding'."
+  (let ((cs nil))
+    (um:nlet-tail iter ((v x))
+                  (when (plusp v)
+                    (multiple-value-bind (vf vr) (floor v +len-58+)
+                      (push (char +alphabet-58+ vr) cs)
+                      (iter vf))))
+    (when npad
+      (loop with char-for-0 = (char +alphabet-58+ 0)
+            repeat npad
+            do (push char-for-0 cs)))
+    (coerce cs 'string)))
 
 (defmethod base58 (x)
   (base58 (int x)))
