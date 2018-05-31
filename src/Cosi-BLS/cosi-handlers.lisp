@@ -858,12 +858,15 @@ check that each TXIN and TXOUT is mathematically sound."
   (change-class (pbc:add-pts sig1 sig2)
                 'pbc:signature))
 
+(defun bft-threshold (blk)
+  (* 2/3 (length (block-witnesses blk))))
+
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (let ((*current-node* my-node))
     (cond ((and *use-gossip*
                 (int= (node-pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
-           (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
+           (let ((bft-thrsh (bft-threshold blk))
                  (start     nil)
                  (g-bits    0)
                  (g-sig     nil))
@@ -925,7 +928,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
       (> (logcount bits)
-         (* 2/3 (length (cosi/proofs:block-witnesses blk))))))
+         (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
   (int= (block-merkle-root-hash blk) ;; check transaction hash against header
