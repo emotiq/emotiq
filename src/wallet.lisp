@@ -35,16 +35,15 @@
     (lisp-object-encoder:serialize wallet o)))
     
 (defun wallet-deserialize (&key (path (emotiq-wallet-path)))
-  (let ((path (emotiq-wallet-path)))
-    (unless (probe-file path)
-      (error "No wallet found at ~a." path))
-    (with-open-file
-        (o path :direction :input :element-type '(unsigned-byte 8))
-      (lisp-object-encoder:deserialize o))))
+  (unless (probe-file path)
+    (error "No wallet found at ~a." path))
+  (with-open-file
+      (o path :direction :input :element-type '(unsigned-byte 8))
+    (lisp-object-encoder:deserialize o)))
 
 (defun create-wallet (&key
                         (path (emotiq-wallet-path))
-                        (force nil force-p))
+                        (force nil))
   (when (and (probe-file path)
              (not force))
     (format *standard-output* "Not overwriting wallet keys at '~a'." path)
