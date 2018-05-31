@@ -1,4 +1,4 @@
-#!/usr/bin/env bash -x
+#!/usr/bin/env bash
 
 # Cocoa adds complications (see Delivery manual).  This binary appears not to need Cocoa, so things are simple.
 # basically, this script calls LWM with two arguments '-build' and 'deliver.lisp'
