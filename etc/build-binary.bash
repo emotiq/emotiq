@@ -30,7 +30,7 @@ etcdeliver=${etc}/deliver
 prefix=${var}/local
 lib=${prefix}/lib
 
-if [ ${var} ]
+if [[ -d ${var} ]]
 then
     rm -rf ${var}
 fi
