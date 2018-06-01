@@ -28,6 +28,7 @@ before_script:
 
 .test: &test_definition
   stage: test
+  retry: 1
   script:
     - lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
