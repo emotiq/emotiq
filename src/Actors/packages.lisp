@@ -134,6 +134,7 @@ THE SOFTWARE.
    #:find-actor
    #:get-actors
    #:recv
+   #:retry-recv
    #:=cont
    #:terminate-actor
    #:without-actor-status
