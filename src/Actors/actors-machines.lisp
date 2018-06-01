@@ -95,45 +95,6 @@ THE SOFTWARE.
 ;; match semantics in this case. (Not generally true of asynchronous
 ;; clauses)
 
-#|
-(defmacro recv (&rest clauses)
-  ;;
-  ;; a RECV uses Optima:MATCH style patterns and clauses.
-  ;;
-  ;; RECV receives and processes one qualifying message, or gets timed
-  ;; out. Messages arriving at the Actor's mailbox which do not
-  ;; qualify for any of the RECV clauses will be stashed during the
-  ;; waiting period. RECV operates asynchronously and does not block
-  ;; waiting.
-  ;;
-  ;; After RECV either times out or receives a qualifying message, the
-  ;; body forms of the Actor that follow the RECV form will be in
-  ;; effect, the stashed messages will be replayed, and the Actor will
-  ;; be using its original behavior on those and all future messages.
-  ;;
-  ;; If there is a :TIMEOUT expression inside the RECV form, the Actor
-  ;; will setup a timeout timer on that expression. If a qualifying
-  ;; message does not arrive before the timer expires, a timeout will
-  ;; occur. That timeout will execute the form listed after
-  ;; :ON-TIMEOUT if given, or else a timeout error will be generated.
-  ;;
-  ;; In the macro, we parse the handler body to create a function
-  ;; which takes a message and returns a fully deconstructed pattern
-  ;; match closure, or nil. This allows us to cancel any pending
-  ;; timeout if a message qualifies.
-  ;;
-  ;; An Actor containing a RECV form will not execute that form until
-  ;; it receives some message that causes it to execute a branch of
-  ;; code contained in the RECV form.
-  ;;
-  (multiple-value-bind (conds-fn timeout-fn timeout-expr)
-      (parse-recv-clauses clauses)
-    `(self-call
-      :recv-setup-{204E1756-D84E-11E7-9D93-985AEBDA9C2A}
-      ,conds-fn ,timeout-fn ,timeout-expr)
-    ))
-|#
-
 (defmacro recv (&rest clauses)
   ;;
   ;; a RECV uses Optima:MATCH style patterns and clauses.
