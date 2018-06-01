@@ -35,6 +35,8 @@ THE SOFTWARE.
   arr)
 
 
+(defstub c-kdf)
+
 (defun apply-c-kdf (nbits keys)
   (apply 'c-kdf nbits keys))
 
