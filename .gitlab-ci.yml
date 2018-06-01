@@ -4,7 +4,8 @@ variables:
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
   lisp: lisp-wrapper.sh
-  systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
+  systems: ":cosi-bls-tests :crypto-pairings"
+  # systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
 
 
 stages:
@@ -24,6 +25,8 @@ before_script:
             (ql-dist:install-dist
               "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
                :prompt nil)
+            (setf (ql-dist:preference (ql-dist:dist "emotiq"))
+                  (1+ (ql-dist:preference (ql-dist:dist "quicklisp"))))
             (uiop:quit 0)'
 
 .test: &test_definition
