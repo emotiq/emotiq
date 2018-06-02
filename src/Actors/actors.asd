@@ -29,8 +29,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2017 by Refined Audiometrics Laboratory, LLC. MIT License terms apply."
   :components  ((:file "packages")
-                #+:ALLEGRO (:file "allegro-timer")
-                #+:CLOZURE (:file "clozure-timer")
+                #-:lispworks
+                (:file "ansi-timer")
                 (:file "actors")
                 ;; (:file "actors-mb")
                 (:file "actors-machines")
