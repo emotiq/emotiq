@@ -210,10 +210,12 @@ THE SOFTWARE.
   (declare (integer arg))
   (let* ((blinder (get-blinder)))
     (declare (integer blinder))
-    (dolist (opnd args arg)
+    (dolist (opnd args)
       (declare (integer opnd))
-      (setf arg (mmod (* arg (+ opnd blinder)))))
-    ))
+      (setf arg (mmod (* arg (+ opnd blinder))))))
+  arg)
+    
+
 
 ;; ------------------------------------------------------------
 
@@ -260,8 +262,8 @@ THE SOFTWARE.
 
 (defun m/ (arg &rest args)
   (declare (integer arg))
-  (dolist (opnd args
-                (if args arg (minv arg)))
+  (dolist (opnd args)
     (declare (integer opnd))
-    (setf arg (m* arg (minv opnd)))))
+    (setf arg (m* arg (minv opnd))))
+  (if args arg (minv arg)))
 
