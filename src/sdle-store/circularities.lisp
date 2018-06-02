@@ -38,7 +38,6 @@
 (defvar *grouped-store-hash*)
 (defvar *grouped-restore-hash*)
 
-#|
 (defstruct delay 
   value (completed nil))
 
@@ -50,7 +49,6 @@
     (setf (delay-value delay) (funcall (the function (delay-value delay)))
           (delay-completed delay) t))
   (delay-value delay))
-|#
 
 ;; -----------------------------------------------------------------------
 ;; The definitions for setting and setting-hash sits in resolving-object.
@@ -79,10 +77,10 @@
   (if (referrer-p value)
       (progn
         (%must-be-in-circs)
-        (push (um.lazy:lazy
-                  (funcall setter
-                           (referred-value value
-                                           *restored-values*)))
+        (push (delay
+               (funcall setter
+                        (referred-value value
+                                        *restored-values*)))
               *need-to-fix*))
     ;; else - not referrer-p
     (funcall setter value)))
@@ -95,12 +93,12 @@
   (if (referrer-p key)
       (progn
         (%must-be-in-circs)
-        (push (um.lazy:lazy
-                  (setf (gethash (referred-value key *restored-values*)
-                                 hashtable)
-                        (if (referrer-p value)
-                            (referred-value value *restored-values*)
-                          value)))
+        (push (delay
+               (setf (gethash (referred-value key *restored-values*)
+                              hashtable)
+                     (if (referrer-p value)
+                         (referred-value value *restored-values*)
+                       value)))
               *need-to-fix*))
     ;; else - not referrer-p
     (%setting (um:make-setter (gethash key hashtable)) value)))
@@ -274,7 +272,7 @@ hash-tables as produced by the function create-serialize-hash."
     (check-magic-number backend place)
     (prog1
       (backend-restore-object backend place)
-      (um:foreach #'um.lazy:force *need-to-fix*)
+      (um:foreach 'force *need-to-fix*)
       )))
 
 (defun update-restored (spot val)

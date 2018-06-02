@@ -54,7 +54,9 @@ THE SOFTWARE.
                 ;; (:file "monads")
                 (:file "critical-section")
                 ;; (:file "dispatch-queues") ;; what do we need these for?
-                ;; (:file "lazy") ;; supplanted by Actors
+                
+                ;; (:file "lazy") ;; not supplanted by Actors
+                
                 #+(AND :COM.RAL :LISPWORKS) (:file "remembered-filenames")
                 ;; (:file "useful-macros-old")
                 ;; (:file "match-macro")
@@ -84,5 +86,6 @@ THE SOFTWARE.
   :depends-on   (#| "compiled-ml-matcher" |#
                  "optima"
                  "cl-ppcre"
-                 "ironclad"))
+                 "ironclad"
+                 ))
 
