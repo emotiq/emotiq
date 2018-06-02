@@ -35,6 +35,7 @@ THE SOFTWARE.
                lisp-object-encoder
                useful-macros
                usocket
+               trivial-garbage
                ads-clos)
   :in-order-to ((test-op (test-op "cosi-bls-tests")))
   :components ((:module package

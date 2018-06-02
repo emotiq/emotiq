@@ -42,6 +42,12 @@ THE SOFTWARE.
 
 ;;--- MAC OS/X ---
 
+
+(defun adjust-to-standard-universal-time-usec (tm)
+  (declare (integer tm))
+  (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0))))
+
+
 #+(AND :LISPWORKS (OR :LINUX :MACOSX))
 (PROGN
  (fli:define-foreign-function (_get-time-of-day "gettimeofday" :source)
@@ -61,12 +67,8 @@ THE SOFTWARE.
              (+ (* 1000000 (the integer (fli:dereference arr :index 0)))
                 (the integer (fli:dereference arr :index 1)))
            (error "Can't perform Posix gettimeofday()"))
-	 )))
+	 ))))
 
- (defun adjust-to-standard-universal-time-usec (tm)
-   (declare (integer tm))
-   #F
-   (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
 
 #+:CLOZURE
 (PROGN
@@ -77,13 +79,18 @@ THE SOFTWARE.
       (ccl::gettimeofday now (ccl:%null-ptr))
       (ccl::%sub-timevals since now ccl::*lisp-start-timeval*)
       (+ (* 1000000 (the (unsigned-byte 32) (ccl:pref since :timeval.tv_sec)))
-         (the fixnum (ccl:pref since :timeval.tv_usec)))))
+         (the fixnum (ccl:pref since :timeval.tv_usec))))))
 
- (defun adjust-to-standard-universal-time-usec (tm)
-   (declare (integer tm))
-   (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
+#+:sbcl
+(progn
+  (defun get-time-usec ()
+    "Time since midnight 01-JAN-1970 UTC in microseconds"
+    (multiple-value-bind (sec usec)
+        (sb-ext:get-time-of-day)
+      (+ usec (* sec (expt 10 6))))))
 
 #-(OR :CLOZURE
+      :sbcl
       (AND :LISPWORKS (OR :LINUX :MACOSX)))
 (progn
   (defun get-time-usec ()
