@@ -620,7 +620,7 @@ THE SOFTWARE.
 (defvar *last-heartbeat*     0)   ;; time of last Executive activity
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
-(defvar *maximum-age*        3)   ;; how long before watchdog should bark
+(defvar *maximum-age*        1)   ;; how long before watchdog should bark
 (defvar *nbr-execs*          2)     ;; should match the number of CPU Cores but never less than 4
 
 ;; ----------------------------------------------------------------
