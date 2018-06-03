@@ -6,5 +6,8 @@
 
 (defparameter *continuous-integration* nil)
 
-(defun ci-p () *continuous-integration)
+(defun ci-p ()
+  *continuous-integration*)
 
+(defun set-ci ()
+  (setf *continuous-integration* t))

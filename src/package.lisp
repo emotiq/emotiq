@@ -39,6 +39,8 @@
    #:get-utxos-per-account #:get-balance)
   (:export
    #:production-p
+   #:ci-p
+   #:set-ci
    #:main
    #:start))
    

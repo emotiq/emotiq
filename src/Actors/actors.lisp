@@ -719,7 +719,7 @@ THE SOFTWARE.
             "Handle Stalling Actors"
             '()
             (lambda ()
-              (if emotiq:*continuous-integration*
+              (if (emotiq:ci-p)
                   (format *standard-output* "Actor Executives are stalled (blocked waiting or compute bound). Continuing anyway.~&")
                 (restart-case
                     (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."

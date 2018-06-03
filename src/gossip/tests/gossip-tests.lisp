@@ -1,5 +1,8 @@
 ;;; gossip-tests.lisp
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (emotiq:set-ci))
+
 (in-package :gossip-tests)
 
 (defparameter *debug* nil "True if you want intermediate timings to print out and show inspector on failures")
