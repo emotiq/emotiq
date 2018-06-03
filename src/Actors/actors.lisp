@@ -340,14 +340,14 @@ THE SOFTWARE.
 
 (defun waste-time ()
   (let ((junk nil))
-    (loop for i from 0 to 100000
+    (loop for i from 0 to 10000
           do
           (setf junk (cons i junk)))
     junk))
 
 (defmethod dispatch-message ((self actor) &rest msg)
+  (waste-time)
   (dcase msg
-    
     (:continuation-{14AFB5F8-D01F-11E7-A1BE-985AEBDA9C2A} (fn &rest vals)
      ;; Used for callbacks into the Actor
      (apply fn vals))
@@ -629,7 +629,7 @@ THE SOFTWARE.
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
 (defvar *maximum-age*        1)   ;; how long before watchdog should bark
-(defvar *nbr-execs*          4)   ;; should match the number of CPU Cores but never less than 4
+(defvar *nbr-execs*          8)   ;; should match the number of CPU Cores but never less than 4
 
 ;; ----------------------------------------------------------------
 ;; Ready Queue
