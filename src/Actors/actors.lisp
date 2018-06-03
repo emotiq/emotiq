@@ -718,7 +718,10 @@ THE SOFTWARE.
             "Handle Stalling Actors"
             '()
             (lambda ()
-              (restart-case
+              (format *standard-output* "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
+                      age)
+              (start-watchdog-timer)
+               #+nil(restart-case
                   (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
                          age)
                 (:do-nothing-just-wait ()
