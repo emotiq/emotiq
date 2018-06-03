@@ -622,16 +622,7 @@ THE SOFTWARE.
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
 (defvar *maximum-age*        3)   ;; how long before watchdog should bark
 (defvar *nbr-execs*               ;; should match the number of CPU Cores but never less than 4
-  #+(AND :LISPWORKS :MACOSX)
-  (load-time-value
-   (with-open-stream (s (sys:open-pipe "sysctl -n hw.logicalcpu"))
-     (let ((ans (ignore-errors (parse-integer (read-line s nil nil)))))
-       (or (and (integerp ans)
-                ans)
-           (max 4 ans)))))
-  #+:CLOZURE
-  (max 4 (ccl:cpu-count))
-  #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
+  1)
 
 ;; ----------------------------------------------------------------
 ;; Ready Queue
