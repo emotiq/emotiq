@@ -92,9 +92,9 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------
 ;; from https://bitcointalk.org/index.php?topic=1026.0
 
-(defconstant +alphabet-58+
+(um:defconstant+ +alphabet-58+
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-(defconstant +len-58+
+(um:defconstant+ +len-58+
   (length +alphabet-58+)) ;; should be 58
 
 (defun make-inverse-alphabet (alphabet)
@@ -111,7 +111,7 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------
 
-(defconstant +alphabet-64+
+(um:defconstant+ +alphabet-64+
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 
 (defvar +inv-alphabet-64+
