@@ -338,6 +338,13 @@ THE SOFTWARE.
 ;; continuation messages resulting from callbacks. Otherwise, we
 ;; forward the message to the user's Actor code.
 
+(defun waste-time ()
+  (let ((junk nil))
+    (loop for i from 0 to 100000
+          do
+          (setf junk (cons i junk)))
+    junk))
+
 (defmethod dispatch-message ((self actor) &rest msg)
   (dcase msg
     
@@ -376,6 +383,7 @@ THE SOFTWARE.
                 (t (&rest args)
                    ;; anything else is up to the programmer who
                    ;; constructed this Actor
+                   (waste-time)
                    (apply (actor-user-fn self) args))
                 ))
              ))
@@ -616,11 +624,11 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Executive Pool - actual system threads dedicated to running Actor code
 
-(defvar *heartbeat-timer*    nil) ;; the system watchdog timer
+(defvar *heartbeat-timer*    0) ;; the system watchdog timer
 (defvar *last-heartbeat*     0)   ;; time of last Executive activity
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
-(defvar *maximum-age*        3)   ;; how long before watchdog should bark
+(defvar *maximum-age*        1)   ;; how long before watchdog should bark
 (defvar *nbr-execs*          4)   ;; should match the number of CPU Cores but never less than 4
 
 ;; ----------------------------------------------------------------
@@ -687,11 +695,11 @@ THE SOFTWARE.
          (mpcompat:process-interrupt exec 'exec-terminate-actor actor)))
      
      (check-sufficient-execs ()
-       (let (age)
+       (let ((age (- (get-universal-time)  ;; been stalled long enough?
+                                     *last-heartbeat*)))
          (unless (or (emptyq-p *actor-ready-queue*)        ;; nothing to do anyway?
-                     (< (setf age (- (get-universal-time)  ;; been stalled long enough?
-				     *last-heartbeat*))
-			*maximum-age*))
+                     (< age
+                        *maximum-age*))
            ;; -------------------------------------------
            ;;
            ;; Why kill the workhorse?
@@ -718,7 +726,9 @@ THE SOFTWARE.
             "Handle Stalling Actors"
             '()
             (lambda ()
-              (restart-case
+              (format *standard-output* "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
+                      age) 
+              #+nil(restart-case
                   (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
                          age)
                 (:do-nothing-just-wait ()
