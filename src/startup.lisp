@@ -23,6 +23,8 @@
 
 (in-package "EMOTIQ")
 
+(defparameter *continuous-integration* nil)
+
 ;; "Entry Point" for development - does nothing, just load and go
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)

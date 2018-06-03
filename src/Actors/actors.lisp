@@ -719,20 +719,22 @@ THE SOFTWARE.
             "Handle Stalling Actors"
             '()
             (lambda ()
-              (restart-case
-                  (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
-                         age)
-                (:do-nothing-just-wait ()
-                  :report "It's okay, just wait"
-                  (start-watchdog-timer))
-                (:spawn-new-executive ()
-                  :report "Spawn another Executive"
-                  (incf *nbr-execs*)
-                  (push-new-executive))
-                (:stop-actor-system ()
-                  :report "Stop Actor system"
-                  (kill-executives))
-                ))
+              (if emotiq:*continuous-integration*
+                  (format *standard-output* "Actor Executives are stalled (blocked waiting or compute bound). Continuing anyway.~&")
+                (restart-case
+                    (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
+                           age)
+                  (:do-nothing-just-wait ()
+                    :report "It's okay, just wait"
+                    (start-watchdog-timer))
+                  (:spawn-new-executive ()
+                    :report "Spawn another Executive"
+                    (incf *nbr-execs*)
+                    (push-new-executive))
+                  (:stop-actor-system ()
+                    :report "Stop Actor system"
+                    (kill-executives))
+                  )))
             ))))
 
      (remove-from-pool (proc)
