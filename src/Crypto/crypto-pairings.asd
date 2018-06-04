@@ -41,8 +41,10 @@ THE SOFTWARE.
   (prepare-op
    :before (o c)
    (let ((wildcard-for-libraries
-          (asdf:system-relative-pathname
-           :emotiq "../var/local/lib/libLispPBCIntf.*")))
+          (make-pathname :defaults 
+                         (asdf:system-relative-pathname
+                          :emotiq "../var/local/lib/libLispPBCIntf")
+                         :type :wild)))
      (unless (directory wildcard-for-libraries)
        (format *standard-output*
                "~&Failed to find libraries matching~&~t~a~&~
