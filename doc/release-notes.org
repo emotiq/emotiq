@@ -1,7 +1,7 @@
 * Release Notes
 ** <2018-05-30 Wed 13:42Z> ~test-0.13-websockets~
-Binaries: <https://github.com/emotiq/emotiq/releases/tag/test-0.13-websockets>
-Branch:   <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180530a>
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/test-0.13-websockets>                      |
+| Branch   | <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180530a> |
 
 1.  The HTTP testing implementation now works in the binary
     distribution, and may be interacted with as <http://locahost:3140/client/>.
@@ -32,5 +32,11 @@ UI <-- Emotiq {result: true, id: 23}
 4.  Documentation for message requests can be found as 
     <https://github.com/emotiq/emotiq-wallet/blob/7c5b99937d63e3232a8191ff119069f0d195d83f/doc/emotiq-wallet-websocket.yaml>
 
-    
+** <2018-05-30 Wed 13:42Z> ~test-0.14-websockets~
 
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/test-0.14-websockets>                      |
+| Branch   | <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180604a> |
+
+1.  Fix disconnected websockets causing synchronization updates to quit
+
+2.  Use proper JSON RPC error responses 
