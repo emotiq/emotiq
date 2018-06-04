@@ -13,8 +13,12 @@
       (uiop:quit -1)))
   (handler-case
       (if (asdf:test-system system)
-          (uiop:quit 0)
-          (uiop:quit -1))
+          (progn
+            (format *standard-output* "~&Test passed for system:~a~&" system)
+            (uiop:quit 0))
+        (progn
+          (format *standard-output* "~&Test passed for system:~a~&" system)
+          (uiop:quit -1)))
     (error (e)
       (format *standard-output*
               "~&Testing system `~a` signalled error:~&~a~&" system e)
