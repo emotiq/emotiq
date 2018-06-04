@@ -237,6 +237,7 @@
    :current-actor
    :send
    :recv
+   :retry-recv
    :become
    :par
    :do-nothing

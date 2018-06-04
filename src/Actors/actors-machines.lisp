@@ -127,9 +127,12 @@ THE SOFTWARE.
   ;;
   (multiple-value-bind (conds-fn timeout-fn timeout-expr)
       (parse-recv-clauses clauses)
-    `(self-call
-      :recv-setup-{204E1756-D84E-11E7-9D93-985AEBDA9C2A}
-      ,conds-fn ,timeout-fn ,timeout-expr)
+    `(labels
+         ((retry-recv ()
+            (self-call
+             :recv-setup-{204E1756-D84E-11E7-9D93-985AEBDA9C2A}
+             ,conds-fn ,timeout-fn ,timeout-expr)))
+       (retry-recv))
     ))
 
 ;; ----------------------------------------------------------------------------------

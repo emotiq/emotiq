@@ -60,30 +60,28 @@ THE SOFTWARE.
                   (mapc #'(lambda (node)
                             (ac:send node :hold-an-election
                                      :n rand))
-                        *all-nodes*)))
-              (doit ()
-                ;; calling doit also restarts the clock
-                (ac:recv
-                  ((list :start)
-                   (ac:pr "Beacon already running")
-                   (doit))
-                  
-                  ((list :kill)
-                   (ac:pr "Beacon terminated"))
-                  
-                  ((list :hold-election)
-                   (hold-election)
-                   (doit))
-                  
-                  :TIMEOUT    *beacon-interval*
-                  :ON-TIMEOUT (progn
-                                (hold-election)
-                                (doit))
-                  )))
+                        *all-nodes*))))
        (um:dcase msg
          (:start ()
           (ac:pr "Beacon started")
-          (doit))
+          ;; recv also restarts the clock
+          (ac:recv
+            ((list :start)
+             (ac:pr "Beacon already running")
+             (ac:retry-recv))
+            
+            ((list :kill)
+             (ac:pr "Beacon terminated"))
+            
+            ((list :hold-election)
+             (hold-election)
+             (ac:retry-recv))
+            
+            :TIMEOUT    *beacon-interval*
+            :ON-TIMEOUT (progn
+                          (hold-election)
+                          (ac:retry-recv))
+            ))
 
          (:kill ()
           (ac:pr "Beacon wasn't running"))
