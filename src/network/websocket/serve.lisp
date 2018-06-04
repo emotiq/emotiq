@@ -37,80 +37,66 @@
                 (cl-json:encode-json-to-string cl-json-object))))
     (hunchensocket:send-text-message client json)))
 
-         
-
 (defmethod hunchensocket:text-message-received ((resource wallet-server) client message)
-  (note "~a-->~a:~&~t~a~&" client resource message)
+  (note "~a connected to ~a:~&~t~a~&" client resource message)
   (let ((request  (cl-json:decode-json-from-string message)))
     (let ((method (alexandria:assoc-value request :method)))
       (unless method
         (note "No method specified in message: ~a" message)
         (return-from hunchensocket:text-message-received nil))
-      (cond
-        ((string= method "subscribe")
-         (let ((response
-                (make-instance 'response
-                               :result `(:true)
-                               :id (alexandria:assoc-value request :id))))
+      (let ((response
+             (make-instance 'response
+                            :result `(:true)
+                            :id (alexandria:assoc-value request :id))))
+        (with-slots (result error)
+            response
+          (cond
+            ((string= method "subscribe")
            ;;; FIXME: locking under load
-           ;;; FIXME: only subscribe to consensus events
-           (pushnew client *consensus-clients*)
-           (unless *consensus-thread*
-             (note "Spawning thread to mock consensus replies.")
-             (bt:make-thread (lambda () (consensus)))
-             (setf *consensus-thread* t))
-           (send-as-json client response)))
-        ((string= method "unsubscribe")
-         (let ((response
-                (make-instance 'response
-                               :id (alexandria:assoc-value request :id))))
-           (if (not (find client *consensus-clients*))
-               (setf (slot-value response 'error)
-                     "No such subscription.")
-               (progn 
-           ;;; FIXME: locking under load
-                 (setf *consensus-clients* (remove client *consensus-clients*))
-                 (setf (slot-value response 'result)
-                       '(:true))))
-           (send-as-json client response)))
-        ((string= method "ping")
-         (let ((response 
-                (make-instance 'response
-                               :id (alexandria:assoc-value request :id)
-                               :result "pong")))
-           (broadcast resource (json:with-explicit-encoder
-                                   (cl-json:encode-json-to-string response)))))
-        ((string= method "wallet")
-         (let ((response 
-                (make-instance 'response
-                               :id (alexandria:assoc-value request :id)
-                               :result `(:object
-                                         (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
-                                         (:amount . 0)))))
-           (broadcast resource (json:with-explicit-encoder
-                                   (cl-json:encode-json-to-string response)))))
-        ((string= method "recovery-phrase")
-         (let ((response
-                (make-instance 'response
-                               :id (alexandria:assoc-value request :id)
-                               :result `(:object
-                                         (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
-                                         (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize))))))))
-           (broadcast resource (json:with-explicit-encoder
-                                   (cl-json:encode-json-to-string response)))))
-        ((string= method "enumerate-wallets")
-         (let ((response
-                (make-instance 'response
-                               :id (alexandria:assoc-value request :id)
-                               :result (emotiq/wallet:enumerate-wallets))))
-           (broadcast resource (cl-json:encode-json-to-string response))))
-        ((string= method "transactions")
-         (let ((response
-                (make-instance 'response
-                               :id (alexandria:assoc-value request :id)
-                               :result (transactions))))
-           (broadcast resource (json:with-explicit-encoder
-                                 (cl-json:encode-json-to-string response)))))))))
+             (if (find "consensus" (alexandria:assoc-value request :params) :test 'string=)
+                 (progn 
+                   (pushnew client *consensus-clients*)
+                   (unless *consensus-thread*
+                     (note "Spawning thread to mock consensus replies.")
+                     (bt:make-thread (lambda () (consensus)))
+                     (setf *consensus-thread* t))
+                   (setf result '(:true)))
+                 ;; error
+                 (setf result nil
+                       error `(:object (:code . -32602)
+                                       (:message . "No such subscription available.")
+                                       (:data . nil)))))
+            ((string= method "unsubscribe")
+             (if (not (find client *consensus-clients*))
+                 (setf result nil
+                       error `(:object (:code . -32602)
+                                       (:message . "No subscription has been registered.")
+                                       (:data . nil)))
+                 (progn
+                   ;; FIXME: locking under load
+                   (setf *consensus-clients* (remove client *consensus-clients*))
+                   (setf result '(:true)))))
+            ((string= method "ping")
+               (setf result "pong"))
+            ((string= method "wallet")
+             (setf result `(:object
+                            (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
+                            (:amount . 0))))
+            ((string= method "recovery-phrase")
+             (setf result 
+                   `(:object
+                     (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
+                     (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize)))))))
+            ((string= method "enumerate-wallets")
+             (setf result (emotiq/wallet:enumerate-wallets)))
+            ((string= method "transactions")
+             (setf result (transactions)))
+            (t
+             (setf result nil
+                   error `(:object (:code . -32601)
+                                   (:message . "No such method.")
+                                   (:data . nil)))))
+          (send-as-json client response))))))
 
 (defvar *handlers* nil)
 

@@ -26,11 +26,23 @@
                                      (:epoch . ,epoch)
                                      (:local-epoch . ,local-epoch)
                                      (:synchronized . ,(cl-json:json-bool (= local-epoch epoch)))))))
-               (loop
-                  :for client :in *consensus-clients*
-                  :do (send-as-json client notification))
+               (notify-clients notification))
          :do (sleep (random 5))
-         :do (advance))))))
+         :do (advance)))))
+
+(defun notify-clients (notification)
+  (dolist (client *consensus-clients*)
+    (let ((state (slot-value client 'hunchensocket::state)))
+      (if (not (eq state :connected))
+          (progn
+            (note "Removing client ~a with state ~a from client connections." client state)
+            (setf *consensus-clients* (remove client *consensus-clients*)))
+          (progn
+            #+(or)
+            (note "~&Notifying client ~a with ~a~&"
+                  client
+                  notification)
+            (send-as-json client notification))))))
 
 (defun transactions ()
   (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))

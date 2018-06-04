@@ -80,6 +80,10 @@ gives the toplevel definitions of the following functions:")
       (let ((message (form-rpc-request "subscribe" '("consensus"))))
         (send message)))
 
+    (defun bad-subscribe ()
+      (let ((message (form-rpc-request "subscribe" '("something/other"))))
+        (send message)))
+
     (defun unsubscribe ()
       (let ((message (form-rpc-request "unsubscribe" '("consensus"))))
         (send message)))
