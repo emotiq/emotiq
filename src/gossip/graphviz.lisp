@@ -141,6 +141,7 @@
   "Hackliy massages a graphviz svg output file into an html file that will automatically
   resize to match the size of your browser window.
   Would be nice if there were options to graphviz for this, but alas, no."
+  ; https://stackoverflow.com/questions/5643254/how-to-scale-svg-image-to-fill-browser-window
   (with-open-file (in infile :direction :input)
     (let ((line ""))
       (loop until (equal 0 (search "<svg width=" line)) do
