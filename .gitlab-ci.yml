@@ -18,15 +18,7 @@ stages:
 before_script:
   - export PATH="$HOME/bin:$PATH"
   - ci/install-lisp.sh
-  - lisp-wrapper.sh -e '(ql-dist:install-dist
-              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
-               :replace t :prompt nil)
-            (ql-dist:install-dist
-              "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
-               :prompt nil)
-            (setf (ql-dist:preference (ql-dist:dist "emotiq"))
-                  (1+ (ql-dist:preference (ql-dist:dist "quicklisp"))))
-            (uiop:quit 0)'
+  - lisp-wrapper.sh -l etc/setup-emotiq-quicklisp.lisp
 
 .test: &test_definition
   stage: test
