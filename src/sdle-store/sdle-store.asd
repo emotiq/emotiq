@@ -44,13 +44,12 @@ CLISP, ECL and AllegroCL are supported.")
   :name "SDLE-STORE"
   :author "Sean Ross <sross@common-lisp.net>; hacked by DM/SD 09/08"
   :maintainer "Sean Ross <sross@common-lisp.net>"
-  :version "0.8.5"
+  :version "0.9.0"
   :description "Serialization package"
   :long-description "Portable CL Package to serialize data"
   :licence "MIT"
   :in-order-to ((test-op (test-op "sdle-store/tests")))
-  :depends-on (useful-macros
-               actors) ;; Actors contains the improved defintion of UM.LAZY
+  :depends-on (useful-macros)
   :serial t
   :components ((:file "package")
                (:file "utils")
@@ -63,7 +62,6 @@ CLISP, ECL and AllegroCL are supported.")
                (:file "default-backend")
                (:non-required-file "custom")))
 
-
 (defmethod perform :after ((o load-op) (c (eql (find-system :sdle-store))))
   (funcall (find-symbol "SETUP-SPECIAL-FLOATS" :sdle-store))
   (provide 'sdle-store))
@@ -73,7 +71,3 @@ CLISP, ECL and AllegroCL are supported.")
   :components ((:module tests
                         :pathname "./"
                         :components ((:file "tests")))))
-
-
-
-;; EOF
