@@ -762,7 +762,7 @@ THE SOFTWARE.
               '()
               'executive-loop)
              *executive-processes*)
-       #+(or :COM.RAL :emotiq-watchdog) (start-watchdog-timer))
+       (start-watchdog-timer))
 
      #+(or :COM.RAL :emotiq-watchdog)
      (start-watchdog-timer ()
