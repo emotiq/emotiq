@@ -92,6 +92,7 @@ THE SOFTWARE.
    :convert-int-to-vector
    :convert-vector-to-int
    :int=
+   :vec=
    ))
 
 (defpackage :hash

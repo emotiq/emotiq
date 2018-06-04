@@ -224,7 +224,7 @@ Typically used for stakes. Public key is G2, Secret key is 1."
                  (trans-gamadj trn)))
 
 (defmethod =hash-trn ((trn transaction) hash)
-  (int= hash (hash-trn trn)))
+  (vec= hash (hash-trn trn)))
 
 (defun do-make-transaction (txins gam-txins txouts txout-secrets fee)
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
@@ -374,7 +374,7 @@ during TXIN formation will be properly disposed of."
 (defmethod find-txin-for-pkey-hash (pkey (trn transaction))
   (find pkey (trans-txins trn)
         :key 'txin-pkey
-        :test 'int=))
+        :test 'vec=))
 
 
 (defmethod decrypt-txout-info ((txout cloaked-txout) skey)
@@ -383,7 +383,7 @@ during TXIN formation will be properly disposed of."
 (defmethod find-txout-for-pkey-hash (pkey-hash (trn transaction))
   (find pkey-hash (trans-txouts trn)
         :key  'txout-hashpkey
-        :test 'int=))
+        :test 'vec=))
 
 ;; ------------------------------------------------------------------
 #|

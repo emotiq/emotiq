@@ -590,6 +590,10 @@ THE SOFTWARE.
           )))
 
 (defun int= (a b)
-  "Easy way to do equality testing on UB8V items"
+  "Poor way to do equality testing on UB8V items. This method fails to
+account for vectors with leading null bytes."
   (= (int a) (int b)))
 
+(defun vec= (a b)
+  "Easy way to do equality testing on UB8V items"
+  (equalp (bev-vec a) (bev-vec b)))

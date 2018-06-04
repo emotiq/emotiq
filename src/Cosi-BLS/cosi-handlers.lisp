@@ -860,7 +860,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (let ((*current-node* my-node))
     (cond ((and *use-gossip*
-                (int= (node-pkey my-node) *leader*))
+                (vec= (node-pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
            (let ((bft-thrsh (bft-threshold blk))
                  (start     nil)
@@ -931,7 +931,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
-  (int= (block-merkle-root-hash blk) ;; check transaction hash against header
+  (vec= (block-merkle-root-hash blk) ;; check transaction hash against header
         (compute-merkle-root-hash
          (block-transactions blk))))
 
@@ -973,13 +973,13 @@ check that each TXIN and TXOUT is mathematically sound."
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (and (int= *leader* (block-leader-pkey blk))
+     (and (vec= *leader* (block-leader-pkey blk))
           (check-block-transactions-hash blk)
           (let ((prevblk (first *blockchain*)))
             (or (null prevblk)
                 (and (> (block-timestamp blk) (block-timestamp prevblk))
-                     (int= (block-prev-block-hash blk) (hash-block prevblk)))))
-          (or (int= (node-pkey node) *leader*)
+                     (vec= (block-prev-block-hash blk) (hash-block prevblk)))))
+          (or (vec= (node-pkey node) *leader*)
               (check-block-transactions blk))
           ))
 
@@ -988,7 +988,7 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
      (unwind-protect
-         (when (and (int= *leader* (block-leader-pkey blk))
+         (when (and (vec= *leader* (block-leader-pkey blk))
                     (check-block-multisignature blk))
            (push blk *blockchain*)
            (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
@@ -1022,7 +1022,7 @@ check that each TXIN and TXOUT is mathematically sound."
                    (ac:pr (format nil "Block validated ~A" (short-id node)))
                    (list (pbc:sign-hash blk-hash (node-skey node))
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
-                                          :test 'int=))))
+                                          :test 'vec=))))
                (progn
                  (ac:pr (format nil "Block not validated ~A" (short-id node)))
                  (list nil 0)))))

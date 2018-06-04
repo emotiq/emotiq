@@ -112,7 +112,7 @@
           (um:nlet-tail iter ((blk  (get-most-recent-block)))
             (when blk
               ;; check that blkid = Hash(blk)
-              (assert (int= (block-hash blk)
+              (assert (vec= (block-hash blk)
                             (hash-block blk)))
               (acc blk)
               (iter (get-block (block-prev blk))))))
