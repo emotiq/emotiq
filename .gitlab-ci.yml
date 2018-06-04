@@ -26,7 +26,6 @@ before_script:
   script:
     - lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
-    - lisp-wrapper.sh -e "(when (asdf:load-system :gossip-tests) (uiop:quit 0))"
     - ci/with-timeout.sh etc/test-harness.bash
 
 test:linux:lispworks:
