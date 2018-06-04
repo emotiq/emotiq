@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-case ${uname_s} in
+case $(uname -s) in
     Linux*)
         timeout_cli=timeout
         ;;
