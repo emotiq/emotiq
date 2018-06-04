@@ -153,7 +153,6 @@ At end you should see a result like
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
-
 All pushed to the source tree result in "Continuous Integration" build
 from Travis CI: <https://travis-ci.org/emotiq/emotiq>.
 
@@ -164,4 +163,4 @@ artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
 
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-05-11 Fri 14:17Z>
+    Revised: <2018-06-04 Mon 07:07Z>
