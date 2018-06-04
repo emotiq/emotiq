@@ -1,3 +1,13 @@
+;; A watchdog timer can be enabled by pushing :emotiq-watchdog onto *features*
+;; The watchdog might be useful during debugging and tuning of the system.
+;; Theoretically, it is possible to create Actors that call blocking
+;; I/O.  Each such block "uses up" a thread ("executive").  If all
+;; executive threads are blocked, then no Actor can run (since Actors
+;; depend on threads).  A tuned system should not have this problem, but,
+;; in the general case, it is possible.
+
+
+
 ;; Actors.lisp -- An implementation of Actors - single thread
 ;; semantics across multithreaded systems
 ;;
@@ -724,6 +734,7 @@ THE SOFTWARE.
            (unschedule-timer (shiftf *heartbeat-timer* nil))
            ;; --------------------------------------------
 	   
+	   #+(or :COM.RAL :emotiq-watchdog)
            (mpcompat:process-run-function
             "Handle Stalling Actors"
             '()
@@ -753,8 +764,9 @@ THE SOFTWARE.
               '()
               'executive-loop)
              *executive-processes*)
-       (start-watchdog-timer))
+       	   #+(or :COM.RAL :emotiq-watchdog) (start-watchdog-timer))
 
+     #+(or :COM.RAL :emotiq-watchdog)
      (start-watchdog-timer ()
        (unless *heartbeat-timer*
          (setf *heartbeat-timer*
