@@ -61,7 +61,7 @@ THE SOFTWARE.
    (lambda (&rest msg)
      (declare (ignore msg))
      (let ((rand (/ (random 1000000) 1000000)))
-       (ac:pr (format nil "~%sending :hold-an-election = ~A" rand))
+       (ac:pr (format nil "sending :hold-an-election = ~A" rand))
        (mapc #'(lambda (node)
                  (cosi-simgen:send node :hold-an-election
                                    :n rand))

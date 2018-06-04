@@ -854,7 +854,6 @@ dropped on the floor.
 
 (defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 
-
 (defun %archive-log ()
   "Archive existing *log* and start a new one.
    This function is not thread-safe; should only be called from *logging-actor*."
@@ -872,6 +871,13 @@ dropped on the floor.
   (let ((logmsg (cons (usec::get-universal-time-usec) args)))
     (apply 'ac:send *logging-actor* :log logmsg)
     logmsg))
+
+(defun log-event-for-pr (cmd &rest items)
+  "Syntactic sugar to play nicely with ac:pr"
+  (case cmd
+    (:quit (setf ac::*shared-printer-actor* #'ac::blind-print))
+    (:init (setf ac::*shared-printer-actor* #'log-event-for-pr))
+    (t (apply 'default-logging-function :PR items))))
 
 (defun default-logging-function (logcmd &rest args)
   "Default logger for nodes. Filters using the *log-filter* mechanism."

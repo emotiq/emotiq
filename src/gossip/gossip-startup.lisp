@@ -69,6 +69,7 @@
 
 (defun gossip-startup (&optional (config-path *gossip-db-file*))
   "Reads initial configuration files. Returns list of lists of host/uids like (address port uid1 uid2 ...)"
+  (gossip-init ':maybe)
   (let ((form (read-gossip-configuration config-path))
         (all-pubkeys nil)
         (hosts nil)
@@ -112,6 +113,27 @@
                                 )))
                        (t (error "Hosts file hosts.conf not found or invalid")))
                  hosts-uids))))
+
+(let ((gossip-inited nil))
+  (defun gossip-init (&optional (cmd))
+    "Call this once before using gossip system. Should return true if everything succeeded."
+    ; make actor:pr calls go to global log.
+    ; NOTE: We're not just substituting *logging-actor* here because we want the timestamp to
+    ;   be made ASAP after function is called, not when logging finally happens.
+    (case cmd
+      (:init
+       (log-event-for-pr ':init)
+       (setf gossip-inited t))
+      (:maybe
+       (unless gossip-inited
+         (gossip-init ':init)))
+      (:uninit
+       (log-event-for-pr ':quit)
+       (setf gossip-inited nil))
+      (:query gossip-inited))))
+     
+(eval-when (:load-toplevel :execute)
+  (gossip-init :init))
 
 ; (gossip-startup)
 
