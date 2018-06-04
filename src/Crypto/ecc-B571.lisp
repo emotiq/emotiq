@@ -195,6 +195,9 @@ THE SOFTWARE.
       :alpha 1))
     ))
 
+
+(defstub c-ecc571-add)
+
 (defun ecc-double (pt)
   (optima:match pt
     ((ecc-infinite-)  pt)
@@ -273,6 +276,10 @@ THE SOFTWARE.
                   (lambda (pt)
                     (ecc-projective pt :alpha alpha)) ))
  
+
+
+(defstub c-ecc571-mul)
+
 (defun ecc-affine-mul (pt n)
   ;; left-to-right algorithm
   ;; for affine coordinates

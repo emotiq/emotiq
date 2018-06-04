@@ -158,6 +158,8 @@
    :txout-secr-gamma
    )
   (:export
+   public-key-to-address)
+  (:export
    :eblock
    :protocol-version
    :epoch
@@ -235,6 +237,7 @@
    :current-actor
    :send
    :recv
+   :retry-recv
    :become
    :par
    :do-nothing

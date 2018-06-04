@@ -1,15 +1,18 @@
 We need to have two branches, determined at runtime, to differentiate between Emotiq development and building a binary.
 
-Building a binary is referred to as "Production".
+Building a binary is referred to as `Production`.
 
-This process must also gel with Travis CI, which rebuilds the whole system (inside of Travis) on every invocation of Travis CI testing.
+This process must also gel with GitLab CI, which rebuilds the whole system (inside of GitLab) on every push to the repository.
 
 
-Development:
+## Development:
 
-As a first step, we need to snip all ties with non-standard libraries, e.g. /usr/local/lib/libpbc.dylib and /usr/local/lib/libgmp.dylib.
+As a first step, we need to snip all ties with non-standard libraries, e.g. `emotiq/var/local/lib/libpbc.dylib` and `emotiq/var/local/lib/libgmp.dylib`.
 
-A script targeted at development is called emotiq/etc/build-crypto-pairing.bash .  Normal Emotiq developers need to wipe the emotiq/var/local directory (if present) with a command such as 'rm -rf emotiq/var".  Then, run the developers' script on the command-line as "bash build-crypto-pairing.bash".  This creates the directory "emotiq/var" and puts pbc related .h files into "emotiq/var/local/include/pbc" and pbc and gmp dylibs (.dylib on mac, .so on linux) into emotiq/var/locl/lib.
+A script targeted at development is called emotiq/etc/build-crypto-pairing.bash.
+Normal Emotiq developers need to wipe the emotiq/var directory (if present)
+with a command such as 'rm -rf emotiq/var".
+Then, run the developers' script on the command-line as `etc/build-crypto-pairing.bash`.  This creates the directory "emotiq/var" and puts pbc related .h files into "emotiq/var/local/include/pbc" and pbc and gmp dylibs (.dylib on mac, .so on linux) into emotiq/var/locl/lib.
 
 The script takes quite a while to run and displays many lines of config and build messages.
 
@@ -17,17 +20,17 @@ The build is only necessary for developers using the crypto-pairing libraries (P
 
 For development, this script needs to be run only once, and the var directory structure is retained.
 
-Developers need to load these systems: emotiq, emotiq/delivery, emotiq/utilities, emotiq/blockchain and emotiq/startup.
+Developers need to load these systems: `emotiq`, `emotiq/delivery`, `emotiq/utilities`, `emotiq/blockchain` and `emotiq/startup`.
 
-Developers should run (emotiq:main) to "run" the system.  The code to run a blockchain node are installed by modifying the function "main" in the file startup.lisp.
+Developers should run `(emotiq:main)` to "run" the system.  The code to run a blockchain node are installed by modifying the function "main" in the file `emotiq/src/startup.lisp`.
 
 Building a binary:
 
 Building a binary (which is something developers will rarely do) is performed by another script.  The steps are:
 
-1) Delete the emotiq/var directory (e.g. "rm -rf emotiq/var")
-2) Cd into emotiq/etc.
-3) Run the delivery script, e.g. "bash production.bash".
+1. Delete the emotiq/var directory (e.g. "rm -rf emotiq/var")
+1. Check path to the LispWorks binary at `etc/deliver/deliv-{macos,linux}.bash`
+1. Run the delivery script `etc/build-binary.sh`.
 
 This script also runs for a long time and displays many messages.
 
@@ -38,19 +41,14 @@ This script results in:
 - DLLs called libpbc.{dylib,.so}.*
 - DLLs called libgmp.{dylib,.so}.*
 
-The resulting files are all placed in one directory emotiq/var/local/production-{linux,mac}.
+The resulting files are all placed in one directory `emotiq/var/local/production/emotiq-<timestamp>-<commit_hash>-<arch>`.
 
-On linux, all the .so's and the binary (emotiq) and the script (emotiq.bash) are put into emotiq/var/local/production-linux/linux.emotiq.bz2.  The production-linux directory will contain:
-
-emotiq       emotiq.linux.bz2  libgmp.la  libgmp.so.10      libLispPBCIntf.so  libpbc.la  libpbc.so.1      libs.tar
-emotiq.bash  libgmp.a          libgmp.so  libgmp.so.10.3.2  libpbc.a           libpbc.so  libpbc.so.1.0.0
-
-
-The .bz2  can be copied to another machine, into an empty directory and untar'ed.
-
-The binary is run with the command line "bash emotiq.bash".  Certain older Mac's may fail with a register dump. A build from my Mac Mini (2012) does not run on my Mac Airbook (late 2010).  If the binary is built on the Airbook, it runs OK on the airbook.  Theory: there is something different in the configuration created by ./configure running on the airbook.  This is being investigated... (ticket #156925019 in PT).
+The binary is run with the command line `bash emotiq.bash`.
 
 The binary always calls the Lisp function "start".
 
 The above works with LispWorks development, and the processes may change as we branch out to use other lisps.
 
+## Production:
+
+Building `production` binary is done by pushing _tagged_ commit to the repository.  

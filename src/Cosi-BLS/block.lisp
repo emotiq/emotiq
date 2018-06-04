@@ -12,17 +12,6 @@
     :documentation 
       "Version of the protocol/software, an integer.")
 
-   (epoch                               ; aka "height"
-    :reader  block-epoch
-    :initarg :epoch
-    :initform 0
-    :documentation
-    "Increasing integer count of epoch this block is part of. We keep
-     a single chain combining identity and ledger, unlike Byzcoin,
-     which keeps an outside identity blockchain with its epoch count
-     and an inside ledger blockchain with its height count. Thus,
-     epoch subsumes height.")
-
    (prev-block-hash
     :reader block-prev-block-hash
     :initform nil
@@ -84,7 +73,6 @@
 
 (defparameter *names-of-block-slots-to-serialize*
   '(protocol-version 
-    epoch
     prev-block-hash
     timestamp
 
@@ -114,7 +102,6 @@
 
 (defparameter *names-of-block-header-slots-to-serialize*
   '(protocol-version 
-    epoch
     prev-block-hash
     timestamp
 
@@ -172,9 +159,8 @@ added to the blockchain."
       (setf transactions block-transactions)
       (setf merkle-root-hash (compute-merkle-root-hash block-transactions))
       (when prev-block? 
-        (with-slots (epoch prev-block-hash)
+        (with-slots (prev-block-hash)
             blk
-          (setf epoch (1+ (slot-value prev-block? 'epoch)))
           (setf prev-block-hash (hash-block prev-block?))))
       blk)))
 
@@ -281,5 +267,5 @@ added to the blockchain."
    for the signature-bitmap slot of eblock."
   (with-slots (signature signature-bitmap)
       block
-    (setf signature (pbc:signed-message-sig sig))
+    (setf signature sig)
     (setf signature-bitmap bits)))

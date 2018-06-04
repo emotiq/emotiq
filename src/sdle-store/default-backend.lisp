@@ -492,7 +492,7 @@
         (when (and *check-for-circs*
                    (referrer-p obj))
           (let ((x x))
-            (push (um.lazy:lazy
+            (push (delay
                       (setf (nth x ret)
                             (referred-value obj *restored-values*)))
                   *need-to-fix*)))
@@ -505,7 +505,7 @@
       ;; and check for the last possible circularity
       (if (and *check-for-circs*
                (referrer-p last1))
-          (push (um.lazy:lazy
+          (push (delay
                     (setf (cdr tail)
                           (referred-value last1 *restored-values*)))
                 *need-to-fix*)
