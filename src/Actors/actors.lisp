@@ -1,3 +1,11 @@
+;; A watchdog timer can be enabled by pushing :emotiq-watchdog onto *features*
+;; The watchdog might be useful during debugging and tuning of the system.
+;; Theoretically, it is possible to create Actors that call blocking
+;; I/O.  Each such block "uses up" a thread ("executive").  If all
+;; executive threads are blocked, then no Actor can run (since Actors
+;; depend on threads).  A tuned system should not have this problem, but,
+;; in the general case, it is possible.
+
 ;; Actors.lisp -- An implementation of Actors - single thread
 ;; semantics across multithreaded systems
 ;;
@@ -616,11 +624,11 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Executive Pool - actual system threads dedicated to running Actor code
 
-(defvar *heartbeat-timer*    nil) ;; the system watchdog timer
-(defvar *last-heartbeat*     0)   ;; time of last Executive activity
+#+(or :COM.RAL :emotiq-watchdog) (defvar *heartbeat-timer*    nil) ;; the system watchdog timer
+#+(or :COM.RAL :emotiq-watchdog) (defvar *last-heartbeat*     0)   ;; time of last Executive activity
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
-(defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
-(defvar *maximum-age*        3)   ;; how long before watchdog should bark
+#+(or :COM.RAL :emotiq-watchdog) (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
+#+(or :COM.RL :emotiq-watchdog) (defvar *maximum-age*        3)   ;; how long before watchdog should bark
 (defvar *nbr-execs*               ;; should match the number of CPU Cores but never less than 4
   #+(AND :LISPWORKS :MACOSX)
   (load-time-value
@@ -696,6 +704,7 @@ THE SOFTWARE.
        (dolist (exec *executive-processes*)
          (mpcompat:process-interrupt exec 'exec-terminate-actor actor)))
      
+     #+(or :COM.RAL :emotiq-watchdog)
      (check-sufficient-execs ()
        (let (age)
          (unless (or (emptyq-p *actor-ready-queue*)        ;; nothing to do anyway?
@@ -755,6 +764,7 @@ THE SOFTWARE.
              *executive-processes*)
        (start-watchdog-timer))
 
+     #+(or :COM.RAL :emotiq-watchdog)
      (start-watchdog-timer ()
        (unless *heartbeat-timer*
          (setf *heartbeat-timer*
