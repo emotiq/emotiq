@@ -18,20 +18,15 @@ stages:
 before_script:
   - export PATH="$HOME/bin:$PATH"
   - ci/install-lisp.sh
-  - lisp-wrapper.sh -e '(ql-dist:install-dist
-              "http://beta.quicklisp.org/dist/quicklisp/2018-01-31/distinfo.txt"
-               :replace t :prompt nil)
-            (ql-dist:install-dist
-              "http://s3.us-east-1.amazonaws.com/emotiq-quickdist/emotiq.txt"
-               :prompt nil)
-            (uiop:quit 0)'
+  - lisp-wrapper.sh -l etc/setup-emotiq-quicklisp.lisp
 
 .test: &test_definition
   stage: test
+  retry: 1
   script:
     - lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
     - lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
-    - etc/test-harness.bash
+    - ci/with-timeout.sh etc/test-harness.bash
 
 test:linux:lispworks:
   <<: *test_definition
@@ -39,8 +34,6 @@ test:linux:lispworks:
     - linux
   variables:
     LISP: lispworks
-    systems: ":cosi-bls-tests :crypto-pairings"
-
 
 test:linux:ccl:
   <<: *test_definition
