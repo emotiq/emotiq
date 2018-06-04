@@ -6,7 +6,15 @@
 
 (defun test-system (system)
   (handler-case 
-      (ql:quickload system)
+      (progn
+        (if (asdf:test-system system)
+            (progn
+              (format *standard-output* "~&Test passed for system:~a~&" system)
+              (uiop:quit 0))
+          (progn
+            (format *standard-output* "~&Test passed for system:~a~&" system)
+            (uiop:quit -1)))
+        (ql:quickload system))
     (error (e)
       (format *standard-output*
               "~&Failed to Quickload dependencies for system `~a`:~&~a~&" system e)
