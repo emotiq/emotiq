@@ -58,8 +58,8 @@
   (um:nlet-tail iter ((blk  (get-most-recent-block)))
     (when blk
       ;; check that blkid = Hash(blk)
-      (assert (= (int (block-hash blk))
-                 (int (hash-block blk))))
+      (assert (hash= (block-hash blk)
+                     (hash-block blk)))
       (push (make-chain-block
              :block blk)
             *blockchain*)
