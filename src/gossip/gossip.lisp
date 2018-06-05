@@ -848,6 +848,7 @@ dropped on the floor.
   "Returns a new log space"
   (make-array 10 :adjustable t :fill-pointer 0))
 
+; TODO: This doesn't call save-log. It probably should once saving is thoroughly debugged.
 (defun %archive-log ()
   "Archive existing *log* and start a new one.
    This function is not thread-safe; should only be called from *logging-actor*."
@@ -905,6 +906,48 @@ dropped on the floor.
            node
            msg
            args)))
+
+; need to move this to utilities
+(defun emotiq/user/root ()
+  #+linux
+  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
+  #+darwin
+  (merge-pathnames "Emotiq/"
+                   (merge-pathnames "Library/Application Support/"
+                                    (user-homedir-pathname))))
+
+(defun emotiq-log-path (logvector)
+  (let ((name (format nil "~D-~D.log" (car (aref logvector 0)) (car (aref logvector (1- (length logvector)))))))
+    (merge-pathnames name (emotiq/user/root))))
+
+(defun serialize-log (logvector path)
+  "Serialize a log vector to a file. Not thread safe. Don't run
+   on log vectors that are in use unless the *logging-actor* does it."
+  (ensure-directories-exist path)
+  (with-open-file (o path :direction :output :element-type '(unsigned-byte 8))
+    (format *standard-output* "Serializing log to ~a" path)
+    (lisp-object-encoder:serialize logvector o)))
+    
+(defun deserialize-log (path)
+  "Deserialize log at path"
+  (with-open-file
+      (o path :direction :input :element-type '(unsigned-byte 8))
+    (lisp-object-encoder:deserialize o)))
+
+(defun %save-log (&optional (copy-first t))
+  "Saves current *log* to a file. Moderately thread-safe if copy-first is true.
+   Not thread-safe at all otherwise."
+  (let* ((newlog (if copy-first
+                     (copy-seq *log*)
+                     *log*))
+         (path (emotiq-log-path newlog)))
+    (declare (dynamic-extent newlog))
+    (serialize-log newlog path)
+    path))
+
+(defun save-log ()
+  "Saves current *log* to a file. Thread-safe."
+   (ac:send *logging-actor* :save))
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.

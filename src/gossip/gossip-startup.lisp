@@ -135,6 +135,9 @@
                                         (when *logstream*
                                           ;; See Note A
                                           (write-string (format nil "~{~S~^ ~}~%" (cdr logmsg)) *logstream*)))
+                                  ; :save saves current log to a file without modifying it
+                                  (:save (save-log nil))
+                                  ; :archive pushes current log onto *archived-logs*, then starts a fresh log
                                   (:archive (%archive-log))))))
        (archive-log)
        (log-event-for-pr ':init)
