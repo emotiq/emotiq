@@ -170,6 +170,10 @@ THE SOFTWARE.
       (subseq bytes 0 nb)))
    ))
 
-(defun hash-check (item expected)
-  (= expected (int (hash/256 item))))
+(defmethod hash-check (item (expected string))
+  (string-equal expected (hex-str (hash/256 item))))
+
+(defmethod hash= ((hash1 hash) (hash2 hash))
+  (vec= hash1 hash2))
+
 

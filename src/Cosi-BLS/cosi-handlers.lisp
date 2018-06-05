@@ -931,9 +931,9 @@ check that each TXIN and TXOUT is mathematically sound."
          (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
-  (int= (block-merkle-root-hash blk) ;; check transaction hash against header
-        (compute-merkle-root-hash
-         (block-transactions blk))))
+  (hash= (block-merkle-root-hash blk) ;; check transaction hash against header
+         (compute-merkle-root-hash
+          (block-transactions blk))))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
   pkey2)
@@ -978,7 +978,7 @@ check that each TXIN and TXOUT is mathematically sound."
           (let ((prevblk (first *blockchain*)))
             (or (null prevblk)
                 (and (> (block-timestamp blk) (block-timestamp prevblk))
-                     (int= (block-prev-block-hash blk) (hash-block prevblk)))))
+                     (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
           (or (int= (node-pkey node) *leader*)
               (check-block-transactions blk))
           ))

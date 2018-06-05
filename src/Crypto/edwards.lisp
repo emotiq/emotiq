@@ -95,7 +95,8 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve1174*
-  #x50c953d8d6f83ab18a8a475acc04567cf621ea543a576f20d70f1f1784a3c727)
+  ;; = (hex-str (hash/256 *curve1174))
+  "50c953d8d6f83ab18a8a475acc04567cf621ea543a576f20d70f1f1784a3c727")
 
 ;; ---------------------------
 
@@ -115,7 +116,8 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve-E382*
-  #x58aa9ce913eb890d831f3ec0e59d0aaaf32304cc4240bfc6ff045599b8ac8419)
+  ;; = (hex-str (hash/256 *curve-E382*))
+  "58aa9ce913eb890d831f3ec0e59d0aaaf32304cc4240bfc6ff045599b8ac8419")
 
 ;; ---------------------------
 
@@ -135,7 +137,8 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve41417*
-  #xa26c08cde33e9d353b0ec47090c1d6fdea32842d9e5b7130a026b09e02d10fd0)
+  ;; = (hex-str (hash/256 *curve41417*))
+  "a26c08cde33e9d353b0ec47090c1d6fdea32842d9e5b7130a026b09e02d10fd0")
 
 ;; ---------------------------
 
@@ -155,7 +158,8 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-curve-E521*
-  #x689a5918f2d28f1d62965551d44c635a141b623ad672b464b21052b481a21420)
+  ;; = (hex-str (hash/256 *curve-E521*))
+  "689a5918f2d28f1d62965551d44c635a141b623ad672b464b21052b481a21420")
 
 ;; ------------------------------------------------------
 

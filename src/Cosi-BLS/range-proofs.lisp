@@ -624,8 +624,8 @@ THE SOFTWARE.
                                                  :Z 9507787602201723372052147491550764275248437713628282754480216598228666537920807278018546459799443464094514589685112))))
 
 (defvar *chk-bp-basis*
-  ;; (HASH/256 *bp-basis*)
-  #xf517bb89109c3b7470a97f0c4b6fc1647e515f9426fbb5aa6f0786065e29c99d)
+  ;; = (hex-str (HASH/256 *bp-basis*))
+  "f517bb89109c3b7470a97f0c4b6fc1647e515f9426fbb5aa6f0786065e29c99d")
 |#
 
 #| ;; for 128 bit security |#
@@ -1038,8 +1038,8 @@ THE SOFTWARE.
    ))
 
 (defvar *chk-bp-basis*
-  ;; (HASH/256 *bp-basis*)
-  #xdbb5d20d21439523959d090d0477ca7f51e5771f031afa0221f8c1faa860fca7)
+  ;; = (hex-str (HASH/256 *bp-basis*))
+  "dbb5d20d21439523959d090d0477ca7f51e5771f031afa0221f8c1faa860fca7")
 #| |#
 
 ;; --------------------------------------------------------------------------------
