@@ -195,6 +195,16 @@
    :block-signature
    :block-merkle-root-hash))
 
+(defpackage :cosi/proofs/newtx          ; New Transactions
+  (:use 
+   :common-lisp
+   :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :edec
+   :pbc)
+  (:export))
+
 ;; from cosi-construction
 (defpackage :cosi-simgen
   (:use
