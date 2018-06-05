@@ -124,8 +124,8 @@
       (:init
        #+OPENMCL
        (if (find-package :gui)
-         (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
-         (setf *logstream* *standard-output*))
+           (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
+           (setf *logstream* *standard-output*))
        #-OPENMCL
        (setf *logstream* *standard-output*)
        (setf *logging-actor* (ac:make-actor
@@ -133,7 +133,8 @@
                                 (case cmd
                                   (:log (vector-push-extend logmsg *log*)
                                         (when *logstream*
-                                            (format *logstream* "~{~S~^ ~}~%" logmsg)))
+                                          ;; See Note A
+                                          (write-string (format nil "~{~S~^ ~}~%" (cdr logmsg)) *logstream*)))
                                   (:archive (%archive-log))))))
        (archive-log)
        (log-event-for-pr ':init)
@@ -151,3 +152,13 @@
 
 ; (gossip-startup)
 
+#| NOTES
+
+NOTE A: If you call (format *logstream* <etc>), then either a lot of small strings or even a lot
+of individual characters get written to the *logstream* and this is much too slow in CCL
+because each output to *logstream* has to be done in the event loop.
+Although this is ccl-specific, it doesn't hurt anything to use (format nil <etc>) on other platforms.
+
+We're calling (cdr logmsg) because we don't want to clutter up the *logstream* with timestamps. If you
+need those, you should be looking at the *log*.
+|#
