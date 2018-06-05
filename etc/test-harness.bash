@@ -32,7 +32,7 @@ systems=${systems:-":emotiq/blockchain
                     :crypto-pairings/t
                     :core-crypto"}
 
-echo Test harness invoked using implementation:
+echo Test harness invoked using implementation: ${lisp}
 echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')
 
 for system in ${systems}; do
@@ -48,4 +48,3 @@ for system in ${systems}; do
     fi
     echo "<== ASDF:TEST-SYSTEM on ${system} succeeded."
 done
-                                      
