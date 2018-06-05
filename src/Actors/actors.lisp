@@ -524,7 +524,7 @@ THE SOFTWARE.
         (mp:mailbox-read mbox)
         (iter)))))
 
-#+(or :ALLEGRO :CLOZURE)
+#+(or :ALLEGRO :CLOZURE :SBCL)
 (let ((queue (list nil))
       (lock  (mpcompat:make-lock)))
 

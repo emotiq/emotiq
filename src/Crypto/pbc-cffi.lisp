@@ -423,6 +423,7 @@ Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
 (defparameter *chk-curve-fr449-params*
+  ;; = (hex-str (hash/256 *curve-fr449-params*))
   "d7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef")
 
 ;; ---------------------------------------------------------------------------------------
