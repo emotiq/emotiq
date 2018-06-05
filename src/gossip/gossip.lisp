@@ -23,6 +23,21 @@
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
 
+(defvar *log* nil "Log of gossip actions.")
+(defvar *logstream* nil "Log stream for gossip log messages. This is in addition to the *log*, so it's fine if this is nil.")
+(defvar *logging-actor* nil "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
+(defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
+(defparameter *log-filter* t "t to log all messages; nil to log none")
+
+(defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
+
+(defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
+(defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
+
+(defparameter *delay-interim-replies* t "True to delay interim replies.
+  Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
+  some partial information is propagating in case of node failures.")
+
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
                                        Can be an integer to pick up to n neighbors.")
@@ -104,16 +119,6 @@ Discussion: :gossip style is more realistic for "loose" networks where nodes don
 are in place between nodes.
 |#
 
-(defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
-(defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
-
-(defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
-
-(defparameter *log-filter* t "t to log all messages; nil to log none")
-(defparameter *delay-interim-replies* t "True to delay interim replies.
-  Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
-  some partial information is propagating in case of node failures.")
-
 (defun make-uid-mapper ()
   "Returns a table that maps UIDs to objects"
   (kvs:make-store ':hashtable :test 'equal))
@@ -176,13 +181,12 @@ are in place between nodes.
   ;   over network lookup
   (eripa-via-network-lookup))
 
-(defparameter *eripa* nil "Cached EXTERNALLY-ROUTABLE-IP-ADDRESS")
-
-(defun eripa ()
-  "Return externally-routable ip address of this machine. This is the primary user function.
-   Caches result for quick repeated use."
-  (or *eripa*
-      (setf *eripa* (externally-routable-ip-address))))
+(let ((eripa nil))
+  (defun eripa ()
+    "Return externally-routable ip address of this machine. This is the primary user function.
+    Caches result for quick repeated use."
+    (or eripa
+        (setf eripa (externally-routable-ip-address)))))
 
 (defun encode-uid (machine-id process-id numeric-id)
   (logior (ash machine-id 48)
@@ -843,16 +847,6 @@ dropped on the floor.
 (defun new-log ()
   "Returns a new log space"
   (make-array 10 :adjustable t :fill-pointer 0))
-
-(defvar *log* (new-log) "Log of gossip actions.")
-(defvar *logging-actor* (ac:make-actor
-                         (lambda (cmd &rest logmsg)
-                           (case cmd
-                             (:log (vector-push-extend logmsg *log*))
-                             (:archive (%archive-log)))))
-  "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
-
-(defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 
 (defun %archive-log ()
   "Archive existing *log* and start a new one.

@@ -14,6 +14,23 @@ Reads from buffers can be done from any thread, but beware that
 they might not be consistent since there is no locking.
 |#
 
+; This will eventually be fixed in the CCL source
+(defun cocoa-edit (&optional arg)
+  (cond ((or (null arg)
+             (typep arg 'string)
+             (typep arg 'pathname))
+         (when arg
+           (unless (probe-file arg)
+             (let ((lpath (merge-pathnames arg *.lisp-pathname*)))
+               (when (probe-file lpath) (setq arg lpath)))))
+         ;; Avoid taking the error inside gui.
+         (when arg (truename arg)) ; fix is here
+         (execute-in-gui #'(lambda () (find-or-make-hemlock-view arg))))
+        ((ccl::valid-function-name-p arg)
+         (hemlock:edit-definition arg)
+         nil)
+        (t (report-bad-arg arg '(or null string pathname (satisfies ccl::valid-function-name-p))))))
+
 (defmethod stream-from-window ((window hemlock-frame))
   (let ((mark (hi::buffer-end-mark ; this is ridiculously complex
                (hi::hemlock-view-buffer
@@ -46,7 +63,7 @@ around this thing to get back that purity.
                                 (start 0)
                                 (end (length string)))
   (queue-for-gui
-   (lambda () (call-next-method stream string start end))))
+   (lambda () (ccl::stream-write-string stream string start end))))
 
 (defmethod highlevel-stream-from-window ((window hemlock-frame))
   "Returns a highlevel Hemlock output stream to the end of the given window.

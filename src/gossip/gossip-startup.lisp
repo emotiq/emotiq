@@ -122,6 +122,20 @@
     ;   be made ASAP after function is called, not when logging finally happens.
     (case cmd
       (:init
+       #+OPENMCL
+       (if (find-package :gui)
+         (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
+         (setf *logstream* *standard-output*))
+       #-OPENMCL
+       (setf *logstream* *standard-output*)
+       (setf *logging-actor* (ac:make-actor
+                              (lambda (cmd &rest logmsg)
+                                (case cmd
+                                  (:log (vector-push-extend logmsg *log*)
+                                        (when *logstream*
+                                            (format *logstream* "~{~S~^ ~}~%" logmsg)))
+                                  (:archive (%archive-log))))))
+       (archive-log)
        (log-event-for-pr ':init)
        (setf gossip-inited t))
       (:maybe
