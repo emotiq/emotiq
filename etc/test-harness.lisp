@@ -14,10 +14,10 @@
   (handler-case
       (if (asdf:test-system system)
           (progn
-            (format *standard-output* "~&Test passed for system: `~a`~&" system)
+            (format *standard-output* "~&Test-system succeeded for system: `~a`~&" system)
             (uiop:quit 0))
           (progn
-            (format *standard-output* "~&Test failed for system: `~a`~&" system)
+            (format *standard-output* "~&Test-system failed for system: `~a`~&" system)
             (uiop:quit -1)))
     (error (e)
       (format *standard-output*
