@@ -524,7 +524,7 @@ THE SOFTWARE.
         (mp:mailbox-read mbox)
         (iter)))))
 
-#+(or :ALLEGRO :CLOZURE)
+#+(or :ALLEGRO :CLOZURE :SBCL)
 (let ((queue (list nil))
       (lock  (mpcompat:make-lock)))
 
@@ -633,6 +633,24 @@ THE SOFTWARE.
   (max 4 (ccl:cpu-count))
   #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
 
+(defun default-watchdog-function ()
+  (restart-case
+      (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
+             age)
+    (:do-nothing-just-wait ()
+      :report "It's okay, just wait"
+      (start-watchdog-timer))
+    (:spawn-new-executive ()
+      :report "Spawn another Executive"
+      (incf *nbr-execs*)
+      (push-new-executive))
+    (:stop-actor-system ()
+      :report "Stop Actor system"
+      (kill-executives))
+    ))
+
+(defvar *watchdog-hook* 'default-watchdog-function)
+
 ;; ----------------------------------------------------------------
 ;; Ready Queue
 
@@ -727,22 +745,8 @@ THE SOFTWARE.
            (mpcompat:process-run-function
             "Handle Stalling Actors"
             '()
-            (lambda ()
-              (restart-case
-                  (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
-                         age)
-                (:do-nothing-just-wait ()
-                  :report "It's okay, just wait"
-                  (start-watchdog-timer))
-                (:spawn-new-executive ()
-                  :report "Spawn another Executive"
-                  (incf *nbr-execs*)
-                  (push-new-executive))
-                (:stop-actor-system ()
-                  :report "Stop Actor system"
-                  (kill-executives))
-                ))
-            ))))
+            *watchdog-hook*)
+           )))
 
      (remove-from-pool (proc)
        (setf *executive-processes* (delete proc *executive-processes*)))

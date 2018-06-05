@@ -364,7 +364,8 @@ THE SOFTWARE.
            ))))
 
 (defvar *chk-bp-basis*
-  #x817364794f007ce83fa54d376fe225c8425f277bea914ac6d69a5f8c27dbc528)
+  ;; = (hex-str (hash/256 *bp-basis*))
+  "817364794f007ce83fa54d376fe225c8425f277bea914ac6d69a5f8c27dbc528")
 
 (assert (hash-check *bp-basis* *chk-bp-basis*))
 

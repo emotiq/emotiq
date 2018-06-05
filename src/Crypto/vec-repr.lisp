@@ -153,7 +153,13 @@ THE SOFTWARE.
             (class-name (class-of obj))
             (ub8v-vec obj))))
 
+(defun hex-digit-char (c)
+  (or (char<= #\0 #\9)
+      (char<= #\a #\f)
+      (char<= #\A #\F)))
+
 (defun hex-of-str (str)
+  (assert (every 'hex-digit-char str))
   (make-instance 'hex
                  :str str))
 
@@ -590,6 +596,12 @@ THE SOFTWARE.
           )))
 
 (defun int= (a b)
-  "Easy way to do equality testing on UB8V items"
+  "Poor way to do equality testing on UB8V items. This method fails to
+account for vectors with leading null bytes. Okay for comparing
+compressed ECC points - public keys, signatures. Not okay for hash
+comparisons."
   (= (int a) (int b)))
 
+(defun vec= (a b)
+  "Easy way to do equality testing on UB8V items"
+  (equalp (bev-vec a) (bev-vec b)))
