@@ -48,6 +48,7 @@ test:linux:sbcl:
     - linux
   variables:
     LISP: sbcl
+  allow_failure: true
 
 test:macos:lispworks:
   <<: *test_definition
@@ -69,6 +70,7 @@ test:macos:sbcl:
     - macos
   variables:
     LISP: sbcl
+  allow_failure: true
 
 
 .build_release: &build_release_definition
