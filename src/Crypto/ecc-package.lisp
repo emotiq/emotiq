@@ -86,6 +86,7 @@ THE SOFTWARE.
    :base64-str
    :hex
    :hex-str
+   :hex-of-str
    :int
    :levn
    :bevn
@@ -111,6 +112,7 @@ THE SOFTWARE.
    :get-hash-nbytes
    :hashable
    :hash-check
+   :hash=
    ))
 
 (defpackage :ecc-crypto-b571
