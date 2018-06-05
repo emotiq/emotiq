@@ -99,33 +99,3 @@ EOF
 mkdir -p ~/bin
 
 "$PREFIX/LispWorks 7.1 (64-bit)/LispWorks (64-bit).app/Contents/MacOS/lispworks-7-1-0-amd64-darwin" -build /tmp/resave.lisp
-cp ci/lwpro-wrapper.sh ~/bin/ros
-chmod +x ~/bin/ros
-
-# Setup ASDF searh path
-
-DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE=${DIR}/..
-
-mkdir -p ~/.config/common-lisp/source-registry.conf.d/
-echo "(:tree \"$BASE\")" >~/.config/common-lisp/source-registry.conf.d/emotiq.conf
-
-echo "Installing Quicklisp"
-wget -O /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
-~/bin/ros -l /tmp/quicklisp.lisp -e '(quicklisp-quickstart:install)'
-
-cat >~/.lispworks <<EOF
-  ;;; The following lines added by ql:add-to-init-file:
-  #-quicklisp
-  (let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
-    (when (probe-file quicklisp-init)
-      (load quicklisp-init)))
-EOF
-
-~/bin/ros -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
-                (lisp-implementation-type)
-                (lisp-implementation-version)
-                #+asdf(asdf:asdf-version) #-asdf "not required")' || exit 1
-
-
-# ~/bin/ros -l ci/deps.lisp
