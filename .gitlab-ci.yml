@@ -42,7 +42,7 @@ test:linux:ccl:
   variables:
     LISP: ccl
 
-test:linux:sbcl:
+.test:linux:sbcl:
   <<: *test_definition
   tags:
     - linux
@@ -64,7 +64,7 @@ test:macos:ccl:
   variables:
     LISP: ccl
 
-test:macos:sbcl:
+.test:macos:sbcl:
   <<: *test_definition
   tags:
     - macos
