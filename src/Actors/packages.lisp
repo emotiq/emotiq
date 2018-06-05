@@ -94,7 +94,6 @@ THE SOFTWARE.
    :unschedule-timer)
   (:export
    #:install-actor-system
-   #:*nbr-execs*
    #:actor
    #:make-actor
    #:send
@@ -146,6 +145,11 @@ THE SOFTWARE.
 
    #:install-actor-system
 
+   #:default-watchdog-function
+   #:*watchdog-hook*
+   #:*maximum-age*
+   #:*nbr-execs*
+   #:*heartbeat-interval*
    ))
 
 (defpackage #:linda
