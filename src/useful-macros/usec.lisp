@@ -68,29 +68,28 @@ THE SOFTWARE.
    #F
    (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
 
-#+:CLOZURE
-(PROGN
-  (defun get-time-usec ()
-    (declare (optimize (speed 3) (debug 0)))
-    (ccl::rlet ((now :timeval)
-           (since :timeval))
-      (ccl::gettimeofday now (ccl:%null-ptr))
-      (ccl::%sub-timevals since now ccl::*lisp-start-timeval*)
-      (+ (* 1000000 (the (unsigned-byte 32) (ccl:pref since :timeval.tv_sec)))
-         (the fixnum (ccl:pref since :timeval.tv_usec)))))
-
- (defun adjust-to-standard-universal-time-usec (tm)
+#-(OR (AND :LISPWORKS (OR :LINUX :MACOSX))
+      :WIN32
+      :ALLEGRO)
+(defun adjust-to-standard-universal-time-usec (tm)
    (declare (integer tm))
-   (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
+   (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0))))
+
+#+:CLOZURE
+(defun get-time-usec ()
+  ;; time since midnight Jan 1, 1970, measured in microseconds
+  (declare (optimize (speed 3) (debug 0)))
+  (ccl::rlet ((now :timeval))
+    (ccl::gettimeofday now)
+    (+ (* 1000000 (the (unsigned-byte 32) (ccl:pref now :timeval.tv_sec)))
+       (the fixnum (ccl:pref now :timeval.tv_usec)))))
 
 #-(OR :CLOZURE
-      (AND :LISPWORKS (OR :LINUX :MACOSX)))
-(progn
-  (defun get-time-usec ()
-    (error "Not yet implemented"))
-  (defun adjust-to-standard-universal-time-usec (tm)
-    (declare (ignore tm))
-    (error "Not yet implemented")))
+      (AND :LISPWORKS (OR :LINUX :MACOSX))
+      :WIN32
+      :ALLEGRO)
+(defun get-time-usec ()
+  (error "Not yet implemented"))
 
 (defun get-universal-time-usec ()
   (adjust-to-standard-universal-time-usec (get-time-usec)))

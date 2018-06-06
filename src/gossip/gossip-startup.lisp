@@ -122,23 +122,14 @@
     ;   be made ASAP after function is called, not when logging finally happens.
     (case cmd
       (:init
-       #+OPENMCL
+       #+IGNORE ; #+OPENMCL ; these hemlock streams are just too slow when they get to a couple thousand lines
+       ; in CCL, we'll just inspect the *log*
        (if (find-package :gui)
            (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
            (setf *logstream* *standard-output*))
        #-OPENMCL
        (setf *logstream* *standard-output*)
-       (setf *logging-actor* (ac:make-actor
-                              (lambda (cmd &rest logmsg)
-                                (case cmd
-                                  (:log (vector-push-extend logmsg *log*)
-                                        (when *logstream*
-                                          ;; See Note A
-                                          (write-string (format nil "~{~S~^ ~}~%" (cdr logmsg)) *logstream*)))
-                                  ; :save saves current log to a file without modifying it
-                                  (:save (save-log nil))
-                                  ; :archive pushes current log onto *archived-logs*, then starts a fresh log
-                                  (:archive (%archive-log))))))
+       (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
        (archive-log)
        (log-event-for-pr ':init)
        (setf gossip-inited t))
@@ -154,14 +145,3 @@
   (gossip-init :init))
 
 ; (gossip-startup)
-
-#| NOTES
-
-NOTE A: If you call (format *logstream* <etc>), then either a lot of small strings or even a lot
-of individual characters get written to the *logstream* and this is much too slow in CCL
-because each output to *logstream* has to be done in the event loop.
-Although this is ccl-specific, it doesn't hurt anything to use (format nil <etc>) on other platforms.
-
-We're calling (cdr logmsg) because we don't want to clutter up the *logstream* with timestamps. If you
-need those, you should be looking at the *log*.
-|#

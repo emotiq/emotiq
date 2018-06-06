@@ -8,6 +8,8 @@
    #:gossip-startup
    #:*nodes*
    #:*log-filter*
+   #:*log*
+   #:*log-dots*
    #:make-graph
    #:solicit
    #:solicit-wait
@@ -27,4 +29,6 @@
    #:archive-log
    #:measure-timing
    #:unwrap
+   #:save-log
+   #:deserialize-log
    ))
