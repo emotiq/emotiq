@@ -128,7 +128,7 @@
            (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
            (setf *logstream* *standard-output*))
        #+ (or (not OPENMCL) (not :SHANNON))
-       (setf *logstream* *standard-output*)
+       (setf *logstream* *error-output*)
        (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
        (archive-log)
        (log-event-for-pr ':init)
