@@ -26,9 +26,7 @@
 ;; "Entry Point" for development - does nothing, just load and go
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
-  (format *standard-output* "Making key pair…")
-  (let ((keypair (pbc:make-key-pair :foo)))
-    (format *standard-output* "  Created ~a~&" keypair)))
+  (emotiq:start-node))
 
 ;; Entry Point for binary version of the system.
 
