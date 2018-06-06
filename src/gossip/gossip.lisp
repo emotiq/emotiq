@@ -23,6 +23,8 @@
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
 
+(defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
+
 (defvar *log* nil "Log of gossip actions.")
 (defvar *logstream* nil "Log stream for gossip log messages. This is in addition to the *log*, so it's fine if this is nil.")
 (defvar *logging-actor* nil "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
@@ -185,12 +187,11 @@ are in place between nodes.
   ;   over network lookup
   (eripa-via-network-lookup))
 
-(let ((eripa nil))
-  (defun eripa ()
-    "Return externally-routable ip address of this machine. This is the primary user function.
-    Caches result for quick repeated use."
-    (or eripa
-        (setf eripa (externally-routable-ip-address)))))
+(defun eripa ()
+  "Return externally-routable ip address of this machine. This is the primary user function.
+  Caches result for quick repeated use."
+  (or *eripa*
+      (setf *eripa* (externally-routable-ip-address))))
 
 (defun encode-uid (machine-id process-id numeric-id)
   (logior (ash machine-id 48)

@@ -19,8 +19,8 @@
   (when (make-config-host)
     (defparameter *keypair-db-file* #P(:gossip-config () "keypairs.conf"))
     (defparameter *hosts-db-file*   #P(:gossip-config () "hosts.conf"))
-    (defparameter *pubkeys-db-file* #P(:gossip-config () "pubkeys.conf"))
-    (defparameter *gossip-db-file*  #P(:gossip-config () "gossip.conf"))))
+    ;; (defparameter *pubkeys-db-file* #P(:gossip-config () "pubkeys.conf"))
+    (defparameter *machine-db-file*  #P(:gossip-config () "local-machine.conf"))))
 
 (defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
 
@@ -35,11 +35,12 @@
 
 ; (read-pairs-database *keypair-db-file*)
 
-(defun read-gossip-configuration (&optional (config-path *gossip-db-file*))
+(defun read-local-machine-configuration (&optional (config-path *machine-db-file*))
   (with-open-file (s config-path :direction :input :if-does-not-exist :error)
     (let ((form (read s nil nil nil)))
       form)))
 
+#+OBSOLETE
 (defun read-pubkeys-database (&optional (pathname *pubkeys-db-file*))
   "Returns a list of strings, one per public key"
   (when (probe-file pathname)
@@ -67,10 +68,10 @@
                     (eripa)
                     (usocket::host-to-hbo ev))))
 
-(defun gossip-startup (&optional (config-path *gossip-db-file*))
+(defun gossip-startup (&optional (config-path *machine-db-file*))
   "Reads initial configuration files. Returns list of lists of host/uids like (address port uid1 uid2 ...)"
   (gossip-init ':maybe)
-  (let ((form (read-gossip-configuration config-path))
+  (let ((form (read-local-machine-configuration config-path))
         (all-pubkeys nil)
         (hosts nil)
         (hosts-uids nil))
@@ -87,7 +88,9 @@
                        (t (error "Invalid or unspecified public keys ~S" pubkeys)))
                  
                  ; Match these against pubkeys in "pubkeys.conf"
+                 #+OBSOLETE
                  (setf all-pubkeys (read-pubkeys-database))
+                 #+OBSOLETE
                  (cond ((every (lambda (local-pubkey)
                                  (member local-pubkey all-pubkeys :test 'eql))
                                pubkeys)
@@ -98,6 +101,10 @@
                        (t (error "Every local pubkey in ~S does not have a counterpart in ~S"
                                  config-path
                                  *pubkeys-db-file*)))
+
+                 (mapc (lambda (pubkey)
+                                (make-node :uid pubkey))
+                              pubkeys)
                  
                  (setf hosts (read-pairs-database *hosts-db-file*))
                  ; Clear log, make local node(s) and start server
