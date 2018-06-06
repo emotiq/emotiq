@@ -19,11 +19,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                    ,@(loop for object in objects 
                            collect `(check-type ,object ,type))))
 
-(defun hashes-equal-p (hash-1 hash-2)
-  "Return true (non-nil) if HASH-1 and HASH-2 are equal and
-  false (nil) otherwise. Args must be instances of hash:hash."
-  (development-type-checks hash:hash hash-1 hash-2)
-  (= (int hash-1) (int hash-2)))
+
+
+
+
+;;;; Transaction Objects
 
 
 
@@ -48,7 +48,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   ;; sequence of transaction-input structions (see below)
   transaction-inputs
 
-  (lock-time 0))                    ; not yet used, will be used later
+  (lock-time 0))     ; not yet used, planned for later use ala Bitcoin
 
 ;; ---!!! "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
@@ -734,7 +734,7 @@ development, this signals a continuable error if there is no transaction."
   "Return true if transaction IDs are equal. TX-ID-1 and TX-ID-2 must
    transaction ID's, which are represented as hashes, i.e., as
    instances of hash:hash."
-  (hashes-equal-p tx-id-1 tx-id-2))
+  (hash:hash= tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
   "Iterate over the blocks of the blockchain (i.e., the value of
