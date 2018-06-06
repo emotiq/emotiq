@@ -820,12 +820,12 @@ dropped on the floor.
 
 (defun multiple-list-uids (address-port-list)
   "Get a list of all UIDs of nodes at given remote address and port in
-   list like ((address port) (address port) ...).
-   This uses gossip and works in parallel, while looping on list-uids does not.
-   If no error, returned list will look like
-   (address port uid1 uid2 ...)
-   If error, returned list will look like
-   (address port :ERRORMSG arg1 arg2 ...)"
+  list like ((address port) (address port) ...).
+  This uses gossip and works in parallel, while looping on list-uids does not.
+  If no error, returned list will look like
+  (address port uid1 uid2 ...)
+  If error, returned list will look like
+  (address port :ERRORMSG arg1 arg2 ...)"
   (let ((rnodes nil)
         (localnode nil)
         (allnodes nil))
@@ -838,7 +838,14 @@ dropped on the floor.
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
-          (setf allnodes (remove (uid localnode) allnodes)))
+          (setf allnodes (remove-if
+                          (lambda (ad)
+                            (and (typep ad 'augmented-data)
+                                 (listp (data ad))
+                                 (null (cdr (data ad)))
+                                 (eql (uid localnode)
+                                      (first (data ad)))))
+                          allnodes)))
       (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
       )))
 

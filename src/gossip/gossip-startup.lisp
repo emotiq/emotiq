@@ -102,6 +102,7 @@
                                  config-path
                                  *pubkeys-db-file*)))
 
+                 ;; TODO: check to see that all pubkeys have a match in keypairs.conf
                  (mapc (lambda (pubkey)
                                 (make-node :uid pubkey))
                               pubkeys)
