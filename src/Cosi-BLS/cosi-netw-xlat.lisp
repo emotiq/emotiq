@@ -33,7 +33,13 @@ THE SOFTWARE.
 
 (defparameter *aid-tbl*
   ;; assoc between Actors and AID's
-  (trivial-garbage:make-weak-hash-table :weakness :value))
+  #+:LISPWORKS (make-hash-table
+                :weak-kind :value)
+  #+:ALLEGRO   (make-hash-table
+                :values :weak)
+  #+:CLOZURE   (make-hash-table
+                :weak :value)
+  )
 
 (um:defmonitor
     ((associate-aid-with-actor (aid actor)
