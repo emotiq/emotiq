@@ -44,8 +44,8 @@
 
 
 (defun argv ()
-#+lispworks system:*line-arguments-list*)
-  
+#+lispworks system:*line-arguments-list*
+#+OPENMCL ccl:*command-line-argument-list*)
 
 (defun message-running-state (&optional how-started-message?)
   (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"
