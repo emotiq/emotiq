@@ -86,7 +86,6 @@ THE SOFTWARE.
    :base64-str
    :hex
    :hex-str
-   :hex-of-str
    :int
    :levn
    :bevn
