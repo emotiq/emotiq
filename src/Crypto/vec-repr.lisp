@@ -112,7 +112,7 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------
 
 (um:defconstant+ +alphabet-64+
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 
 (defvar +inv-alphabet-64+
   (make-inverse-alphabet +alphabet-64+))
@@ -396,7 +396,7 @@ THE SOFTWARE.
           )))))
 
 (defmethod base64 ((x string))
-  (assert (every (um:rcurry 'find +alphabet-64+) x))
+  (assert (every (um:rcurry 'find +alphabet-64+) (string-right-trim '(#\=) x)))
   (make-instance 'base64
                  :str x))
 
@@ -431,6 +431,10 @@ THE SOFTWARE.
   (assert (every (um:rcurry 'digit-char-p 16) x))
   (make-instance 'hex
                  :str x))
+
+;; legacy
+(defun hex-of-str (str)
+  (hex str))
 
 (defmethod hex (x)
   (hex (bev x)))
