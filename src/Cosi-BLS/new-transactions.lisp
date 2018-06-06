@@ -32,31 +32,33 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; sent back to the sender's same address, which is then referred to
 ;;; as a so-called "change address".
 
-(defstruct (transaction 
-            (:conc-name "")
-            (:print-object print-transaction-structure))
+(defclass transaction ()
+  (;; [First put outputs, since they start out at first unspent until a
+   ;; later transaction arrives with inputs authorized to redeem them.]
 
-  ;; a hash of this transaction, which also uniquely* identifies it
-  transaction-id
+   ;; sequence of transaction-output structures (see below)
+   (transaction-outputs :reader transaction-outputs :initarg :transaction-outputs)
 
-  ;; [First put outputs, since they start out at first unspent until a
-  ;; later transaction arrives with inputs authorized to redeem them.]
+   ;; sequence of transaction-input structions (see below)
+   (transaction-inputs :reader transaction-inputs :initarg :transaction-inputs)
 
-  ;; sequence of transaction-output structures (see below)
-  transaction-outputs
-
-  ;; sequence of transaction-input structions (see below)
-  transaction-inputs
-
-  (lock-time 0))     ; not yet used, planned for later use ala Bitcoin
-
-;; ---!!! "uniquely", assuming certain rules and conventions are
-;; ---!!! followed to ensure this, some of which are still to-be-done;
-;; ---!!! see notes at serialize-transaction -mhd, 6/5/18
+   (lock-time :initform 0))) ; not yet used, planned for later use ala Bitcoin
 
 ;; ---!!! to do: consider segregating signature ("witness") data ala
 ;; ---!!! Bitcoin Segwit soft fork.  However, note that this requires
 ;; ---!!! special handling of merkle root at block level. -mhd, 6/5/18
+
+
+
+(defmethod transaction-id ((tx transaction))
+  "Get hash of this transaction, which also uniquely* identifies it."
+  (let ((message (serialize-transaction tx)))
+    (hash-for-transaction-id message)))
+
+;; ---!!! * "uniquely", assuming certain rules and conventions are
+;; ---!!! followed to ensure this, some of which are still to-be-done;
+;; ---!!! see notes at serialize-transaction -mhd, 6/5/18
+  
 
 
 
@@ -82,22 +84,29 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;;
 ;;; 
 
-(defstruct (transaction-output (:conc-name ""))
-  tx-out-public-key-hash       ; like the Bitcoin address
-  tx-out-amount                ; integer number of smallest coin units
-  tx-out-lock-script)          ; what Bitcoin calls scriptPubKey
+(defclass transaction-output ()
+  ((tx-out-public-key-hash              ; like the Bitcoin address
+    :reader tx-out-public-key-hash
+    :initarg :tx-out-public-key-hash)
+   (tx-out-amount              ; integer number of smallest coin units
+    :reader tx-out-amount
+    :initarg :tx-out-amount)
+   (tx-out-lock-script               ; what Bitcoin calls scriptPubKey
+    :reader tx-out-lock-script
+    :initarg :tx-out-lock-script)))
 
-(defstruct (transaction-input (:conc-name ""))
-  tx-in-id
-  tx-in-index
-  tx-in-unlock-script                   ; what Bitcoin calls scriptSig
-  ;; ^-- we create a list of args to pass to the lock script
+(defclass transaction-input ()
+  ((tx-in-id :reader tx-in-id :initarg :tx-in-id)
+   (tx-in-index :reader tx-in-index :initarg :tx-in-index)
+   (tx-in-unlock-script                  ; what Bitcoin calls scriptSig
+    ;; ^-- we create a list of args to pass to the lock script
+    :reader tx-in-unlock-script
+    :initarg :tx-in-unlock-script)
   
-  ;; direct pointers: in memory only: a local cache, basically
-  %tx-in-utxo
-  %tx-in-public-key
-  %tx-in-signature
-  (%tx-in-epoch 0))
+   ;; direct pointers: in memory only: a local cache, basically
+   (%tx-in-utxo :initarg :%tx-in-utxo :reader %tx-in-utxo)
+   (%tx-in-public-key :initarg :%tx-in-public-key :reader %tx-in-public-key)
+   (%tx-in-signature :initarg :%tx-in-signature :accessor %tx-in-signature)))
   
 
 
@@ -522,7 +531,13 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-     
+(defun hash-for-transaction-id (message)
+  "Hash MESSAGE, the serialization returned by serialize-transaction."
+  (hash:hash/256 message))
+
+
+
+
 
 (def-script-op public-key-equal-verify (public-key public-key-hash)
   (let* ((public-key-hash-from-public-key
@@ -663,7 +678,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun make-coinbase-transaction-input ()
-  (make-transaction-input
+  (make-instance
+   'transaction-input
    ;; The next two value settings are imitative of Bitcoin, which similarly has
    ;; all 0 bits for Tx ID, all 1 bits for Tx index. These slots do not serve
    ;; their normal function, so these values are arbitrary. These two ARE part
@@ -680,7 +696,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    :%tx-in-signature nil))
 
 (defun make-coinbase-transaction-output (public-key-hash amount)
-  (make-transaction-output
+  (make-instance
+   'transaction-output
    :tx-out-public-key-hash public-key-hash
    :tx-out-amount amount
    :tx-out-lock-script (get-locking-script 'script-pub-key)))
@@ -883,7 +900,8 @@ development, this signals a continuable error if there is no transaction."
            (setq indexed-output (elt utxo-transaction-outputs index))
            (setq subamount (tx-out-amount indexed-output))
         sum subamount into total-input-amount
-        collect (make-transaction-input
+        collect (make-instance
+                 'transaction-input
                  :tx-in-id id
                  :tx-in-index index
                  :tx-in-unlock-script (get-unlocking-script 'script-sig)
@@ -899,7 +917,8 @@ development, this signals a continuable error if there is no transaction."
 
            (setq total-output-amount
                  (loop for (public-key-hash amount) in output-specs
-                       collect (make-transaction-output
+                       collect (make-instance
+                                'transaction-output
                                 :tx-out-public-key-hash public-key-hash
                                 :tx-out-amount amount
                                 :tx-out-lock-script (get-locking-script 'script-pub-key))
@@ -939,11 +958,6 @@ development, this signals a continuable error if there is no transaction."
                 (return (add-transaction-to-mempool signed-transaction)))))))
 
 
-
-(defun hash-for-transaction-id (message)
-  (hash:hash/256 message))
-
-
 (defun check-private-keys-for-transaction-inputs (private-keys tx-inputs)
   (unless (= (length private-keys) (length tx-inputs))
     (warn 
@@ -971,11 +985,11 @@ private atomic private key or singleton list in the case of a single input or as
 a list of keys in the case of two or more inputs. Normally, all transactions
 should be signed, and only coinbase transactions are not signed."
   (let* ((transaction
-           (make-transaction
+           (make-instance
+            'transaction
             :transaction-inputs tx-inputs
             :transaction-outputs tx-outputs))
          (message (serialize-transaction transaction)))
-    (setf (transaction-id transaction) (hash-for-transaction-id message))
     ;; Got keys? Sign transaction if so:
     (when skeys
       (let ((private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
