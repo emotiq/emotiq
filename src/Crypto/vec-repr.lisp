@@ -607,3 +607,10 @@ comparisons."
 (defun vec= (a b)
   "Easy way to do equality testing on UB8V items"
   (equalp (bev-vec a) (bev-vec b)))
+
+;; --------------------------------------------------------------
+;; Utility functions
+
+(defun sbs (str)
+  (coerce str 'simple-base-string))
+

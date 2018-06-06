@@ -93,6 +93,7 @@ THE SOFTWARE.
    :convert-vector-to-int
    :int=
    :vec=
+   :sbs
    ))
 
 (defpackage :hash
