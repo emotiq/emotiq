@@ -4,6 +4,8 @@
 (in-package :gossip)
 
 (defvar *tcp-connection-table* (kvs:make-store ':hashtable :test 'eql) "Memoizes all open connections")
+(defvar *poll-thread* nil "Process that polls for network input.")
+(defvar *socket-actor-table* (make-hash-table :test 'eq) "Hash table from socket to socket-actor.")
 
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
@@ -145,32 +147,47 @@
   
   (ac:send actor :shutdown reason))
 
-; Would be nice to convert this to a single external thread that monitors all
-;   open sockets and sends messages to actors associated with readable sockets.
-;   For that to be practical, it needs to be possible to add/delete sockets from
-;   the list being monitored without stopping and restarting the thread.
-;   For now, it's one thread per monitored socket.
-(defmethod select-loop ((actor socket-actor))
+(defun select-loop ()
   "Loop that monitors read-readiness of socket and sends messages
   to actor when ready. This should be run in a separate
   thread, not in an actor.
   (If you run it in an actor, that actor and the thread containing
   it will block, and that actor will no longer be able to receive
   messages.)"
-  (let ((socket (get-socket actor)))
-    (loop
-      (multiple-value-bind (success errorp)
-                           (wait-for-stream-input (usocket:socket-stream socket) nil)
-        (cond (success (send-socket-receive-message actor))
-              (t ; If success is null here, stream is irreparably dead with
-               ; no further data available, so fall through and end loop
-               (send-socket-shutdown-message actor errorp)
-               (return)))))))
-  
+  (when (debug-level 3)
+    (log-event "Poll thread started") (mpcompat:current-process))
+  (unwind-protect
+      (loop
+       ;; Detect the sockets with input ready to read.
+       ;; Wake up at least once per 10ms so that new sockets don't wait
+       ;; too long to be included in the poll set.
+       (dolist (socket (sockets-with-input-waiting :timeout 0.01))
+         (let ((actor (gethash socket *socket-actor-table*)))
+           (when (debug-level 4)
+             (log-event "Poll activity" actor socket))
+           (multiple-value-bind (success errorp)
+               (wait-for-stream-input (usocket:socket-stream socket) nil)
+             (cond (success (send-socket-receive-message actor))
+                   (t ;; If success is null here, stream is irreparably dead with
+                      ;; no further data available, so fall through and end loop
+                    (send-socket-shutdown-message actor errorp)
+                    (remhash socket *socket-actor-table*)
+                    (return)))))))
+    ;; This thread is not polling anymore.
+    (when (debug-level 3)
+      (log-event "~&Poll thread terminated~%" (mpcompat:current-process)))
+    (setf *poll-thread* nil)))
+
+(defun sockets-with-input-waiting (&key timeout)
+  "Return the list of actor sockets that have input waiting."
+  (usocket:wait-for-input (alexandria:hash-table-keys *socket-actor-table*)
+                          :ready-only t
+                          :timeout timeout))
+
 (defmethod make-select-thread ((actor socket-actor))
   "Launch a thread to monitor a socket for incoming data. If such occurs, send
    a message to the socket's actor and return to monitoring."
-  (mpcompat:process-run-function "Select loop" nil 'select-loop actor))
+  (mpcompat:process-run-function "Select loop" nil 'select-loop))
 
 (defmethod socket-actor-dispatcher (&rest msg)
   "Dispatch function for a socket-actor"
@@ -224,7 +241,6 @@
                (when (debug-level 3)
                  (log-event "Socket shutdown" actor reason))
                (when (usocket:stream-usocket-p socket) (usocket:socket-close socket))
-               (process-kill (get-thread actor))
                (unmemoize-connection address port)))))))))
 
 (defun open-active-socket (address port)
@@ -272,6 +288,7 @@
    You can pass in your own argument for outbox; if nil a mailbox will be created automatically.
    Given outbox could be either a mailbox, an actor, or a function that acts as a continuation
    for handling received objects."
+  (ensure-poll-thread)
   (let* ((outbox (or outbox (mpcompat:make-mailbox)))
          (actor  (make-instance 'socket-actor :fn 'socket-actor-dispatcher))
          (address (usocket:get-peer-address socket))
@@ -280,6 +297,14 @@
     (ac:set-property actor :peer-port    port)
     (ac:set-property actor :outbox outbox)
     (ac:set-property actor :socket socket)
-    (ac:set-property actor :thread (make-select-thread actor))
     (memoize-connection address port actor)
+    (setf (gethash socket *socket-actor-table*) actor)
     actor))
+
+(defun ensure-poll-thread ()
+  "Ensure that the socket-actors socket input poll thread has been started."
+  ;; XXX detect when it has died and needs a restart.
+  (when (null *poll-thread*)
+    (setf *poll-thread*
+          (mpcompat:process-run-function "socket actors poll" nil 'select-loop))))
+
