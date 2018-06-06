@@ -36,7 +36,8 @@ THE SOFTWARE.
                useful-macros
                usocket
                trivial-garbage
-               ads-clos)
+               ads-clos
+               gossip)
   :in-order-to ((test-op (test-op "cosi-bls-tests")))
   :components ((:module package
                         :pathname "./"

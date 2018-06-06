@@ -56,7 +56,7 @@ THE SOFTWARE.
    (lambda (&rest msg)
      (labels ((hold-election ()
                 (let ((rand (/ (random 1000000) 1000000)))
-                  (ac:pr (format nil "~%sending :hold-an-election = ~A" rand))
+                  (ac:pr (format nil "sending :hold-an-election = ~A" rand))
                   (mapc #'(lambda (node)
                             (ac:send node :hold-an-election
                                      :n rand))
