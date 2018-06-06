@@ -30,5 +30,6 @@
    #:measure-timing
    #:unwrap
    #:save-log
+   #:save-text-log
    #:deserialize-log
    ))

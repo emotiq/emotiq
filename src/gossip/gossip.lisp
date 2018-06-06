@@ -914,12 +914,9 @@ dropped on the floor.
 
 ; need to move this to utilities
 (defun emotiq/user/root ()
-  #+linux
-  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
-  #+darwin
-  (merge-pathnames "Emotiq/"
-                   (merge-pathnames "Library/Application Support/"
-                                    (user-homedir-pathname))))
+  (let ((dir (asdf:system-relative-pathname :emotiq "../var/log/")))
+    (ensure-directories-exist dir)
+    dir))
 
 (defun emotiq-log-paths (logvector)
   (let* ((name (format nil "~D-~D" (car (aref logvector 0)) (car (aref logvector (1- (length logvector))))))
@@ -957,7 +954,7 @@ dropped on the floor.
       (o path :direction :input :element-type '(unsigned-byte 8))
     (lisp-object-encoder:deserialize o)))
 
-(defun %save-log (&optional (copy-first t))
+(defun %save-log (&key (text-only nil) (copy-first t))
   "Saves current *log* to two files -- one as objects and one as just strings.
    (The first facilitates forensic debugging; the second is just for human administrator consumption.)
    Moderately thread-safe if copy-first is true.
@@ -967,7 +964,8 @@ dropped on the floor.
                     *log*)))
     (declare (dynamic-extent newlog))
     (multiple-value-bind (path-for-objects path-for-strings)  (emotiq-log-paths newlog)
-      (serialize-log newlog path-for-objects)
+      (unless text-only
+        (serialize-log newlog path-for-objects))
       (stringify-log newlog path-for-strings)
       (values path-for-objects
               path-for-strings))))
@@ -975,6 +973,10 @@ dropped on the floor.
 (defun save-log ()
   "Saves current *log* to a file. Thread-safe."
    (ac:send *logging-actor* :save))
+
+(defun save-text-log ()
+  "Saves current *log* to a file. Thread-safe."
+   (ac:send *logging-actor* :save-text))
 
 (defun actor-logger-fn (cmd &rest logmsg)
   "Function that the *logging-actor* runs"
@@ -985,7 +987,8 @@ dropped on the floor.
               (when *log-dots*
                 (write-char #\. *standard-output*))))
     ; :save saves current log to files without modifying it
-    (:save (%save-log nil))
+    (:save (%save-log :copy-first nil))
+    (:save-text (%save-log :text-only t :copy-first nil))
     ; :archive pushes current log onto *archived-logs*, then starts a fresh log
     (:archive (%archive-log))))
 
