@@ -42,6 +42,14 @@ test:linux:ccl:
   variables:
     LISP: ccl
 
+.test:linux:sbcl:
+  <<: *test_definition
+  tags:
+    - linux
+  variables:
+    LISP: sbcl
+  allow_failure: true
+
 test:macos:lispworks:
   <<: *test_definition
   tags:
@@ -55,6 +63,14 @@ test:macos:ccl:
     - macos
   variables:
     LISP: ccl
+
+.test:macos:sbcl:
+  <<: *test_definition
+  tags:
+    - macos
+  variables:
+    LISP: sbcl
+  allow_failure: true
 
 
 .build_release: &build_release_definition
