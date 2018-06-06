@@ -4,15 +4,16 @@
 
 (in-package :gossip)
 
-(defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
-  in which to look for config files, more preferred first")
-
-(defun make-config-host ()
-  "Look for config directory"
-  (some (lambda (subpath)
-          (when (probe-file (asdf:system-relative-pathname :emotiq subpath))
-            (ipath:define-illogical-host :gossip-config (asdf:system-relative-pathname :emotiq subpath))))
-        *config-paths*))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
+    in which to look for config files, more preferred first")
+  
+  (defun make-config-host ()
+    "Look for config directory"
+    (some (lambda (subpath)
+            (when (probe-file (asdf:system-relative-pathname :emotiq subpath))
+              (ipath:define-illogical-host :gossip-config (asdf:system-relative-pathname :emotiq subpath))))
+          *config-paths*)))
 
 (eval-when (:load-toplevel :execute) 
   (when (make-config-host)
@@ -68,6 +69,7 @@
 
 (defun gossip-startup (&optional (config-path *gossip-db-file*))
   "Reads initial configuration files. Returns list of lists of host/uids like (address port uid1 uid2 ...)"
+  (gossip-init ':maybe)
   (let ((form (read-gossip-configuration config-path))
         (all-pubkeys nil)
         (hosts nil)
@@ -103,11 +105,43 @@
                         (run-gossip-sim :TCP)
                         (let ((uids nil))
                           (setf hosts-uids
+                                #+IGNORE
                                 (loop for host in hosts
                                   when (setf uids (apply 'list-uids host))
-                                  collect (append host uids)))))
+                                  collect (append host uids))
+                                (multiple-list-uids hosts)
+                                )))
                        (t (error "Hosts file hosts.conf not found or invalid")))
                  hosts-uids))))
 
-; (gossip-startup)
+(let ((gossip-inited nil))
+  (defun gossip-init (&optional (cmd))
+    "Call this once before using gossip system. Should return true if everything succeeded."
+    ; make actor:pr calls go to global log.
+    ; NOTE: We're not just substituting *logging-actor* here because we want the timestamp to
+    ;   be made ASAP after function is called, not when logging finally happens.
+    (case cmd
+      (:init
+       #+IGNORE ; #+OPENMCL ; these hemlock streams are just too slow when they get to a couple thousand lines
+       ; in CCL, we'll just inspect the *log*
+       (if (find-package :gui)
+           (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
+           (setf *logstream* *standard-output*))
+       #-OPENMCL
+       (setf *logstream* *standard-output*)
+       (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
+       (archive-log)
+       (log-event-for-pr ':init)
+       (setf gossip-inited t))
+      (:maybe
+       (unless gossip-inited
+         (gossip-init ':init)))
+      (:uninit
+       (log-event-for-pr ':quit)
+       (setf gossip-inited nil))
+      (:query gossip-inited))))
+     
+(eval-when (:load-toplevel :execute)
+  (gossip-init :init))
 
+; (gossip-startup)

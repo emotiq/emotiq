@@ -5,12 +5,16 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:gossip-startup
    #:*nodes*
    #:*log-filter*
+   #:*log*
+   #:*log-dots*
    #:make-graph
    #:solicit
    #:solicit-wait
    #:solicit-progress
+   #:solicit-direct
    #:stop-gossip-sim
    #:run-gossip-sim
    #:as-hash-table
@@ -24,4 +28,7 @@
    #:eripa
    #:archive-log
    #:measure-timing
+   #:unwrap
+   #:save-log
+   #:deserialize-log
    ))
