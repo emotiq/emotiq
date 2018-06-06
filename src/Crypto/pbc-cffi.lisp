@@ -423,7 +423,8 @@ Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
 (defparameter *chk-curve-fr449-params*
-  #xd7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef)
+  ;; = (hex-str (hash/256 *curve-fr449-params*))
+  "d7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
@@ -458,7 +459,7 @@ Barreto and Naehrig
 Size of q^12 is 3072 bits.")
 
 (defparameter *chk-curve-fr256-params*
-  #xb937a11b2d71b08fecddfdd2be170ed1dfab1bd8891d45914f071cc63cd28443)
+  "b937a11b2d71b08fecddfdd2be170ed1dfab1bd8891d45914f071cc63cd28443")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
@@ -625,7 +626,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 3 out of 4 hash/256")
 
 (defparameter *chk-curve-fr256-params-old*
-  #xec9f36b197a11280f6cc4b47a8a3dc7b8663ccbb3975c3068c9069803673361d)
+  "ec9f36b197a11280f6cc4b47a8a3dc7b8663ccbb3975c3068c9069803673361d")
 
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
@@ -655,7 +656,7 @@ serves as a check on our implementation with his pbc-calc for
 comparison.")
 
 (defparameter *chk-curve-default-ar160-params*
-  #x16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38)
+  "16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38")
 
 ;; ---------------------------------------------------------------------------------------
 

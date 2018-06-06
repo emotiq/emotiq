@@ -309,7 +309,7 @@ THE SOFTWARE.
             ;; worker thread, then use BG worker threads.
             (mp:funcall-async #'gf)
           ;; else - create one for ourselves
-          (mpcompat:process-run-function (gensym "future-") '() #'gf))
+          (mp:process-run-function (gensym "future-") '() #'gf))
         (mp:process-allow-scheduling) ;; help to get ball rolling...
         (%make-future
          :ans  ref)

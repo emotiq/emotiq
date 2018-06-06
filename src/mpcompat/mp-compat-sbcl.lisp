@@ -70,8 +70,7 @@ THE SOFTWARE.
 
 (defun process-run-function (name flags proc &rest args)
   "Spawn a new Lisp thread and run the indicated function with inital args."
-  (declare (ignore flags)
-           (type function proc))
+  (declare (ignore flags))
   (sb-thread:make-thread (lambda ()
 			   (apply proc args))
 			 :name name))
@@ -117,9 +116,9 @@ THE SOFTWARE.
 	      (handler-case
 		  (sb-ext:with-timeout timeout
 		    (sb-sys:allow-with-interrupts
-		      (sb-thread:get-mutex lock nil t)) ;; Deprecated 
+                      (sb-thread:grab-mutex lock :waitp t))
 		    (go have-lock))
-		(timeout (cx)
+		(sb-ext:timeout (cx)
 		  (declare (ignore cx))
 		  (go beyond))))
 	    have-lock

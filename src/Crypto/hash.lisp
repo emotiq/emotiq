@@ -32,6 +32,12 @@ THE SOFTWARE.
   ((val :reader  hash-val
         :initarg :val)))
 
+(defclass hash/ripemd/160 (hash)
+  ())
+
+(defclass hash/sha2/256 (hash)
+  ())
+
 (defclass hash/256 (hash)
   ())
 
@@ -76,6 +82,37 @@ THE SOFTWARE.
    (loenc:encode x)))
 
 ;; -------------------------------------------------
+
+(defun local-ripemd/160-buffers (&rest bufs)
+  (let ((dig (ironclad:make-digest :ripemd-160)))
+    (dolist (buf bufs)
+      (ironclad:update-digest dig buf))
+    (ironclad:produce-digest dig)))
+
+(defun hash/ripemd/160 (&rest args)
+  ;; produce a UB8V of the args
+  (let ((hv  (apply 'local-ripemd/160-buffers
+                    (mapcar 'hashable args))))
+    (values (make-instance 'hash/ripemd/160
+                           :val (make-instance 'bev
+                                               :vec hv))
+            (length hv))))
+
+(defun local-sha2/256-buffers (&rest bufs)
+  (let ((dig (ironclad:make-digest :sha256))) ; sha2/256
+    (dolist (buf bufs)
+      (ironclad:update-digest dig buf))
+    (ironclad:produce-digest dig)))
+
+(defun hash/sha2/256 (&rest args)
+  ;; produce a UB8V of the args
+  (let ((hv  (apply 'local-sha2/256-buffers
+                    (mapcar 'hashable args))))
+    (values (make-instance 'hash/sha2/256
+                           :val (make-instance 'bev
+                                               :vec hv))
+            (length hv))))
+
 
 (defun local-sha3/256-buffers (&rest bufs)
   (let ((dig (ironclad:make-digest :sha3/256)))
@@ -133,6 +170,10 @@ THE SOFTWARE.
       (subseq bytes 0 nb)))
    ))
 
-(defun hash-check (item expected)
-  (= expected (int (hash/256 item))))
+(defmethod hash-check (item (expected string))
+  (string-equal expected (hex-str (hash/256 item))))
+
+(defmethod hash= ((hash1 hash) (hash2 hash))
+  (vec= hash1 hash2))
+
 

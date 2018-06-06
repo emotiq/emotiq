@@ -35,6 +35,7 @@ THE SOFTWARE.
                lisp-object-encoder
                useful-macros
                usocket
+               trivial-garbage
                ads-clos
                gossip)
   :in-order-to ((test-op (test-op "cosi-bls-tests")))
@@ -46,14 +47,15 @@ THE SOFTWARE.
                         :pathname "./"
                         :serial t
                         :components (#+CLOZURE (:file "clozure")
+                                     (:file "address")
                                      (:file "cosi-blkdef")
                                      (:file "block")
                                      (:file "cosi-keying")
 				     (:file "cosi-construction")
-                                     (:file "cosi-netw-xlat")
                                      (:file "range-proofs")
                                      (:file "transaction")
-                                     (:file "cosi-handlers")))))
+                                     (:file "cosi-handlers")
+                                     (:file "cosi-netw-xlat")))))
 
 
 

@@ -29,29 +29,15 @@ THE SOFTWARE.
 
 (in-package :CL-USER)
 
-#+:ALLEGRO
-(defpackage :allegro-timer
-  (:nicknames :atimer)
+#-lispworks
+(defpackage :ansi-timer
   (:use :common-lisp)
   (:export
    :timer
    :make-timer
    :schedule-timer
    :schedule-timer-relative
-   :unschedule-timer
-   ))
-
-#+:CLOZURE
-(defpackage :clozure-timer
-  (:nicknames :ctimer)
-  (:use :common-lisp)
-  (:export
-   :timer
-   :make-timer
-   :schedule-timer
-   :schedule-timer-relative
-   :unschedule-timer
-   ))
+   :unschedule-timer))
 
 (defpackage #:actors
   (:use #:common-lisp)
@@ -101,19 +87,13 @@ THE SOFTWARE.
    :make-timer
    :schedule-timer-relative
    :unschedule-timer)
-  #+:ALLEGRO
-  (:import-from :atimer
-   :make-timer
-   :schedule-timer-relative
-   :unschedule-timer)
-  #+:CLOZURE
-  (:import-from :ctimer
+  #-:lispworks
+  (:import-from :ansi-timer
    :make-timer
    :schedule-timer-relative
    :unschedule-timer)
   (:export
    #:install-actor-system
-   #:*nbr-execs*
    #:actor
    #:make-actor
    #:send
@@ -134,6 +114,7 @@ THE SOFTWARE.
    #:find-actor
    #:get-actors
    #:recv
+   #:retry-recv
    #:=cont
    #:terminate-actor
    #:without-actor-status
@@ -164,6 +145,11 @@ THE SOFTWARE.
 
    #:install-actor-system
 
+   #:default-watchdog-function
+   #:*watchdog-hook*
+   #:*maximum-age*
+   #:*nbr-execs*
+   #:*heartbeat-interval*
    ))
 
 (defpackage #:linda

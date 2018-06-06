@@ -110,27 +110,15 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
   (node-check-transaction trn))
 
-(defmethod node-dispatcher ((msg-sym (eql :validate)) &key reply-to sig bits)
-  (node-validate-cosi reply-to sig bits))
-
 (defmethod node-dispatcher ((msg-sym (eql :public-key)) &key reply-to)
   (reply reply-to :pkey+zkp (node-pkeyzkp *current-node*)))
 
 (defmethod node-dispatcher ((msg-sym (eql :election)) &key new-leader-pkey)
   (node-elect-new-leader new-leader-pkey))
 
-(defmethod node-dispatcher ((msg-sym (eql :cosi-sign)) &key reply-to msg timeout)
-  (node-compute-cosi reply-to :notary msg timeout))
-
 (defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
-  (case consensus-stage
-    (:notary 
-     (node-cosi-notary-signing reply-to
-                               consensus-stage blk seq timeout))
-    (t
-     (node-cosi-signing reply-to
-                        consensus-stage blk seq timeout))
-    ))
+  (node-cosi-signing reply-to
+                     consensus-stage blk seq timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :add/change-node)) &key new-node-info)
   (node-insert-node new-node-info))
@@ -697,31 +685,6 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
 
-(defun node-validate-cosi (reply-to sig bits)
-  ;; toplevel entry for Cosi signature validation checking
-  ;; first check for valid signature...
-  (if (pbc:check-message sig)
-      ;; we passed signature validation on composite signature
-      ;; now verify the public keys making up that signature
-      (let* ((pkeys (reduce (lambda (lst node)
-                              ;; collect keys from bitmap indication
-                              (if (and node
-                                       (logbitp (node-bit node) bits))
-                                  (cons (node-pkey node) lst)
-                                lst))
-                            *node-bit-tbl*
-                            :initial-value nil))
-             ;; compute composite public key
-             (tkey  (reduce 'pbc:mul-pts pkeys)))
-        (reply reply-to :validation
-               ;; see that our computed composite key matches the
-               ;; key used in the signature
-               (= (vec-repr:int (pbc:signed-message-pkey sig))
-                  (vec-repr:int tkey))))
-    
-    ;; else - we failed initial signature validation
-    (reply reply-to :validation nil)))
-
 ;; -----------------------------------------------------------------------
 
 #-(AND :COM.RAL :LISPWORKS)
@@ -828,14 +791,14 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------
 
-(defun sub-signing (my-node consensus-stage msg seq-id timeout)
+(defun sub-signing (my-node consensus-stage blk seq-id timeout)
   (declare (ignore my-node))
   (=lambda (node)
     (let ((start  (get-universal-time)))
       (send node :signing
             :reply-to        (current-actor)
             :consensus-stage consensus-stage
-            :blk             msg
+            :blk             blk
             :seq             seq-id
             :timeout         timeout)
       (labels
@@ -848,28 +811,24 @@ check that each TXIN and TXOUT is mathematically sound."
                (=return (val)
                  (!dly)
                  (become 'do-nothing) ;; stop responding to messages
-                 (=values val))
-               
-               (wait ()
-                 (recv
-                   ((list* :signed sub-seq ans)
-                    (if (eql sub-seq seq-id)
-                        (=return ans)
-                      ;; else
-                      (wait)))
-
-                   (_
-                    (wait))
-                   
-                   :TIMEOUT timeout
-                   :ON-TIMEOUT
-                   (progn
-                     (pr (format nil "SubSigning timeout waiting for ~A"
-                                 (short-id node)))
-                     (=return nil))
-                   )))
-        (wait))
-      )))
+                 (=values val)))
+        (recv
+          ((list* :signed sub-seq ans)
+           (if (eql sub-seq seq-id)
+               (=return ans)
+             ;; else
+             (retry-recv)))
+          
+          (_
+           (retry-recv))
+          
+          :TIMEOUT timeout
+          :ON-TIMEOUT
+          (progn
+            (pr (format nil "SubSigning timeout waiting for ~A"
+                        (short-id node)))
+            (=return nil))
+          )))))
 
 ;; ------------------------------
 
@@ -885,14 +844,26 @@ check that each TXIN and TXOUT is mathematically sound."
         (unless (eql node my-node)
           (apply 'send (node-pkey node) msg))))
 
-(=defun gossip-signing (my-node consensus-stage msg seq-id timeout)
+(defmethod add-sigs ((sig1 null) sig2)
+  sig2)
+
+(defmethod add-sigs ((sig1 pbc:signature) (sig2 null))
+  sig1)
+
+(defmethod add-sigs ((sig1 pbc:signature) (sig2 pbc:signature))
+  (change-class (pbc:add-pts sig1 sig2)
+                'pbc:signature))
+
+(defun bft-threshold (blk)
+  (* 2/3 (length (block-witnesses blk))))
+
+(=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (let ((*current-node* my-node))
     (cond ((and *use-gossip*
                 (int= (node-pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
-           (let ((bft-thrsh (* 2/3 (length *node-bit-tbl*)))
+           (let ((bft-thrsh (bft-threshold blk))
                  (start     nil)
-                 (g-cnt     0)
                  (g-bits    0)
                  (g-sig     nil))
              
@@ -900,7 +871,7 @@ check that each TXIN and TXOUT is mathematically sound."
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
                                   :consensus-stage consensus-stage
-                                  :blk             msg
+                                  :blk             blk
                                   :seq             seq-id
                                   :timneout        timeout)
              (setf start (get-universal-time))
@@ -912,35 +883,39 @@ check that each TXIN and TXOUT is mathematically sound."
                     (=values val))
                   
                   (=finish ()
-                    (=return (and g-sig
-                                  (list g-sig g-bits))))
-                  
-                  (wait ()
+                    (=return (if g-sig
+                                 (list g-sig g-bits)
+                               (list nil 0))))
+
+                  (adj-timeout ()
                     (let ((stop (get-universal-time)))
-                      (decf timeout (- stop (shiftf start stop))))
-                    (recv
-                      ((list :signed sub-seq sig bits)
-                       (when (and (eql sub-seq seq-id)
-                                  sig
-                                  (pbc:check-message sig))
-                         (pr (hex bits))
-                         (setf g-bits (logior g-bits bits)
-                               g-sig  (if g-sig
-                                          (pbc:combine-signatures g-sig sig)
-                                        sig)))
-                       (if (> (incf g-cnt) bft-thrsh)
-                           (=finish)
-                         (wait)))
-                      
-                      (msg
-                       (pr (format nil "Gossip-wait got unknown message: ~A" msg))
-                       (wait))
-                      
-                      :TIMEOUT    timeout
-                      :ON-TIMEOUT (=finish)
-                      )))
-               (wait))))
-          
+                      (decf timeout (- stop (shiftf start stop))))))
+                  
+               (recv
+                 ((list :signed sub-seq sig bits)
+                  (when (and (eql sub-seq seq-id)
+                             sig
+                             (zerop (logand g-bits bits)) ;; check for no intersection
+                             (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
+                    (pr (hex bits))
+                    (setf g-bits (logior g-bits bits)
+                          g-sig  (add-sigs sig g-sig)))
+                  (if (> (logcount g-bits) bft-thrsh)
+                      (=finish)
+                    ;; else
+                    (progn
+                      (adj-timeout)
+                      (retry-recv))))
+                 
+                 (msg
+                  (pr (format nil "Gossip-wait got unknown message: ~A" msg))
+                  (adj-timeout)
+                  (retry-recv))
+                 
+                 :TIMEOUT    timeout
+                 :ON-TIMEOUT (=finish)
+                 ))))
+  
           (t 
            ;; else - not leader don't re-gossip request for signatures
            (=values nil))
@@ -948,45 +923,49 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; -------------------------------------------------------
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
-;; each different type of Cosi network... For now, just act as notary
-;; service - sign anything.
-
-(defun notary-validate-cosi-message (node consensus-stage msg)
-  (declare (ignore node consensus-stage msg))
-  t)
-
-;; ------------------------------------------------------------------------
+;; each different type of Cosi network...
 
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
       (> (logcount bits)
-         (* 2/3 (length (cosi/proofs:block-witnesses blk))))))
+         (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
-  (int= (block-merkle-root-hash blk) ;; check transaction hash against header
-        (compute-merkle-root-hash
-         (block-transactions blk))))
-  
+  (hash= (block-merkle-root-hash blk) ;; check transaction hash against header
+         (compute-merkle-root-hash
+          (block-transactions blk))))
+
+(defmethod add-pkeys ((pkey1 null) pkey2)
+  pkey2)
+
+(defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 null))
+  pkey1)
+
+(defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
+  (change-class (pbc:add-pts pkey1 pkey2)
+                'pbc:public-key))
+
+(defun composite-pkey (blk bits)
+  ;; compute composite witness key sum
+  (let ((wsum  nil))
+    (loop for ix from 0
+          for wkey in (coerce (block-witnesses blk) 'list)
+          do
+          (when (logbitp ix bits)
+            (setf wsum (add-pkeys wsum wkey))))
+    wsum))
+
+(defun check-hash-multisig (hash sig bits blk)
+  (and sig
+       (check-byz-threshold bits blk)
+       (pbc:check-hash hash sig (composite-pkey blk bits))))
+
 (defun check-block-multisignature (blk)
   (let* ((bits  (block-signature-bitmap blk))
          (sig   (block-signature blk))
-         (wits  (block-witnesses blk))
-         (hash  (hash/256 (signature-hash-message blk)))
-         (wsum  nil))
-
-    ;; compute composite witness key sum
-    (loop for ix from 0
-          for wkey in (coerce wits 'list)
-          do
-          (when (ith-witness-signed-p blk ix)
-            (setf wsum (if wsum
-                           (pbc:add-pts wsum wkey)
-                         wkey))))
-
-    (and (check-byz-threshold bits blk) ;; check witness count for BFT threshold
-         (check-block-transactions-hash blk)
-         ;; check multisig as valid signature on header
-         (pbc:check-hash hash sig (change-class wsum 'pbc:public-key)))
+         (hash  (hash/256 (signature-hash-message blk))))
+    (and (check-hash-multisig hash sig bits blk)
+         (check-block-transactions-hash blk))
     ))
 
 (defun validate-cosi-message (node consensus-stage blk)
@@ -998,9 +977,8 @@ check that each TXIN and TXOUT is mathematically sound."
           (check-block-transactions-hash blk)
           (let ((prevblk (first *blockchain*)))
             (or (null prevblk)
-                (and (> (block-epoch blk)     (block-epoch prevblk))
-                     (> (block-timestamp blk) (block-timestamp prevblk))
-                     (int= (block-prev-block-hash blk) (hash-block prevblk)))))
+                (and (> (block-timestamp blk) (block-timestamp prevblk))
+                     (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
           (or (int= (node-pkey node) *leader*)
               (check-block-transactions blk))
           ))
@@ -1027,9 +1005,10 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun node-cosi-signing (reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
-  (let* ((node *current-node*)
-         (subs (and (not *use-gossip*)
-                    (remove-if 'node-bad (group-subs node)))))
+  (let* ((node     *current-node*)
+         (blk-hash (hash/256 (signature-hash-message blk)))
+         (subs     (and (not *use-gossip*)
+                        (remove-if 'node-bad (group-subs node)))))
     (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
     (=bind (ans)
         (par
@@ -1041,14 +1020,12 @@ check that each TXIN and TXOUT is mathematically sound."
              (if (validate-cosi-message node consensus-stage blk)
                  (progn
                    (ac:pr (format nil "Block validated ~A" (short-id node)))
-                   (list (pbc:sign-message (signature-hash-message blk)
-                                           (node-pkey node)
-                                           (node-skey node))
+                   (list (pbc:sign-hash blk-hash (node-skey node))
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
                                           :test 'int=))))
                (progn
                  (ac:pr (format nil "Block not validated ~A" (short-id node)))
-                 (list nil nil)))))
+                 (list nil 0)))))
 
           ;; ... and here is where we have all the subnodes in our
           ;; group do the same, recursively down the Cosi tree.
@@ -1059,6 +1036,7 @@ check that each TXIN and TXOUT is mathematically sound."
           (gossip-signing node
                           consensus-stage
                           blk
+                          blk-hash
                           seq-id
                           timeout))
       
@@ -1076,69 +1054,9 @@ check that each TXIN and TXOUT is mathematically sound."
                       (t
                        (destructuring-bind (sub-sig sub-bits) resp
                          (if (and sub-sig
-                                  (pbc:check-message sub-sig))
-                             (setf sig  (if sig
-                                            (pbc:combine-signatures sig sub-sig)
-                                          sub-sig)
-                                   bits (logior bits sub-bits))
-                           ;; else
-                           (mark-node-corrupted node sub))
-                         ))
-                      )))
-            (mapc #'fold-answer subs r-lst) ;; gather results from subs
-            (when g-ans
-              (fold-answer node g-ans))
-            (send reply-to :signed seq-id sig bits))
-          )))))
-
-(defun node-cosi-notary-signing (reply-to consensus-stage msg seq-id timeout)
-  "This code is for simple testing. It will disappear shortly. Don't
-bother factoring it with NODE-COSI-SIGNING."
-  ;; Compute a collective BLS signature on the message. This process
-  ;; is tree-recursivde.
-  (let* ((node *current-node*)
-         (subs (and (not *use-gossip*)
-                    (remove-if 'node-bad (group-subs node)))))
-    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
-    (=bind (ans)
-        (par
-          (let ((*current-node* node))
-            (=values 
-             ;; Here is where we decide whether to lend our signature. But
-             ;; even if we don't, we stil give others in the group a chance
-             ;; to decide for themselves
-             (if (notary-validate-cosi-message node consensus-stage msg)
-                 (list (pbc:sign-message msg (node-pkey node) (node-skey node))
-                       (node-bitmap node))
-               (list nil 0))))
-
-          (let ((fn (sub-signing node consensus-stage msg seq-id timeout)))
-            (pmapcar fn subs))
-
-          ;; gossip-mode group
-          (gossip-signing node
-                          consensus-stage
-                          msg
-                          seq-id
-                          timeout))
-      
-      (let ((*current-node* node))
-        (destructuring-bind ((sig bits) r-lst g-ans) ans
-          (labels ((fold-answer (sub resp)
-                     (cond
-                      ((null resp)
-                       ;; no response from node, or bad subtree
-                       (pr (format nil "No signing: ~A"
-                                   (short-id sub)))
-                       (mark-node-no-response node sub))
-                      
-                      (t
-                       (destructuring-bind (sub-sig sub-bits) resp
-                         (if (and sub-sig
-                                  (pbc:check-message sub-sig))
-                             (setf sig  (if sig
-                                            (pbc:combine-signatures sig sub-sig)
-                                          sub-sig)
+                                  (zerop (logand sub-bits bits)) ;; check for no overlap
+                                  (pbc:check-hash blk-hash sub-sig (composite-pkey blk sub-bits)))
+                             (setf sig  (add-sigs sig sub-sig)
                                    bits (logior bits sub-bits))
                            ;; else
                            (mark-node-corrupted node sub))
@@ -1152,204 +1070,103 @@ bother factoring it with NODE-COSI-SIGNING."
 
 ;; -----------------------------------------------------------
 
-(defun node-compute-cosi (reply-to consensus-stage msg timeout)
+(defun node-compute-cosi (reply-to consensus-stage blk timeout)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
-  (let ((sess (gen-uuid-int)) ;; strictly increasing sequence of integers
-        (self (current-actor)))
+  (let* ((self (current-actor))
+         (hash (hash/256 (signature-hash-message blk)))
+         (sess (int hash)))
     (ac:self-call :signing
                   :reply-to        self
                   :consensus-stage consensus-stage
-                  :blk             msg
+                  :blk             blk
                   :seq             sess
                   :timeout         timeout)
-    (labels
-        ((wait-signing ()
-           (recv
-             ((list :signed seq sig bits)
-              (cond
-               ((eql seq sess)
-                (if (and sig
-                         (pbc:check-message sig))
-                    ;; we completed successfully
-                    (reply reply-to
-                           (list :signature sig bits))
-                  ;; bad signature
-                  (reply reply-to :corrupt-cosi-network)
-                  ))
-               ;; ------------------------------------
-               (t ;; seq mismatch
-                  ;; must have been a late arrival
-                  (pr :late-arrival)
-                  (wait-signing))
-               )) ;; end of message pattern
-             ;; ---------------------------------
-             #|
-             ((list :new-transaction msg)
-              ;; allow processing of new transactions while we wait
-              (let ((*current-node* node))
-                (node-check-transaction msg)
-                (wait-signing)))
-             |#
-             ;; ---------------------------------
-             ;; :TIMEOUT 30
-             ;; :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
-             )))
-      (wait-signing)
+    (recv
+      ((list :signed seq sig bits)
+       (cond
+        ((eql seq sess)
+         (if (check-hash-multisig hash sig bits blk)
+             ;; we completed successfully
+             (reply reply-to
+                    (list :signature sig bits))
+           ;; bad signature
+           (reply reply-to :corrupt-cosi-network)
+           ))
+        ;; ------------------------------------
+        (t ;; seq mismatch
+           ;; must have been a late arrival
+           (pr :late-arrival)
+           (retry-recv))
+        )) ;; end of message pattern
+      ;; ---------------------------------
+      ;; ---------------------------------
+      ;; :TIMEOUT 30
+      ;; :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
       )))
 
 ;; ------------------------------------------------------------------------------------------------
 
-(defparameter *nleaders* 0) ;; not atomic!  but good enough for a first attempt
-
-(defun leader-exec (prepare-timeout commit-timeout)
-  #|
-  (incf *nleaders*)
-  (unless (= 1 *nleaders*)
-    (error (format nil "wrong leader count ~A" *nleaders*)))
-  |#
+(defun leader-assemble-block (trns prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
-  (let* ((node *current-node*)
-         (new-block 
-          (cosi/proofs:create-block
-           (first *blockchain*)
-           *election-proof* *leader*
-           (map 'vector 'node-pkey *node-bit-tbl*)
-           (get-transactions-for-new-block)))
-         (self      (current-actor)))
-    (unless (block-transactions new-block)
-      (end-all-holdoffs))
-    (when (block-transactions new-block) ;; don't do anything if block is empty
-      (ac:self-call :cosi-sign-prepare
-                    :reply-to  self
-                    :blk       new-block
-                    :timeout   prepare-timeout)
-      (pr "Waiting for Cosi prepare")
-      (labels
-          ((wait-prep-signing ()
-             (recv
-               ((list :answer (list :signature sig bits))
-                (let ((*current-node* node))
-                  (update-block-signature new-block sig bits)
-                  (ac:self-call :cosi-sign-commit
-                                :reply-to  self
-                                :blk       new-block
-                                :timeout   commit-timeout)
-                  (pr "Waiting for Cosi commit")
-                  (labels ((wait-cmt-signing ()
-                             (recv
-                               ((list :answer (list :signature _ bits))
-                                (let ((*current-node* node))
-                                  (send *dly-instr* :plt)
-                                  (cond ((check-byz-threshold bits new-block)
-                                         #+(or)
-                                         (inspect new-block)
-                                         (send node :block-finished)
-                                         #|
-                                         (decf *nleaders*)
-                                         (assert (= 0 *nleaders*))
-                                         |#
-                                         )
-                                        
-                                        (t
-                                         (pr "Failed to get sufficient signatures during commit phase"))
-                                        )))
-                               
-                               ((list :answer (list :corrupt-cosi-network))
-                                (pr "Corrupt Cosi network"))
-                               
-                               ((list :answer (list :timeout-cosi-network))
-                                (pr "Timeout waiting for commitment multisignature"))
-
-                               #|
-                               ;; ---------------------------------
-                               ((list :new-transaction msg)
-                                ;; allow processing of new transactions while we wait
-                                (let ((*current-node* node))
-                                  (node-check-transaction msg)
-                                  (wait-cmt-signing)))
-                               |#
-                               )))
-                    (wait-cmt-signing))))
-               
-               ((list :answer (list :corrupt-cosi-network))
-                (pr "Corrupt Cosi network"))
-               
-               ((list :answer (list :timeout-cosi-network))
-                (pr "Timeout waiting for prepare multisignature"))
-
-               #|
-               ;; ---------------------------------
-               ((list :new-transaction msg)
-                ;; allow processing of new transactions while we wait
-                (let ((*current-node* node))
-                  (node-check-transaction msg)
-                  (wait-prep-signing)))
-               |#
-               )))
-        (wait-prep-signing)
-        ))))
+  (let* ((node      *current-node*)
+         (self      (current-actor))
+         (new-block (cosi/proofs:create-block (first *blockchain*)
+                                              *election-proof* *leader*
+                                              (map 'vector 'node-pkey *node-bit-tbl*)
+                                              trns)))
+    (ac:self-call :cosi-sign-prepare
+                  :reply-to  self
+                  :blk       new-block
+                  :timeout   prepare-timeout)
+    (pr "Waiting for Cosi prepare")
+    (recv
+      ((list :answer (list :signature sig bits))
+       (let ((*current-node* node))
+         (update-block-signature new-block sig bits)
+         ;; we now have a fully assembled block with
+         ;; multisignature.
+         ;;
+         ;; At the end of the following COMMIT phase, all
+         ;; witnesses will end their holdoffs, regardless of
+         ;; verification outcome
+         (ac:self-call :cosi-sign-commit
+                       :reply-to  self
+                       :blk       new-block
+                       :timeout   commit-timeout)
+         (pr "Waiting for Cosi commit")
+         (recv
+           ((list :answer (list* :signature _))
+            (send *dly-instr* :plt)
+            (send node :block-finished))
+           
+           ((list :answer (list :corrupt-cosi-network))
+            (pr "Corrupt Cosi network in COMMIT phase"))
+           
+           #|
+           ((list :answer (list :timeout-cosi-network))
+            (pr "Timeout waiting for commitment multisignature"))
+           |#
+           )))
+      
+      ((list :answer (list :corrupt-cosi-network))
+       (pr "Corrupt Cosi network in PREPARE phase")
+       (end-all-holdoffs))
+      
+      #|
+      ((list :answer (list :timeout-cosi-network))
+       (pr "Timeout waiting for prepare multisignature"))
+      |#
+      )))
     
-     
-;; -------------------------------------------------------------------------------------
-#|
-;; FOR TESTING!!!
-
-(setup-server)
-
-(set-executive-pool 1)
-
-(setf *real-nodes* (list *leader-node*))
-
-(setf *real-nodes* (remove "10.0.1.13" *real-nodes*
-                           :test 'string-equal))
-
-(generate-tree :nodes 100)
-
-(reconstruct-tree)
-|#
-
-(defun tst ()
-  (reset-system)
-  (spawn
-   (lambda ()
-     (send *dly-instr* :clr)
-     (send *dly-instr* :pltwin :histo-4)
-     (let ((start (get-universal-time))
-           (ret   (current-actor)))
-       (send *top-node* :cosi-sign
-             :reply-to ret
-             :msg      "This is a test message!"
-             :timeout  10)
-       (recv
-         ((list :answer
-                (and msg
-                     (list :signature sig bits)))
-          (send *dly-instr* :plt)
-          (ac:pr
-           (format nil "Total Witnesses: ~D" (logcount bits))
-           msg
-           (format nil "Duration = ~A" (- (get-universal-time) start)))
-          
-          (send *top-node* :validate
-                :reply-to ret
-                :sig      sig
-                :bits     bits)
-          (recv
-            ((list :answer :validation t/f)
-             (if t/f
-                 (ac:pr :valid-signature)
-               (ac:pr :invalid-signature)))
-            
-            (msg
-             (error "ValHuh?: ~A" msg))
-            ))
-         
-         (msg
-          (error "Huh? ~A" msg))
-         )))))
+(defun leader-exec (prepare-timeout commit-timeout)
+  (let ((trns  (get-transactions-for-new-block)))
+    (if trns
+        (leader-assemble-block trns prepare-timeout commit-timeout)
+      ;; else
+      (end-all-holdoffs))))
 
 ;; -----------------------------------------------------------------------------------
 ;; Test block assembly and verification...
@@ -1363,17 +1180,18 @@ bother factoring it with NODE-COSI-SIGNING."
   (spawn
    (lambda ()
      (labels
-         ((send-tx-to-all (tx)
+         ((bcast-msg (&rest msg)
             (map nil (lambda (node)
-                       (send node :new-transaction
-                             :trn tx))
+                       (apply 'send node msg))
                  *node-bit-tbl*))
+          (send-tx-to-all (tx)
+            (bcast-msg :new-transaction :trn tx))
           (send-genesis-to-all (utxo)
-            (map nil (lambda (node)
-                       (send node :genesis-utxo
-                             :utxo utxo))
-                 *node-bit-tbl*)))
+            (bcast-msg :genesis-utxo :utxo utxo))
+          (become-witness ()
+            (bcast-msg :become-witness)))
        
+       (become-witness)
        ;; -------------------------------------------------------------
        ;; manufacture two transactions and send to all nodes
        (if *trans1*
@@ -1436,9 +1254,11 @@ bother factoring it with NODE-COSI-SIGNING."
        ;; ------------------------------------------------------------------------
        (sleep 10)
        (map nil (lambda (node)
+                  (setf (node-current-leader node) (node-pkey *top-node*))
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
+       (send *top-node* :become-leader)
        (send *top-node* :make-block)
        ))))
 
@@ -1450,17 +1270,18 @@ bother factoring it with NODE-COSI-SIGNING."
   (spawn
    (lambda ()
      (labels
-         ((send-tx-to-all (tx)
+         ((bcast-msg (&rest msg)
             (map nil (lambda (node)
-                       (send node :new-transaction
-                             :trn tx))
+                       (apply 'send node msg))
                  *node-bit-tbl*))
+          (send-tx-to-all (tx)
+            (bcast-msg :new-transaction :trn tx))
           (send-genesis-to-all (utxo)
-            (map nil (lambda (node)
-                       (send node :genesis-utxo
-                             :utxo utxo))
-                 *node-bit-tbl*)))
+            (bcast-msg :genesis-utxo :utxo utxo))
+          (become-witness ()
+            (bcast-msg :become-witness)))
        
+       (become-witness)
        ;; -------------------------------------------------------------
        ;; manufacture two transactions and send to all nodes
        (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
@@ -1519,9 +1340,11 @@ bother factoring it with NODE-COSI-SIGNING."
        ;; ------------------------------------------------------------------------
        (sleep 10)
        (map nil (lambda (node)
+                  (setf (node-current-leader node) (node-pkey *top-node*))
                   (send node :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
+       (send *top-node* :become-leader)
        (send *top-node* :make-block)
        ))))
 

@@ -140,6 +140,6 @@ parent-chain and index for same parent keying."
       (ckd-secret-key (keying-triple-skey k) c 1)
     (multiple-value-bind (cpkey cchain2)
         (ckd-public-key (keying-triple-pkey k) c 1)
-      (assert (int= (public-of-secret cskey) cpkey))
-      (assert (int= cchain cchain2)))))
+      (assert (vec= (public-of-secret cskey) cpkey))
+      (assert (vec= cchain cchain2)))))
 |#

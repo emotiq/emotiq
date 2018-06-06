@@ -43,6 +43,7 @@ while test $# -gt 0; do
   esac
 done
 
+echo "(quit)" >> $tmpfile
 $lisp_cli $@ <$tmpfile
 EXIT_CODE=$?
 

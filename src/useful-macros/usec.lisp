@@ -42,6 +42,12 @@ THE SOFTWARE.
 
 ;;--- MAC OS/X ---
 
+
+(defun adjust-to-standard-universal-time-usec (tm)
+  (declare (integer tm))
+  (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0))))
+
+
 #+(AND :LISPWORKS (OR :LINUX :MACOSX))
 (PROGN
  (fli:define-foreign-function (_get-time-of-day "gettimeofday" :source)
@@ -61,12 +67,7 @@ THE SOFTWARE.
              (+ (* 1000000 (the integer (fli:dereference arr :index 0)))
                 (the integer (fli:dereference arr :index 1)))
            (error "Can't perform Posix gettimeofday()"))
-	 )))
-
- (defun adjust-to-standard-universal-time-usec (tm)
-   (declare (integer tm))
-   #F
-   (+ tm #.(* 1000000 (encode-universal-time 0 0 0 1 1 1970 0)))))
+	 ))))
 
 #-(OR (AND :LISPWORKS (OR :LINUX :MACOSX))
       :WIN32

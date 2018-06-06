@@ -92,9 +92,9 @@ THE SOFTWARE.
 ;; ----------------------------------------------------------
 ;; from https://bitcointalk.org/index.php?topic=1026.0
 
-(defconstant +alphabet-58+
+(um:defconstant+ +alphabet-58+
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-(defconstant +len-58+
+(um:defconstant+ +len-58+
   (length +alphabet-58+)) ;; should be 58
 
 (defun make-inverse-alphabet (alphabet)
@@ -111,7 +111,7 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------
 
-(defconstant +alphabet-64+
+(um:defconstant+ +alphabet-64+
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 
 (defvar +inv-alphabet-64+
@@ -153,7 +153,13 @@ THE SOFTWARE.
             (class-name (class-of obj))
             (ub8v-vec obj))))
 
+(defun hex-digit-char (c)
+  (or (char<= #\0 #\9)
+      (char<= #\a #\f)
+      (char<= #\A #\F)))
+
 (defun hex-of-str (str)
+  (assert (every 'hex-digit-char str))
   (make-instance 'hex
                  :str str))
 
@@ -315,18 +321,37 @@ THE SOFTWARE.
 
 (defmethod base58 ((x integer))
   ;; encode integer as a base58 string
-  (make-instance 'base58
-                 :str (let ((cs nil))
-                        (um:nlet-tail iter ((v x))
-                          (when (plusp v)
-                            (multiple-value-bind (vf vr) (floor v +len-58+)
-                              (push (char +alphabet-58+ vr) cs)
-                              (iter vf))))
-                        (coerce cs 'string))
-                 ))
+  (make-instance 'base58 :str (integer-to-base58-with-pad x 0)))
 
 (defmethod base58 ((x base58))
   x)
+
+(defmethod base58 ((x vector))
+  (let* ((length (length x))
+         (int (int x))
+         (npad
+           ;; count the leading 0 bytes to pad:
+           (loop for i from 0 below length
+                 while (zerop (aref x i))
+                 count t)))
+    (make-instance
+     'base58
+     :str (integer-to-base58-with-pad int npad))))
+
+(defun integer-to-base58-with-pad (x npad)
+  "Return a string representation of integer X preceded by NPAD Base58
+   encodings of 0 as leading zero 'padding'."
+  (let ((cs nil))
+    (um:nlet-tail iter ((v x))
+                  (when (plusp v)
+                    (multiple-value-bind (vf vr) (floor v +len-58+)
+                      (push (char +alphabet-58+ vr) cs)
+                      (iter vf))))
+    (when npad
+      (loop with char-for-0 = (char +alphabet-58+ 0)
+            repeat npad
+            do (push char-for-0 cs)))
+    (coerce cs 'string)))
 
 (defmethod base58 (x)
   (base58 (int x)))
@@ -571,6 +596,12 @@ THE SOFTWARE.
           )))
 
 (defun int= (a b)
-  "Easy way to do equality testing on UB8V items"
+  "Poor way to do equality testing on UB8V items. This method fails to
+account for vectors with leading null bytes. Okay for comparing
+compressed ECC points - public keys, signatures. Not okay for hash
+comparisons."
   (= (int a) (int b)))
 
+(defun vec= (a b)
+  "Easy way to do equality testing on UB8V items"
+  (equalp (bev-vec a) (bev-vec b)))

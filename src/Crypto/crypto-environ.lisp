@@ -34,10 +34,13 @@ THE SOFTWARE.
   pubkey-file)
 
 (defun make-crypto-environ ()
-  (let* ((home   (probe-file #+:MACOSX "~/"
-                             ;; #+:WIN32 (lw:environment-variable "USERPROFILE")
-                             #+:WIN32 (sys:get-user-profile-directory)))
-         (shared #+:MACOSX (or (probe-file "~/Dropbox/Team Share/")
+  (let* ((home   (probe-file
+                  #-(or :macosx :win32) "~/"
+                  #+:MACOSX "~/" ;; #+:WIN32 (lw:environment-variable "USERPROFILE")
+                  #+:WIN32 (sys:get-user-profile-directory)))
+         (shared
+                 #-(or :macosx :win32) "/var/tmp/" ;; FIXME
+                 #+:MACOSX (or (probe-file "~/Dropbox/Team Share/")
                                (probe-file "~/Documents/Dropbox/Team Share/"))
                  #+:WIN32  (probe-file (merge-pathnames "Dropbox/Team Share/" home)))
          (pwd    (merge-pathnames "_acudora-ecc-passwds" home))
