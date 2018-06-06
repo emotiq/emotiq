@@ -16,4 +16,4 @@ case $(uname -s) in
         ;;
 esac
 
-exec ${timeout_cli} -k 11m 10m $*
+exec ${timeout_cli} -k 11m 10m $@
