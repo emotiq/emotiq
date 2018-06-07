@@ -27,22 +27,22 @@
 
 
 
-;;;; Normalizing Strings as Base Strings and Simple Strings
+;;;; Normalizing Strings as Simple Base Strings and Simple Strings
 
-(defun normalize-to-base-string (string)
+(defun normalize-to-simple-base-string (string)
   "If STRING is not a base string, return a copy (via
-   copy-as-base-string) that is of type SIMPLE-BASE-STRING; otherwise,
-   return STRING itself. It is an error for STRING to contain
-   non-BASE-CHAR characters."
+   copy-as-simple-base-string) that is of type SIMPLE-BASE-STRING;
+   otherwise, return STRING itself. It is an error for STRING to
+   contain non-BASE-CHAR characters."
   (etypecase string
-    (base-string string)
-    (string (copy-as-base-string string))))
+    (simple-base-string string)
+    (string (copy-as-simple-base-string string))))
 
-(defun copy-as-base-string (string)
-  "Return a freshly consed string of type SIMPLE-BASE-STRING, i.e., an
-  array with element-type BASE-CHAR, of the same (active) length as
-  and with all the same (active) elements as STRING copied over to the
-  same positions. It is an error for STRING to contain non-BASE-CHAR
+(defun copy-as-simple-base-string (string)
+  "Return a freshly consed string of type SIMPLE-BASE-STRING, i.e., a
+  simple array with element-type BASE-CHAR, with length and elements
+  the same as those (active) for STRING copied over to the same
+  positions. It is an error for STRING to contain non-BASE-CHAR
   characters."
   (make-array
    (length string)
