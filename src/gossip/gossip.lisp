@@ -178,7 +178,7 @@ are in place between nodes.
                     (t (http-fetch "http://api.ipify.org/" s))))))
     (when (and (stringp dq)
                (> (length dq) 0))
-      (values (usocket::host-to-hbo dq)
+      (values (usocket::host-to-vector-quad dq)
               dq))))
 
 (defun externally-routable-ip-address ()
@@ -211,7 +211,7 @@ are in place between nodes.
 ;   two processes on the same machine because it uses PID as part of the ID. Should still work
 ;   fine even in real (not simulated) systems.
 (defun short-uid ()
-  (encode-uid (logand #xFFFFFFFF (eripa)) ; 32 bits
+  (encode-uid (logand #xFFFFFFFF (usocket::host-to-hbo (eripa))) ; 32 bits
               (logand #xFFFF #+OPENMCL (ccl::getpid) #+LISPWORKS (getpid)) ; 16 bits
               (logand #xFFFFFFFF (generate-new-monotonic-id)))) ; 32 bits
 
@@ -463,6 +463,11 @@ are in place between nodes.
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
+(defmethod print-object ((thing proxy-gossip-node) stream)
+   (with-slots (real-address) thing
+       (print-unreadable-object (thing stream :type t :identity nil)
+          (when real-address (princ (usocket::host-to-hostname real-address) stream)))))
+
 (defmethod clear-caches ((node proxy-gossip-node))
   "Caches should be cleared in the normal course of events, but this can be used to make sure."
   )
@@ -700,13 +705,13 @@ dropped on the floor.
             (send-msg solicitation
                       uid                   ; destination
                       actor-name)
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
-              ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *direct-reply-max-seconds-to-wait*))
+              ; gotta wait a little longer than *direct-reply-max-seconds-to-wait* because that's how long the actor timeout will take.
               ;   Only after that elapses, will an actor put the value into the mbox.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (except :TIMEOUT))
+                   (except :name :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -751,16 +756,15 @@ dropped on the floor.
                       uid      ; destination
                       actor-name)     ; srcuid
             
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox *max-seconds-to-wait*)
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
               ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
               ;   Only after that elapses, will an actor put the value into the mbox.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (except :TIMEOUT))
+                   (except :name :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
-
 
 (defun solicit-progress (node kind &rest args)
   "Like solicit-wait but prints periodic progress log messages (if any)
@@ -794,7 +798,7 @@ dropped on the floor.
                 (values 
                  (if win
                      (first (args (first response)))
-                     (except :TIMEOUT))
+                     (except :name :TIMEOUT))
                  soluid)))
           (setf (logfn node) old-logger))))))
 

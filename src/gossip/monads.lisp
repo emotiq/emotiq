@@ -84,11 +84,18 @@
                  (augment (funcall dc (data ad1) (data ad2)) (metadata ad1))
                  (list ad1 ad2)))))))
 
+(defun gossip-equalp (d1 d2)
+  "Like equalp but also tests for ip addresses"
+  (or (equalp d1 d2)
+      (and (integerp d1)
+           (integerp d2)
+           (usocket:ip= d1 d2))))
+
 (defun metadata-match? (md1 md2)
   "Returns true if the two metadatas match, or nil if not.
    Metadata match if they are both nil, or if they both have identical keys and values,
    but possibly in different orders."
-  (null (set-exclusive-or md1 md2 :test 'equalp)))
+  (null (set-exclusive-or md1 md2 :test 'gossip-equalp)))
 
 (defun munge-augmented-data (ad ad-list dcfun)
   "If ad has metadata that matches that of one of the ads in ad-list, coalesce it using dcfun into that list and return the list.
