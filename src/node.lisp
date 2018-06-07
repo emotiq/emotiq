@@ -1,6 +1,7 @@
 (in-package "EMOTIQ")
 
-;; a place-holder for a main Emotiq node
-(defun node ()
-  (emotiq/cli:main)
-)
+;;; Startup an Emotiq node
+(defun start-node ()
+  (gossip:gossip-startup :ping-others t))
+
+
