@@ -145,8 +145,7 @@ THE SOFTWARE.
          (:actor-callback (aid &rest ans)
           (let ((actor (lookup-actor-for-aid aid)))
             (when actor
-              (let ((*current-node* node))
-                (apply 'send actor ans)))
+              (apply 'send actor ans))
             ))
          
           (t (&rest msg)
