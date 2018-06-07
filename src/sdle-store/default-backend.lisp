@@ -887,16 +887,26 @@
 ;; Dumping (unsigned-byte 32) for each character seems
 ;; like a bit much when most of them will be 
 ;; base-chars. So we try to cater for them.
-(defvar *char-marker* (code-char 255)
+(defconstant +char-marker+ (code-char 255)
   "Largest character that can be represented in 8 bits")
 
 (defun unicode-string-p (string)
-  "An implementation specific test for a unicode string."
+  "An implementation-independent predicate on STRING, which must be of
+   type simple-string, as to whether it contains any characters with
+   code > 255. It may use implementation-dependent code and/or
+   knowledge to achieve this result, but only as an optimization."
   (declare ;; (xoptimize speed (safety 0) (debug 0))
-           (type simple-string string))
-  #+cmu nil ;; cmucl doesn't support unicode yet.
-  #+:lispworks (not (typep string 'lw:8-bit-string))
-  #-(or cmu :lispworks) (some #'(lambda (x) (char> x *char-marker*)) string))
+   (type simple-string string))
+  (and
+
+   #+cmu nil                      ; cmucl doesn't support unicode yet.
+   #+:LISPWORKS (if (typep string 'lw:8-bit-string)
+                    nil           ; can't have char > 255
+                    t)            ; might have, must check
+
+   ;; Return true as soon as one char > 255 encountered:
+   (loop for i fixnum from 0 below (the fixnum (length string))
+           thereis (char> (char string i) +char-marker+))))
 
 (defun store-simple-string (obj stream)
   (declare (type simple-string obj)
