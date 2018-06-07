@@ -401,12 +401,6 @@ are in place between nodes.
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works")))
 
-#+OBSOLETE
-(defclass gossip-network-actor (ac:actor)
-  ((node :initarg :node :initform nil :accessor node
-         :documentation "The gossip-node on behalf of which this actor works.
-         Should only be attached to proxy-gossip-nodes.")))
-
 (defclass actor-mixin ()
   ((actor :initarg :actor :initform nil :accessor actor
           :documentation "Actor for this node")))
@@ -494,22 +488,6 @@ are in place between nodes.
     (lambda (&rest msg)
       (when (debug-level 5)
         (log-event "Gossip Actor" (ac::current-actor) "received" msg))
-      (apply 'gossip-dispatcher node msg))))
-
-#+OBSOLETE
-(defmethod make-gossip-actor ((node null))
-  (make-instance 'gossip-actor
-    :node node
-    :fn 
-    (lambda (&rest msg)
-      (apply 'gossip-dispatcher node msg))))
-
-#+OBSOLETE
-(defmethod make-gossip-actor ((node proxy-gossip-node))
-  (make-instance 'gossip-network-actor
-    :node node
-    :fn 
-    (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
 (defun make-node (&rest args)
@@ -789,7 +767,6 @@ dropped on the floor.
              (soluid (uid solicitation)))
         (unwind-protect
             (progn
-              (setf (logfn node) #'interactive-logging-function)
               (send-msg solicitation
                         uid      ; destination
                         #'final-continuation)     ; srcuid
@@ -896,22 +873,6 @@ dropped on the floor.
     (when (or (eq t *log-filter*)
               (funcall *log-filter* logcmd))
       (apply 'log-event logcmd args))))
-
-;;; TODO: This is probably obsolete
-(defun interactive-logging-function (logcmd &rest args)
-  "Use this logging function for interactive debugging. You'll probably only want to use this
-  in the mode you called #'solicit on. Note that this merely writes to the REPL _in addition_ to standard logging,
-  not as opposed to it.
-  Returns the form that default-logging-function returned."
-  (let* ((logmsg (apply 'default-logging-function logcmd args))
-         (logstring (format nil "~S~%" logmsg)))
-    #+OpenMCL
-    (if (find-package :hi)
-        (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
-        (write-string logstring *standard-output*))
-    #-OpenMCL
-    (write-string logstring *standard-output*)
-    logmsg))
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
