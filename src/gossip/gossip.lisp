@@ -989,7 +989,7 @@ dropped on the floor.
   (case cmd
     (:log (vector-push-extend logmsg *log*)
           ;;; Add message to textual log facility
-          (format *error-output* "~&~{~a~^ ~}~&" logmsg)
+          (format *error-output* "~&~{~a~^ ~}~&" logmsg))
     ; :save saves current log to files without modifying it
     (:save (%save-log nil))
     ; :archive pushes current log onto *archived-logs*, then starts a fresh log
