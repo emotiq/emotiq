@@ -31,6 +31,55 @@
 
 
 
+;;;; Normalizing Strings as Simple Strings
+
+
+(defparameter *normalizing-string-test-cases*
+  ;; format:
+  ;;  ((descriptive-name <string corresponding to description>) ...)
+  `((simple-base-string
+     ,(make-array 3 :element-type 'base-char :initial-element #\t))
+    (test-simple-string
+     ,(make-array 3 :element-type 'base-char :initial-element #\t))
+    (test-adjustable-string
+     ,(make-array
+       3 :element-type 'character :initial-element #\s :adjustable t))
+    (test-adjustable-string-with-fill-pointer
+     ,(make-array
+       3 :element-type 'character :initial-element #\t :adjustable t
+       :fill-pointer 3))))
+
+(define-test normalizing-strings-as-simple-strings
+  (loop for (descriptive-name string)
+          in *normalizing-string-test-cases*
+        as normalized-base-string
+          = (normalize-to-base-string string)
+        as normalized-simple-string
+          = (normalize-to-simple-string string)
+        as normalized-base-string-correctly-p
+          = (etypecase normalized-base-string
+              (base-string t)
+              (simple-string nil)
+              (string nil))
+        as normalized-simple-string-correctly-p
+          = (etypecase normalized-simple-string
+              (base-string nil)
+              (simple-string t)
+              (string nil))
+        ;; Test to show that string is EQUAL to its base-string and
+        ;; simple-string equivalents, and then make sure normalized
+        ;; strings are of exactly the right types.
+        do (assert-equal string normalized-base-string)
+           (assert-equal string normalized-simple-string)
+           (assert-true normalized-base-string-correctly-p)
+           (assert-true normalized-simple-string-correctly-p)))
+  
+  
+     
+
+
+
+
 ;;;; Crypto
 
 
