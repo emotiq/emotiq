@@ -42,7 +42,6 @@
   (actors:install-actor-system)
   (main))
 
-
 (defun argv ()
 #+lispworks system:*line-arguments-list*
 #+OPENMCL ccl:*command-line-argument-list*)

@@ -75,11 +75,11 @@
                  (values nil :DEAD))))) ; stream will never have more data, because fn returned but nil timeout
   )
 
-
 (defun stream-eofp (stream)
   "Returns true if stream is at EOF"
   #+OPENMCL
-  (ccl:stream-eofp stream)
+  (handler-case (ccl:stream-eofp stream) ; could be a bad-fd error if other end got closed
+    (error () t))
   #+LISPWORKS
   (stream:stream-check-eof-no-hang stream))
 

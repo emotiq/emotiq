@@ -37,7 +37,7 @@
                 :components ((:file "blockchain")))))
                                        
 (defsystem "emotiq/startup"
-  :depends-on (emotiq/node               
+  :depends-on (emotiq/node
                actors)
   :components ((:module source
                 :pathname "./"
@@ -63,8 +63,12 @@
                 :components ((:file "cli")))))
 
 (defsystem "emotiq/node"  ;; a live node
+<<<<<<< HEAD
   :depends-on (gossip
                emotiq/cli)
+=======
+  :depends-on (gossip)
+>>>>>>> dev
   :components ((:module source
                 :pathname "./"
                 :components ((:file "node")))))
