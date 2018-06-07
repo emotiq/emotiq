@@ -22,3 +22,13 @@
                (:file "http-fetch")
                (:file "graphviz")
                (:file "gossip-startup")))
+
+(defsystem "gossip/config"
+  :depends-on (gossip
+               alexandria
+               crypto-pairings)
+  :components ((:module config :pathname "config/"
+                        :components ((:file "generate")))))
+
+
+  

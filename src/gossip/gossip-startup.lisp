@@ -4,28 +4,35 @@
 
 (in-package :gossip)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
-    in which to look for config files, more preferred first")
-  
-  (defun make-config-host ()
-    "Look for config directory"
-    (some (lambda (subpath)
-            (when (probe-file (asdf:system-relative-pathname :emotiq subpath))
-              (ipath:define-illogical-host :gossip-config (asdf:system-relative-pathname :emotiq subpath))))
-          *config-paths*)))
+(defparameter *keypairs-filename* "keypairs.conf")
+(defparameter *hosts-filename* "hosts.conf")
+(defparameter *machine-filename* "local-machine.conf")
 
-(eval-when (:load-toplevel :execute) 
-  (when (make-config-host)
-    (defparameter *keypair-db-file* #P(:gossip-config () "keypairs.conf"))
-    (defparameter *hosts-db-file*   #P(:gossip-config () "hosts.conf"))
-    (defparameter *pubkeys-db-file* #P(:gossip-config () "pubkeys.conf"))
-    (defparameter *gossip-db-file*  #P(:gossip-config () "gossip.conf"))))
+(defparameter *hosts* nil "Hosts read from *hosts-filename*")
+
+(defparameter *keypair-db-path* nil "Full path to keypairs config file")
+(defparameter *hosts-db-path*   nil "Full path to hosts config file")
+(defparameter *machine-db-path* nil "Full path to local-machine config file")
+
+(defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
+    in which to look for config files, more preferred first")
+
+(defun find-root-path ()
+  "Look for a viable config directory"
+  (some (lambda (subpath)
+          (probe-file (asdf:system-relative-pathname :emotiq subpath)))
+        *config-paths*))
+
+(defun setup-config-file-paths (&optional (root-path (find-root-path)))
+  (when root-path
+    (setf *keypair-db-path* (merge-pathnames *keypairs-filename* root-path))
+    (setf *hosts-db-path*   (merge-pathnames *hosts-filename* root-path))
+    (setf *machine-db-path* (merge-pathnames *machine-filename* root-path))))
 
 (defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
 
 (defun read-pairs-database (pathname)
-  (when (probe-file pathname)
+  (when (and pathname (probe-file pathname))
     (let ((pair nil)
           (pairs nil))
       (with-open-file (s pathname)
@@ -33,14 +40,16 @@
               (loop while (setf pair (read s nil nil nil)) collect pair)))
       pairs)))
 
-; (read-pairs-database *keypair-db-file*)
+; (read-pairs-database *keypair-db-path*)
 
-(defun read-gossip-configuration (&optional (config-path *gossip-db-file*))
-  (with-open-file (s config-path :direction :input :if-does-not-exist :error)
-    (let ((form (read s nil nil nil)))
-      form)))
+(defun read-local-machine-configuration (&optional (pathname *machine-db-path*))
+  (when (probe-file pathname)
+    (with-open-file (s pathname :direction :input :if-does-not-exist :error)
+      (let ((form (read s nil nil nil)))
+        form))))
 
-(defun read-pubkeys-database (&optional (pathname *pubkeys-db-file*))
+#+OBSOLETE
+(defun read-pubkeys-database (&optional (pathname *pubkeys-db-path*))
   "Returns a list of strings, one per public key"
   (when (probe-file pathname)
     (let ((key nil)
@@ -67,52 +76,76 @@
                     (eripa)
                     (usocket::host-to-hbo ev))))
 
-(defun gossip-startup (&optional (config-path *gossip-db-file*))
-  "Reads initial configuration files. Returns list of lists of host/uids like (address port uid1 uid2 ...)"
-  (gossip-init ':maybe)
-  (let ((form (read-gossip-configuration config-path))
-        (all-pubkeys nil)
+(defun read-config-files ()
+  (let ((keypairs (read-pairs-database *keypair-db-path*))
         (hosts nil)
-        (hosts-uids nil))
-    (when form (destructuring-bind (&key eripa
-                                         (gossip-port *nominal-gossip-port*)
-                                         pubkeys)
-                                   form
-                 (when eripa (process-eripa-value eripa))
-                 (cond ((typep gossip-port '(unsigned-byte 16))
-                        (setf *nominal-gossip-port* gossip-port))
-                       (t (error "Invalid gossip-port ~S" gossip-port)))
-                 (cond ((consp pubkeys)
-                        (clrhash *nodes*)) ; kill local nodes
-                       (t (error "Invalid or unspecified public keys ~S" pubkeys)))
-                 
-                 ; Match these against pubkeys in "pubkeys.conf"
-                 (setf all-pubkeys (read-pubkeys-database))
-                 (cond ((every (lambda (local-pubkey)
-                                 (member local-pubkey all-pubkeys :test 'eql))
-                               pubkeys)
-                        ; if every local pubkey is in the database, make nodes for them
-                        (mapc (lambda (pubkey)
-                                (make-node :uid pubkey))
-                              pubkeys))
-                       (t (error "Every local pubkey in ~S does not have a counterpart in ~S"
-                                 config-path
-                                 *pubkeys-db-file*)))
-                 
-                 (setf hosts (read-pairs-database *hosts-db-file*))
-                 ; Clear log, make local node(s) and start server
-                 (cond (hosts
-                        (run-gossip-sim :TCP)
-                        (let ((uids nil))
-                          (setf hosts-uids
-                                #+IGNORE
-                                (loop for host in hosts
-                                  when (setf uids (apply 'list-uids host))
-                                  collect (append host uids))
-                                (multiple-list-uids hosts)
-                                )))
-                       (t (error "Hosts file hosts.conf not found or invalid")))
-                 hosts-uids))))
+        (local-machine nil))
+    (flet ((badfile (filename)
+             (error "~S file not found or invalid" filename)))
+      (unless keypairs (badfile *keypairs-filename*))
+      (setf hosts (read-pairs-database *hosts-db-path*))
+      (unless hosts (badfile *hosts-filename*))
+      (setf local-machine (read-local-machine-configuration *machine-db-path*))
+      (unless local-machine (badfile *machine-filename*))
+      (values keypairs hosts local-machine))))
+
+(defun configure-local-machine (keypairs local-machine)
+  "Clear log, make local node(s) and start server"
+  (when local-machine
+    (destructuring-bind (&key eripa
+                              (gossip-port *nominal-gossip-port*)
+                              pubkeys)
+                        local-machine
+      (when eripa (process-eripa-value eripa))
+      (cond ((typep gossip-port '(unsigned-byte 16))
+             (setf *nominal-gossip-port* gossip-port))
+            (t (error "Invalid gossip-port ~S" gossip-port)))
+      (cond ((consp pubkeys)
+             (clrhash *nodes*)) ; kill local nodes
+            (t (error "Invalid or unspecified public keys ~S" pubkeys)))
+      ;; check to see that all pubkeys have a match in *keypair-db-path*
+      (every (lambda (local-pubkey)
+                       (unless (member local-pubkey keypairs :test 'eql :key 'car)
+                         (error "Pubkey ~S is not present in ~S" local-pubkey *keypairs-filename*))
+                       t)
+                     pubkeys)
+      ;; make local nodes
+      (mapc (lambda (pubkey)
+              (make-node :uid pubkey))
+            pubkeys)
+      ;; clear log and start server
+      (run-gossip-sim :TCP)
+      t)))
+
+(defun ping-other-machines (&optional (hosts *hosts*))
+  "Find what other machines are alive.
+  Returns alist of augmented-data or exception monads about live public keys on other machines.
+  You can map unwrap on these things to get at the real data."
+  (when hosts
+    (multiple-list-uids hosts)))
+
+(defun gossip-startup (&key root-path (ping-others nil))
+  "Reads initial configuration files.
+   If ping-others is true, returns list of augmented-data or exception monads about live public keys on other machines.
+   If ping-others is false, just return list of hosts found in *hosts-db-path*.
+     You can later call ping-other-machines with this list if desired."
+  (let ((*keypair-db-path* *keypair-db-path*)
+        (*hosts-db-path* *hosts-db-path*)
+        (*machine-db-path* *machine-db-path*))
+    (when root-path ; if we're given a root-path, use that instead of the global one
+      (setup-config-file-paths root-path))
+    (gossip-init ':maybe)
+    (log-event "Gossip init finished.")
+    (multiple-value-bind (keypairs hosts local-machine) (read-config-files)
+      (unless (configure-local-machine keypairs local-machine)
+        (error "Cannot configure local machine")) ; configure-local-machine should have thrown its own error here
+      (setf *hosts* hosts) ; make it easy to call ping-other-machines later
+      (if ping-others
+          (let ((other-machines (ping-other-machines hosts)))
+            (unless other-machines
+              (error "No other hosts to check. Perhaps ~S was empty." *hosts-filename*))
+            other-machines)
+          hosts))))
 
 (let ((gossip-inited nil))
   (defun gossip-init (&optional (cmd))
@@ -122,13 +155,17 @@
     ;   be made ASAP after function is called, not when logging finally happens.
     (case cmd
       (:init
+       (let ((root-path (find-root-path)))
+         (when root-path
+           (ipath:define-illogical-host :emotiq-config root-path) ; in case we need it
+           (setup-config-file-paths root-path)))
        #+IGNORE ; #+OPENMCL ; these hemlock streams are just too slow when they get to a couple thousand lines
        ; in CCL, we'll just inspect the *log*
        (if (find-package :gui)
            (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
            (setf *logstream* *standard-output*))
-       #-OPENMCL
-       (setf *logstream* *standard-output*)
+       #+(or (not :openmcl) (not :shannon))
+       (setf *logstream* *error-output*)
        (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
        (archive-log)
        (log-event-for-pr ':init)
@@ -140,8 +177,11 @@
        (log-event-for-pr ':quit)
        (setf gossip-inited nil))
       (:query gossip-inited))))
-     
-(eval-when (:load-toplevel :execute)
-  (gossip-init :init))
 
 ; (gossip-startup)
+; (mapcar 'unwrap (gossip-startup :ping-others t))
+; (mapcar 'unwrap (ping-other-machines (gossip-startup)))
+
+; or
+; (gossip-startup)
+; (mapcar 'unwrap (ping-other-machines))

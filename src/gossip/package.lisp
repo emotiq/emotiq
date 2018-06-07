@@ -6,6 +6,7 @@
   (:use :cl)
   (:export
    #:gossip-startup
+   #:ping-other-machines
    #:*nodes*
    #:*log-filter*
    #:*log*

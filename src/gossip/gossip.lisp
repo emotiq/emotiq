@@ -23,6 +23,8 @@
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
 
+(defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
+
 (defvar *log* nil "Log of gossip actions.")
 (defvar *logstream* nil "Log stream for gossip log messages. This is in addition to the *log*, so it's fine if this is nil.")
 (defvar *logging-actor* nil "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
@@ -176,7 +178,7 @@ are in place between nodes.
                     (t (http-fetch "http://api.ipify.org/" s))))))
     (when (and (stringp dq)
                (> (length dq) 0))
-      (values (usocket::host-to-hbo dq)
+      (values (usocket::host-to-vector-quad dq)
               dq))))
 
 (defun externally-routable-ip-address ()
@@ -185,12 +187,11 @@ are in place between nodes.
   ;   over network lookup
   (eripa-via-network-lookup))
 
-(let ((eripa nil))
-  (defun eripa ()
-    "Return externally-routable ip address of this machine. This is the primary user function.
-    Caches result for quick repeated use."
-    (or eripa
-        (setf eripa (externally-routable-ip-address)))))
+(defun eripa ()
+  "Return externally-routable ip address of this machine. This is the primary user function.
+  Caches result for quick repeated use."
+  (or *eripa*
+      (setf *eripa* (externally-routable-ip-address))))
 
 (defun encode-uid (machine-id process-id numeric-id)
   (logior (ash machine-id 48)
@@ -210,7 +211,7 @@ are in place between nodes.
 ;   two processes on the same machine because it uses PID as part of the ID. Should still work
 ;   fine even in real (not simulated) systems.
 (defun short-uid ()
-  (encode-uid (logand #xFFFFFFFF (eripa)) ; 32 bits
+  (encode-uid (logand #xFFFFFFFF (usocket::host-to-hbo (eripa))) ; 32 bits
               (logand #xFFFF #+OPENMCL (ccl::getpid) #+LISPWORKS (getpid)) ; 16 bits
               (logand #xFFFFFFFF (generate-new-monotonic-id)))) ; 32 bits
 
@@ -462,6 +463,11 @@ are in place between nodes.
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
               All we know about it is its UID and address, which is enough to transmit a message to it."))
 
+(defmethod print-object ((thing proxy-gossip-node) stream)
+   (with-slots (real-address) thing
+       (print-unreadable-object (thing stream :type t :identity nil)
+          (when real-address (princ (usocket::host-to-hostname real-address) stream)))))
+
 (defmethod clear-caches ((node proxy-gossip-node))
   "Caches should be cleared in the normal course of events, but this can be used to make sure."
   )
@@ -699,13 +705,13 @@ dropped on the floor.
             (send-msg solicitation
                       uid                   ; destination
                       actor-name)
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
-              ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *direct-reply-max-seconds-to-wait*))
+              ; gotta wait a little longer than *direct-reply-max-seconds-to-wait* because that's how long the actor timeout will take.
               ;   Only after that elapses, will an actor put the value into the mbox.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (except :TIMEOUT))
+                   (except :name :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -750,16 +756,15 @@ dropped on the floor.
                       uid      ; destination
                       actor-name)     ; srcuid
             
-            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox *max-seconds-to-wait*)
+            (multiple-value-bind (response success) (mpcompat:mailbox-read mbox (* 1.2 *max-seconds-to-wait*))
               ; gotta wait a little longer than *max-seconds-to-wait* because that's how long the actor timeout will take.
               ;   Only after that elapses, will an actor put the value into the mbox.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (except :TIMEOUT))
+                   (except :name :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
-
 
 (defun solicit-progress (node kind &rest args)
   "Like solicit-wait but prints periodic progress log messages (if any)
@@ -793,7 +798,7 @@ dropped on the floor.
                 (values 
                  (if win
                      (first (args (first response)))
-                     (except :TIMEOUT))
+                     (except :name :TIMEOUT))
                  soluid)))
           (setf (logfn node) old-logger))))))
 
@@ -819,12 +824,12 @@ dropped on the floor.
 
 (defun multiple-list-uids (address-port-list)
   "Get a list of all UIDs of nodes at given remote address and port in
-   list like ((address port) (address port) ...).
-   This uses gossip and works in parallel, while looping on list-uids does not.
-   If no error, returned list will look like
-   (address port uid1 uid2 ...)
-   If error, returned list will look like
-   (address port :ERRORMSG arg1 arg2 ...)"
+  list like ((address port) (address port) ...).
+  This uses gossip and works in parallel, while looping on list-uids does not.
+  If no error, returned list will look like
+  (address port uid1 uid2 ...)
+  If error, returned list will look like
+  (address port :ERRORMSG arg1 arg2 ...)"
   (let ((rnodes nil)
         (localnode nil)
         (allnodes nil))
@@ -837,7 +842,14 @@ dropped on the floor.
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
-          (setf allnodes (remove (uid localnode) allnodes)))
+          (setf allnodes (remove-if
+                          (lambda (ad)
+                            (and (typep ad 'augmented-data)
+                                 (listp (data ad))
+                                 (null (cdr (data ad)))
+                                 (eql (uid localnode)
+                                      (first (data ad)))))
+                          allnodes)))
       (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
       )))
 
@@ -912,21 +924,17 @@ dropped on the floor.
            msg
            args)))
 
-; need to move this to utilities
-(defun emotiq/user/root ()
-  #+linux
-  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
-  #+darwin
-  (merge-pathnames "Emotiq/"
-                   (merge-pathnames "Library/Application Support/"
-                                    (user-homedir-pathname))))
+(defun emotiq/log/root ()
+  (let ((d (asdf:system-relative-pathname :emotiq "../var/log/")))
+    (ensure-directories-exist d)
+    d))
 
 (defun emotiq-log-paths (logvector)
   (let* ((name (format nil "~D-~D" (car (aref logvector 0)) (car (aref logvector (1- (length logvector))))))
          (namelog (concatenate 'string name *log-object-extension*))
          (nametxt (concatenate 'string name *log-string-extension*)))
-    (values (merge-pathnames namelog (emotiq/user/root))
-            (merge-pathnames nametxt (emotiq/user/root)))))
+    (values (merge-pathnames namelog (emotiq/log/root))
+            (merge-pathnames nametxt (emotiq/log/root)))))
 
 (defun serialize-log (logvector path)
   "Serialize a log vector to a file as objects. Not thread safe. Don't run
@@ -974,16 +982,14 @@ dropped on the floor.
 
 (defun save-log ()
   "Saves current *log* to a file. Thread-safe."
-   (ac:send *logging-actor* :save))
+  (ac:send *logging-actor* :save))
 
 (defun actor-logger-fn (cmd &rest logmsg)
   "Function that the *logging-actor* runs"
   (case cmd
     (:log (vector-push-extend logmsg *log*)
-          (if *logstream*
-              (write-as-string logmsg *logstream*)
-              (when *log-dots*
-                (write-char #\. *standard-output*))))
+          ;;; Add message to textual log facility
+          (format *error-output* "~&~{~a~^ ~}~&" logmsg))
     ; :save saves current log to files without modifying it
     (:save (%save-log nil))
     ; :archive pushes current log onto *archived-logs*, then starts a fresh log
