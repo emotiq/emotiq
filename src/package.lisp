@@ -9,7 +9,7 @@
            #:octet-vector-to-hex-string #:hex-string-to-octet-vector
            #:string-to-octet-vector
 
-           #:normalize-to-base-string #:copy-as-base-string
+           #:normalize-to-simple-base-string #:copy-as-simple-base-string
            #:normalize-to-simple-string #:copy-as-simple-string)
   (:export #:hash-digest-vector-to-hex-string
            #:sha-256-string #:sha-256-vector 
