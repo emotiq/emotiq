@@ -18,6 +18,7 @@
                #+(and OPENMCL EASYGUI) (:file "hemlock-log-streams")
                (:file "socket-actors")
                (:file "monads")
+               (:file "logging")
                (:file "gossip")
                (:file "http-fetch")
                (:file "graphviz")
