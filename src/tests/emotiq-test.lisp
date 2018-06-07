@@ -52,26 +52,28 @@
 (define-test normalizing-strings-as-simple-strings
   (loop for (descriptive-name string)
           in *normalizing-string-test-cases*
-        as normalized-base-string
-          = (normalize-to-base-string string)
+        as normalized-simple-base-string
+          = (normalize-to-simple-base-string string)
         as normalized-simple-string
           = (normalize-to-simple-string string)
-        as normalized-base-string-correctly-p
-          = (etypecase normalized-base-string
-              (base-string t)
+        as normalized-simple-base-string-correctly-p
+          = (etypecase normalized-simple-base-string
+              (simple-base-string t)
+              (base-string nil)
               (simple-string nil)
               (string nil))
         as normalized-simple-string-correctly-p
           = (etypecase normalized-simple-string
+              (simple-base-string nil)
               (base-string nil)
               (simple-string t)
               (string nil))
-        ;; Test to show that string is EQUAL to its base-string and
-        ;; simple-string equivalents, and then make sure normalized
-        ;; strings are of exactly the right types.
-        do (assert-equal string normalized-base-string)
+        ;; Test to show that string is EQUAL to its simple-base-string
+        ;; and simple-string equivalents, and then make sure
+        ;; normalized strings are of exactly the right types.
+        do (assert-equal string normalized-simple-base-string)
            (assert-equal string normalized-simple-string)
-           (assert-true normalized-base-string-correctly-p)
+           (assert-true normalized-simple-base-string-correctly-p)
            (assert-true normalized-simple-string-correctly-p)))
   
   
