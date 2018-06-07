@@ -134,11 +134,11 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------------------------
 
 (defun make-node-dispatcher (node)
-  (let* ((beh  (make-actor
-                (lambda (&rest msg)
-                  (let ((*current-node* node))
-                    (apply 'node-dispatcher msg)))
-                )))
+  (let ((beh  (make-actor
+               (lambda (&rest msg)
+                 (let ((*current-node* node))
+                   (apply 'node-dispatcher msg)))
+               )))
     (make-actor
      (lambda (&rest msg)
        (um:dcase msg
