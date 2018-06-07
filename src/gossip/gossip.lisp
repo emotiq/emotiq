@@ -924,21 +924,17 @@ dropped on the floor.
            msg
            args)))
 
-; need to move this to utilities
-(defun emotiq/user/root ()
-  #+linux
-  (merge-pathnames "/.emotiq/" (user-homedir-pathname))
-  #+darwin
-  (merge-pathnames "Emotiq/"
-                   (merge-pathnames "Library/Application Support/"
-                                    (user-homedir-pathname))))
+(defun emotiq/log/root ()
+  (let ((d (asdf:system-relative-pathname :emotiq "../var/log/")))
+    (ensure-directories-exist d)
+    d))
 
 (defun emotiq-log-paths (logvector)
   (let* ((name (format nil "~D-~D" (car (aref logvector 0)) (car (aref logvector (1- (length logvector))))))
          (namelog (concatenate 'string name *log-object-extension*))
          (nametxt (concatenate 'string name *log-string-extension*)))
-    (values (merge-pathnames namelog (emotiq/user/root))
-            (merge-pathnames nametxt (emotiq/user/root)))))
+    (values (merge-pathnames namelog (emotiq/log/root))
+            (merge-pathnames nametxt (emotiq/log/root)))))
 
 (defun serialize-log (logvector path)
   "Serialize a log vector to a file as objects. Not thread safe. Don't run
@@ -986,16 +982,14 @@ dropped on the floor.
 
 (defun save-log ()
   "Saves current *log* to a file. Thread-safe."
-   (ac:send *logging-actor* :save))
+  (ac:send *logging-actor* :save))
 
 (defun actor-logger-fn (cmd &rest logmsg)
   "Function that the *logging-actor* runs"
   (case cmd
     (:log (vector-push-extend logmsg *log*)
-          (if *logstream*
-              (write-as-string logmsg *logstream*)
-              (when *log-dots*
-                (write-char #\. *standard-output*))))
+          ;;; Add message to textual log facility
+          (format *error-output* "~&~{~a~^ ~}~&" logmsg)
     ; :save saves current log to files without modifying it
     (:save (%save-log nil))
     ; :archive pushes current log onto *archived-logs*, then starts a fresh log

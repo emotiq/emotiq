@@ -135,6 +135,7 @@
     (when root-path ; if we're given a root-path, use that instead of the global one
       (setup-config-file-paths root-path))
     (gossip-init ':maybe)
+    (log-event "Gossip init finished.")
     (multiple-value-bind (keypairs hosts local-machine) (read-config-files)
       (unless (configure-local-machine keypairs local-machine)
         (error "Cannot configure local machine")) ; configure-local-machine should have thrown its own error here
@@ -163,8 +164,8 @@
        (if (find-package :gui)
            (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
            (setf *logstream* *standard-output*))
-       #-OPENMCL
-       (setf *logstream* *standard-output*)
+       #+(or (not :openmcl) (not :shannon))
+       (setf *logstream* *error-output*)
        (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
        (archive-log)
        (log-event-for-pr ':init)
