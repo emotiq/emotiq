@@ -17,6 +17,11 @@
     (ensure-directories-exist d)
     d))
 
+(defun etc/ ()
+  (let ((d (asdf:system-relative-pathname :emotiq "../var/etc/")))
+    (ensure-directories-exist d)
+    d))
+
 
 
 

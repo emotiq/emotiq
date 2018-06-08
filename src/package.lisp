@@ -83,8 +83,6 @@
    #:eassert
 
    #:prdebug))
-
-
   
 (defpackage emotiq/elections
   (:use #:cl)
@@ -96,7 +94,8 @@
 (defpackage emotiq/filesystem
   (:use #:cl)
   (:nicknames #:emotiq/fs #:emotiq/path)
-  (:export 
+  (:export
+   #:etc/
    #:var/log/))
 
 

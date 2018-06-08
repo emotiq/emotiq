@@ -34,3 +34,10 @@
    #:save-text-log
    #:deserialize-log
    ))
+
+(defpackage gossip/config
+  (:use #:cl)
+  (:export
+   #:initialize 
+   #:get-values))
+
