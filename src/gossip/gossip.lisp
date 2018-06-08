@@ -1857,7 +1857,7 @@ gets sent back, and everything will be copacetic.
                                             :port port
                                             :message-received-hook 'transport-message-received
                                             :peer-up-hook 'transport-peer-up
-                                            :peer-down-hook 'transport-peer-down:))))
+                                            :peer-down-hook 'transport-peer-down))))
 
 (defun transport-message-received (peer-address peer-port message)
   "Callback for transport layer on incoming message from other node."
@@ -1883,10 +1883,6 @@ gets sent back, and everything will be copacetic.
   (unless (null *transport*)
     (stop-transport *transport*)
     (setf *transport* nil)))
-
-(defun transmit-msg ((msg gossip-message-mixin) node srcuid)
-  (multiple-value-bind (address port)
-  (gossip/transport:transmit 
 
 ;; ------------------------------------------------------------------------------
 ;; We need to authenticate all messages being sent over socket ports
