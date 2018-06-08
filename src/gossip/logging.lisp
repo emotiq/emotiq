@@ -85,8 +85,6 @@
   (ensure-directories-exist path)
   (with-open-file (stream path :direction :output :element-type '(unsigned-byte 8))
     ;(format *standard-output* "Serializing log to ~a" path)
-    ;; must not use FORMAT to *standard-output* here, because this is being
-    ;; run in a multiprocessing environment (Actors or no Actors)
     (lisp-object-encoder:serialize logvector stream)))
     
 (defun write-as-string (msg stream)
@@ -94,17 +92,6 @@
   ;; Some of our streams have a lot of overhead on each write, so we pre-convert
   ;;   msg to a string. See Note F.
   (write-string (format nil "~{~S~^ ~}~%" msg) stream))
-  ;; FORMAT NIL here is maybe OK, this is being run in a multiprocesing environment, but,
-  ;; even if FORMAT is swapped out, WRITE-STRING cannot run until it has all of its args
-  ;; in place.  It depends on whether WRITE-STRING is "atomic" in a given implementation.
-  ;; WRITE-STRING takes two arguments - a string and a stream.  Maybe full-preemption
-  ;; will carve up the WRITE-STRING exucution, maybe not.  So, this function depends on
-  ;; the implementation - if WRITE-STRING is not defined as atomic, then it is possible
-  ;; that the msg will be interleaved (the effects of multiprocessing (forget about
-  ;; Actors) might be to time-slice WRITE-STRING, only less likely).  (Actors or no Actors).
-  ;; The bugs simply become more elusive, as args get smaller.  Bugs happen less frequently
-  ;; and then appear to be "random".  The "window" for interleaving is much smaller, but can
-  ;; can happen once in a while (which makes errors so much harder to debug).
 
 (defun stringify-log (logvector path)
   "Saves logvector to a file. Moderately thread-safe if copy-first is true.
@@ -112,8 +99,6 @@
   (ensure-directories-exist path)
   (with-open-file (stream path :direction :output)
     ;(format *standard-output* "Serializing log to ~a" path)
-    ;; must not use FORMAT to *standard-output* here, because this is being
-    ;; run in a multiprocessing environment (Actors or no Actors)
     (loop for msg across logvector do
       (write-as-string msg stream))))
 
