@@ -146,22 +146,12 @@ THE SOFTWARE.
   (if *print-readably*
       (progn
         (princ "#." out-stream)
-        (prin1 `(,(class-name (class-of obj)) (hex-of-str ,(hex-str (hex obj))))
+        (prin1 `(,(class-name (class-of obj)) (hex ,(hex-str (hex obj))))
                out-stream))
     ;; else
     (format out-stream "#<~A ~A >"
             (class-name (class-of obj))
             (ub8v-vec obj))))
-
-(defun hex-digit-char (c)
-  (or (char<= #\0 #\9)
-      (char<= #\a #\f)
-      (char<= #\A #\F)))
-
-(defun hex-of-str (str)
-  (assert (every 'hex-digit-char str))
-  (make-instance 'hex
-                 :str str))
 
 (defmethod print-object ((obj ub8v-repr) out-stream)
   ;; subclasses of UB8V-REPR mixin should feel free to override this
@@ -326,6 +316,11 @@ THE SOFTWARE.
 (defmethod base58 ((x base58))
   x)
 
+(defmethod base58 ((x string))
+  (assert (every (um:rcurry 'find +alphabet-58+) x))
+  (make-instance 'base58
+                 :str x))
+
 (defmethod base58 ((x vector))
   (let* ((length (length x))
          (int (int x))
@@ -400,6 +395,11 @@ THE SOFTWARE.
                            :str str))
           )))))
 
+(defmethod base64 ((x string))
+  (assert (every (um:rcurry 'find +alphabet-64+) (string-right-trim '(#\=) x)))
+  (make-instance 'base64
+                 :str x))
+
 (defmethod base64 ((x base64))
   x)
 
@@ -414,23 +414,27 @@ THE SOFTWARE.
          (nb  (length v))
          (str (make-string (* 2 nb))))
     (labels ((enc (val)
-               (code-char
-                (+ val
-                   (if (< val 10)
-                       #.(char-code #\0)
-                     #.(- (char-code #\a) 10))))
-               ))
-    (loop for bx from (1- nb) downto 0
-          for b = (aref v bx)
-          for ix = (* 2 bx)
-          do
-          (setf (char str ix)      (enc (ldb '#.(byte 4 4) b))
-                (char str (1+ ix)) (enc (ldb '#.(byte 4 0) b))))
-    (make-instance 'hex
-                   :str str))))
+               (digit-char val 16)))
+      (loop for bx from (1- nb) downto 0
+            for b = (aref v bx)
+            for ix = (* 2 bx)
+            do
+            (setf (char str ix)      (enc (ldb '#.(byte 4 4) b))
+                  (char str (1+ ix)) (enc (ldb '#.(byte 4 0) b))))
+      (make-instance 'hex
+                     :str str))))
 
 (defmethod hex ((x hex))
   x)
+
+(defmethod hex ((x string))
+  (assert (every (um:rcurry 'digit-char-p 16) x))
+  (make-instance 'hex
+                 :str x))
+
+;; legacy
+(defun hex-of-str (str)
+  (hex str))
 
 (defmethod hex (x)
   (hex (bev x)))
@@ -553,12 +557,7 @@ THE SOFTWARE.
          (ns   (length str))
          (vec  (make-ub8-vector (ceiling ns 2))))
     (labels ((decode (ch)
-               (cond ((char<= #\0 ch #\9) (- (char-code ch) #.(char-code #\0)))
-                     ((char<= #\A ch #\F) (- (char-code ch) #.(- (char-code #\A) 10)))
-                     ((char<= #\a ch #\f) (- (char-code ch) #.(- (char-code #\a) 10)))
-                     (t
-                      (error "Invalid Hex string: ~S" str))
-                     )))
+               (digit-char-p ch 16)))
       (um:nlet-tail iter ((vx  0)
                           (sx  0)
                           (val 0)
@@ -595,6 +594,9 @@ THE SOFTWARE.
            bev)
           )))
 
+;; --------------------------------------------------------------
+;; Testing
+
 (defun int= (a b)
   "Poor way to do equality testing on UB8V items. This method fails to
 account for vectors with leading null bytes. Okay for comparing
@@ -605,3 +607,10 @@ comparisons."
 (defun vec= (a b)
   "Easy way to do equality testing on UB8V items"
   (equalp (bev-vec a) (bev-vec b)))
+
+;; --------------------------------------------------------------
+;; Utility functions
+
+(defun sbs (str)
+  (coerce str 'simple-base-string))
+

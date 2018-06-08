@@ -134,11 +134,24 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------------------------
 
 (defun make-node-dispatcher (node)
-  (ac:make-actor
-   (lambda (msg-sym &rest args)
-     (let ((*current-node* node))
-       (apply 'node-dispatcher msg-sym args)))))
-
+  (let ((beh  (make-actor
+               (lambda (&rest msg)
+                 (let ((*current-node* node))
+                   (apply 'node-dispatcher msg)))
+               )))
+    (make-actor
+     (lambda (&rest msg)
+       (um:dcase msg
+         (:actor-callback (aid &rest ans)
+          (let ((actor (lookup-actor-for-aid aid)))
+            (when actor
+              (apply 'send actor ans))
+            ))
+         
+          (t (&rest msg)
+             (apply 'send beh msg))
+          )))))
+        
 (defun crash-recovery ()
   ;; just in case we need to re-make the Actors for the network
   (maphash (lambda (k node)
