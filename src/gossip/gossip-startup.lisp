@@ -4,90 +4,12 @@
 
 (in-package :gossip)
 
-(defparameter *keypairs-filename* "keypairs.conf")
-(defparameter *hosts-filename* "hosts.conf")
-(defparameter *machine-filename* "local-machine.conf")
-
-(defparameter *hosts* nil "Hosts read from *hosts-filename*")
-
-(defparameter *keypair-db-path* nil "Full path to keypairs config file")
-(defparameter *hosts-db-path*   nil "Full path to hosts config file")
-(defparameter *machine-db-path* nil "Full path to local-machine config file")
-
-(defparameter *config-paths* '("../var/etc/gossip-config/" "config/") "Potential paths relative to :emotiq
-    in which to look for config files, more preferred first")
-
-(defun find-root-path ()
-  "Look for a viable config directory"
-  (some (lambda (subpath)
-          (probe-file (asdf:system-relative-pathname :emotiq subpath)))
-        *config-paths*))
-
-(defun setup-config-file-paths (&optional (root-path (find-root-path)))
-  (when root-path
-    (setf *keypair-db-path* (merge-pathnames *keypairs-filename* root-path))
-    (setf *hosts-db-path*   (merge-pathnames *hosts-filename* root-path))
-    (setf *machine-db-path* (merge-pathnames *machine-filename* root-path))))
-
-(defparameter *whitespace* (list #\space #\tab #\newline #\return #\backspace #\Page))
-
-(defun read-pairs-database (pathname)
-  (when (and pathname (probe-file pathname))
-    (let ((pair nil)
-          (pairs nil))
-      (with-open-file (s pathname)
-        (setf pairs
-              (loop while (setf pair (read s nil nil nil)) collect pair)))
-      pairs)))
-
-; (read-pairs-database *keypair-db-path*)
-
-(defun read-local-machine-configuration (&optional (pathname *machine-db-path*))
-  (when (probe-file pathname)
-    (with-open-file (s pathname :direction :input :if-does-not-exist :error)
-      (let ((form (read s nil nil nil)))
-        form))))
-
-#+OBSOLETE
-(defun read-pubkeys-database (&optional (pathname *pubkeys-db-path*))
-  "Returns a list of strings, one per public key"
-  (when (probe-file pathname)
-    (let ((key nil)
-          (keys nil))
-      (with-open-file (s pathname)
-        (setf keys
-              (loop while (setf key (read-line s nil nil nil)) collect key)))
-      (setf keys (mapcar (lambda (key)
-                           (string-trim *whitespace* key))
-                         keys))
-      (when keys
-        (setf keys
-              (remove-if (lambda (key)
-                           (or (zerop (length key))
-                               (eql 0 (position #\; key))))
-                         keys))
-        (setf keys (mapcar (lambda (string)
-                             (parse-integer string))
-                           keys))
-        keys))))
+(defparameter *hosts* nil "Hosts as read from gossip/config")
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
                     (eripa)
                     (usocket::host-to-hbo ev))))
-
-(defun read-config-files ()
-  (let ((keypairs (read-pairs-database *keypair-db-path*))
-        (hosts nil)
-        (local-machine nil))
-    (flet ((badfile (filename)
-             (error "~S file not found or invalid" filename)))
-      (unless keypairs (badfile *keypairs-filename*))
-      (setf hosts (read-pairs-database *hosts-db-path*))
-      (unless hosts (badfile *hosts-filename*))
-      (setf local-machine (read-local-machine-configuration *machine-db-path*))
-      (unless local-machine (badfile *machine-filename*))
-      (values keypairs hosts local-machine))))
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
@@ -129,23 +51,21 @@
    If ping-others is true, returns list of augmented-data or exception monads about live public keys on other machines.
    If ping-others is false, just return list of hosts found in *hosts-db-path*.
      You can later call ping-other-machines with this list if desired."
-  (let ((*keypair-db-path* *keypair-db-path*)
-        (*hosts-db-path* *hosts-db-path*)
-        (*machine-db-path* *machine-db-path*))
-    (when root-path ; if we're given a root-path, use that instead of the global one
-      (setup-config-file-paths root-path))
-    (gossip-init ':maybe)
-    (log-event "Gossip init finished.")
-    (multiple-value-bind (keypairs hosts local-machine) (read-config-files)
-      (unless (configure-local-machine keypairs local-machine)
-        (error "Cannot configure local machine")) ; configure-local-machine should have thrown its own error here
-      (setf *hosts* hosts) ; make it easy to call ping-other-machines later
-      (if ping-others
-          (let ((other-machines (ping-other-machines hosts)))
-            (unless other-machines
-              (error "No other hosts to check. Perhaps ~S was empty." *hosts-filename*))
-            other-machines)
-          hosts))))
+  (when root-path ; if we're given a root-path, use that instead of the global one
+    (gossip/config:initialize :root-path root-path))
+  (gossip-init ':maybe)
+  (log-event "Gossip init finished.")
+  (multiple-value-bind (keypairs hosts local-machine)
+      (gossip/config:get-values)
+    (unless (configure-local-machine keypairs local-machine)
+      (error "Cannot configure local machine")) ; configure-local-machine should have thrown its own error here
+    (setf *hosts* hosts) ; make it easy to call ping-other-machines later
+    (if ping-others
+        (let ((other-machines (ping-other-machines hosts)))
+          (unless other-machines
+            (error "No other hosts to check.")
+          other-machines)
+        hosts))))
 
 (let ((gossip-inited nil))
   (defun gossip-init (&optional (cmd))
@@ -155,10 +75,6 @@
     ;   be made ASAP after function is called, not when logging finally happens.
     (case cmd
       (:init
-       (let ((root-path (find-root-path)))
-         (when root-path
-           (ipath:define-illogical-host :emotiq-config root-path) ; in case we need it
-           (setup-config-file-paths root-path)))
        #+IGNORE ; #+OPENMCL ; these hemlock streams are just too slow when they get to a couple thousand lines
        ; in CCL, we'll just inspect the *log*
        (if (find-package :gui)
@@ -174,6 +90,7 @@
        (unless gossip-inited
          (gossip-init ':init)))
       (:uninit
+       ;;; XXX Don't we need to shutdown/unbind the socket listener?
        (log-event-for-pr ':quit)
        (setf gossip-inited nil))
       (:query gossip-inited))))

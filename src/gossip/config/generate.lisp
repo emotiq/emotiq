@@ -1,8 +1,3 @@
-(defpackage gossip/config
-  (:use :cl)
-  (:export
-   #:generate))
-
 (in-package :gossip/config)
 
 (defun make-key-integers ()

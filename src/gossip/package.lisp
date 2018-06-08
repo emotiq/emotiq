@@ -31,5 +31,13 @@
    #:measure-timing
    #:unwrap
    #:save-log
+   #:save-text-log
    #:deserialize-log
    ))
+
+(defpackage gossip/config
+  (:use #:cl)
+  (:export
+   #:initialize 
+   #:get-values))
+
