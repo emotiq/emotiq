@@ -44,9 +44,21 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
    (lock-time :initform 0))) ; not yet used, planned for later use ala Bitcoin
 
-;; ---!!! to do: consider segregating signature ("witness") data ala
-;; ---!!! Bitcoin Segwit soft fork.  However, note that this requires
-;; ---!!! special handling of merkle root at block level. -mhd, 6/5/18
+;; ---!!! TODO FIX: we currently have variant of segregating signature
+;; ---!!! ("witness") data ala Bitcoin Segwit soft fork.  We are currently not
+;; ---!!! including signature data in the regular hash of transaction data that
+;; ---!!! gets signed (see serialize-transaction below). However, we need to
+;; ---!!! follow through with the other side of "segwit", that is, to create
+;; ---!!! "witness hash" (a "WTXID") consisting of both the transaction and
+;; ---!!! signature data.  In Bitcoin under SegWit, the WTXID is used to compute
+;; ---!!! the Witness merkle root, which is put in an output of the coinbase
+;; ---!!! transaction of the block. In Bitcoin it is held in an output of the
+;; ---!!! Coinbase transaction, but that was only done for compatibility: they
+;; ---!!! would have put it in the block if they could have done so compatibly,
+;; ---!!! but putting it in an output of the coinbase transaction was the next
+;; ---!!! best thing.  Decide whether to keep or discard the actual signature
+;; ---!!! data as opposed to its hash (or possibly to have that be optional per
+;; ---!!! node).  -mhd, 6/8/18
 
 
 
@@ -984,24 +996,40 @@ case, keys should supply one private key for each input, either as a single
 private atomic private key or singleton list in the case of a single input or as
 a list of keys in the case of two or more inputs. Normally, all transactions
 should be signed, and only coinbase transactions are not signed."
-  (let* ((transaction
-           (make-instance
-            'transaction
-            :transaction-inputs tx-inputs
-            :transaction-outputs tx-outputs))
-         (message (serialize-transaction transaction)))
+  (let* ((transaction (make-transaction tx-inputs tx-outputs)))
     ;; Got keys? Sign transaction if so:
     (when skeys
-      (let ((private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
-        (check-private-keys-for-transaction-inputs private-keys tx-inputs)
-        (let ((public-keys (if (and pkeys (atom pkeys)) (list pkeys) pkeys)))
-          (check-public-keys-for-transaction-inputs public-keys tx-inputs)
-          (loop for tx-input in tx-inputs
-                as private-key in private-keys
-                as public-key in public-keys
-                as signature = (sign-message message public-key private-key)
-                do (setf (%tx-in-signature tx-input) signature)))))
+      (sign-transaction transaction skeys pkeys))
     transaction))
+
+
+
+(defun make-transaction (tx-inputs tx-outputs)
+  "Create a transaction with inputs TX-INPUTS and outpus TX-OUTPUTS."
+  (make-instance
+   'transaction
+   :transaction-inputs tx-inputs
+   :transaction-outputs tx-outputs))
+
+(defun sign-transaction (transaction skeys pkeys)
+  "Sign transactions with private and public key or keys SKEYS and PKEYS,
+   respectively. SKEYS/PKEYS should be supplied as either a single atomic key or
+   a singleton list in the case of a single input or as a list of two or more
+   keys in the case of two or more inputs. Normally, all transactions should be
+   signed, and only coinbase transactions are not signed.  Each resulting
+   signature is stored in the %tx-in-signature slot of each input, and note also
+   that the signature stores and makes accessible its corresponding public key."
+  (let* ((message (serialize-transaction transaction))
+         (private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
+    (with-slots (tx-inputs) transaction
+      (check-private-keys-for-transaction-inputs private-keys tx-inputs)
+      (let ((public-keys (if (and pkeys (atom pkeys)) (list pkeys) pkeys)))
+        (check-public-keys-for-transaction-inputs public-keys tx-inputs)
+        (loop for tx-input in tx-inputs
+              as private-key in private-keys
+              as public-key in public-keys
+              as signature = (sign-message message public-key private-key)
+              do (setf (%tx-in-signature tx-input) signature))))))
 
 
 
