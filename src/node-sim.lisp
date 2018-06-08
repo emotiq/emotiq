@@ -44,10 +44,8 @@ witnesses."
   (cosi-simgen:init-sim)
 
   ;; should this following code be executed every time or only when a new configuration is created?
-  (let ((node-list (list-of-nodes)))
-    (assert node-list)
-    (assign-phony-stake-to-nodes node-list)
-    (emotiq/elections:set-nodes (sort-nodes-by-stake node-list)))
+  (phony-up-nodes)
+  (emotiq/elections:set-nodes (list-of-nodes))
 
   (when run-cli-p
     (emotiq/cli:main)))
@@ -63,7 +61,7 @@ witnesses."
 (defun broadcast-message (&rest message)
   (loop
      :for node :across cosi-simgen:*node-bit-tbl*
-     :doing (apply 'cosi-simgen:send node message)))
+     :doing (apply 'cosi-simgen:send (cosi-simgen:node-pkey node) message)))
 
 (defun send-genesis-utxo (&key (monetary-supply 1000) (cloaked t))
   (when *genesis-output*
@@ -204,26 +202,25 @@ This will spawn an actor which will asynchronously do the following:
   "Return the blocks in the chain currently under local simulation."
   (cosi-simgen:node-blockchain cosi-simgen:*top-node*))
 
+(defun kill-beacon ()
+  (emotiq/elections::kill-beacon))
+
+;; ----------------------------------------------------------------
+;; These disappear once Gossip is installed...
+
+(defun phony-up-nodes ()
+  (maphash (lambda (k node)
+             (declare (ignore k))
+             (setf (cosi-simgen:node-stake node) (random 100000)))
+           cosi-simgen:*ip-node-tbl*))
+
 ;; hacked copy of cosi-simgen::assign-bits()
 (defun list-of-nodes ()
   (let ((collected
          (um:accum acc
            (maphash (lambda (k node)
                       (declare (ignore k))
-                      (acc node))
+                      (acc (list (cosi-simgen:node-pkey node) (cosi-simgen:node-stake node))))
                     cosi-simgen:*ip-node-tbl*))))
     collected))
-
-(defun assign-phony-stake-to-nodes (node-list)
-  ;; set the node-stake slot of every node to a random number <= 100,000
-  (dolist (node node-list)
-        (let ((phony-stake (random 100000)))
-          (setf (cosi-simgen:node-stake node) phony-stake))))
-
-(defun sort-nodes-by-stake (node-list)
-    (sort node-list '< :key #'cosi-simgen:node-stake))
-
-
-(defun kill-beacon ()
-  (emotiq/elections::kill-beacon))
 

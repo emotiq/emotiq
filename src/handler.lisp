@@ -31,22 +31,23 @@
     (ac:pr "Election delayed by holdoff"))
   (unless cosi-simgen::*holdoff*
     (let* ((node   (cosi-simgen:current-node))
+           (me     (cosi-simgen:node-pkey node))
            (stake  (cosi-simgen:node-stake node))
            (winner (emotiq/elections:hold-election n)))
-      (setf (cosi-simgen:node-current-leader node) (cosi-simgen:node-pkey winner))
+      (setf (cosi-simgen:node-current-leader node) winner)
       (ac:pr (format nil "~A got :hold-an-election ~A" (cosi-simgen::short-id node) n))
-      (let ((me (eq winner node)))
+      (let ((iwon (vec-repr:int= winner me)))
         (ac:pr (format nil "election results ~A (stake = ~A)"
-                       (if me " *ME* " " not me ")
+                       (if iwon " *ME* " " not me ")
                        stake))
         (ac:pr (format nil "winner ~A me=~A"
                        (cosi-simgen::short-id winner)
-                       (cosi-simgen::short-id node)))
-        (if me
+                       (cosi-simgen::short-id me)))
+        (if iwon
             (progn
-              (cosi-simgen:send node :become-leader)
-              (cosi-simgen:send node :make-block))
-          (cosi-simgen:send node :become-witness))))))
+              (cosi-simgen:send me :become-leader)
+              (cosi-simgen:send me :make-block))
+          (cosi-simgen:send me :become-witness))))))
 
 (defmethod cosi-simgen:node-dispatcher :around ((msg-sym (eql :block-finished)) &key)
   ;; (emotiq/elections::kill-beacon) ;; for simulator - so that we don't get a periodic call for elections when the simulated run is finished

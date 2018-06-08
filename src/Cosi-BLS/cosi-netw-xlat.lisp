@@ -61,6 +61,21 @@ THE SOFTWARE.
   (apply 'ac:send (actor-return-addr-node addr)
          :actor-callback (actor-return-addr-aid addr) msg))
 
+;; -----------------
+
+(defmethod ac:send ((node node) &rest msg)
+  (when (node-byz node)
+    (pr (format nil "Byzantine-node: ~A" (short-id node))))
+  (unless (node-byz node)
+    (if (eq node *current-node*)
+        (apply 'ac:send (node-self node) msg)
+      (apply 'ac:send (node-pkey node) msg))))
+
+;; -----------------
+
+(defun reply (reply-to &rest msg)
+  (apply 'send reply-to :answer msg))
+
 ;; -----------------------------------------------------------
 
 (defmethod gossip-send (pkey aid msg)
@@ -81,19 +96,6 @@ THE SOFTWARE.
         (if (eq node *current-node*)
             (apply 'ac:send (node-self node) msg)
           (gossip-send pkey nil msg))))))
-
-(defmethod ac:send ((node node) &rest msg)
-  (when (node-byz node)
-    (pr (format nil "Byzantine-node: ~A" (short-id node))))
-  (unless (node-byz node)
-    (if (eq node *current-node*)
-        (apply 'ac:send (node-self node) msg)
-      (gossip-send (node-pkey node) nil msg))))
-
-;; -----------------
-
-(defun reply (reply-to &rest msg)
-  (apply 'send reply-to :answer msg))
 
 ;; --------------------------------------------------------------
 
