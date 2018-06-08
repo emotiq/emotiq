@@ -769,7 +769,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (setf (node-hold-off-timer node)  (let ((this-node node))
                                             (ac::make-timer
                                              (lambda ()
-                                               (send this-node :end-holdoff)))))
+                                               (send (node-pkey this-node) :end-holdoff)))))
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
@@ -787,7 +787,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun send-real-nodes (&rest msg)
   (loop for ip in *real-nodes* do
-        (apply 'send (gethash ip *ip-node-tbl*) msg)))
+        (apply 'send (node-pkey (gethash ip *ip-node-tbl*)) msg)))
 
 (defmethod short-id ((node node))
   (node-ip node)
@@ -847,7 +847,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun end-all-holdoffs ()
   (loop for node across *node-bit-tbl* do
-        (send node :end-holdoff)))
+        (send (node-pkey node) :end-holdoff)))
 
 (defvar *use-gossip* t)
 
@@ -1153,7 +1153,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (recv
            ((list :answer (list* :signature _))
             (send *dly-instr* :plt)
-            (send node :block-finished))
+            (send (node-pkey node) :block-finished))
            
            ((list :answer (list :corrupt-cosi-network))
             (pr "Corrupt Cosi network in COMMIT phase"))
@@ -1195,7 +1195,7 @@ check that each TXIN and TXOUT is mathematically sound."
      (labels
          ((bcast-msg (&rest msg)
             (map nil (lambda (node)
-                       (apply 'send node msg))
+                       (apply 'send (node-pkey node) msg))
                  *node-bit-tbl*))
           (send-tx-to-all (tx)
             (bcast-msg :new-transaction :trn tx))
@@ -1268,7 +1268,7 @@ check that each TXIN and TXOUT is mathematically sound."
        (sleep 10)
        (map nil (lambda (node)
                   (setf (node-current-leader node) (node-pkey *top-node*))
-                  (send node :answer
+                  (send (node-pkey node) :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
        (send *top-node* :become-leader)
@@ -1285,7 +1285,7 @@ check that each TXIN and TXOUT is mathematically sound."
      (labels
          ((bcast-msg (&rest msg)
             (map nil (lambda (node)
-                       (apply 'send node msg))
+                       (apply 'send (node-pkey node) msg))
                  *node-bit-tbl*))
           (send-tx-to-all (tx)
             (bcast-msg :new-transaction :trn tx))
@@ -1354,7 +1354,7 @@ check that each TXIN and TXOUT is mathematically sound."
        (sleep 10)
        (map nil (lambda (node)
                   (setf (node-current-leader node) (node-pkey *top-node*))
-                  (send node :answer
+                  (send (node-pkey node) :answer
                         (format nil "Ready-to-run: ~A" (short-id node))))
             *node-bit-tbl*)
        (send *top-node* :become-leader)
