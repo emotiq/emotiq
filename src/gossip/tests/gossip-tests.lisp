@@ -2,10 +2,23 @@
 
 (in-package :gossip-tests)
 
-(defparameter *debug* nil "True if you want intermediate timings to print out and show inspector on failures")
+(defparameter *debug* nil
+  "True if you want intermediate timings to print out and show inspector on failures")
 
 (eval-when (:load-toplevel :execute)
-  (REMOVE-TESTS :ALL))
+  (lisp-unit:remove-tests :all))
+
+(defmacro with-networking (&body body)
+  `(progn
+     (build-fixture)
+     ,@body
+     (teardown-fixture)))
+                                      
+(defun build-fixture ()
+  (gossip::gossip-init ':maybe))
+
+(defun teardown-fixture ()
+  (gossip::gossip-init ':uninit))
 
 (defun %aliveness (uid)
   "Runs test sending initial message to node with given uid"
@@ -53,80 +66,81 @@
 ; (let ((*print-failures* t)) (run-tests '(aliveness)))
 (define-test aliveness
              "Test count-alive and list-alive"
-  ; careful with globals. Remember that they get a different value in each thread if you're not careful.
-  ; So we set them here rather than bind them.
-  (let ((oldnodes *nodes*)
-        (oldlogdots *log-dots*))
-    (set-protocol-style :neighborcast)
-    (unwind-protect
-        (progn 
-          (setf *log-dots* t)
-          (setf *nodes* (gossip::make-uid-mapper))
-          (clrhash *nodes*)
-          (make-test-network)
-          (ac::kill-executives)
-          (assert-eql 10 (run-gossip-sim))
-          (let* ((nodes (listify-nodes))
-                 (uids (mapcar #'gossip::uid nodes)))
-            ; do same test starting at every possible node
-            (mapc '%aliveness uids)
-            ))
-      (setf *nodes* oldnodes
-           *log-dots* oldlogdots)
-      )))
+  ;;; careful with globals. Remember that they get a different value
+  ;;; in each thread if you're not careful.  So we set them here
+  ;;; rather than bind them.
+  (with-networking 
+      (let ((oldnodes *nodes*)
+            (oldlogdots *log-dots*))
+        (set-protocol-style :neighborcast)
+        (unwind-protect
+             (progn 
+               (setf *log-dots* t)
+               (setf *nodes* (gossip::make-uid-mapper))
+               (clrhash *nodes*)
+               (make-test-network)
+               (ac::kill-executives)
+               (assert-eql 10 (run-gossip-sim))
+               (let* ((nodes (listify-nodes))
+                      (uids (mapcar #'gossip::uid nodes)))
+                                        ; do same test starting at every possible node
+                 (mapc '%aliveness uids)))
+          (setf *nodes* oldnodes
+                *log-dots* oldlogdots)))))
 
 ; (let ((*print-failures* t)) (run-tests '(key-value)))
 (define-test key-value
              "Test key-value protocols"
-  ; careful with globals. Remember that they get a different value in each thread if you're not careful.
-  ; So we set them here rather than bind them.
-  (let ((oldnodes *nodes*)
-        (oldlogdots *log-dots*))
-    (set-protocol-style :neighborcast)
-    (unwind-protect
-        (progn
-          (setf *log-dots* t)
-          (setf *nodes* (gossip::make-uid-mapper))
-          (clrhash *nodes*)
-          (make-test-network)
-          (ac::kill-executives)
-          (assert-eql 10 (run-gossip-sim))
-          (let* ((nodes (listify-nodes))
-                 (uids (mapcar #'gossip::uid nodes)))
-            ; do same test starting at every possible node
-            (mapc '%key-value uids)
-            ))
-      (setf *nodes* oldnodes
-           *log-dots* oldlogdots)
-      )))
+  ;;; careful with globals. Remember that they get a different value
+  ;;; in each thread if you're not careful.  So we set them here
+  ;;; rather than bind them.
+  (with-networking              
+    (let ((oldnodes *nodes*)
+          (oldlogdots *log-dots*))
+      (set-protocol-style :neighborcast)
+      (unwind-protect
+           (progn
+             (setf *log-dots* t)
+             (setf *nodes* (gossip::make-uid-mapper))
+             (clrhash *nodes*)
+             (make-test-network)
+             (ac::kill-executives)
+             (assert-eql 10 (run-gossip-sim))
+             (let* ((nodes (listify-nodes))
+                    (uids (mapcar #'gossip::uid nodes)))
+            ;; do same test starting at every possible node
+               (mapc '%key-value uids)))
+        (setf *nodes* oldnodes
+              *log-dots* oldlogdots)))))
 
 (define-test partial-gossip "Test partial-gossip with parameter 2"
-  ; careful with globals. Remember that they get a different value in each thread if you're not careful.
-  ; So we set them here rather than bind them.
-  (let ((oldnodes *nodes*)
-        (oldlogdots *log-dots*))
-    (set-protocol-style :gossip 2)
-    (unwind-protect
-        (let ((results nil)
-              (*log-filter* nil))
-          (setf *log-dots* t)
-          (setf *nodes* (gossip::make-uid-mapper))
-          (clrhash *nodes*)
-          (make-graph 100)
-          (ac::kill-executives)
-          (assert-eql 100 (run-gossip-sim))
-          (dotimes (i 100)
-            (push (unwrap (solicit-wait (random-node) :count-alive)) results))
-          (setf results (mapcar (lambda (x) (if (numberp x) x nil)) results)) ; ensure :TIMEOUT doesn't appear in data
-          (assert (lambda ()
-                    (every (lambda (x)
-                             (if (numberp x)
-                                 (> x 90)
-                                 t))
-                           results))))
-      (setf *nodes* oldnodes
-           *log-dots* oldlogdots)
-      )))
+  ;;; careful with globals. Remember that they get a different value
+  ;;; in each thread if you're not careful.  So we set them here
+  ;;; rather than bind them.
+  (with-networking
+    (let ((oldnodes *nodes*)
+          (oldlogdots *log-dots*))
+      (set-protocol-style :gossip 2)
+      (unwind-protect
+           (let ((results nil)
+                 (*log-filter* nil))
+             (setf *log-dots* t)
+             (setf *nodes* (gossip::make-uid-mapper))
+             (clrhash *nodes*)
+             (make-graph 100)
+             (ac::kill-executives)
+             (assert-eql 100 (run-gossip-sim))
+             (dotimes (i 100)
+               (push (unwrap (solicit-wait (random-node) :count-alive)) results))
+             (setf results (mapcar (lambda (x) (if (numberp x) x nil)) results)) ; ensure :TIMEOUT doesn't appear in data
+             (assert (lambda ()
+                       (every (lambda (x)
+                                (if (numberp x)
+                                    (> x 90)
+                                    t))
+                              results))))
+        (setf *nodes* oldnodes
+              *log-dots* oldlogdots)))))
 
 ; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
 ; (let ((*print-failures* t)) (run-tests :all))
