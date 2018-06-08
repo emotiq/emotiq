@@ -29,6 +29,13 @@
                 :components ((:file "utilities")
                              (:file "external")))))
 
+(defsystem "emotiq/filesystem"
+  :depends-on (emotiq)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "filesystem")))))
+  
 (defsystem "emotiq/blockchain"
   :depends-on (emotiq/utilities)
   :components ((:module source

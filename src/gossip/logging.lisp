@@ -72,17 +72,12 @@
               (funcall *log-filter* logcmd))
       (apply 'log-event logcmd args))))
 
-(defun emotiq/log/root ()
-  (let ((d (asdf:system-relative-pathname :emotiq "../var/log/")))
-    (ensure-directories-exist d)
-    d))
-
 (defun emotiq-log-paths (logvector)
   (let* ((name (format nil "~D-~D" (car (aref logvector 0)) (car (aref logvector (1- (length logvector))))))
          (namelog (concatenate 'string name *log-object-extension*))
          (nametxt (concatenate 'string name *log-string-extension*)))
-    (values (merge-pathnames namelog (emotiq/log/root))
-            (merge-pathnames nametxt (emotiq/log/root)))))
+    (values (merge-pathnames namelog (emotiq/fs:var/log/))
+            (merge-pathnames nametxt (emotiq/fs:var/log/)))))
 
 (defun serialize-log (logvector path)
   "Serialize a log vector to a file as objects. Not thread safe. Don't run
@@ -156,7 +151,7 @@
   "Function that the *logging-actor* runs"
   (case cmd
     (:log (vector-push-extend logmsg *log*)
-          ;;; Add message to textual log facility
+          ;;; Shunt message to line-oriented log facility
           (format *error-output* "~&~{~a~^ ~}~&" logmsg))
     ; :save saves current log to files without modifying it
     (:save (%save-log :copy-first nil))

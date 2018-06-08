@@ -38,6 +38,9 @@
    #:*minter-0-pkey-hash* #:*minter-0-pkey* #:*minter-0-skey*
    #:get-utxos-per-account #:get-balance)
   (:export
+   #:emotiq/log/)
+  
+  (:export
    #:start-node)
   (:export
    #:production-p
@@ -89,3 +92,11 @@
    #:set-nodes
    #:make-election-beacon
    #:hold-election))
+
+(defpackage emotiq/filesystem
+  (:use #:cl)
+  (:nicknames #:emotiq/fs #:emotiq/path)
+  (:export 
+   #:var/log/))
+
+
