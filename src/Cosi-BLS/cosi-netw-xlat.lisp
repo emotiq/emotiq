@@ -63,6 +63,7 @@ THE SOFTWARE.
 
 ;; -----------------
 
+#|
 (defmethod ac:send ((node node) &rest msg)
   (when (node-byz node)
     (pr (format nil "Byzantine-node: ~A" (short-id node))))
@@ -70,6 +71,7 @@ THE SOFTWARE.
     (if (eq node *current-node*)
         (apply 'ac:send (node-self node) msg)
       (apply 'ac:send (node-pkey node) msg))))
+|#
 
 ;; -----------------
 
