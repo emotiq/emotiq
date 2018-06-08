@@ -13,8 +13,14 @@
                 :pathname "./"
                 :components ((:file "package")))))
 
+(defsystem "emotiq/logging"
+  :depends-on (emotiq
+               simple-date-time)
+  :components ((:file "note")))
+
 (defsystem "emotiq/delivery"
-  :depends-on (emotiq)
+  :depends-on (emotiq
+               simple-date-time)
   :components ((:module delivery
                 :pathname "./"
                 :components ((:file "production")))))
@@ -29,6 +35,13 @@
                 :components ((:file "utilities")
                              (:file "external")))))
 
+(defsystem "emotiq/filesystem"
+  :depends-on (emotiq)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "filesystem")))))
+  
 (defsystem "emotiq/blockchain"
   :depends-on (emotiq/utilities)
   :components ((:module source
@@ -63,7 +76,8 @@
                 :components ((:file "cli")))))
 
 (defsystem "emotiq/node"  ;; a live node
-  :depends-on (gossip)
+  :depends-on (gossip
+               emotiq/logging)
   :components ((:module source
                 :pathname "./"
                 :components ((:file "node")))))

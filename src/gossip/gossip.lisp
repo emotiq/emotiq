@@ -25,16 +25,6 @@
 
 (defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
 
-(defvar *log* nil "Log of gossip actions.")
-(defvar *logstream* nil "Log stream for gossip log messages. This is in addition to the *log*, so it's fine if this is nil.")
-(defvar *logging-actor* nil "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
-(defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
-(defparameter *log-filter* t "t to log all messages; nil to log none")
-(defparameter *log-object-extension* ".log" "File extension for object-based logs")
-(defparameter *log-string-extension* ".txt" "File extension for string-based logs")
-(defparameter *log-dots* nil "True if you want the logger to send a period to *standard-output* for each log message.
-    Only used if *logstream* is nil. Mostly for debugging.")
-
 (defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
 
 (defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
@@ -134,30 +124,6 @@ are in place between nodes.
 (hcl:defglobal-variable *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 #+OpenMCL
 (ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
-
-(defun log-exclude (&rest strings)
-  "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
- (lambda (logcmd)
-   (let ((logcmdname (symbol-name logcmd)))
-     (notany (lambda (x) (search x logcmdname :test #'char-equal)) strings))))
-
-(defun log-include (&rest strings)
-  "Allow log messages whose logcmd contains any of the given strings. Case-insensitive."
- (lambda (logcmd)
-   (let ((logcmdname (symbol-name logcmd)))
-     (some (lambda (x) (search x logcmdname :test #'char-equal)) strings))))
-
-;; Ex: Don't log any messages that contain "WAIT" or "ACCEPT"
-;; (setf *log-filter* (log-exclude "WAIT" "ACCEPT" "IGNORE"))
-
-;; Ex: Don't log any messages that contain "COALESCE"
-;; (setf *log-filter* (log-exclude "COALESCE"))
-
-;; Ex: Include only :FINALREPLY messages
-;; (setf *log-filter* (log-include "FINALREPLY"))
-
-;; Ex: Don't include SIR messages
-;; (setf *log-filter* (log-exclude "SIR"))
 
 (defun aws-p ()
   "Returns true if we're running on an AWS EC2 instance.
@@ -401,12 +367,6 @@ are in place between nodes.
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works")))
 
-#+OBSOLETE
-(defclass gossip-network-actor (ac:actor)
-  ((node :initarg :node :initform nil :accessor node
-         :documentation "The gossip-node on behalf of which this actor works.
-         Should only be attached to proxy-gossip-nodes.")))
-
 (defclass actor-mixin ()
   ((actor :initarg :actor :initform nil :accessor actor
           :documentation "Actor for this node")))
@@ -494,22 +454,6 @@ are in place between nodes.
     (lambda (&rest msg)
       (when (debug-level 5)
         (log-event "Gossip Actor" (ac::current-actor) "received" msg))
-      (apply 'gossip-dispatcher node msg))))
-
-#+OBSOLETE
-(defmethod make-gossip-actor ((node null))
-  (make-instance 'gossip-actor
-    :node node
-    :fn 
-    (lambda (&rest msg)
-      (apply 'gossip-dispatcher node msg))))
-
-#+OBSOLETE
-(defmethod make-gossip-actor ((node proxy-gossip-node))
-  (make-instance 'gossip-network-actor
-    :node node
-    :fn 
-    (lambda (&rest msg)
       (apply 'gossip-dispatcher node msg))))
 
 (defun make-node (&rest args)
@@ -789,7 +733,6 @@ dropped on the floor.
              (soluid (uid solicitation)))
         (unwind-protect
             (progn
-              (setf (logfn node) #'interactive-logging-function)
               (send-msg solicitation
                         uid      ; destination
                         #'final-continuation)     ; srcuid
@@ -860,58 +803,6 @@ dropped on the floor.
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
 
-(defun new-log ()
-  "Returns a new log space"
-  (make-array 10 :adjustable t :fill-pointer 0))
-
-;;; TODO: This doesn't call save-log. It probably should once saving is thoroughly debugged.
-(defun %archive-log ()
-  "Archive existing *log* and start a new one.
-   This function is not thread-safe; should only be called from *logging-actor*."
-  (vector-push-extend *log* *archived-logs*)
-  (setf *log* (new-log)))
-
-(defun archive-log ()
-  "Archive existing *log* and start a new one. Thread-safe."
-  (ac:send *logging-actor* :archive))
-
-(defun log-event (&rest args)
-  "General mechanism for logging events. Sends timestamp and args to *logging-actor*.
-   No filtering is done here.
-   Also returns effective log message."
-  (let ((logmsg (cons (usec::get-universal-time-usec) args)))
-    (apply 'ac:send *logging-actor* :log logmsg)
-    logmsg))
-
-(defun log-event-for-pr (cmd &rest items)
-  "Syntactic sugar to play nicely with ac:pr"
-  (case cmd
-    (:quit (setf ac::*shared-printer-actor* #'ac::blind-print))
-    (:init (setf ac::*shared-printer-actor* #'log-event-for-pr))
-    (t (apply 'default-logging-function :PR items))))
-
-(defun default-logging-function (logcmd &rest args)
-  "Default logger for nodes. Filters using the *log-filter* mechanism."
-  (when *log-filter*
-    (when (or (eq t *log-filter*)
-              (funcall *log-filter* logcmd))
-      (apply 'log-event logcmd args))))
-
-;;; TODO: This is probably obsolete
-(defun interactive-logging-function (logcmd &rest args)
-  "Use this logging function for interactive debugging. You'll probably only want to use this
-  in the mode you called #'solicit on. Note that this merely writes to the REPL _in addition_ to standard logging,
-  not as opposed to it.
-  Returns the form that default-logging-function returned."
-  (let* ((logmsg (apply 'default-logging-function logcmd args))
-         (logstring (format nil "~S~%" logmsg)))
-    #+OpenMCL
-    (if (find-package :hi)
-        (funcall (intern "WRITE-TO-TOP-LISTENER" :hi) logstring)
-        (write-string logstring *standard-output*))
-    #-OpenMCL
-    (write-string logstring *standard-output*)
-    logmsg))
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
@@ -924,76 +815,6 @@ dropped on the floor.
            msg
            args)))
 
-(defun emotiq/log/root ()
-  (let ((d (asdf:system-relative-pathname :emotiq "../var/log/")))
-    (ensure-directories-exist d)
-    d))
-
-(defun emotiq-log-paths (logvector)
-  (let* ((name (format nil "~D-~D" (car (aref logvector 0)) (car (aref logvector (1- (length logvector))))))
-         (namelog (concatenate 'string name *log-object-extension*))
-         (nametxt (concatenate 'string name *log-string-extension*)))
-    (values (merge-pathnames namelog (emotiq/log/root))
-            (merge-pathnames nametxt (emotiq/log/root)))))
-
-(defun serialize-log (logvector path)
-  "Serialize a log vector to a file as objects. Not thread safe. Don't run
-   on log vectors that are in use unless the *logging-actor* does it."
-  (ensure-directories-exist path)
-  (with-open-file (stream path :direction :output :element-type '(unsigned-byte 8))
-    ;(format *standard-output* "Serializing log to ~a" path)
-    (lisp-object-encoder:serialize logvector stream)))
-    
-(defun write-as-string (msg stream)
-  "Writes a list of objects (msg) as a string to stream"
-  ;; Some of our streams have a lot of overhead on each write, so we pre-convert
-  ;;   msg to a string. See Note F.
-  (write-string (format nil "~{~S~^ ~}~%" msg) stream))
-
-(defun stringify-log (logvector path)
-  "Saves logvector to a file. Moderately thread-safe if copy-first is true.
-  Not thread-safe at all otherwise."
-  (ensure-directories-exist path)
-  (with-open-file (stream path :direction :output)
-    ;(format *standard-output* "Serializing log to ~a" path)
-    (loop for msg across logvector do
-      (write-as-string msg stream))))
-
-(defun deserialize-log (path)
-  "Deserialize object-based log file at path"
-  (with-open-file
-      (o path :direction :input :element-type '(unsigned-byte 8))
-    (lisp-object-encoder:deserialize o)))
-
-(defun %save-log (&optional (copy-first t))
-  "Saves current *log* to two files -- one as objects and one as just strings.
-   (The first facilitates forensic debugging; the second is just for human administrator consumption.)
-   Moderately thread-safe if copy-first is true.
-   Not thread-safe at all otherwise."
-  (let ((newlog (if copy-first
-                    (copy-seq *log*)
-                    *log*)))
-    (declare (dynamic-extent newlog))
-    (multiple-value-bind (path-for-objects path-for-strings)  (emotiq-log-paths newlog)
-      (serialize-log newlog path-for-objects)
-      (stringify-log newlog path-for-strings)
-      (values path-for-objects
-              path-for-strings))))
-
-(defun save-log ()
-  "Saves current *log* to a file. Thread-safe."
-  (ac:send *logging-actor* :save))
-
-(defun actor-logger-fn (cmd &rest logmsg)
-  "Function that the *logging-actor* runs"
-  (case cmd
-    (:log (vector-push-extend logmsg *log*)
-          ;;; Add message to textual log facility
-          (format *error-output* "~&~{~a~^ ~}~&" logmsg))
-    ; :save saves current log to files without modifying it
-    (:save (%save-log nil))
-    ; :archive pushes current log onto *archived-logs*, then starts a fresh log
-    (:archive (%archive-log))))
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.

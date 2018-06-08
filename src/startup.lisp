@@ -27,6 +27,7 @@
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
   (emotiq:start-node))
+
 ;; Entry Point for binary version of the system.
 
 (defun start ()
@@ -42,8 +43,8 @@
   (main))
 
 (defun argv ()
-#+lispworks system:*line-arguments-list*)
-  
+#+lispworks system:*line-arguments-list*
+#+OPENMCL ccl:*command-line-argument-list*)
 
 (defun message-running-state (&optional how-started-message?)
   (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"
