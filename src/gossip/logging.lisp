@@ -152,7 +152,11 @@
   (case cmd
     (:log (vector-push-extend logmsg *log*)
           ;;; Shunt message to line-oriented log facility
-          (format *error-output* "~&~{~a~^ ~}~&" logmsg))
+          ;; First object in logmsg is the timestamp.
+          ;;
+          ;; TODO: use the timestamp directly
+          (emotiq:note "~&~{~a~^ ~}~&" (rest logmsg)))
+          
     ; :save saves current log to files without modifying it
     (:save (%save-log :copy-first nil))
     (:save-text (%save-log :text-only t :copy-first nil))

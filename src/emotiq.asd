@@ -13,8 +13,14 @@
                 :pathname "./"
                 :components ((:file "package")))))
 
+(defsystem "emotiq/logging"
+  :depends-on (emotiq
+               simple-date-time)
+  :components ((:file "note")))
+
 (defsystem "emotiq/delivery"
-  :depends-on (emotiq)
+  :depends-on (emotiq
+               simple-date-time)
   :components ((:module delivery
                 :pathname "./"
                 :components ((:file "production")))))

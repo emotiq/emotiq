@@ -43,6 +43,8 @@
   (:export
    #:start-node)
   (:export
+   #:note)
+  (:export
    #:production-p
    #:main
    #:start))
