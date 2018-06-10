@@ -708,7 +708,7 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
-(format *standard-output* "~&init-pairing called~&")
+(format *standard-output* "~&init-pairing called ~A~&" *curve*)
   (mpcompat:with-lock (*crypto-lock*)
     (load-dlls)
     (let ((prev   *curve*)
@@ -747,6 +747,7 @@ SMP access. Everything else should be SMP-safe."
                   (set-generator g2)
                 (get-g1)) ;; fill in cached value
               ))))
+(format *standard-output* "~&return from init-pairing called ~A~&" *curve*)
       prev))) ;; return previous *curve*
 
 (defun need-pairing ()
