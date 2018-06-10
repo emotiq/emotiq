@@ -142,20 +142,36 @@ THE SOFTWARE.
 
 (defun load-dev-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
-  (cffi:define-foreign-library
-   libpbc
-   (:darwin #.(concatenate 
-	       'string 
-	       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	       "/libLispPBCIntf.dylib"))
-   (:linux #.(concatenate 
-	      'string 
-	      (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	      "/libLispPBCIntf.so"))
-   (t (:default "libLispPBCIntf"))))
+  (format *standard-output* "~&load dev dlls~&")
+  (let ((ddotstring #.(concatenate 
+		    'string 
+		    (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		    "/libLispPBCIntf.dylib"))
+	(ldotstring #.(concatenate 
+		    'string 
+		    (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		    "/libLispPBCIntf.so"))
+	(dstring (concatenate 
+		   'string 
+		   (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		   "/libLispPBCIntf.dylib"))
+	(lstring (concatenate 
+		  'string 
+		  (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
+		  "/libLispPBCIntf.so")))
+    (format *standard-output* "~&ddotstring /~a/~&ldotstring /~a/~&   dstring /~a/~&   lstring /~a/~&" 
+	    ddotstring ldotstring dstring lstring)
+    (format *standard-output* "~&ddotstring /~a/~&ldotstring /~a/~&   dstring /~a/~&   lstring /~a/~&" 
+	    (type-of ddotstring) (type-of ldotstring) (type-of dstring) (type-of lstring))
+    (cffi:define-foreign-library
+     libpbc
+     (:darwin dstring)
+     (:linux  lstring)
+     (t (:default "libLispPBCIntf")))))
 
 (defun load-production-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from the current directory"
+(format *standard-output* "~&load production dlls~&")
   (cffi:define-foreign-library
    libpbc
    (:darwin "libLispPBCIntf.dylib")
@@ -708,7 +724,6 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
-(format *standard-output* "~&init-pairing called ~A~&" *curve*)
   (mpcompat:with-lock (*crypto-lock*)
     (load-dlls)
     (let ((prev   *curve*)
@@ -747,12 +762,12 @@ SMP access. Everything else should be SMP-safe."
                   (set-generator g2)
                 (get-g1)) ;; fill in cached value
               ))))
-(format *standard-output* "~&return from init-pairing called ~A~&" *curve*)
       prev))) ;; return previous *curve*
 
 (defun need-pairing ()
   "If pairing lib not already init, then do so."
   (unless *curve*
+    (format *standard-output* "~&calling init-pairing~&")
     (init-pairing)))
 
 ;; -------------------------------------------------
@@ -959,9 +974,11 @@ library."
    (skey  :reader keying-triple-skey
           :initarg :skey)))
 
-(defun make-key-pair (seed)
+(defun make-key-pair (seed &key (curve-p nil) (curve nil))
   "Return a certified keying pair. Seed can be literally anything.
 Certification includes a BLS Signature on the public key."
+  (when curve-p
+    (format *standard-output* "~&make-key-pair caller-has-curve ~a I-have-curve ~A~&" (not (null curve)) (not (null *curve*))))
   (need-pairing)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((sbuf *zr-size*)

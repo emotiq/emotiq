@@ -1,7 +1,7 @@
 ;;; gossip.lisp
 ;;; 11-May-2018 SVS
 
-;;; Actor-based gossip protocol.
+;;; Acprtor-based gossip protocol.
 ;;; As far as the actors are concerned,
 ;;; we're just sending messages of type :gossip, regardless of whether they're solicitations
 ;;; or replies.
@@ -1965,14 +1965,14 @@ gets sent back, and everything will be copacetic.
   (defun hmac-keypair ()
     (unless hmac-keypair
       (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)) :curve-p t :curve pbc::*curve*)))
     hmac-keypair)
   (defun sign-message (msg)
     "Sign and return an authenticated message packet. Packet includes
     original message."
     (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
                                   (pbc:keying-triple-sig  (hmac-keypair))))
-    (pbc:sign-message msg
+   (pbc:sign-message msg
                       (pbc:keying-triple-pkey (hmac-keypair))
                       (pbc:keying-triple-skey (hmac-keypair)))))
 
@@ -1981,6 +1981,7 @@ gets sent back, and everything will be copacetic.
 (defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
   "Send message across network.
    srcuid is that of the (real) local gossip-node that sent message to this node."
+(ac:pr "in transmit-msg 1")
   (cond (*udp-gossip-socket*
          (node-log node :TRANSMIT msg)
          (let* ((payload (sign-message (list (real-uid node) srcuid *actual-udp-gossip-port* msg)))
@@ -1999,11 +2000,14 @@ gets sent back, and everything will be copacetic.
 (defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
   "Send a message across TCP network.
   srcuid is that of the (real) local gossip-node that sent message to this node."
+
   (multiple-value-bind (socket-actor errorp)
                        (ensure-connection (real-address node) (real-port node))
     (cond ((null errorp)
+(ac:pr "null errorp")
            (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
              (ac:send socket-actor :send-socket-data payload)))
+(ac:pr "finished null errorp")
           (t (node-log node :CANNOT-TRANSMIT msg "cannot create socket" errorp)
              (when (and (typep msg 'solicitation)
                         (or (uid? (reply-to msg))
@@ -2019,6 +2023,7 @@ gets sent back, and everything will be copacetic.
                                             (:remote-port    . ,(real-port node))))))))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
+(ac:pr "in deliver-gossip-msg 3")
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
@@ -2026,6 +2031,7 @@ gets sent back, and everything will be copacetic.
   (locally-receive-msg gossip-msg node srcuid))
 
 (defmethod deliver-gossip-msg ((gossip-msg system-async) (node gossip-mixin) srcuid)
+(ac:pr "in deliver-gossip-msg 2")
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
@@ -2034,6 +2040,7 @@ gets sent back, and everything will be copacetic.
 
 (defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
+(ac:pr "in deliver-gossip-msg 1")
   (transmit-msg gossip-msg node srcuid))
 
 (defun run-gossip-sim (&optional (protocol :TCP))
