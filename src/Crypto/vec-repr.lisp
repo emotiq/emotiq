@@ -165,6 +165,15 @@ THE SOFTWARE.
             (class-name (class-of obj))
             (ub8v-repr obj))))
 
+(defun short-str (str)
+  (let ((len (length str)))
+    (if (< len 40)
+        str
+      (format nil "~A...~A"
+              (subseq str 0 20)
+              (subseq str (- len 20)))
+      )))
+
 ;; ----------------------------------------------------------
 ;; Base58 encodes integers into character strings of the restricted
 ;; alphabet.

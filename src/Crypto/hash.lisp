@@ -176,4 +176,11 @@ THE SOFTWARE.
 (defmethod hash= ((hash1 hash) (hash2 hash))
   (vec= hash1 hash2))
 
+(defmethod print-object ((obj hash) out-stream)
+  (if *print-readably*
+      (call-next-method)
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (short-str (hex-str obj)))
+    ))
 
