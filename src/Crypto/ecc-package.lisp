@@ -94,6 +94,7 @@ THE SOFTWARE.
    :int=
    :vec=
    :sbs
+   :short-str
    ))
 
 (defpackage :hash
