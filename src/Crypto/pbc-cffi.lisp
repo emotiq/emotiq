@@ -1,3 +1,5 @@
+(declare (optimize (speed 0) (safety 3) (debug 3)))
+
 ;; pbc-cffi.lisp -- PBC (Pairing Based Crypto) in Lisp using CFFI
 ;;
 ;; DM/Emotiq 03/18
@@ -43,6 +45,7 @@ THE SOFTWARE.
    :gt
    :gt-val
    :public-key
+
    :public-key-val
    :secret-key
    :secret-key-val
