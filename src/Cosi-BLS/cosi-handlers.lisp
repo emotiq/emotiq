@@ -795,11 +795,12 @@ check that each TXIN and TXOUT is mathematically sound."
   )
 
 (defmethod short-id (x)
-  (let ((str (base58-str x)))
-    (if (> (length str) 20)
+  (let* ((str (base58-str x))
+         (len (length str)))
+    (if (> len 20)
         (concatenate 'string (subseq str 0 10)
                      ".."
-                     (subseq str (- (length str) 10)))
+                     (subseq str (- len 10)))
       str)))
 
 ;; ------------------------------
