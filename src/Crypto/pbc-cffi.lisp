@@ -143,30 +143,18 @@ THE SOFTWARE.
 (defun load-dev-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
   (format *standard-output* "~&load dev dlls~&")
-  (let ((ddotstring #.(concatenate 
+  (let ((darwinstr (concatenate 
 		    'string 
 		    (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
 		    "/libLispPBCIntf.dylib"))
-	(ldotstring #.(concatenate 
-		    'string 
-		    (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		    "/libLispPBCIntf.so"))
-	(dstring (concatenate 
+	(linuxstr (concatenate 
 		   'string 
 		   (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		   "/libLispPBCIntf.dylib"))
-	(lstring (concatenate 
-		  'string 
-		  (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-		  "/libLispPBCIntf.so")))
-    (format *standard-output* "~&ddotstring /~a/~&ldotstring /~a/~&   dstring /~a/~&   lstring /~a/~&" 
-	    ddotstring ldotstring dstring lstring)
-    (format *standard-output* "~&ddotstring /~a/~&ldotstring /~a/~&   dstring /~a/~&   lstring /~a/~&" 
-	    (type-of ddotstring) (type-of ldotstring) (type-of dstring) (type-of lstring))
+		   "/libLispPBCIntf.so")))
     (cffi:define-foreign-library
      libpbc
-     (:darwin dstring)
-     (:linux  lstring)
+     (:darwin darwinstr)
+     (:linux linuxstr)
      (t (:default "libLispPBCIntf")))))
 
 (defun load-production-dlls ()
@@ -974,11 +962,9 @@ library."
    (skey  :reader keying-triple-skey
           :initarg :skey)))
 
-(defun make-key-pair (seed &key (curve-p nil) (curve nil))
+(defun make-key-pair (seed)
   "Return a certified keying pair. Seed can be literally anything.
 Certification includes a BLS Signature on the public key."
-  (when curve-p
-    (format *standard-output* "~&make-key-pair caller-has-curve ~a I-have-curve ~A~&" (not (null curve)) (not (null *curve*))))
   (need-pairing)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((sbuf *zr-size*)

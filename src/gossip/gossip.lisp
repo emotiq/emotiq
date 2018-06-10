@@ -1965,7 +1965,7 @@ gets sent back, and everything will be copacetic.
   (defun hmac-keypair ()
     (unless hmac-keypair
       (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)) :curve-p t :curve pbc::*curve*)))
+            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
     hmac-keypair)
   (defun sign-message (msg)
     "Sign and return an authenticated message packet. Packet includes
@@ -2023,7 +2023,6 @@ gets sent back, and everything will be copacetic.
                                             (:remote-port    . ,(real-port node))))))))))
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
-(ac:pr "in deliver-gossip-msg 3")
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
@@ -2031,7 +2030,6 @@ gets sent back, and everything will be copacetic.
   (locally-receive-msg gossip-msg node srcuid))
 
 (defmethod deliver-gossip-msg ((gossip-msg system-async) (node gossip-mixin) srcuid)
-(ac:pr "in deliver-gossip-msg 2")
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
   ;  modify the original without affecting other threads.
   (incf (hopcount gossip-msg))
@@ -2040,7 +2038,6 @@ gets sent back, and everything will be copacetic.
 
 (defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
-(ac:pr "in deliver-gossip-msg 1")
   (transmit-msg gossip-msg node srcuid))
 
 (defun run-gossip-sim (&optional (protocol :TCP))
