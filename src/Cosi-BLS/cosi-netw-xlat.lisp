@@ -178,11 +178,13 @@ THE SOFTWARE.
 
 ;;; For binary delivery, we need to allocate keypair memory at
 ;;; runtime.  
-(let (hmac-keypair)
+(let ((hmac-keypair nil)
+      (hmac-keypair-mutex (mpcompat:make-lock)))
   (defun hmac-keypair ()
     (unless hmac-keypair
-      (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+      (mpcompat:with-lock (hmac-keypair-mutex)
+        (setf hmac-keypair
+              (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))))
     hmac-keypair)
   (defmethod socket-send (ip port dest msg)
     (let* ((payload (make-hmac (list* dest msg)
