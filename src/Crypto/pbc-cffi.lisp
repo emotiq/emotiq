@@ -142,17 +142,13 @@ THE SOFTWARE.
 
 (defun load-dev-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
+  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
+           cffi:*foreign-library-directories*)
   (cffi:define-foreign-library
-   libpbc
-   (:darwin #.(concatenate 
-	       'string 
-	       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	       "/libLispPBCIntf.dylib"))
-   (:linux #.(concatenate 
-	      'string 
-	      (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	      "/libLispPBCIntf.so"))
-   (t (:default "libLispPBCIntf"))))
+      libpbc 
+    (:darwin "libLispPBCIntf.dylib")
+    (:linux "libLispPBCIntf.so")
+    (t (:default "libLispPBCIntf"))))
 
 (defun load-production-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from the current directory"
@@ -166,7 +162,7 @@ THE SOFTWARE.
   "load the dev or production dlls at runtime"
   (if (emotiq:production-p)
       (load-production-dlls)
-    (load-dev-dlls))
+      (load-dev-dlls))
   (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
@@ -718,7 +714,6 @@ library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
   (mpcompat:with-lock (*crypto-lock*)
-    (load-dlls)
     (let ((prev   *curve*)
           (params (or params
                       *curve-fr449-params*)))
@@ -727,6 +722,7 @@ SMP access. Everything else should be SMP-safe."
       (when (or params-supplied-p
                 (null *curve*))
         (setf *curve* nil) ;; in case we fail
+	(load-dlls)
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
                          (g2   curve-params-g2)) params
