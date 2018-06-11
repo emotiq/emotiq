@@ -116,7 +116,6 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     :initarg :tx-in-unlock-script)
   
    ;; direct pointers: in memory only: a local cache, basically
-   (%tx-in-utxo :initarg :%tx-in-utxo :reader %tx-in-utxo)
    (%tx-in-public-key :initarg :%tx-in-public-key :reader %tx-in-public-key)
    (%tx-in-signature :initarg :%tx-in-signature :accessor %tx-in-signature)))
   
@@ -737,11 +736,17 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-;;; ...
+;;;; Transaction Contexts
 
-(defmacro with-blockchain-context ((context &optional options) &body body)
+
+(defvar *transaction-context*)
+
+(defclass transaction-context ()
+  ((tx-in-utxo :initarg :tx-in-utxo :reader tx-in-utxo)))
+
+(defmacro with-transaction-context ((context &optional options) &body body)
   (declare (ignore options))            ; reserved for later
-  `(let* ((*current-blockchain-context* ,context))
+  `(let* ((*transaction-context* ,context))
      ,@body))
 
 ;; Should an attempt be made to detect reentrant usage and signal an
@@ -753,7 +758,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   "Used for development-only testing. This may NOT be relied upon at run time in
 production to stop execution if there is no transaction context. When called in
 development, this signals a continuable error if there is no transaction."
-  (when (not (boundp '*current-blockchain-context*))
+  (when (not (boundp '*transaction-context*))
     (cerror "continue anyhow" "not in a transaction context")))
 
 
@@ -890,84 +895,37 @@ development, this signals a continuable error if there is no transaction."
 
 
 
-(defun next-transaction (input-specs output-specs)
+(defun make-transaction-inputs (input-specs)
   (require-blockchain)                  ; error checking
-  (loop with utxo
+  (loop with tx
         with utxo-transaction-outputs
         with n-outputs
-        with indexed-output
-        with subamount
-        with total-output-amount
-        with tx-outputs
-        for (id index public-key private-key) in input-specs
-        do (unless (setq utxo (find-utxo id))
-             (warn "Transaction failure: no UTXO found.")
+        for (id index) in input-specs
+        do (unless (setq tx (find-transaction-per-id id))
+             (warn "Transaction failure: no TX with TXID ~A found." id)
              (return nil))
-           (setq utxo-transaction-outputs (transaction-outputs utxo))
+           (setq utxo-transaction-outputs (transaction-outputs tx))
            (setq n-outputs (length utxo-transaction-outputs))
            (when (not (< index n-outputs))
-             (warn "Transaction failure: out-of-range index in UTXO: ~d" 
+             (warn "Transaction failure: no UTXO found: out-of-range index in TX Outputs: ~d."
                    index)
              (return nil))
-           (setq indexed-output (elt utxo-transaction-outputs index))
-           (setq subamount (tx-out-amount indexed-output))
-        sum subamount into total-input-amount
         collect (make-instance
                  'transaction-input
                  :tx-in-id id
                  :tx-in-index index
-                 :tx-in-unlock-script (get-unlocking-script 'script-sig)
-                 :%tx-in-utxo utxo
-                 :%tx-in-public-key public-key)
-          into tx-inputs
-        collect private-key
-          into private-keys-for-inputs
-        ;; total-input-amount is the amount that had been in an unspent output,
-        ;; which must now be consumed as "input", and then must be consumed as
-        ;; output.
-        finally
+                 :tx-in-unlock-script (get-unlocking-script 'script-sig))
+          into tx-inputs))
 
-           (setq total-output-amount
-                 (loop for (public-key-hash amount) in output-specs
-                       collect (make-instance
-                                'transaction-output
-                                :tx-out-public-key-hash public-key-hash
-                                :tx-out-amount amount
-                                :tx-out-lock-script (get-locking-script 'script-pub-key))
-                         into tx-outs
-                       sum amount into amount-sum
-                       finally (setq tx-outputs tx-outs)
-                               (return amount-sum)))
 
-           (format t "~%Input specs: ~a~%" input-specs)
-           (format t "Output specs: ~a~%" output-specs)
-           (format t "UTXO found: ID = ~a, Index = ~a~%" id index)
-           (format t "Transaction total input amount: ~a~%" total-input-amount)
-           (format t "Transaction total output amount: ~a~%" total-output-amount)
-           ;; check for overspend:
-           (when (> total-output-amount total-input-amount)
-             (warn "Overspend attempt: Output total ~a > input total ~a."
-                   total-output-amount total-input-amount)
-             (warn "Transaction failure.")
-             (return nil))
-           ;; check for zero (or negative) spend: (Combine checks. OK?)
-           (when (<= total-output-amount 0)
-             (warn "~a spend attempt: output total ~a: must spend more than zero."
-                   (if (< total-output-amount 0) "Zero" "Negative")
-                   total-output-amount)
-             (warn "Transaction failure.")
-             (return nil))
-           (let ((signed-transaction
-                   (make-hash-and-maybe-sign-transaction
-                    tx-inputs tx-outputs :keys private-keys-for-inputs)))
-             (cond
-               ((not (eval-transaction signed-transaction))
-                ;; Transaction failed.
-                (warn "Transaction failed in script evaluation.")
-                (return nil))
-               (t
-                ;; Transaction succeeded. Add it to the blockchain.
-                (return (add-transaction-to-mempool signed-transaction)))))))
+(defun make-transaction-outputs (output-specs)
+  (require-blockchain)                  ; error checking
+  (loop for (public-key-hash amount) in output-specs
+        collect (make-instance
+                 'transaction-output
+                 :tx-out-public-key-hash public-key-hash
+                 :tx-out-amount amount
+                 :tx-out-lock-script (get-locking-script 'script-pub-key))))
 
 
 (defun check-private-keys-for-transaction-inputs (private-keys tx-inputs)
