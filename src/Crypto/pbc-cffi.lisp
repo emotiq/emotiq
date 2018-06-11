@@ -316,6 +316,15 @@ THE SOFTWARE.
 Usually, they are in big-endian representation for PBC library."
   (crypto-val-vec x))
 
+(defmethod print-object ((obj crypto-val) out-stream)
+  (if *print-readably*
+      (call-next-method)
+    ;; else
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (short-str (hex-str obj)))
+    ))
+
 ;; -------------------------------------------------
 ;; Useful subclasses
 
