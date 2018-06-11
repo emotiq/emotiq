@@ -2,12 +2,12 @@
   :name "Gossip"
   :description "Gossip protocols"
   :author "Shannon Spires <svs@emotiq.ch>"
-  :version "0.2.1"
+  :version "0.2.2"
   :maintainer "Shannon Spires <svs@emotiq.ch>"
   :depends-on (gossip/config
                emotiq/logging
                quicklisp
-	       uiop
+               uiop
                mpcompat
                key-value-store
                actors
