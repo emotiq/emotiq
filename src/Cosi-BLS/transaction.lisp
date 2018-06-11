@@ -350,7 +350,7 @@ during TXIN formation will be properly disposed of."
                                 :initial-value (ed-neutral-point)))
                (ctxouts   (mapcar 'pedersen-commitment txouts))
                (ttxout    (reduce 'ed-add ctxouts
-                                  :initial-value (ed-nth-pt fee))))
+                                  :initial-value (ed-mul (range-proofs:gpt) fee))))
           ;; check that Sum(txin) = Sum(txout) + Fee
           (ed-pt= (ed-mul (range-proofs:hpt) gamadj)
                   (ed-sub ttxout ttxin)))

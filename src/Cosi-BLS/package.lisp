@@ -51,7 +51,7 @@
    :ed-compress-pt
    :ed-decompress-pt
    :with-ed-curve
-   :ed-nth-pt
+   :ed-from-hash
    :ed-random-generator
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
@@ -59,6 +59,7 @@
    :convert-bytes-to-int)
   (:export
    :*max-bit-length*
+   :gpt
    :hpt
    :range-proof-block
    :range-proof-block-sum-gamma

@@ -2,6 +2,7 @@
 (in-package :cosi-tests)
 
 (define-test basis-consistency
+  (assert-true (hash-check range-proofs::*digits-of-pi* range-proofs::*chk-digits-of-pi*))
   (assert-true (hash-check range-proofs::*bp-basis* range-proofs::*chk-bp-basis*)))
 
 (define-test cloaked-transaction-consistency
