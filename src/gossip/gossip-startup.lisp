@@ -13,7 +13,7 @@
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
-  (declare (special *keypairs-filename*))
+  (declare (special gossip/config::*keypairs-filename*))
   (when local-machine
     (destructuring-bind (&key eripa
                               (gossip-port *nominal-gossip-port*)
@@ -29,7 +29,7 @@
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
                        (unless (member local-pubkey keypairs :test 'eql :key 'car)
-                         (error "Pubkey ~S is not present in ~S" local-pubkey *keypairs-filename*))
+                         (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
                        t)
                      pubkeys)
       ;; make local nodes
