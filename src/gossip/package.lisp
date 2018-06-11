@@ -35,9 +35,19 @@
    #:deserialize-log
    ))
 
+
 (defpackage gossip/config
   (:use #:cl)
   (:export
    #:initialize 
    #:get-values))
+
+(defpackage :gossip/transport
+  (:use :cl)
+  (:export
+   #:start-transport
+   #:stop-transport
+   #:status
+   #:transmit))
+
 
