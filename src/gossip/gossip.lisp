@@ -1988,19 +1988,20 @@ gets sent back, and everything will be copacetic.
 ;;; signing node can authenticate this HMAC. 
 
 (defun actor-keypair-fn (cmd &rest logmsg)
-  "Test-and-set function that the *hmac-keypair-actor* runs"
+  "Test-and-set function that the *hmac-keypair-actor* runs.
+   It's critical that only one actor run pbc:make-key-pair at a time"
   (case cmd
     (:tas ; test-and-set
-     (destructuring-bind (mbox initialvalue &rest other) logmsg
+     (destructuring-bind (mbox &rest other) logmsg
        (declare (ignore other))
        (unless *hmac-keypair*
-         (setf *hmac-keypair* initialvalue))
+         (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
        (ac:send mbox *hmac-keypair*)))))
 
 (defun hmac-keypair ()
   (or *hmac-keypair*
     (let ((mbox (mpcompat:make-mailbox)))
-      (ac:send *hmac-keypair-actor* :TAS mbox (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
+      (ac:send *hmac-keypair-actor* :TAS mbox)
       (first (mpcompat:mailbox-read mbox)))))
 
 (defun sign-message (msg)
