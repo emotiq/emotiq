@@ -58,9 +58,9 @@
            (concatenate 'string (subseq orig 0 4) "..." (subseq orig (- (length orig) 4))))
           (t orig))))
 
-(defmethod draw-node ((node proxy-gossip-node) stream edgetable)
-  "Draw proxy node showing UID, real address, and real port"
-  (declare (ignore edgetable))
+(defmethod dump-node ((node proxy-gossip-node) stream edgetable graphID)
+  "Dump proxy node showing UID, real address, and real port"
+  (declare (ignore edgetable graphID))
   (format stream "~%  \"~A\" [fontsize=\"10.0\", tooltip=\"~A\", label=<~A<BR /> ~
         <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
                      (short (uid node))
@@ -75,24 +75,24 @@
                      (uid node))
 |#
 
-(defmethod draw-node ((node gossip-node) stream edgetable)
+(defmethod dump-node ((node gossip-node) stream edgetable graphID)
   (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\\N\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
           (short (uid node))
           (uid node))
-  (dolist (neighbor (neighbors node))
+  (dolist (neighbor (neighborhood node graphID))
     (let* ((minuid (min neighbor (uid node)))
            (maxuid (max neighbor (uid node)))
            (key (cons minuid maxuid)))
-      (unless (gethash key edgetable) ; don't draw links twice
+      (unless (gethash key edgetable) ; don't dump links twice
         (format stream "~%  \"~A\" -- \"~A\";" (short (uid node)) neighbor)
         (setf (gethash key edgetable) t)))))
 
-(defun write-inner-commands (stream nodelist)
-  (let ((edges-already-drawn (make-hash-table :test 'equalp)))
+(defun write-inner-commands (stream nodelist graphID)
+  (let ((edges-already-dumped (make-hash-table :test 'equalp)))
     (dolist (node nodelist)
-      (draw-node node stream edges-already-drawn))))
+      (dump-node node stream edges-already-dumped graphID))))
 
-(defun write-dotfile-stream (stream nodelist)
+(defun write-dotfile-stream (stream nodelist graphID)
   (let ((mapname (random-name)))
     (format stream "graph ~A {~%" mapname)
     (format stream "graph [outputorder=\"edgesfirst\"];~%")
@@ -100,13 +100,13 @@
     (format stream "graph [overlap=false];~%")
     (format stream "graph [repulsiveforce=8];~%")
     (format stream "graph [K=1.0];~%")
-    (write-inner-commands stream nodelist)
+    (write-inner-commands stream nodelist graphID)
     (format stream "~%}")
     mapname))
 
-(defun write-dotfile (dotfile nodelist)
+(defun write-dotfile (dotfile nodelist graphID)
   (with-open-file (stream dotfile :direction :output :if-exists :supersede)
-    (write-dotfile-stream stream nodelist)))
+    (write-dotfile-stream stream nodelist graphID)))
 
 (defun convert-dotfile-to-svg (dotpath &optional svgpath)
   (let ((cmd *graphviz-command*))
@@ -122,11 +122,11 @@
                                    (uiop:native-namestring svgpath))))
           (t (error "Cannot locate graphviz sfdp command. Please install graphviz first.")))))
 
-(defmethod visualize-nodes ((nodes null))
-  (visualize-nodes *nodes*))
+(defmethod visualize-nodes ((nodes null) &optional (graphID *default-graphID*))
+  (visualize-nodes *nodes* graphID))
 
-(defmethod visualize-nodes ((nodes hash-table))
-  (visualize-nodes (listify-nodes nodes)))
+(defmethod visualize-nodes ((nodes hash-table) &optional (graphID *default-graphID*))
+  (visualize-nodes (listify-nodes nodes) graphID))
 
 (defparameter *html-header*
   "<!DOCTYPE html>
@@ -156,25 +156,25 @@
             (write-string line out)))
         (write-string *html-footer* out)))))
 
-(defmethod visualize-nodes-svg ((nodelist list))
+(defmethod visualize-nodes-svg ((nodelist list) graphID)
   "Makes a graphviz .dot file from nodelist, then converts that to an .svg file, and returns that pathname.
   Opens svg file in browser."
   (let* ((dotpath (make-temp-dotfile))
          (svgpath (make-pathname :directory (pathname-directory dotpath)
                                  :name (pathname-name dotpath)
                                  :type "svg")))
-    (write-dotfile dotpath nodelist)
+    (write-dotfile dotpath nodelist graphID)
     (convert-dotfile-to-svg dotpath svgpath)
     (values dotpath svgpath)))
 
-(defmethod visualize-nodes ((nodelist list))
+(defmethod visualize-nodes ((nodelist list) &optional (graphID *default-graphID*))
   "Calls visualize-nodes-svg, then converts that file into an html file that automatically
   resizes the svg image as you resize your browser window. Opens html file in browser."
   (let ((len (length nodelist)))
     (when (> len 5000)
       (cerror "Do it anyway." "There are ~D nodes. It will take a long time to visualize that many." len))
     (multiple-value-bind (dotpath svgpath)
-                         (visualize-nodes-svg nodelist)
+                         (visualize-nodes-svg nodelist graphID)
       (let ((htmlpath (make-pathname :host (pathname-host svgpath)
                                      :directory (pathname-directory svgpath)
                                      :name (pathname-name svgpath)
