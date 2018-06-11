@@ -142,17 +142,13 @@ THE SOFTWARE.
 
 (defun load-dev-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
+  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
+           cffi:*foreign-library-directories*)
   (cffi:define-foreign-library
-   libpbc
-   (:darwin #.(concatenate 
-	       'string 
-	       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	       "/libLispPBCIntf.dylib"))
-   (:linux #.(concatenate 
-	      'string 
-	      (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	      "/libLispPBCIntf.so"))
-   (t (:default "libLispPBCIntf"))))
+      libpbc 
+    (:darwin "libLispPBCIntf.dylib")
+    (:linux "libLispPBCIntf.so")
+    (t (:default "libLispPBCIntf"))))
 
 (defun load-production-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from the current directory"
@@ -166,7 +162,7 @@ THE SOFTWARE.
   "load the dev or production dlls at runtime"
   (if (emotiq:production-p)
       (load-production-dlls)
-    (load-dev-dlls))
+      (load-dev-dlls))
   (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
