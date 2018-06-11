@@ -61,6 +61,31 @@
 
 (defvar *debug-level* 1 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
+(defun remove-keywords (arg-list keywords)
+  (let ((clean-tail arg-list))
+    ;; First, determine a tail in which there are no keywords to be removed.
+    (loop for arg-tail on arg-list by #'cddr
+	  for (key) = arg-tail
+	  do (when (member key keywords :test #'eq)
+	       (setq clean-tail (cddr arg-tail))))
+    ;; Cons up the new arg list until we hit the clean-tail, then nconc that on
+    ;; the end.
+    (loop for arg-tail on arg-list by #'cddr
+	  for (key value) = arg-tail
+	  if (eq arg-tail clean-tail)
+	    nconc clean-tail
+	    and do (loop-finish)
+	  else if (not (member key keywords :test #'eq))
+	    nconc (list key value)
+	  end)))
+
+(defmacro with-keywords-removed ((var keywords &optional (new-var var))
+				 &body body)
+  "binds NEW-VAR (defaults to VAR) to VAR with the keyword arguments specified
+in KEYWORDS removed."
+  `(let ((,new-var (remove-keywords ,var ',keywords)))
+     ,@body))
+
 (defun debug-level (&optional (level nil level-supplied-p))
   (cond (level-supplied-p
          (when *debug-level*
@@ -466,11 +491,17 @@ are in place between nodes.
 
 (defun make-node (&rest args)
   "Makes a new node"
-  (let* ((node (apply 'make-instance 'gossip-node args))
-         (actor (make-gossip-actor node)))
-    (setf (actor node) actor)
-    (kvs:relate-unique! *nodes* (uid node) node)
-    node))
+  (let ((neighborhood (getf args :neighborhood))) ; allow to specify :neighborhood as list, for *default-graphID*
+    (with-keywords-removed (args (:neighborhood))
+      (let* ((node (apply 'make-instance 'gossip-node args))
+             (actor (make-gossip-actor node)))
+        (when neighborhood
+          (mapcar (lambda (uid)
+                    (pushnew uid (neighborhood node)))
+                  neighborhood))
+        (setf (actor node) actor)
+        (kvs:relate-unique! *nodes* (uid node) node)
+        node))))
 
 (defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -806,8 +837,10 @@ dropped on the floor.
           (setf allnodes (remove-if
                           (lambda (ad)
                             (and (typep ad 'augmented-data)
+                                 (listp (data ad))
+                                 (null (cdr (data ad)))
                                  (eql (uid localnode)
-                                      (data ad))))
+                                      (first (data ad)))))
                           allnodes)))
       (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
       )))
@@ -1340,6 +1373,13 @@ dropped on the floor.
   "Ensure an augmented-data object is getting returned."
   (declare (ignore thisnode msgargs))
   (let ((datum (call-next-method)))
+    (maybe-augment-datum datum kind)))
+
+#+WRONG
+(defmethod initial-reply-value :around (kind thisnode msgargs)
+  "Ensure an augmented-data object is getting returned."
+  (declare (ignore thisnode msgargs))
+  (let ((datum (call-next-method)))
     (typecase datum ; tolerate initializers that create a list
       (list (mapcar (lambda (dat)
                       (maybe-augment-datum dat kind))
@@ -1471,6 +1511,7 @@ dropped on the floor.
   (let ((coalesced-data ;(kvs:lookup-key (reply-cache thisnode) soluid)) ; will already have been coalesced here
          (coalesce thisnode reply-kind soluid))) ; won't have already been coalesced if we timed out!
     ; clean up reply tables.
+    ;;(break)
     (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
     (kvs:remove-key (reply-cache thisnode) soluid)
     (kvs:remove-key (timers thisnode) soluid)

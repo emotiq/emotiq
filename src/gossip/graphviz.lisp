@@ -122,9 +122,6 @@
                                    (uiop:native-namestring svgpath))))
           (t (error "Cannot locate graphviz sfdp command. Please install graphviz first.")))))
 
-(defmethod visualize-nodes ((nodes null) &optional (graphID *default-graphID*))
-  (visualize-nodes *nodes* graphID))
-
 (defmethod visualize-nodes ((nodes hash-table) &optional (graphID *default-graphID*))
   (visualize-nodes (listify-nodes nodes) graphID))
 
