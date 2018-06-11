@@ -1,4 +1,4 @@
-# Emotiq
+s# Emotiq
 
 This source tree constitutes the public Emotiq source repository from
 <https://github.com/emotiq/emotiq>.
@@ -16,7 +16,7 @@ This is a predominantly Common Lisp code base.
 We aim to work on as many ANSI implementations as possible.
 
 For the development of `testnet` we are targeting the commercial
-LispWorks Pro 7.1 implementation but we ensure our code runs under
+LispWorks Pro 7.1 implementation, but we ensure our code runs under
 `ccl`.  We use LispWorks Pro to create the binaries we distribute, but
 our we intend our full functionality to be always be available by
 running on source with an arbitrary Common Lisp implementation to the
@@ -25,21 +25,30 @@ extent we have the resources for such an effort.
 ### Tell ASDF where to find the Emotiq systems
 
 First, place a copy of this repository somewhere locally on your
-machine.  We refer to that location as `~/work/emotiq/` in the
-following instructions, so please adjust if you have your local copy
+machine.
+We refer to that location as `~/work/emotiq/` in the
+following instructions, so, please, adjust location of the source tree in the `emotiq.conf` if you have your local copy
 of the repository in a different location.
 
 Configure ASDF to search `~/work/emotiq/` at Lisp boot by copying
-<file:etc/emotiq.conf> to
+`etc/emotiq.conf` (adjusting path to the source tree, if needed) to
 `~/.config/common-lisp/source-registry.conf.d/`, creating the
-destination directory if it doesn't already exist.
+destination directory, if it doesn't already exist.
 
 The following REPL command issued from the top-level source directory
 will both create the directory and copy the file on operating systems
-running some version of *NIX:
+running some version of `*NIX`:
 
-    (uiop:run-program "mkdir -p ~/.config/common-lisp/source-registry.conf.d/ && cp ~/work/emotiq/etc/emotiq.conf ~/.config/common-lisp/source-registry.conf.d/")
+```lisp
+(uiop:run-program "mkdir -p ~/.config/common-lisp/source-registry.conf.d/ && cp ~/work/emotiq/etc/emotiq.conf ~/.config/common-lisp/source-registry.conf.d/")
+```
 
+or in shell:
+
+```bash
+mkdir -p ~/.config/common-lisp/source-registry.conf.d/ && \
+cp ~/work/emotiq/etc/emotiq.conf ~/.config/common-lisp/source-registry.conf.d/
+```
 
 If you are under Windows or have placed your copy of this source tree
 in a different location on the file-system, you will have to perform
@@ -61,7 +70,7 @@ usage of Quicklisp in the following manner:
 
 1.  We use an exact version of the `quicklisp` Quicklisp distribution,
     currently `quicklisp 2018-01-31`.
-    
+
 2.  We package dependencies not available in the `quicklisp`
     distribution within our own Quicklisp distribution named `emotiq`.
     We set the priority of the `emotiq` Quicklisp distribution higher
@@ -108,8 +117,8 @@ is updating this tree from a previous version, one may explicitly have
 to force the asdf `prepare-op` via so:
 
     (asdf:make :crypto-pairings)
-    
-# Running 
+
+# Running
 
 After Quicklisp has been installed and configured, then issuing
 
@@ -119,12 +128,12 @@ will download all the dependencies needed by the tests gathered into
 the `emotiq/sim` ASDF system.
 
 To run the single node simulator, see the instructions in
-<file:src/simulation.md>.
+`src/simulation.md`.
 
 We have many ASDF descriptions within this repository whose
 dependencies may need to be satisfied by via `ql:quickload`.
 
-Currently we are working many systems simultaneously, most noteworthy
+Currently we are working on many systems simultaneously, most noteworthy
 among them being the work in the `cosi-bls` system.
 
 If in exploring the code one finds a missing dependency, say for the
@@ -135,7 +144,7 @@ system `cosi-bls`, a simple
 should satisfy the dependencies.  (TODO: `cl:restart` for missing
 dependencies).
 
-# Test 
+# Test
 
 To Evaluate form to test, which also loads, the system:
 
@@ -154,14 +163,14 @@ The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
 
-All pushed to the source tree result in "Continuous Integration" build
-from Travis CI: <https://travis-ci.org/emotiq/emotiq>.
+All pushes to the source tree result in "Continuous Integration" build
+by Gitlab CI: <https://gitlab.aws.emotiq.ch/emotiq/emotiq/pipelines>.
 
-The description of test coverage is contained in the Travis CI
-artifact at <https://github.com/emotiq/emotiq/blob/dev/.travis.yml>.
+The description of test coverage is contained in the GitLab CI
+artifact at <https://github.com/emotiq/emotiq/blob/dev/.gitlab-ci.yml>.
 
 # Colophon
 
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-05-11 Fri 14:17Z>
+    Revised: <2018-06-11T07:06:50Z>
