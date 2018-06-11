@@ -23,6 +23,8 @@
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
 (defvar *default-graphID* :root "Identifier of the default, root, ground, or 'physical' graph that a node is always part of")
+(defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
+(defvar *hmac-keypair-actor* nil "Actor managing *hmac-keypair*")
 
 (defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
 
@@ -668,7 +670,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (except :name :TIMEOUT))
+                   (list (except :name :TIMEOUT)))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -719,7 +721,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (except :name :TIMEOUT))
+                   (list (except :name :TIMEOUT)))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -754,7 +756,7 @@ dropped on the floor.
                 (values 
                  (if win
                      (first (args (first response)))
-                     (except :name :TIMEOUT))
+                     (list (except :name :TIMEOUT)))
                  soluid)))
           (setf (logfn node) old-logger))))))
 
@@ -1984,20 +1986,31 @@ gets sent back, and everything will be copacetic.
 
 ;;; The need for this is rather dubious.  No one other than the
 ;;; signing node can authenticate this HMAC. 
-(let (hmac-keypair)
-  (defun hmac-keypair ()
-    (unless hmac-keypair
-      (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
-    hmac-keypair)
-  (defun sign-message (msg)
-    "Sign and return an authenticated message packet. Packet includes
-    original message."
-    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
-                                  (pbc:keying-triple-sig  (hmac-keypair))))
-    (pbc:sign-message msg
-                      (pbc:keying-triple-pkey (hmac-keypair))
-                      (pbc:keying-triple-skey (hmac-keypair)))))
+
+(defun actor-keypair-fn (cmd &rest logmsg)
+  "Test-and-set function that the *hmac-keypair-actor* runs"
+  (case cmd
+    (:tas ; test-and-set
+     (destructuring-bind (mbox initialvalue &rest other) logmsg
+       (declare (ignore other))
+       (unless *hmac-keypair*
+         (setf *hmac-keypair* initialvalue))
+       (ac:send mbox *hmac-keypair*)))))
+
+(defun hmac-keypair ()
+  (or *hmac-keypair*
+    (let ((mbox (mpcompat:make-mailbox)))
+      (ac:send *hmac-keypair-actor* :TAS mbox (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))
+      (first (mpcompat:mailbox-read mbox)))))
+
+(defun sign-message (msg)
+  "Sign and return an authenticated message packet. Packet includes
+  original message."
+  (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
+                                (pbc:keying-triple-sig  (hmac-keypair))))
+  (pbc:sign-message msg
+                    (pbc:keying-triple-pkey (hmac-keypair))
+                    (pbc:keying-triple-skey (hmac-keypair))))
 
 ;; ------------------------------------------------------------------------------
 
