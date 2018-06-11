@@ -21,7 +21,7 @@
                (:file "ccl-sockets-patch")
                #+(and OPENMCL EASYGUI)
                (:file "hemlock-log-streams")
-               (:file "socket-actors")
+               (:file "gossip-transport")
                (:file "monads")
                (:file "logging")
                (:file "gossip")

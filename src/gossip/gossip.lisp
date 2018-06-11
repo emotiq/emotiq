@@ -58,6 +58,8 @@
 
 (defvar *debug-level* 1 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
+(defvar *transport* nil "Network transport endpoint.")
+
 (defun debug-level (&optional (level nil level-supplied-p))
   (cond (level-supplied-p
          (when *debug-level*
@@ -1769,191 +1771,47 @@ gets sent back, and everything will be copacetic.
 
 ;; ------------------------------------------------------------------------------
 
-(defun incoming-message-handler-udp (raw-message-buffer rem-address)
-  "Deserialize a raw message string, srcuid, rem-port and destuid.
-  srcuid and destuid will be that of a proxy-gossip-node and gossip-node on THIS machine,
-  respectively."
-  ;                                                v--- Port at which passive listener is running
-  ;network message: (list (real-uid node) srcuid rem-port msg)
-  ;                     uid  --^            ^-- source uid
-  ;             on local machine            on destination machine
+;;;
+;;; Transport interface
+;;;
+
+(defun start-gossip-transport (&optional (address nil) (port nil))
+  "Start the Gossip Transport network endpoint (if not already started.)
+  ADDRESS and/or PORT can be supplied to bind the endpoint to a
+  specific address, otherwise an available address will be assigned
+  automatically."
+  (when (null *transport*)
+    (setf *transport*
+          (gossip/transport:start-transport :address address
+                                            :port port
+                                            :message-received-hook 'transport-message-received
+                                            :peer-up-hook 'transport-peer-up
+                                            :peer-down-hook 'transport-peer-down))))
+
+(defun transport-message-received (peer-address peer-port message)
+  "Callback for transport layer on incoming message from other node."
   (with-authenticated-packet (packet)
-      (loenc:decode raw-message-buffer)
-    (destructuring-bind (destuid srcuid rem-port msg) packet ;; note: if not what we were expecting, then this will signal error
-      (when (debug-level 2)
-        (log-event :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
-      (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
-          ;ensure a local node of type proxy-gossip-node exists on this machine with
-          ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-        (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
-          ;   on THIS machine.
-        ))))
+      ;; Unpack envelope containing Gossip metadata.
+      (destructuring-bind (destuid srcuid msg) packet
+        (log-event "Gossip transport message received" peer-address peer-port)
+        ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
+        (let ((proxy (ensure-proxy-node :tcp peer-address peer-port srcuid)))
+          ;; Note: Use uid of proxy for during local processing.
+          (incoming-message-handler msg (uid proxy) destuid)))))
 
-(defmethod serve-gossip-port ((mode (eql :UDP)) socket)
-  "UDP gossip port server loop"
-    (let ((maxbuf (make-array *max-buffer-length*
-                              :element-type '(unsigned-byte 8))))
-      (unwind-protect
-          (loop
-            (when (eql :SHUTDOWN-SERVER *shutting-down*)
-                (setf *shutting-down* nil)
-                (return-from serve-gossip-port))
-	    (multiple-value-bind (buf buf-len rem-ip)
-		(usocket:socket-receive socket maxbuf (length maxbuf))
-              (let* ((saf-buf (if (eq buf maxbuf)
-                                  (subseq buf 0 buf-len)
-                                buf))
-                     (shutdown-msg? (equalp *shutdown-msg* (subseq buf 0 (shutdown-msg-len)))))
-                (when shutdown-msg?
-                  (setf *shutting-down* nil)
-                  (return-from serve-gossip-port))
-                (incoming-message-handler-udp saf-buf rem-ip))))
-        (usocket:socket-shutdown socket ':IO)
-        (usocket:socket-close socket))))
+(defun transport-peer-up (peer-address peer-port)
+  "Callback for transport layer event."
+  (log-event "Transport connection to peer established" peer-address peer-port))
 
-(defmethod serve-gossip-port ((mode (eql :TCP)) listening-socket)
-  "TCP gossip port server loop. This runs in its own thread, not in an actor."
-  (unwind-protect
-      (loop
-        (when (eql :SHUTDOWN-SERVER *shutting-down*)
-          (setf *shutting-down* nil)
-          (return-from serve-gossip-port))
-        (let ((socket nil)
-              (timed-out? nil))
-          (setf socket (ignore-errors (usocket:socket-accept listening-socket)))
-          
-          (when (debug-level 3)
-            (log-event "Got connection from " (usocket:get-peer-address socket)))
-          
-          ;; At this point, we have a live incoming stream. Although it may be closing.
-          
-          (multiple-value-bind (success errorp)
-                               (wait-for-stream-input (usocket:socket-stream socket) 10) ; should have data within 10 seconds
-            (when (and (null success)
-                       (null errorp))
-              (setf timed-out? t))
-            (when (debug-level 3)
-              (if timed-out?
-                  (log-event "Giving up.")
-                  (log-event "Got data.")))
-            ;; At this point, we have data available. Probably (may be closed or timed out).
-            (cond ((or (eql :SHUTDOWN-SERVER *shutting-down*)
-                       timed-out?
-                       errorp)
-                   (when socket (usocket:socket-close socket)))
-                  ;; Really should have data at this point...
-                  (t ; establish a socket-actor for this new incoming connection
-                   (make-socket-actor socket 'ofsag))))))
-    (when listening-socket (usocket:socket-close listening-socket))))
+(defun transport-peer-down (peer-address peer-port reason)
+  "Callback for transport layer event."
+  (log-event "Transport connection to peer failed" peer-address peer-port reason))
 
-(defun open-passive-udp-socket (port)
-  "Open a passive udp socket. Returns socket if successful.
-   Returns a keyword if some kind of error."
-  (handler-case (usocket:socket-connect nil nil
-                        :protocol :datagram
-                        :local-host usocket:*wildcard-host* ; must be 0, not "localhost", in order to receive on all IP addresses of all interfaces
-                        :local-port port)
-  (USOCKET:ADDRESS-IN-USE-ERROR ()
-                                :ADDRESS-IN-USE)))
-
-(defun open-passive-tcp-socket (port)
-  "Open a passive tcp socket. Returns socket if successful.
-  Returns a keyword if some kind of error."
-  (handler-case (usocket:socket-listen
-                 usocket:*wildcard-host*
-                 port
-                 :element-type '(unsigned-byte 8)
-                 :reuse-address t)
-    (USOCKET:ADDRESS-IN-USE-ERROR ()
-                                  :ADDRESS-IN-USE)))
-
-(defmethod start-gossip-server ((mode (eql :udp)) &optional (port *nominal-gossip-port*) (try-count 0))
-  "Starts local passive gossip server and return it and its local port."
-  (when (< try-count *max-server-tries*)
-    (unless (find-process *udp-gossip-server-name*)
-      (setf *shutting-down* nil)
-      (let* ((socket (open-passive-udp-socket port)))
-        (cond ((usocket:datagram-usocket-p socket)
-               (mpcompat:process-run-function *udp-gossip-server-name* nil
-                 'serve-gossip-port mode socket)
-               (values (setf *udp-gossip-socket* socket)
-                       (setf *actual-udp-gossip-port* (usocket:get-local-port socket))))
-              ((eql :ADDRESS-IN-USE socket)
-               (if (find-process *udp-gossip-server-name*)
-                   ; if process exists for serving UDP in THIS LISP IMAGE, we're done
-                   nil
-                   ; otherwise, assume process exists for serving UDP on some OTHER lisp image, which means we can retry
-                   (start-gossip-server mode (1+ port) (1+ try-count)))))))))
-
-(defmethod start-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*) (try-count 0))
-  (when (< try-count *max-server-tries*)
-    (unless (find-process *tcp-gossip-server-name*)
-      (setf *shutting-down* nil)
-      (let* ((socket (open-passive-tcp-socket port)))
-        (cond ((usocket:stream-server-usocket-p socket)
-               (mpcompat:process-run-function *tcp-gossip-server-name* nil
-                 'serve-gossip-port mode socket)
-               (values (setf *tcp-gossip-socket* socket)
-                       (setf *actual-tcp-gossip-port* (usocket:get-local-port socket))))
-              ((eql :ADDRESS-IN-USE socket)
-               (if (find-process *tcp-gossip-server-name*)
-                   ; if process exists for serving TCP in THIS LISP IMAGE, we're done
-                   nil
-                   ; otherwise, assume process exists for serving TCP on some OTHER lisp image, which means we can retry
-                   (start-gossip-server mode (1+ port) (1+ try-count)))))))))
-
-;;; This is different from cosi-simgen::internal-send-socket.
-;;; Don't create a new socket, and don't close it when we're done.
-;;; Rather, reuse the one we already have. This is critical to ensure the
-;;;   other end sees the proper port to respond to.
-
-(let ((sender (ac:make-actor
-               (lambda (socket packet nb addr port)
-                 (unless (eql nb (usocket:socket-send socket packet nb
-                                                      :host addr :port port))
-                   (ac::pr :socket-send-error addr packet))))))
-  
-  (defun internal-send-socket (addr port packet)
-    (let ((nb (length packet)))
-      (when (> nb *max-buffer-length*)
-        (error "Packet too large for UDP transmission"))
-      (let ((socket *udp-gossip-socket*))
-        ;; (pr :sock-send (length packet) addr packet)
-        (ac:send sender socket packet nb addr port)))))
-
-(defmethod shutdown-gossip-server ((mode (eql T)) &optional port)
-  (declare (ignore port))
-  (shutdown-gossip-server :UDP)
-  (shutdown-gossip-server :TCP))
-
-(defmethod shutdown-gossip-server ((mode (eql :UDP)) &optional (port *nominal-gossip-port*))
-  (setf *shutting-down* :SHUTDOWN-SERVER)
-  (uiop:if-let (process (find-process *udp-gossip-server-name*))
-    (progn
-      (sleep .5)
-      (internal-send-socket "127.0.0.1" port *shutdown-msg*)
-      (sleep .5)
-      (process-kill process)
-      (when *udp-gossip-socket*
-        (usocket:socket-close *udp-gossip-socket*))
-      (setf *udp-gossip-socket* nil
-            *actual-udp-gossip-port* nil))))
-
-(defmethod shutdown-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*))
-  (declare (ignore port)) ; probably don't need this
-  (setf *shutting-down* :SHUTDOWN-SERVER)
-  (uiop:if-let (process (find-process *tcp-gossip-server-name*))
-    (progn
-      (sleep .5)
-      (process-kill process)
-      (when *tcp-gossip-socket*
-        (usocket:socket-close *tcp-gossip-socket*))
-      (setf *tcp-gossip-socket* nil
-            *actual-tcp-gossip-port* nil))))
-
-(defmethod transmit-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
-  (declare (ignore srcuid))
-  (error "Bug: Cannot transmit to a local node!"))
+(defun shutdown-gossip-server ()
+  "Stop the Gossip Transport network endpoint (if currently running)."
+  (unless (null *transport*)
+    (gossip/transport:stop-transport *transport*)
+    (setf *transport* nil)))
 
 ;; ------------------------------------------------------------------------------
 ;; We need to authenticate all messages being sent over socket ports
@@ -1980,45 +1838,15 @@ gets sent back, and everything will be copacetic.
 
 ;; ------------------------------------------------------------------------------
 
-(defmethod transmit-msg ((msg gossip-message-mixin) (node udp-gossip-node) srcuid)
-  "Send message across network.
-   srcuid is that of the (real) local gossip-node that sent message to this node."
-  (cond (*udp-gossip-socket*
-         (node-log node :TRANSMIT msg)
-         (let* ((payload (sign-message (list (real-uid node) srcuid *actual-udp-gossip-port* msg)))
-                (packet  (loenc:encode payload))
-                (nb      (length packet)))
-           (when (> nb *max-buffer-length*)
-             (error "Packet too large for UDP transmission"))
-           (internal-send-socket (real-address node) (real-port node) packet)
-           ))
-        (t
-         (node-log node :CANNOT-TRANSMIT msg "no socket"))))
-
-(defmethod transmit-msg :before (msg (node tcp-gossip-node) srcuid)
-  (node-log node :TRANSMIT msg srcuid))
-
-(defmethod transmit-msg ((msg gossip-message-mixin) (node tcp-gossip-node) srcuid)
-  "Send a message across TCP network.
-  srcuid is that of the (real) local gossip-node that sent message to this node."
-  (multiple-value-bind (socket-actor errorp)
-                       (ensure-connection (real-address node) (real-port node))
-    (cond ((null errorp)
-           (let ((payload (sign-message (list (real-uid node) srcuid *actual-tcp-gossip-port* msg))))
-             (ac:send socket-actor :send-socket-data payload)))
-          (t (node-log node :CANNOT-TRANSMIT msg "cannot create socket" errorp)
-             (when (and (typep msg 'solicitation)
-                        (or (uid? (reply-to msg))
-                            (eq :UPSTREAM (reply-to msg))))
-               (send-final-reply
-                node
-                (reply-to msg)
-                (uid msg) ; soluid
-                (kind msg)
-                (except :name ':CANNOT-TRANSMIT
-                        :exception-condition errorp
-                        :metadata `((:remote-address . ,(real-address node))
-                                            (:remote-port    . ,(real-port node))))))))))
+(defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
+  "This node is a standin for a remote node. Transmit message across network."
+  (gossip/transport:transmit *transport*
+                             (real-address node)
+                             (real-port node) 
+                             ;; Pack message in a signed envelope containing Gossip metadata.
+                             (sign-message (list (real-uid node) ; destuid
+                                                 srcuid          ; srcuid
+                                                 gossip-msg))))  ; message (payload)
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
   (setf gossip-msg (copy-message gossip-msg)) ; must copy before incrementing hopcount because we can't
@@ -2034,9 +1862,6 @@ gets sent back, and everything will be copacetic.
   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
   (locally-receive-msg gossip-msg node srcuid))
 
-(defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
-  "This node is a standin for a remote node. Transmit message across network."
-  (transmit-msg gossip-msg node srcuid))
 
 (defun run-gossip-sim (&optional (protocol :TCP))
   "Archive the current log and clear it.
@@ -2046,7 +1871,7 @@ gets sent back, and everything will be copacetic.
   (shutdown-gossip-server t)
   (archive-log)
   (sleep .5)
-  (start-gossip-server protocol)
+  (start-gossip-server)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
