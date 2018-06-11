@@ -714,7 +714,6 @@ library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
   (mpcompat:with-lock (*crypto-lock*)
-    (load-dlls)
     (let ((prev   *curve*)
           (params (or params
                       *curve-fr449-params*)))
@@ -723,6 +722,7 @@ SMP access. Everything else should be SMP-safe."
       (when (or params-supplied-p
                 (null *curve*))
         (setf *curve* nil) ;; in case we fail
+	(load-dlls)
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
                          (g2   curve-params-g2)) params
