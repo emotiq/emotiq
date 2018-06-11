@@ -22,7 +22,6 @@
                #+(and OPENMCL EASYGUI)
                (:file "hemlock-log-streams")
                (:file "gossip-transport")
-               (:file "socket-actors")
                (:file "monads")
                (:file "logging")
                (:file "gossip")
