@@ -1,4 +1,4 @@
-s# Emotiq
+# Emotiq
 
 This source tree constitutes the public Emotiq source repository from
 <https://github.com/emotiq/emotiq>.
@@ -56,8 +56,9 @@ the corresponding actions manually as per your local OS conventions.
 
 Once the ASDF configuration has been edited correctly, one should be
 able to verify that things are working via:
-
-    (asdf:system-source-directory :emotiq)
+```lisp
+(asdf:system-source-directory :emotiq)
+```
 
 ### Configure Quicklisp
 
@@ -79,8 +80,9 @@ usage of Quicklisp in the following manner:
 
 To effect the configuration of this setup, execute the forms in
 `etc/setup-emotiq-quicklisp.lisp` after installing Quicklisp via:
-
-    (load (asdf:system-relative-pathname :emotiq "../etc/setup-emotiq-quicklisp.lisp"))
+```lisp
+(load (asdf:system-relative-pathname :emotiq "../etc/setup-emotiq-quicklisp.lisp"))
+```
 
 ### Building the native libraries required by CRYPTO-PAIRINGS
 
@@ -115,14 +117,16 @@ As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
 is updating this tree from a previous version, one may explicitly have
 to force the asdf `prepare-op` via so:
-
-    (asdf:make :crypto-pairings)
+```lisp
+(asdf:make :crypto-pairings)
+```
 
 # Running
 
 After Quicklisp has been installed and configured, then issuing
-
-    (ql:quickload :emotiq/sim)
+```lisp
+(ql:quickload :emotiq/sim)
+```
 
 will download all the dependencies needed by the tests gathered into
 the `emotiq/sim` ASDF system.
@@ -138,8 +142,9 @@ among them being the work in the `cosi-bls` system.
 
 If in exploring the code one finds a missing dependency, say for the
 system `cosi-bls`, a simple
-
-    (ql:quickload :cosi-bls)
+```lisp
+(ql:quickload :cosi-bls)
+```
 
 should satisfy the dependencies.  (TODO: `cl:restart` for missing
 dependencies).
@@ -147,21 +152,21 @@ dependencies).
 # Test
 
 To Evaluate form to test, which also loads, the system:
-
-    (asdf:test-system :emotiq)
+```lisp
+(asdf:test-system :emotiq)
+```
 
 At end you should see a result like
-
+```
     Unit Test Summary
      | 12 assertions total
      | 12 passed
      | 0 failed
      | 0 execution errors
      | 0 missing tests
-
+```
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
-
 
 All pushes to the source tree result in "Continuous Integration" build
 by Gitlab CI: <https://gitlab.aws.emotiq.ch/emotiq/emotiq/pipelines>.
