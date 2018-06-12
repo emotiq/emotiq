@@ -38,7 +38,7 @@ The third value contains the configuration of this node."
              (error "~S file not found or invalid" filename)))
       (unless keypairs (badfile *keypairs-filename*))
       (setf hosts (read-pairs-database *hosts-db-path*))
-      (unless hosts (badfile *hosts-filename*))
+      (unless hosts (gossip::log-event :WARN (format nil "'~A' invalid or empty" *hosts-filename*)))
       (setf local-machine (read-local-machine-configuration *machine-db-path*))
       (unless local-machine (badfile *machine-filename*))
       (values keypairs hosts local-machine))))
