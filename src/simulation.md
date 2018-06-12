@@ -41,7 +41,7 @@ configured in parameters to RUN:
       coins to `*user-1*`.  The resulting transaction can be referenced
       via `*tx-1*`.
 
-  2.  Transfer the AMOUNT of coins from `*user-1`* to `*user-2*` as `*tx-2*`.
+  2.  Transfer the AMOUNT of coins from `*user-1*` to `*user-2*` as `*tx-2*`.
 
   3.  Transfer `(- amount (floor (/ amount 2)))` coins from `*user-2*` to
       `*user-3*` as `*tx-3*`.
