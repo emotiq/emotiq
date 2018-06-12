@@ -200,13 +200,17 @@ added to the blockchain."
              collect tx-out-id))))
 
 
+(defparameter *newtx-p* nil) ; using new-transactions.lisp (package cosi/proofs/newtx)
+
 
 (defun get-transaction-id (transaction)
   "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
    used to hash the transactions leaves of the merkle tree to produce the
    block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
    a superset thereof."
-  (vec-repr:bev-vec (hash:hash-val (hash-transaction transaction))))
+  (if *newtx-p*
+      (cosi/proofs/newtx:transaction-id transaction)
+      (vec-repr:bev-vec (hash:hash-val (hash-transaction transaction)))))
 
 ;; In Bitcoin this is known as the TXID of the transaction.
 

@@ -203,7 +203,7 @@
    :vec-repr
    :edec
    :pbc)
-  (:export))
+  (:export transaction-id))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
