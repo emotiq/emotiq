@@ -29,7 +29,7 @@ lisp=${lisp:-'ros'}
 
 # The default whitespace list of systems to test
 systems=${systems:-":crypto-pairings/t
-                    :cosi-bls"
+                    :cosi-bls"}
 
 echo Test harness invoked using implementation: ${lisp}
 echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)' < /dev/null)
