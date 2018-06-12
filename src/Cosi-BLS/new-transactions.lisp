@@ -63,9 +63,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defmethod transaction-id ((tx transaction))
-  "Get hash of this transaction, which also uniquely* identifies it."
+  "Get hash of this transaction, which also uniquely* identifies it, as hash:hash/256 instance."
   (let ((message (serialize-transaction tx)))
-    (hash-for-transaction-id message)))
+    (bev-vec (hash-for-transaction-id message))))
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
@@ -116,7 +116,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     :initarg :tx-in-unlock-script)
   
    ;; direct pointers: in memory only: a local cache, basically
-   (%tx-in-public-key :initarg :%tx-in-public-key :reader %tx-in-public-key)
+   (%tx-in-public-key :initarg :%tx-in-public-key :accessor %tx-in-public-key)
    (%tx-in-signature :initarg :%tx-in-signature :accessor %tx-in-signature)))
   
 
@@ -422,60 +422,142 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       "Not in a Transaction-Script-OP context, as required."))))
 
 
+(defparameter *minimum-transaction-fee* 10)
+
+(defun transaction-fee-too-low-p (transaction-fee)
+  (< transaction-fee *minimum-transaction-fee*))               ; ---!!! review!!
 
 
+(defun validate-transaction (transaction)
+  "Validate TRANSACTION, and either accept it (by returning true) or
+   reject it by returning false (nil).  This is for transactions
+   transmitted via gossip network.  The following checks are done:
 
-(defun eval-transaction (transaction)
-  (when (> (length (transaction-inputs transaction)) 1)
-    (cerror "Continue regardless"
-            "Only single-input transactions handled in current implementation"))
+   - Reject if transaction-inputs or transaction-outputs are nil.
 
-  ;; simplified: for now: assume 1 input, n outputs; will generalize next
+   - Reject if any output amount or the total is outside the legal money range.
 
-  (loop with tx-in = (first (transaction-inputs transaction))
-        with id = (tx-in-id tx-in)
-        with index = (tx-in-index tx-in)
-        with utxo = (%tx-in-utxo tx-in)
-        with utxo-outputs = (transaction-outputs utxo)
-        with utxo-output
-          = (or (nth index utxo-outputs) 
-                ;; debugging code:
-                (unless (tx-ids= id (transaction-id utxo))
-                  (error "UTXO ~a does not match input spec [~a/~d]"
-                         utxo id index))
-                (error "UTXO ~a output [~a/~d] lost - likely programming error"
-                       utxo id index))
-        with unlock-script = (tx-in-unlock-script tx-in)
-        with public-key-hash = (tx-out-public-key-hash utxo-output)
-        ;; with tx-out-amount = (tx-out-amount utxo-output)
-        with lock-script = (tx-out-lock-script utxo-output)
-        do (return
-             (in-transaction (transaction)
-               (in-transaction-script-context
-                 (when (null lock-script)
-                   (fail-script))
-                 (when (null unlock-script)
-                   (fail-script))
-                 (let* ((unlock-script-function-name (first unlock-script))
-                        (unlock-args
-                          (apply-x
-                           unlock-script-function-name
-                           '()
-                           `((^signature . ,(%tx-in-signature tx-in))
-                             (^public-key . ,(%tx-in-public-key tx-in)))))
-                        (lock-script-function-name (first lock-script)))
-                   (apply-x
-                    lock-script-function-name
-                    unlock-args
+   - Reject if this appears to be a coinbase transaction (created by block creator only).
 
-                    ;; Establish and handle implicit/global
-                    ;; parameters by putting them in the bindings
-                    ;; list, and then referring to them as from
-                    ;; script as script vars. Kludge this for now --
-                    ;; automate soon.
+   - Reject if we have a matching transaction in the mempool or in a block of the blockchain.
 
-                    `((^tx-public-key-hash
-                       . ,public-key-hash)))))))))
+   - For each input, if the referenced output exists in any other tx in the mempool, reject this transaction.
+
+   - For each input, if the referenced output does not exist or has already been spent, reject this transaction.
+
+   - Reject if the sum of input values < sum of output values.
+
+   - Reject if transaction fee (= sum of input values minus sum of output values) would be too low.
+
+   - For each input, apply the unlock script function to no args,
+     check that the result is a valid arg list (typically the
+     list (signature public-key)), then apply the result to the lock
+     script function of the output of the transaction referenced by
+     the input. If any of these scripts do not succeed (indicated by
+     returning nil), reject this transaction.
+
+   - Add the transaction to the mempool."
+
+  (when (null (transaction-inputs transaction))
+    (warn "Transaction with no inputs rejected")
+    (return-from validate-transaction nil))
+  (when (null (transaction-outputs transaction))
+    (warn "Transaction with no outputs rejected")
+    (return-from validate-transaction nil))
+
+  (let ((txid (transaction-id transaction)))
+    (when (find-transaction-per-id txid)
+      (warn "A transaction with this ID (~a) is already on the blockchain. Rejected."
+            txid))
+    (when (find-transaction-per-id txid)
+      (warn "A transaction with this ID (~a) is already on the blockchain. Rejected."
+            txid))
+  
+  (loop for tx-in in (transaction-inputs transaction)
+        as id = (tx-in-id tx-in)
+        as index = (tx-in-index tx-in)
+        as input-tx = (find-transaction-per-id id)
+        as input-tx-outputs 
+          = (cond
+              ((null input-tx)
+               (warn "~%No transaction with TXID ~a found."
+                     id)
+               (return nil))
+              (t (transaction-outputs input-tx)))
+        as utxo
+          = (let ((tx-out 
+                    (or (nth index input-tx-outputs)
+                        (unless (tx-ids= id (transaction-id input-tx))
+                          (warn "TX ~a output does not match input spec [~a/~d]."
+                                input-tx id index)
+                          (return nil))
+                        ;; debugging:
+                        (error "TX ~a output [~a/~d] lost - likely programming error"
+                               input-tx id index))))
+              ;; ---!!! todo: verify not spent. pretend that's been
+              ;; ---!!! done here for now!
+              tx-out)
+        as input-subamount = (tx-out-amount utxo)
+        as succeed-p = (run-chainlisp-script transaction tx-in utxo)
+        when (coinbase-transaction-input-p tx-in)
+          do (warn "Transaction with coinbase input - rejected")
+             (return nil)
+        when (not succeed-p)
+          do (return nil)
+        sum input-subamount into sum-of-inputs
+        finally (let ((sum-of-outputs
+                        (loop for tx-out in (transaction-outputs transaction)
+                              sum (tx-out-amount tx-out))))
+                  (when (< sum-of-inputs sum-of-outputs)
+                    (warn "TX sum of inputs values < sum of output values. Rejected.")
+                    (return nil))
+                  (when (transaction-fee-too-low-p 
+                         (- sum-of-inputs sum-of-outputs))
+                    (warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
+                          (- sum-of-inputs sum-of-outputs)
+                          *minimum-transaction-fee*)
+                    (return nil)))
+                (format t "~%Successful transaction ~a" transaction)
+                (add-transaction-to-mempool transaction)
+                (return t))))
+
+                  
+
+
+(defun run-chainlisp-script (transaction transaction-input utxo)
+  (in-transaction (transaction)
+    (in-transaction-script-context
+      (let* ((lock-script (tx-out-lock-script utxo))
+             (unlock-script (tx-in-unlock-script transaction-input))
+             (public-key-hash (tx-out-public-key-hash utxo)))
+      (when (null lock-script)
+        (fail-script))
+      (when (null unlock-script)
+        (fail-script))
+      (let* ((unlock-script-function-name (first unlock-script))
+             (unlock-args
+               (apply-x
+                unlock-script-function-name
+                '()
+                `((^signature . ,(%tx-in-signature transaction-input))
+                  (^public-key . ,(%tx-in-public-key transaction-input)))))
+             (lock-script-function-name (first lock-script)))
+        (apply-x
+         lock-script-function-name
+         unlock-args
+
+         ;; Establish and handle implicit/global
+         ;; parameters by putting them in the bindings
+         ;; list, and then referring to them as from
+         ;; script as script vars. Kludge this for now --
+         ;; automate soon.
+
+         `((^tx-public-key-hash
+            . ,public-key-hash))))))))
+
+;; Above rules/logic/documentation loosely based on Bitcoin "tx"
+;; documentation here:
+;; https://en.bitcoin.it/wiki/Protocol_rules#.22tx.22_messages
 
 
 
@@ -572,13 +654,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
        (fail-script-op)))))
 
 (def-script-op check-signature (public-key signature)
-  (let ((signed-message
-          (make-instance
-           'signed-message 
-           :msg (serialize-current-transaction)
-           :pkey public-key
-           :sig signature)))
-    (check-message signed-message)))
+  (check-hash
+   (hash:hash/256 (serialize-current-transaction))
+   signature public-key))
 
 
 (def-locking-script script-pub-key (public-key signature)
@@ -688,20 +766,34 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (coin-amount *coinbase-fee-in-coin-units*))
 
 
+
+
+;;; The next two values to initialize the id and index of the input for a coinbase transaction
+;;; are settings are imitative of Bitcoin, which similarly has
+;;; all 0 bits for Tx ID, all 1 bits for Tx index. These slots do not serve
+;;; their normal function, so these values are arbitrary. These two ARE part
+;;; of the hash of the transaction.
+
+(defvar *initial-coinbase-tx-in-id-value*
+  "0000000000000000000000000000000000000000000000000000000000000000")
+
+(defvar *initial-coinbase-tx-in-index-value*
+  -1)
+
+(defun coinbase-transaction-input-p (transaction-input)
+  (with-slots (tx-in-id tx-in-index) transaction-input
+    (and (equal tx-in-id *initial-coinbase-tx-in-id-value*)
+         (equal tx-in-index *initial-coinbase-tx-in-index-value*))))
+
 (defun make-coinbase-transaction-input ()
   (make-instance
    'transaction-input
-   ;; The next two value settings are imitative of Bitcoin, which similarly has
-   ;; all 0 bits for Tx ID, all 1 bits for Tx index. These slots do not serve
-   ;; their normal function, so these values are arbitrary. These two ARE part
-   ;; of the hash of the transaction.
-   :tx-in-id "0000000000000000000000000000000000000000000000000000000000000000"
-   :tx-in-index "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+   :tx-in-id *initial-coinbase-tx-in-id-value*
+   :tx-in-index *initial-coinbase-tx-in-index-value*
 
    ;; These are also not going to be used as for a normal transaction.  The rest
    ;; are NOT part of the hash of the transaction.
    :tx-in-unlock-script nil
-   :%tx-in-utxo nil
 
    :%tx-in-public-key nil
    :%tx-in-signature nil))
@@ -768,7 +860,7 @@ development, this signals a continuable error if there is no transaction."
   "Return true if transaction IDs are equal. TX-ID-1 and TX-ID-2 must
    transaction ID's, which are represented as hashes, i.e., as
    instances of hash:hash."
-  (hash:hash= tx-id-1 tx-id-2))
+  (equalp tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
   "Iterate over the blocks of the blockchain (i.e., the value of
@@ -881,9 +973,9 @@ development, this signals a continuable error if there is no transaction."
   "Transactions may be stored in EQUALP hash tables. The mempool, for
   example, is an equalp hash table. This returns a key that is a byte
   vector, i.e., such that it has the property that it may be compared
-  using equalp.  Specifically it's the byte vector representing the
-  hash that is the transaction ID of TRANSACTION."
-  (bev-vec (transaction-id transaction)))
+  using equalp.  Specifically it's the big-endian byte vector
+  representing the hash that is the transaction ID of TRANSACTION."
+  (transaction-id transaction))
 
 
 
@@ -986,8 +1078,10 @@ should be signed, and only coinbase transactions are not signed."
         (loop for tx-input in tx-inputs
               as private-key in private-keys
               as public-key in public-keys
-              as signature = (sign-message message public-key private-key)
-              do (setf (%tx-in-signature tx-input) signature))))))
+              as signature = (sign-hash (hash:hash/256 message) private-key)
+              do (setf (%tx-in-signature tx-input) signature)
+                 (setf (%tx-in-public-key tx-input) public-key))))))
+  
 
 
 
