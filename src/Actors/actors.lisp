@@ -715,38 +715,37 @@ THE SOFTWARE.
          (mpcompat:process-interrupt exec 'exec-terminate-actor actor)))
      
      (check-sufficient-execs ()
-       (let (age)
-         (unless (or (emptyq-p *actor-ready-queue*)        ;; nothing to do anyway?
-                     (< (setf age (- (get-universal-time)  ;; been stalled long enough?
-				     *last-heartbeat*))
-			*maximum-age*))
-           ;; -------------------------------------------
-           ;;
-           ;; Why kill the workhorse?
-           ;;
-           ;; For LW, the timer routine triggers in an arbitrary
-           ;; thread with a retriggering timer. This routine runs as
-           ;; an interrupt routine and we need to keep it short. We
-           ;; also need to prevent retriggering of nuisance
-           ;; notifications while we are busy handling the situation.
-           ;;
-           ;; For ACL, the timer runs in its own dedicated thread and
-           ;; won't retrigger until we return from here. But we also
-           ;; need to keep this short so that we don't block ongoing
-           ;; useful activity that may need something inside this
-           ;; monitor section.
-           ;;
-           ;; So in both cases, just kill off the timer and let a new
-           ;; thread handle the notification with the user.
-           ;; ----------------------------------------------
-           (unschedule-timer (shiftf *heartbeat-timer* nil))
-           ;; --------------------------------------------
-	   
-           (mpcompat:process-run-function
-            "Handle Stalling Actors"
-            '()
-            *watchdog-hook*)
-           )))
+       (unless (or (emptyq-p *actor-ready-queue*)        ;; nothing to do anyway?
+                   (< (- (get-universal-time)  ;; been stalled long enough?
+                         *last-heartbeat*)
+                      *maximum-age*))
+         ;; -------------------------------------------
+         ;;
+         ;; Why kill the workhorse?
+         ;;
+         ;; For LW, the timer routine triggers in an arbitrary
+         ;; thread with a retriggering timer. This routine runs as
+         ;; an interrupt routine and we need to keep it short. We
+         ;; also need to prevent retriggering of nuisance
+         ;; notifications while we are busy handling the situation.
+         ;;
+         ;; For ACL, the timer runs in its own dedicated thread and
+         ;; won't retrigger until we return from here. But we also
+         ;; need to keep this short so that we don't block ongoing
+         ;; useful activity that may need something inside this
+         ;; monitor section.
+         ;;
+         ;; So in both cases, just kill off the timer and let a new
+         ;; thread handle the notification with the user.
+         ;; ----------------------------------------------
+         (unschedule-timer (shiftf *heartbeat-timer* nil))
+         ;; --------------------------------------------
+         
+         (mpcompat:process-run-function
+          "Handle Stalling Actors"
+          '()
+          *watchdog-hook*)
+         ))
 
      (remove-from-pool (proc)
        (setf *executive-processes* (delete proc *executive-processes*)))
