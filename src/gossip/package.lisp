@@ -39,6 +39,7 @@
 (defpackage gossip/config
   (:use #:cl)
   (:export
+   #:generate
    #:initialize 
    #:get-values))
 

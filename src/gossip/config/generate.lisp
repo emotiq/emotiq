@@ -30,22 +30,23 @@
 
 
 (defun generate (records &key (root #p"/var/tmp/conf/"))
-  (let ((keys (generate-keys records)))
-    (loop
-       :for (host eripa port (public . private))
-       :in keys
-       :do (let ((directory (merge-pathnames (format nil "~a/" host) root)))
-             (format *error-output* "~&Writing configuration for ~a~&~tto ~a.~&" host directory)
-             (ensure-directories-exist directory)
-             (write-local-machine-conf
-              (merge-pathnames "local-machine.conf" directory)
-              eripa port public)
-             (write-hosts-conf
-              (merge-pathnames "hosts.conf" directory)
-              keys)
-             (write-keypairs-conf
-              (merge-pathnames "keypairs.conf" directory)
-              keys)))))
+  (let ((key-records (generate-keys records)))
+    (dolist (key-record key-records)
+      (destructuring-bind (host eripa port (public private))
+          key-record
+        (declare (ignore private))
+        (let ((directory (merge-pathnames (format nil "~a/" host) root)))
+          (emotiq:note "~&Writing configuration for ~a~&~tto ~a.~&" host directory)
+          (ensure-directories-exist directory)
+          (write-local-machine-conf
+           (merge-pathnames "local-machine.conf" directory)
+           eripa port public)
+          (write-hosts-conf
+           (merge-pathnames "hosts.conf" directory)
+           key-records)
+          (write-keypairs-conf
+           (merge-pathnames "keypairs.conf" directory)
+           key-records))))))
 
 (defun write-local-machine-conf (path eripa port public)
   (with-open-file (o path
@@ -59,15 +60,22 @@
   (with-open-file (o path
                      :direction :output
                      :if-exists :supersede)
-    (loop :for (host eripa port (public  private)) :in records
-       :doing (format o "~s~&" `(,host ,port)))))
+    (dolist (key-record records)
+      (destructuring-bind (host eripa port (public private))
+          key-record
+        (declare (ignore eripa public private))
+        (format o "~s~&" `(,host ,port))))))
 
 (defun write-keypairs-conf (path records)
   (with-open-file (o path
                      :direction :output
                      :if-exists :supersede)
-    (loop :for (host eripa port (public  private)) :in records
-       :doing (format o "~s~&" `(,public ,private)))))
+    (dolist (key-record records)
+      (destructuring-bind (host eripa port (public private))
+          key-record
+        (declare (ignore host eripa port))
+        (format o "~s~&" `(,public ,private))))))
+
 
 
 

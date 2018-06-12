@@ -31,6 +31,7 @@
 
 (defsystem "gossip/config"
   :depends-on (emotiq/filesystem
+               emotiq/logging
                crypto-pairings)
   :components ((:module package :pathname "."
                         :components ((:file "package")))
