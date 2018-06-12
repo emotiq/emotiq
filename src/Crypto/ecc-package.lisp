@@ -92,6 +92,9 @@ THE SOFTWARE.
    :convert-int-to-vector
    :convert-vector-to-int
    :int=
+   :vec=
+   :sbs
+   :short-str
    ))
 
 (defpackage :hash
@@ -110,6 +113,7 @@ THE SOFTWARE.
    :get-hash-nbytes
    :hashable
    :hash-check
+   :hash=
    ))
 
 (defpackage :ecc-crypto-b571

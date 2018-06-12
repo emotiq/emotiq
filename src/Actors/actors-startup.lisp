@@ -215,7 +215,8 @@ THE SOFTWARE.
   (declare (ignore ignored))
   (unless (directory-manager-p)
     (install-actor-directory)
-    (install-actor-printer)))
+    (install-actor-printer)
+    ))
 
 #-:lispworks
 (eval-when (:load-toplevel)

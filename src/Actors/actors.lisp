@@ -524,7 +524,7 @@ THE SOFTWARE.
         (mp:mailbox-read mbox)
         (iter)))))
 
-#+(or :ALLEGRO :CLOZURE)
+#+(or :ALLEGRO :CLOZURE :SBCL)
 (let ((queue (list nil))
       (lock  (mpcompat:make-lock)))
 
@@ -620,7 +620,7 @@ THE SOFTWARE.
 (defvar *last-heartbeat*     0)   ;; time of last Executive activity
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
-(defvar *maximum-age*        3)   ;; how long before watchdog should bark
+(defvar *maximum-age*        3)   ;; how long before watchdog should bark, in seconds
 (defvar *nbr-execs*               ;; should match the number of CPU Cores but never less than 4
   #+(AND :LISPWORKS :MACOSX)
   (load-time-value
@@ -632,6 +632,24 @@ THE SOFTWARE.
   #+:CLOZURE
   (max 4 (ccl:cpu-count))
   #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
+
+(defun default-watchdog-function ()
+  (restart-case
+      (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
+             age)
+    (:do-nothing-just-wait ()
+      :report "It's okay, just wait"
+      (start-watchdog-timer))
+    (:spawn-new-executive ()
+      :report "Spawn another Executive"
+      (incf *nbr-execs*)
+      (push-new-executive))
+    (:stop-actor-system ()
+      :report "Stop Actor system"
+      (kill-executives))
+    ))
+
+(defvar *watchdog-hook* 'default-watchdog-function)
 
 ;; ----------------------------------------------------------------
 ;; Ready Queue
@@ -727,22 +745,8 @@ THE SOFTWARE.
            (mpcompat:process-run-function
             "Handle Stalling Actors"
             '()
-            (lambda ()
-              (restart-case
-                  (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
-                         age)
-                (:do-nothing-just-wait ()
-                  :report "It's okay, just wait"
-                  (start-watchdog-timer))
-                (:spawn-new-executive ()
-                  :report "Spawn another Executive"
-                  (incf *nbr-execs*)
-                  (push-new-executive))
-                (:stop-actor-system ()
-                  :report "Stop Actor system"
-                  (kill-executives))
-                ))
-            ))))
+            *watchdog-hook*)
+           )))
 
      (remove-from-pool (proc)
        (setf *executive-processes* (delete proc *executive-processes*)))

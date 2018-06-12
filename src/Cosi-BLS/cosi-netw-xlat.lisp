@@ -45,25 +45,8 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------
 
-;;; TODO use the network transport layer in gossip to resolve this
-;;; need.  For now this is needed to pass cosi messages on the local
-;;; machine.
-(defvar *machine-ip-addr* 
-  #+lispworks
-  (comm:get-host-entry (machine-instance) :fields '(:address))
-  #+ccl
-  (ccl:lookup-hostname (machine-instance))
-  #-(or ccl lispworks)
-  (prog1
-      2887548929 ;; aka "127.0.0.1" as an integer
-    (warn "Unimplemented lookup of machine hostname under this implementation")))
-
-
-(defvar *cosi-port* 65001)
-
 (defstruct actor-return-addr
-  (ip   *machine-ip-addr*)
-  (port *cosi-port*)
+  (node (node-pkey (current-node)))
   aid)
 
 (defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
@@ -75,10 +58,25 @@ THE SOFTWARE.
     (sdle-store:backend-store-object backend ret stream)))
 
 (defmethod ac:send ((addr actor-return-addr) &rest msg)
-  (socket-send (actor-return-addr-ip   addr)
-               (actor-return-addr-port addr)
-               (actor-return-addr-aid  addr)
-               msg))
+  (apply 'ac:send (actor-return-addr-node addr)
+         :actor-callback (actor-return-addr-aid addr) msg))
+
+;; -----------------
+
+#|
+(defmethod ac:send ((node node) &rest msg)
+  (when (node-byz node)
+    (pr (format nil "Byzantine-node: ~A" (short-id node))))
+  (unless (node-byz node)
+    (if (eq node *current-node*)
+        (apply 'ac:send (node-self node) msg)
+      (apply 'ac:send (node-pkey node) msg))))
+|#
+
+;; -----------------
+
+(defun reply (reply-to &rest msg)
+  (apply 'send reply-to :answer msg))
 
 ;; -----------------------------------------------------------
 
@@ -101,22 +99,10 @@ THE SOFTWARE.
             (apply 'ac:send (node-self node) msg)
           (gossip-send pkey nil msg))))))
 
-(defmethod ac:send ((node node) &rest msg)
-  (when (node-byz node)
-    (pr (format nil "Byzantine-node: ~A" (short-id node))))
-  (unless (node-byz node)
-    (if (eq node *current-node*)
-        (apply 'ac:send (node-self node) msg)
-      (gossip-send (node-pkey node) nil msg))))
-
-;; -----------------
-
-(defun reply (reply-to &rest msg)
-  (apply 'send reply-to :answer msg))
-
 ;; --------------------------------------------------------------
 
 (defparameter *local-ip*    "127.0.0.1")
+(defparameter *cosi-port*   65001)
 
 (defmethod translate-pkey-to-ip-port ((pkey pbc:public-key))
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
@@ -167,23 +153,13 @@ THE SOFTWARE.
       (progn ;; ignore-errors
         ;; might not be a properly destructurable packet
         (destructuring-bind (dest &rest msg) packet
-          (cond ((typep dest 'pbc:public-key)
-                 (let ((node (gethash (int dest) *pkey-node-tbl*)))
-                   (unless node
-                     (pr :Non-existent-node))
-                   (when node
-                     (when (eq node *my-node*)
-                       (pr (format nil "fowarding-by-default-to-me: ~A" msg)))
-                     (apply 'ac:send (node-self node) msg))))
-                (t
-                 (let ((actor (lookup-actor-for-aid dest)))
-                   (when actor
-                     ;; for debug... -------------------
-                     (when (eq actor (node-self *my-node*))
-                       (pr (format nil "forwarding-specifically-to-me: ~A" msg)))
-                     ;; ------------------
-                     (apply 'ac:send actor msg))))
-                )))
+          (let ((node (gethash (int dest) *pkey-node-tbl*)))
+            (unless node
+              (pr :Non-existent-node))
+            (when node
+              (when (eq node *my-node*)
+                (pr (format nil "fowarding-by-default-to-me: ~A" msg)))
+              (apply 'ac:send (node-self node) msg)))))
       )))
 
 (defvar *handler* (make-actor 'port-routing-handler))
@@ -202,11 +178,13 @@ THE SOFTWARE.
 
 ;;; For binary delivery, we need to allocate keypair memory at
 ;;; runtime.  
-(let (hmac-keypair)
+(let ((hmac-keypair nil)
+      (hmac-keypair-mutex (mpcompat:make-lock)))
   (defun hmac-keypair ()
     (unless hmac-keypair
-      (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+      (mpcompat:with-lock (hmac-keypair-mutex)
+        (setf hmac-keypair
+              (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))))
     hmac-keypair)
   (defmethod socket-send (ip port dest msg)
     (let* ((payload (make-hmac (list* dest msg)

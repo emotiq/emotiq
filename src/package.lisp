@@ -7,7 +7,10 @@
   (:export #:octet #:octet-vector #:octet-vector-p
            #:make-octet-vector #:ovref
            #:octet-vector-to-hex-string #:hex-string-to-octet-vector
-           #:string-to-octet-vector)
+           #:string-to-octet-vector
+
+           #:normalize-to-simple-base-string #:copy-as-simple-base-string
+           #:normalize-to-simple-string #:copy-as-simple-string)
   (:export #:hash-digest-vector-to-hex-string
            #:sha-256-string #:sha-256-vector 
            #:sha3-512-string #:sha3-512-vector
@@ -37,6 +40,13 @@
    #:initial-total-coin-amount
    #:*minter-0-pkey-hash* #:*minter-0-pkey* #:*minter-0-skey*
    #:get-utxos-per-account #:get-balance)
+  (:export
+   #:emotiq/log/)
+  
+  (:export
+   #:start-node)
+  (:export
+   #:note)
   (:export
    #:production-p
    #:main
@@ -87,8 +97,6 @@
    #:eassert
 
    #:prdebug))
-
-
   
 (defpackage emotiq/elections
   (:use #:cl)
@@ -96,3 +104,12 @@
    #:set-nodes
    #:make-election-beacon
    #:hold-election))
+
+(defpackage emotiq/filesystem
+  (:use #:cl)
+  (:nicknames #:emotiq/fs #:emotiq/path)
+  (:export
+   #:etc/
+   #:var/log/))
+
+

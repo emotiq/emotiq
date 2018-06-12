@@ -39,10 +39,11 @@ THE SOFTWARE.
 ;; is just one real node, which must always be the leader
 (defvar *all-nodes*  nil) 
 
-(defun set-nodes (sorted-node-list)
-  (ac:pr (format nil "election set-nodes ~A" sorted-node-list))
-  (assert sorted-node-list)
-  (setf *all-nodes* sorted-node-list))
+(defun set-nodes (node-list)
+  "Node-list is a list of (public-key stake-amount) pairs"
+  (ac:pr (format nil "election set-nodes ~A" node-list))
+  (assert node-list)
+  (setf *all-nodes* node-list))
 
 ;;; this can be done in the election handler, or use this code and ensure
 ;;; that each node-handler responds to :hold-an-election
@@ -56,10 +57,11 @@ THE SOFTWARE.
    (lambda (&rest msg)
      (labels ((hold-election ()
                 (let ((rand (/ (random 1000000) 1000000)))
-                  (ac:pr (format nil "~%sending :hold-an-election = ~A" rand))
-                  (mapc #'(lambda (node)
-                            (ac:send node :hold-an-election
-                                     :n rand))
+                  (ac:pr (format nil "sending :hold-an-election = ~A" rand))
+                  (mapc #'(lambda (pair)
+                            (destructuring-bind (node-pkey node-stake) pair
+                              (ac:send node-pkey :hold-an-election
+                                       :n rand)))
                         *all-nodes*))))
        (um:dcase msg
          (:start ()
@@ -122,9 +124,13 @@ THE SOFTWARE.
 (defmethod node-stake ((node tree-node))
   (tree-node-sum node))
 
+#|
 (defmethod node-stake ((node cosi-simgen:node))
   (cosi-simgen:node-stake node))
-  
+|#
+(defmethod node-stake ((node cons))
+  (second node))
+
 ;; a tree of stakes, cosi-simgen:nodes at the leaves (very bottom of tree)
 
 (defun make-tree-node (pair)
@@ -157,7 +163,7 @@ based on their relative stake"
                     (iter r)
                   (iter l)))
           ;; else - we have arrived at a winner
-          tree)))))
+          (first tree)))))) ;; return pkey of winner
 
         
     

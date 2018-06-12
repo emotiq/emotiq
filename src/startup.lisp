@@ -33,7 +33,8 @@
   (websocket/wallet:start-server :port 3145)
   ;; Start the REST server which provides support for testing the
   ;; WebSocket implementation at <http://localhost:3140/client/>
-  (emotiq-rest:start-server :port 3140))
+  (emotiq-rest:start-server :port 3140)
+  (emotiq:start-node))
 
 ;; Entry Point for binary version of the system.
 
@@ -49,10 +50,9 @@
   (actors:install-actor-system)
   (main))
 
-
 (defun argv ()
-#+lispworks system:*line-arguments-list*)
-  
+#+lispworks system:*line-arguments-list*
+#+OPENMCL ccl:*command-line-argument-list*)
 
 (defun message-running-state (&optional how-started-message?)
   (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"

@@ -24,8 +24,8 @@ before_script:
   stage: test
   retry: 1
   script:
-    - lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"
-    - lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"
+    - ci/with-timeout.sh 'lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"'
+    - ci/with-timeout.sh 'lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"'
     - ci/with-timeout.sh etc/test-harness.bash
 
 test:linux:lispworks:
@@ -42,6 +42,14 @@ test:linux:ccl:
   variables:
     LISP: ccl
 
+.test:linux:sbcl:
+  <<: *test_definition
+  tags:
+    - linux
+  variables:
+    LISP: sbcl
+  allow_failure: true
+
 test:macos:lispworks:
   <<: *test_definition
   tags:
@@ -55,6 +63,14 @@ test:macos:ccl:
     - macos
   variables:
     LISP: ccl
+
+.test:macos:sbcl:
+  <<: *test_definition
+  tags:
+    - macos
+  variables:
+    LISP: sbcl
+  allow_failure: true
 
 
 .build_release: &build_release_definition
@@ -90,6 +106,7 @@ release:
     - github-release release --tag ${CI_COMMIT_TAG} -c ${CI_COMMIT_SHA} -d "${CI_COMMIT_MESSAGE}"
 
 .deploy: &deploy_definition
+  before_script:
   stage: deploy
   variables:
     LISP: lispworks

@@ -142,17 +142,13 @@ THE SOFTWARE.
 
 (defun load-dev-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
+  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
+           cffi:*foreign-library-directories*)
   (cffi:define-foreign-library
-   libpbc
-   (:darwin #.(concatenate 
-	       'string 
-	       (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	       "/libLispPBCIntf.dylib"))
-   (:linux #.(concatenate 
-	      'string 
-	      (namestring (asdf:system-relative-pathname 'emotiq "../var/local/lib"))
-	      "/libLispPBCIntf.so"))
-   (t (:default "libLispPBCIntf"))))
+      libpbc 
+    (:darwin "libLispPBCIntf.dylib")
+    (:linux "libLispPBCIntf.so")
+    (t (:default "libLispPBCIntf"))))
 
 (defun load-production-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from the current directory"
@@ -166,7 +162,7 @@ THE SOFTWARE.
   "load the dev or production dlls at runtime"
   (if (emotiq:production-p)
       (load-production-dlls)
-    (load-dev-dlls))
+      (load-dev-dlls))
   (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
@@ -316,6 +312,15 @@ THE SOFTWARE.
 Usually, they are in big-endian representation for PBC library."
   (crypto-val-vec x))
 
+(defmethod print-object ((obj crypto-val) out-stream)
+  (if *print-readably*
+      (call-next-method)
+    ;; else
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (short-str (hex-str obj)))
+    ))
+
 ;; -------------------------------------------------
 ;; Useful subclasses
 
@@ -394,6 +399,7 @@ not belonging to any field"))
   (make-curve-params
    :name :curve-fr449
    :pairing-text
+   (sbs
    #>.end
 type f
 q 1453677448591213781098647615517727737801456574135793739359641814210133565958086561658399625709718948307085772504735487548743943171189343
@@ -403,6 +409,7 @@ beta 122975015149922782532847283109469166274085501446888257632022793381126845732
 alpha0 298900426690285755283106923224136990858821502781746907684148252712220485095267046905800379160959798842713091253816223767728475099528772
 alpha1 94767155804077352517678038114326012034615203665857146478293396108661642277407951463015818396017138542636648537581758284300101921434637
 .end
+)
    :g1  (make-instance 'g1-cmpr
          :pt (bev
               (make-instance 'hex
@@ -423,7 +430,8 @@ Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
 (defparameter *chk-curve-fr449-params*
-  #xd7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef)
+  ;; = (hex-str (hash/256 *curve-fr449-params*))
+  "d7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
@@ -431,6 +439,7 @@ Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^4
   (make-curve-params
    :name :curve-fr256
    :pairing-text
+   (sbs
    #>.end
 type f
 q 115792089237314936872688561244471742058375878355761205198700409522629664518163
@@ -440,6 +449,7 @@ beta 766002130439646383346394328393505616205869984506515612453223045487518321639
 alpha0 82889197335545133675228720470117632986673257748779594473736828145653330099944
 alpha1 66367173116409392252217737940259038242793962715127129791931788032832987594232
 .end
+)
    :g1  (make-instance 'g1-cmpr
          :pt (bev
               (make-instance 'hex
@@ -458,7 +468,7 @@ Barreto and Naehrig
 Size of q^12 is 3072 bits.")
 
 (defparameter *chk-curve-fr256-params*
-  #xb937a11b2d71b08fecddfdd2be170ed1dfab1bd8891d45914f071cc63cd28443)
+  "b937a11b2d71b08fecddfdd2be170ed1dfab1bd8891d45914f071cc63cd28443")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
@@ -466,6 +476,7 @@ Size of q^12 is 3072 bits.")
   (make-curve-params
    :name  :curve-fr255
    :pairing-text
+   (sbs
    #>.end
 type f
 q 57896044618657242796275912003089040872670005837955836828594514493287093416899
@@ -475,6 +486,7 @@ beta 558039170365748164300823682417187052731462208855974059856274212229651204510
 alpha0 36745065291682366075254502967669756043233951020839323524243711945517092183438
 alpha1 48463065091351977226261302315306999962633968949407617433093635561838515781540
 .end
+)
 #|
    :g1  (make-instance 'g1-cmpr
          :pt (bev
@@ -500,6 +512,7 @@ Curves of Prime Order' by Barreto and Naehrig")
   (make-curve-params
    :name  :curve-fr250
    :pairing-text
+   (sbs
    #>.end
 type f
 q 1809251394332986959257939850161114686612631097102842638593643553811817328791
@@ -509,6 +522,7 @@ beta 143714190825196814681707640227486479534136208876291073401047437073211868857
 alpha0 536271594856618124639488944906714824552130805762113454417772030647384157770
 alpha1 28425959349375493106220488310181159417866476731095721227729238529329201869
 .end
+)
 #|
    :g1  (make-instance 'g1-cmpr
          :pt (bev
@@ -535,6 +549,7 @@ Curves of Prime Order' by Barreto and Naehrig")
   (make-curve-params
    :name :curve-fr248
    :pairing-text
+   (sbs
    #>.end
 type f
 q 452312848583254953884744365750739939688865847938171536927600539923801802599
@@ -544,6 +559,7 @@ beta 397249851777460990708985571352217434120562840764162776983847378519420311973
 alpha0 304231671163681708906096514291872830602548274253692921780966369109574403653
 alpha1 345706227803693509060549771291435615772039886420137687701437165115462066273
 .end
+)
 #|
    :g1  (make-instance 'g1-cmpr
          :pt (bev
@@ -570,6 +586,7 @@ Curves of Prime Order' by Barreto and Naehrig")
   (make-curve-params
    :name :curve-fr247
    :pairing-text
+   (sbs
    #>.end
 type f
 q 226156424291628771614785038744124807180463434874498764847568283250641725631
@@ -579,6 +596,7 @@ beta 157581236914492743008411029886095484341247996949025327085235169276682226769
 alpha0 102203583261777748687691191922467678782639793054014524719597751476114479682
 alpha1 183476226787262761591357671373987444584218941387482623829885679422372771068
 .end
+)
 #|
    :g1  (make-instance 'g1-cmpr
          :pt (bev
@@ -603,6 +621,7 @@ Curves of Prime Order' by Barreto and Naehrig")
 (defparameter *curve-fr256-params-old*
   (make-curve-params
    :pairing-text
+   (sbs
    #>.end
 type f
 q 16283262548997601220198008118239886027035269286659395419233331082106632227801
@@ -612,6 +631,7 @@ beta 258884928943654248853773222049750430270094630806612676761613360620988850655
 alpha0 15760619495780482509052463852330180194970833782280957391784969704642983647946
 alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660735
 .end
+)
    :g1  (make-instance 'g1-cmpr
          :pt (bev
               (make-instance 'hex
@@ -625,12 +645,13 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 3 out of 4 hash/256")
 
 (defparameter *chk-curve-fr256-params-old*
-  #xec9f36b197a11280f6cc4b47a8a3dc7b8663ccbb3975c3068c9069803673361d)
+  "ec9f36b197a11280f6cc4b47a8a3dc7b8663ccbb3975c3068c9069803673361d")
 
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
   (make-curve-params
    :pairing-text
+   (sbs
    #>.end
 type a
 q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791
@@ -641,6 +662,7 @@ exp1 107
 sign1 1
 sign0 1
 .end
+)
    :g1  (make-instance 'g1-cmpr
          :pt (make-instance 'base58
               :str "BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
@@ -655,7 +677,7 @@ serves as a check on our implementation with his pbc-calc for
 comparison.")
 
 (defparameter *chk-curve-default-ar160-params*
-  #x16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38)
+  "16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38")
 
 ;; ---------------------------------------------------------------------------------------
 
@@ -692,7 +714,6 @@ library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
   (mpcompat:with-lock (*crypto-lock*)
-    (load-dlls)
     (let ((prev   *curve*)
           (params (or params
                       *curve-fr449-params*)))
@@ -701,6 +722,7 @@ SMP access. Everything else should be SMP-safe."
       (when (or params-supplied-p
                 (null *curve*))
         (setf *curve* nil) ;; in case we fail
+	(load-dlls)
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
                          (g2   curve-params-g2)) params

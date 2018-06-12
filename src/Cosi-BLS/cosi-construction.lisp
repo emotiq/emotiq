@@ -73,7 +73,7 @@ THE SOFTWARE.
   (make-array *bins-per-node*
               :initial-element nil))
 
-(defclass node ()
+(defclass node (gossip:gossip-node)
   ((ip       :accessor node-ip       ;; IPv4 string for this node
              :initarg  :ip)
    (pkeyzkp  :accessor node-pkeyzkp  ;; public key + ZKP

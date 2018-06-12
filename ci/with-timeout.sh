@@ -16,4 +16,9 @@ case $(uname -s) in
         ;;
 esac
 
-exec ${timeout_cli} -k 11m 10m $*
+tmpfile=$(mktemp /tmp/with-timout.XXXXXX)
+echo "#!/usr/bin/env bash" > $tmpfile
+echo $* >> $tmpfile
+chmod +x $tmpfile
+
+exec ${timeout_cli} -k 11m 10m $tmpfile
