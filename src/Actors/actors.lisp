@@ -634,6 +634,8 @@ THE SOFTWARE.
   #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
 
 (defun default-watchdog-function ()
+  (let ((age (- (get-universal-time)  ;; been stalled long enough?
+		*last-heartbeat*)))
   (restart-case
       (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
              age)
@@ -647,7 +649,7 @@ THE SOFTWARE.
     (:stop-actor-system ()
       :report "Stop Actor system"
       (kill-executives))
-    ))
+    )))
 
 (defvar *watchdog-hook* 'default-watchdog-function)
 
