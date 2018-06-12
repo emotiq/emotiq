@@ -9,11 +9,11 @@
 #   Whitespace separated list of systems to test.
 #
 #
-# For example
+# For example the following entry
 #
-#   lisp=ccl systems=":gossip-test :cosi-bls" bash test-harness.bash
+#   lisp=ccl systems=":gossip-tests :cosi-bls" bash test-harness.bash
 #
-# would invoke the test harness using `ccl` on the `gossip-test` and
+# would invoke the test harness using `ccl` on the `gossip-tests` and
 # `cosi-bls` systems.
 #
 # BUGS
