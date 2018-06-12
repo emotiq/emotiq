@@ -34,7 +34,7 @@ systems=${systems:-":gossip-tests
                     :emotiq/wallet"}
 
 echo Test harness invoked using implementation: ${lisp}
-#echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')
+echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)' < /dev/null)
 # Sneaky pete exception for PROVE which needs a special ASDF syntax definition
 echo $(${lisp} --eval '(ql:quickload :prove)(uiop:quit 0)' < /dev/null)
 
