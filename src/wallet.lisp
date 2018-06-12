@@ -117,16 +117,10 @@ Returns nil if unsuccessful."
     (lisp-object-encoder:deserialize o)))
 
 (defun primary-address (wallet)
-  (hexify
+  (vec-repr:hex-str
+   (vec-repr:hex
    (pbc:keying-triple-pkey
-    (emotiq/wallet:keying-triple wallet))))
-
-(defmethod hexify ((object pbc-interface:public-key))
-  (format nil "~x"
-          (vec-repr::convert-vec-to-int
-           (vec-repr:bev-vec
-            (pbc:public-key-val
-             object)))))
+    (emotiq/wallet:keying-triple wallet)))))
 
 (defun key-phrase (wallet)
   (cosi-keying:convert-int-to-wordlist
