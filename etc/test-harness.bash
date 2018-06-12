@@ -30,7 +30,8 @@ lisp=${lisp:-'ros'}
 # The default whitespace list of systems to test
 systems=${systems:-":emotiq/blockchain
                     :crypto-pairings/t
-                    :core-crypto"}
+                    :core-crypto
+                    :emotiq/wallet"}
 
 echo Test harness invoked using implementation: ${lisp}
 echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')

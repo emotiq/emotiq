@@ -67,7 +67,7 @@
 
    #:rename-wallet
 
-   #:enumerate-wallets
+   #:enumerate-wallet-names
 
    #:*default-wallet-name*
    
@@ -109,6 +109,7 @@
   (:use #:cl)
   (:nicknames #:emotiq/fs #:emotiq/path)
   (:export
+   #:emotiq/user/root/
    #:etc/
    #:var/log/))
 

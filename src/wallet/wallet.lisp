@@ -5,6 +5,9 @@
     :initarg :salt :accessor salt)
    (keying-triple
     :initarg :keying-triple :accessor keying-triple)
+   (encrypted-private-key
+    :initarg :encrypted-wallet-secret
+    :accessor encrypted-wallet-secret)
    (encrypted-private-key-p
     :initarg :encrypted-private-key-p :accessor encrypted-private-key-p)))
 
@@ -14,13 +17,14 @@
                  :keying-triple (cosi-keying:make-random-keypair)
                  :encrypted-private-key-p nil))
 
-(defun emotiq/user/root ()
-  #+linux
-  (merge-pathnames ".emotiq/" (user-homedir-pathname))
-  #+darwin
-  (merge-pathnames "Emotiq/"
-                   (merge-pathnames "Library/Application Support/"
-                                    (user-homedir-pathname))))
+(defun copy-wallet (wallet)
+  (with-slots (salt keying-triple encrypted-private-key-p encrypted-wallet-secret)
+      wallet
+    (make-instance 'wallet
+                   :salt salt
+                   :keying-triple keying-triple
+                   :encrypted-wallet-secret encrypted-wallet-secret
+                   :encrypted-private-key-p encrypted-private-key-p)))
 
 (defvar *default-wallet-name* "My Wallet")
 
@@ -33,18 +37,15 @@ If the wallet already exists, it will not be overwritten unless FORCE
 is non-nil.
 
 The default name for a wallet is *DEFAULT-WALLET-NAME*."
+  (when (get-wallet-named name)
+    (unless force
+      (emotiq:note "Not overwriting existing wallet at '~a'." path)
+      (return-from create-wallet nil)))
   (let ((path (emotiq-wallet-path :name name)))
-    (when (and (probe-file path)
-               (not force))
-      (format *standard-output* "Not overwriting existing wallet at '~a'." path)
-      (return-from create-wallet nil))
     (let ((wallet (make-wallet)))
       (values
        name
        (wallet-serialize wallet :path path)))))
-
-(defun get-wallet-named (name)
-  (wallet-deserialize :path (emotiq-wallet-path :name name)))
 
 (defun rename-wallet (from-name to-name)
   "Rename wallet FROM-NAME into TO-NAME
@@ -70,11 +71,11 @@ Returns nil if unsuccessful."
                       :type nil
                       :defaults from)))))
 
-(defun enumerate-wallets ()
+(defun enumerate-wallet-names ()
   "Return a list of wallet names persisted on the local node"
   (let ((directories
          (directory 
-          (merge-pathnames "../*/"
+          (merge-pathnames (make-pathname :directory '(:relative :up :wild))
                            (make-pathname :name nil :type nil
                                           :defaults (emotiq-wallet-path))))))
     (loop
@@ -92,14 +93,6 @@ Returns nil if unsuccessful."
 (defun pathname-name-to-wallet-name (name)
   (quri:url-decode name))
 
-(defun emotiq-wallet-path (&key (name *default-wallet-name*))
-  "Return pathname of wallet with NAME"
-  (merge-pathnames
-   (format nil "wallet/~a/~a"
-           (wallet-name-to-pathname-name name)
-           "emotiq.wallet")
-   (emotiq/user/root)))
-   
 (defun wallet-serialize (wallet &key (path (emotiq-wallet-path)))
   "Serialize WALLET object to PATH"
   (ensure-directories-exist path)
@@ -111,7 +104,8 @@ Returns nil if unsuccessful."
 (defun wallet-deserialize (&key (path (emotiq-wallet-path)))
   "Deserialize wallet from file at PATH"
   (unless (probe-file path)
-    (error "No wallet found at ~a." path))
+    (emotiq:note "No wallet found at ~a." path)
+    (return-from wallet-deserialize nil))
   (with-open-file
       (o path :direction :input :element-type '(unsigned-byte 8))
     (lisp-object-encoder:deserialize o)))
@@ -138,18 +132,50 @@ Returns nil if unsuccessful."
    (pbc:keying-triple-skey
     (emotiq/wallet:keying-triple wallet))))
 
-#+(or)
-(defun aes256-key (passphrase salt)
-  (let ((kdf
-         (ironclad:make-kdf :pbkdf2 :digest 'ironclad:sha3)))
-    (ironclad:derive-key kdf passphrase salt 1024 32)))
+(defun ensure-octet-sequence (value)
+  (cond
+    ((typep value '(SIMPLE-ARRAY (UNSIGNED-BYTE 8) *))
+     value)
+    ((some (lambda (type)
+             (subtypep (type-of value) type))
+           '((base-string *)
+             (simple-array character *)))
+     (ironclad:ascii-string-to-byte-array value))
+    (t
+     (error "Cannot convert ~a with type ~a to octet sequence." value (type-of value)))))
+               
+(defun derive-aes256-keying (passphrase salt)
+  "Returns 48 bytes: 32 bytes for key; 16 bytes for IV."
+  (let ((kdf (ironclad:make-kdf :pbkdf2 :digest 'ironclad:sha3)))
+    (ironclad:derive-key
+     kdf
+     (ensure-octet-sequence passphrase)
+     (ensure-octet-sequence salt)
+     1024 48)))
 
-#+(or)
+;;; FIXME:  only encrypts the first 48 bytes of the secret key
 (defun encrypt-wallet (wallet passphrase)
+  "Encrypt all secrets in WALLET with PASSPHRASE.
+
+Returns an in-memory copy of wallet stripped of private key."
   (unless (not (encrypted-private-key-p wallet))
     (error "Private key already recorded as encrypted."))
-  (let ((wallet-key (aes256-key passphrase (salt wallet)))
-        (pkey (slot-value (slot-value wallet 'keying-triple) 'pbc-interface::pkey) 'pbc-interface::val))))
-
+  (let* ((aes256-keying (derive-aes256-keying passphrase (salt wallet)))
+         (key (subseq aes256-keying 0 32))
+         (iv (subseq aes256-keying 32 48))
+         (cipher (ironclad:make-cipher :aes :key key :initialization-vector iv :mode :cbc)) 
+         (secret-key (secret-key wallet))
+         (encrypted-key (make-array (let* ((length (length secret-key)))
+                                      (+ length (mod length 16)))
+                                    :element-type (unsigned-byte *)))
+         (result (copy-wallet wallet)))
+    (with-slots (encrypted-private-key-p encrypted-wallet-secret)
+        result
+      (ironclad:encrypt cipher
+                        (vec-repr:bev-vec secret-key)
+                        encrypted-wallet-secret)
+      (setf encrypted-private-key-p t))
+    result))
+     
 #+(or)
 (defun decrypt-wallet (wallet passphrase))
