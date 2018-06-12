@@ -113,7 +113,7 @@ the simple commitment to the uncloaked value"
 
 (defun make-admin-commit (amt &optional (gamma (random-between 1 *ed-r*)))
   (values
-   (range-proofs:simple-commit (range-proofs:hpt) gamma amt)
+   (range-proofs:simple-commit (range-proofs:gpt) (range-proofs:hpt) gamma amt)
    gamma))
 
 (defun check-amt (amt)
