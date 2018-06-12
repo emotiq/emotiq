@@ -834,6 +834,8 @@ dropped on the floor.
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
+          (unless (listp allnodes) ; it's perfectly legal for solicit-xxx to return a single object rather than a list
+            (setf allnodes (list allnodes)))
           (setf allnodes (remove-if
                           (lambda (ad)
                             (and (typep ad 'augmented-data)
@@ -1511,7 +1513,6 @@ dropped on the floor.
   (let ((coalesced-data ;(kvs:lookup-key (reply-cache thisnode) soluid)) ; will already have been coalesced here
          (coalesce thisnode reply-kind soluid))) ; won't have already been coalesced if we timed out!
     ; clean up reply tables.
-    ;;(break)
     (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
     (kvs:remove-key (reply-cache thisnode) soluid)
     (kvs:remove-key (timers thisnode) soluid)
@@ -2030,14 +2031,13 @@ gets sent back, and everything will be copacetic.
 
 (defun actor-keypair-fn (cmd &rest logmsg)
   "Test-and-set function that the *hmac-keypair-actor* runs.
-   It's critical that only one actor run pbc:make-key-pair at a time"
-  (case cmd
-    (:tas ; test-and-set
-     (destructuring-bind (mbox &rest other) logmsg
-       (declare (ignore other))
-       (unless *hmac-keypair*
-         (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
-       (ac:send mbox *hmac-keypair*)))))
+  It's critical that only one actor run pbc:make-key-pair at a time"
+  (declare (ignore cmd)) ; everything is interpreted as :TAS
+  (destructuring-bind (mbox &rest other) logmsg
+    (declare (ignore other))
+    (unless *hmac-keypair*
+      (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+    (ac:send mbox *hmac-keypair*)))
 
 (defun hmac-keypair ()
   (or *hmac-keypair*
