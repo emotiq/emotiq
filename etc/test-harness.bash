@@ -28,13 +28,15 @@ DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 lisp=${lisp:-'ros'}
 
 # The default whitespace list of systems to test
-systems=${systems:-":emotiq/blockchain
+systems=${systems:-":gossip-tests
                     :crypto-pairings/t
                     :core-crypto
                     :emotiq/wallet"}
 
 echo Test harness invoked using implementation: ${lisp}
-echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')
+#echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')
+# Sneaky pete exception for PROVE which needs a special ASDF syntax definition
+echo $(${lisp} --eval '(ql:quickload :prove)(uiop:quit 0)' < /dev/null)
 
 for system in ${systems}; do
     rm -rf ~/.cache/common-lisp/
