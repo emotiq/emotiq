@@ -67,7 +67,7 @@
 
    #:rename-wallet
 
-   #:enumerate-wallet-names
+   #:enumerate-wallets
 
    #:*default-wallet-name*
    
