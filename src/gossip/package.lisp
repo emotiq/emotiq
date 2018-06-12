@@ -40,6 +40,7 @@
   (:use #:cl)
   (:export
    #:generate
+   #:*aws-example*
    #:initialize 
    #:get-values))
 
