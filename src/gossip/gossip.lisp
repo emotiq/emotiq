@@ -689,7 +689,7 @@ dropped on the floor.
           (let* ((solicitation (make-solicitation
                                 :reply-to (uid node)
                                 :kind kind
-                                :forward-to ':neighborcast
+                                :forward-to t ; neighborcast
                                 :args args))
                  (soluid (uid solicitation)))
             (send-msg solicitation
@@ -1191,15 +1191,18 @@ dropped on the floor.
 ;; Because these messages never involve a reply, even if the reply-to slot is non-nil in these messages,
 ;;   it will be ignored.
 
+;;; This is the application programmer's interface into the gossip system.
 (defmethod announce ((msg solicitation) thisnode srcuid)
-  "Announce a message to the collective. First arg of Msg is the announcement,
-   which can be any Lisp object. Recipient nodes are not expected to reply.
-   This is probably only useful for debugging gossip protocols, since the only
-   record of the announcement will be in the log."
-  (let ((content (first (args msg))))
-    (declare (ignore content))
-    ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
+  "Announce a message to the collective. First arg of Msg is the disposition, which
+   is expected to be an actor-ish (actor or otherwise something that ac:send can send to). Remaining
+   args are message sent to that actor-ish.
+   Recipient nodes are not expected to reply."
+  (let ((disposition (first (args msg)))
+        (downstream (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
+    (if downstream
+         (forward msg thisnode downstream) ; thisnode becomes new source for forwarding purposes
+         (when disposition ; assume it's something that we can ac:send to
+           (apply 'ac:send (cdr (args msg)))))))
 
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
