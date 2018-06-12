@@ -4,8 +4,8 @@ variables:
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
   lisp: lisp-wrapper.sh
+# Add ASDF systems here to test them  
   systems: ":cosi-bls-tests :crypto-pairings :gossip-tests"
-
 
 stages:
   - test
@@ -24,8 +24,6 @@ before_script:
   stage: test
   retry: 1
   script:
-    - ci/with-timeout.sh 'lisp-wrapper.sh -e "(when (ql:quickload :cosi-bls) (uiop:quit 0))"'
-    - ci/with-timeout.sh 'lisp-wrapper.sh -e "(when (asdf:load-system :cosi-bls) (uiop:quit 0))"'
     - ci/with-timeout.sh etc/test-harness.bash
 
 test:linux:lispworks:
