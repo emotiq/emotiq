@@ -33,6 +33,7 @@
    #:save-log
    #:save-text-log
    #:deserialize-log
+   #:visualize-nodes
    ))
 
 (defpackage gossip/config

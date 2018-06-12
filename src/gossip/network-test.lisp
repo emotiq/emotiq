@@ -39,7 +39,7 @@
                          *nominal-gossip-port*)))
     (setf rnode (ensure-proxy-node :TCP server-address server-port rnodenum))
     (setf localnode (make-node
-                     :NEIGHBORS (list (uid rnode))))))
+                     :neighborhood (list (uid rnode))))))
 
 ; (setup-client 100 *server-address* 202)
 ; (setup-client 100 "localhost" 202)
@@ -126,7 +126,7 @@
                   *nominal-gossip-port*)))
     (setf rnode (ensure-proxy-node :TCP other-machine-address port m))
     (setf localnode (make-node
-                     :NEIGHBORS (list (uid rnode))))))
+                     :neighborhood (list (uid rnode))))))
 
 ; (setup-client-for-upstream-test 100 316 "localhost")
 

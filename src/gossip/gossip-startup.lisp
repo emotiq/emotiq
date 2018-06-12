@@ -13,6 +13,7 @@
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
+  (declare (special gossip/config::*keypairs-filename*))
   (when local-machine
     (destructuring-bind (&key eripa
                               (gossip-port *nominal-gossip-port*)
@@ -28,7 +29,7 @@
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
                        (unless (member local-pubkey keypairs :test 'eql :key 'car)
-                         (error "Pubkey ~S is not present in ~S" local-pubkey *keypairs-filename*))
+                         (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
                        t)
                      pubkeys)
       ;; make local nodes
@@ -83,6 +84,7 @@
        #+(or (not :openmcl) (not :shannon))
        (setf *logstream* *error-output*)
        (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
+       (setf *hmac-keypair-actor* (ac:make-actor #'actor-keypair-fn))
        (archive-log)
        (log-event-for-pr ':init)
        (setf gossip-inited t))
@@ -92,6 +94,8 @@
       (:uninit
        ;;; XXX Don't we need to shutdown/unbind the socket listener?
        (log-event-for-pr ':quit)
+       (setf *logging-actor* nil)
+       (setf *hmac-keypair-actor* nil)
        (setf gossip-inited nil))
       (:query gossip-inited))))
 

@@ -69,12 +69,6 @@
     (loop :for (host eripa port (public  private)) :in records
        :doing (format o "~s~&" `(,public ,private)))))
 
-(defun write-pubkeys-conf (path records)
-  (with-open-file (o path
-                     :direction :output
-                     :if-exists :supersede)
-    (loop :for (host eripa port (public  private)) :in records
-       :doing (format o "~s~&" public))))
 
 
 
