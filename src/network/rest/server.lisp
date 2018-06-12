@@ -10,13 +10,13 @@
            (restas:start api
                          :port port
                          :acceptor-class 'restas:restas-acceptor)))
-      (note "Starting REST server for api '~a' listening on port ~a" api port)
-      (note "An index of available services be viewed as <~a>" base-uri)
+      (emotiq:note "Starting REST server for api '~a' listening on port ~a" api port)
+      (emotiq:note "An index of available services be viewed as <~a>" base-uri)
       server)))
             
 (defun stop-server ()
   (ignore-errors
-    (note "Terminating all RESTAS acceptors with extreme prejudice.")
+    (emotiq:note "Terminating all RESTAS acceptors with extreme prejudice.")
     (restas:stop-all)))
 
 (defun restart-server ()

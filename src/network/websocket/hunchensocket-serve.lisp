@@ -2,19 +2,6 @@
   (:use :cl))
 (in-package :wallet/server)
 
-(defun note (message-or-format &rest args)
-  "Emit a note of progress to the appropiate logging system."
-  (let ((formats '(simple-date-time:|yyyymmddThhmmssZ|
-                   simple-date-time:|yyyy-mm-dd hh:mm:ss|)))
-    (format *error-output* 
-            "~&~a ~a~&"
-            (apply (second formats)
-                   (list (simple-date-time:now)))
-            (apply 'format 
-                 nil
-                 message-or-format
-                 (if args args nil)))))
-
 (defclass echo-server (hunchensocket:websocket-resource)
   ((path :initarg :path :reader path))
   (:default-initargs :client-class 'echo-server-client))

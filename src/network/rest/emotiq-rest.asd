@@ -1,5 +1,6 @@
 (defsystem "emotiq-rest"
   :depends-on (emotiq/wallet
+               emotiq/logging
                restas 
                cosi-bls
                parenscript

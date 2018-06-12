@@ -7,7 +7,6 @@
   (:export
    :assemble-path
    :as-html :reify
-   :note
    :mime-type))
 
    

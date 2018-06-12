@@ -22,11 +22,11 @@
 
 (defmethod hunchensocket:client-connected ((resource wallet-server) client)
   (declare (ignore client))
-  (note "~a has connected." resource))
+  (emotiq:note "~a has connected." resource))
 
 (defmethod hunchensocket:client-disconnected ((resource wallet-server) client)
   (declare (ignore client))
-  (note "~a has disconnected." resource))
+  (emotiq:note "~a has disconnected." resource))
 
 (defun broadcast (resource json)
   (loop :for peer :in (hunchensocket:clients resource)
@@ -38,11 +38,11 @@
     (hunchensocket:send-text-message client json)))
 
 (defmethod hunchensocket:text-message-received ((resource wallet-server) client message)
-  (note "~a connected to ~a:~&~t~a~&" client resource message)
+  (emotiq:note "~a connected to ~a:~&~t~a~&" client resource message)
   (let ((request  (cl-json:decode-json-from-string message)))
     (let ((method (alexandria:assoc-value request :method)))
       (unless method
-        (note "No method specified in message: ~a" message)
+        (emotiq:note "No method specified in message: ~a" message)
         (return-from hunchensocket:text-message-received nil))
       (let ((response
              (make-instance 'response
@@ -57,7 +57,7 @@
                  (progn 
                    (pushnew client *consensus-clients*)
                    (unless *consensus-thread*
-                     (note "Spawning thread to mock consensus replies.")
+                     (emotiq:note "Spawning thread to mock consensus replies.")
                      (bt:make-thread (lambda () (consensus)))
                      (setf *consensus-thread* t))
                    (setf result '(:true)))
@@ -108,7 +108,7 @@
          (push instance *handlers*)
          instance))
       (t 
-       (note "Unhandled request for resource path '~a'." path)))))
+       (emotiq:note "Unhandled request for resource path '~a'." path)))))
         
 (eval-when (:load-toplevel :execute)
   (pushnew 'handler hunchensocket:*websocket-dispatch-table*))
@@ -119,7 +119,7 @@
   (unless *acceptor*
     (setf *acceptor*
           (make-instance 'hunchensocket:websocket-acceptor :port port)))
-  (note "Starting websocket server on <ws://localhost:~a>"
+  (emotiq:note "Starting websocket server on <ws://localhost:~a>"
         (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
 

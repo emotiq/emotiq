@@ -52,7 +52,7 @@
       ((ends-with "svg" path)
        "image/svg+xml")
       (t
-       (note "Failed to determine mime type for '~A'." path)
+       (emotiq:note "Failed to determine mime type for '~A'." path)
        "image/*"))))
 
 (defmacro as-html (&body body)
@@ -71,17 +71,3 @@ Returns the mime type of the file as the second value."
          result
          (mime-type (pathname-type result)))
         "No bindable representation found.")))
-
-(defun note (message-or-format &rest args)
-  "Emit a note of progress to the appropiate logging system."
-  (format t 
-          "~a ~a~%"
-;;          (simple-date-time:|yyyymmddThhmmssZ|
-          (simple-date-time:|yyyy-mm-dd hh:mm:ss|
-                            (simple-date-time:now))
-          (apply 'format 
-                 nil
-                 message-or-format
-                 (if args 
-                     args
-                     nil))))

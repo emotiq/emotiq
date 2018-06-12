@@ -16,6 +16,7 @@
 
 (defsystem websocket/wallet
   :depends-on (emotiq/wallet
+               emotiq/logging
                cl-who
                parenscript
                cl-json
