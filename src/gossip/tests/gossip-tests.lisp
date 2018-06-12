@@ -150,7 +150,7 @@
   (make-node
    :UID 9
    :ADDRESS 'NIL
-   :NEIGHBORS '(2 4)
+   :neighborhood '(2 4)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -158,7 +158,7 @@
   (make-node
    :UID 4
    :ADDRESS 'NIL
-   :NEIGHBORS '(8 3 5 9)
+   :neighborhood '(8 3 5 9)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -166,7 +166,7 @@
   (make-node
    :UID 5
    :ADDRESS 'NIL
-   :NEIGHBORS '(6 8 4)
+   :neighborhood '(6 8 4)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -174,7 +174,7 @@
   (make-node
    :UID 8
    :ADDRESS 'NIL
-   :NEIGHBORS '(4 3 5)
+   :neighborhood '(4 3 5)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -182,7 +182,7 @@
   (make-node
    :UID 3
    :ADDRESS 'NIL
-   :NEIGHBORS '(4 1 8)
+   :neighborhood '(4 1 8)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -190,7 +190,7 @@
   (make-node
    :UID 1
    :ADDRESS 'NIL
-   :NEIGHBORS '(2 6 3)
+   :neighborhood '(2 6 3)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -198,7 +198,7 @@
   (make-node
    :UID 6
    :ADDRESS 'NIL
-   :NEIGHBORS '(5 2 1)
+   :neighborhood '(5 2 1)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -206,7 +206,7 @@
   (make-node
    :UID 2
    :ADDRESS 'NIL
-   :NEIGHBORS '(9 1 7 6)
+   :neighborhood '(9 1 7 6)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -214,7 +214,7 @@
   (make-node
    :UID 7
    :ADDRESS 'NIL
-   :NEIGHBORS '(10 2)
+   :neighborhood '(10 2)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)
@@ -222,7 +222,7 @@
   (make-node
    :UID 10
    :ADDRESS 'NIL
-   :NEIGHBORS '(7)
+   :neighborhood '(7)
    :local-kvs (as-hash-table
                'EQUAL
                'NIL)

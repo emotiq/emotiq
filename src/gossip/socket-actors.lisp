@@ -155,7 +155,7 @@
       (when (debug-level 4)
         (log-event "Socket receive" actor))
       (setf object
-            (handler-case (loenc:deserialize stream)
+            (handler-case (loenc:deserialize stream) ; error can happen if other end closed
               (error (c) (handle-stream-error c stream))))
       (ac:send outbox actor object) ; first parameter is this actor, so we can know where object came from
       )))
@@ -205,7 +205,8 @@
              (cond ((and (usocket:stream-usocket-p socket)
                          (open-stream-p stream))
                     (loenc:serialize payload stream)
-                    (finish-output stream))
+                    (handler-case (finish-output stream) ; error can happen if other end closed
+                      (error (c) (ac:self-call :shutdown :CLOSED))))
                    (t (ac:self-call :shutdown :CLOSED)))))
           (:shutdown
            ; Kill the select thread, close the socket. Leave outbox alone in case any output objects remain.
