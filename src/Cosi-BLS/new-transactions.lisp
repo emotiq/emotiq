@@ -1025,27 +1025,6 @@ development, this signals a continuable error if there is no transaction."
 
 
 
-(defun make-transaction-inputs-check (input-specs)
-  (require-blockchain)                  ; error checking
-  (loop with tx
-        with utxo-transaction-outputs
-        with n-outputs
-        for (id index) in input-specs
-        do (unless (setq tx (find-transaction-per-id id))
-             (warn "Transaction failure: no TX with TXID ~A found." id)
-             (return nil))
-           (setq utxo-transaction-outputs (transaction-outputs tx))
-           (setq n-outputs (length utxo-transaction-outputs))
-           (when (not (< index n-outputs))
-             (warn "Transaction failure: no UTXO found: out-of-range index in TX Outputs: ~d."
-                   index)
-             (return nil))
-        collect (make-instance
-                 'transaction-input
-                 :tx-in-id id
-                 :tx-in-index index
-                 :tx-in-unlock-script (get-unlocking-script 'script-sig))))
-
 (defun make-transaction-inputs (input-specs)
   (loop for (id index) in input-specs
         collect (make-instance
@@ -1054,15 +1033,6 @@ development, this signals a continuable error if there is no transaction."
                  :tx-in-index index
                  :tx-in-unlock-script (get-unlocking-script 'script-sig))))
 
-
-(defun make-transaction-outputs-check (output-specs)
-  (require-blockchain)                  ; error checking
-  (loop for (public-key-hash amount) in output-specs
-        collect (make-instance
-                 'transaction-output
-                 :tx-out-public-key-hash public-key-hash
-                 :tx-out-amount amount
-                 :tx-out-lock-script (get-locking-script 'script-pub-key))))
 
 (defun make-transaction-outputs (output-specs)
   (loop for (public-key-hash amount) in output-specs
