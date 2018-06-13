@@ -824,16 +824,19 @@ library."
                            :pt (get-element *g2-size* '_get-g2))
             )))
 
+(defun parse-order-from-init-text ()
+  (let ((txt (curve-params-pairing-text *curve*)))
+    (multiple-value-bind (start end gstart gend)
+        (#~m/\nr ([0-9]+).*\n/ txt)
+      (declare (ignore end))
+      (when start
+        (read-from-string (subseq txt (aref gstart 0) (aref gend 0)))
+        ))))
+
 (defun get-order ()
   "Return the integer value that represents the field and group orders."
   (or *curve-order*
-      (setf *curve-order*
-            (let ((txt (curve-params-pairing-text *curve*)))
-              (read-from-string txt t nil
-                                :start (+ (search "r " txt
-                                                  :test 'string-equal)
-                                          2)))
-            )))
+      (setf *curve-order* (parse-order-from-init-text))))
 
 ;; -------------------------------------------------
 ;; NOTE: Mapping hash values to Elliptic curves by first mapping
