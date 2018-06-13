@@ -406,11 +406,18 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       "Not in a Transaction-Script context, as required."))))
 
   
+(defparameter *debugging-chainlisp* nil
+  "When true, fail-script-op signals a continuable error on a failed
+  script operation instead of calling WARN.")
+
+
 (defun fail-script-op ()
   (cond
     (*current-script-op*
      (require-transaction-script-op-context)
-     (warn "Failure in script op ~a" *current-script-op*)
+     (if *debugging-chainlisp*
+         (cerror "Continue" "Failure in script op ~a" *current-script-op*)
+         (warn "Failure in script op ~a" *current-script-op*))
      (throw *transaction-script-catch-tag*
        nil))
     (t
@@ -449,6 +456,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
    - Reject if transaction fee (= sum of input values minus sum of output values) would be too low.
 
+   - Reject if input missing witness data (i.e., transaction has not
+     been signed, i.e., signature and public-key slots are unbound).
+
    - For each input, apply the unlock script function to no args,
      check that the result is a valid arg list (typically the
      list (signature public-key)), then apply the result to the lock
@@ -473,15 +483,18 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       (warn "A transaction with this ID (~a) is already on the blockchain. Rejected."
             txid))
   
-  (loop for tx-in in (transaction-inputs transaction)
+  (loop with succeed-p
+        for tx-in in (transaction-inputs transaction)
         as id = (tx-in-id tx-in)
         as index = (tx-in-index tx-in)
         as input-tx = (find-transaction-per-id id)
         as input-tx-outputs 
           = (cond
               ((null input-tx)
-               (warn "~%No transaction with TXID ~a found."
-                     id)
+               (progn
+                 (warn "~%No transaction with TXID ~a found." id)
+                 ;; (trace-compare-all-tx-ids id)
+                 )
                (return nil))
               (t (transaction-outputs input-tx)))
         as utxo
@@ -498,10 +511,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
               ;; ---!!! done here for now!
               tx-out)
         as input-subamount = (tx-out-amount utxo)
-        as succeed-p = (run-chainlisp-script transaction tx-in utxo)
         when (coinbase-transaction-input-p tx-in)
           do (warn "Transaction with coinbase input - rejected")
              (return nil)
+        when (or (not (slot-boundp tx-in '%tx-in-signature))
+                 (null (%tx-in-signature tx-in))
+                 (not (slot-boundp tx-in '%tx-in-public-key))
+                 (null (%tx-in-public-key tx-in)))
+          do (warn "Transaction missing witness data. Forgot to sign? Rejected.")
+             (return nil)                 
+        do (setq succeed-p (run-chainlisp-script transaction tx-in utxo))
         when (not succeed-p)
           do (return nil)
         sum input-subamount into sum-of-inputs
@@ -633,25 +652,34 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (def-script-op public-key-equal-verify (public-key public-key-hash)
-  (let* ((public-key-hash-from-public-key
-           (cosi/proofs:public-key-to-address public-key))
-         (l1 (length public-key-hash))
-         (l2 (length public-key-hash-from-public-key)))
-    (cond
-      ((not (stringp public-key-hash))
-       (format t "~%Public-key ~s not a string but string expected~%"
-               public-key-hash))
-      ((not (stringp public-key-hash-from-public-key))
-       (format t "~%Public-key hash ~s derived from public-key ~s not a string but string expected~%"
-               public-key public-key-hash))
-      ((not (= l1 l2))
-       (format t "~%Public key hash ~s length ~s ~%  not same as public key ~s hash ~s length ~s~%"
-               public-key-hash l2
-               public-key public-key-hash-from-public-key l2))
-      ((string= public-key-hash public-key-hash-from-public-key)
-       t)
-      (t
-       (fail-script-op)))))
+  (cond
+    ((not (typep public-key 'pbc:public-key))
+     (format t "~%Arg public-key (~s) is not of correct type: ~s~%"
+             public-key 'pbc:public-key)
+     (fail-script-op))
+    ((not (stringp public-key-hash))
+     (format t "~%Public-key-hash ~s not a string but string expected~%"
+             public-key-hash)
+     (fail-script-op))
+    (t
+     (let* ((public-key-hash-from-public-key
+              (cosi/proofs:public-key-to-address public-key))
+            (l1 (length public-key-hash))
+            (l2 (length public-key-hash-from-public-key)))
+       (cond
+         ((not (stringp public-key-hash-from-public-key))
+          (format t "~%Public-key hash ~s derived from public-key ~s not a string but string expected~%"
+                  public-key-hash-from-public-key public-key)
+          (fail-script-op))
+         ((not (= l1 l2))
+          (format t "~%Public key hash ~s length ~s ~%  not same as public key ~s hash ~s length ~s~%"
+                  public-key-hash l2
+                  public-key public-key-hash-from-public-key l2)
+          (fail-script-op))
+         ((string= public-key-hash public-key-hash-from-public-key)
+          t)
+         (t
+          (fail-script-op)))))))
 
 (def-script-op check-signature (public-key signature)
   (check-hash
@@ -810,7 +838,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun make-genesis-transaction (public-key-hash)
-  (make-hash-and-maybe-sign-transaction
+  (make-and-maybe-sign-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
           public-key-hash 
@@ -819,7 +847,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun make-coinbase-transaction (public-key-hash)
-  (make-hash-and-maybe-sign-transaction
+  (make-and-maybe-sign-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
           public-key-hash
@@ -871,7 +899,7 @@ development, this signals a continuable error if there is no transaction."
          do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
-  `(loop for ,tx-var in (slot-value ,blk 'cosi/proofs:block-transactions)
+  `(loop for ,tx-var in (cosi/proofs:block-transactions ,blk)
          do (progn ,@body)))
 
 
@@ -917,6 +945,16 @@ development, this signals a continuable error if there is no transaction."
                   problem-found? found-tx? found-block?))
           nil)))
       (t (values found-tx? found-block?)))))
+
+
+(defun trace-compare-all-tx-ids (id)
+  (format t "~%Trace:~%")
+  (do-blockchain (blk)
+    (do-transactions (tx blk)
+      (format t "~%TX id = ~s   vs~%  ~s [~a]"
+              (transaction-id tx) id
+              (tx-ids= (transaction-id tx) id))))
+  (format t "~&end trace~%"))
     
 
 
@@ -987,7 +1025,7 @@ development, this signals a continuable error if there is no transaction."
 
 
 
-(defun make-transaction-inputs (input-specs)
+(defun make-transaction-inputs-check (input-specs)
   (require-blockchain)                  ; error checking
   (loop with tx
         with utxo-transaction-outputs
@@ -1006,12 +1044,27 @@ development, this signals a continuable error if there is no transaction."
                  'transaction-input
                  :tx-in-id id
                  :tx-in-index index
-                 :tx-in-unlock-script (get-unlocking-script 'script-sig))
-          into tx-inputs))
+                 :tx-in-unlock-script (get-unlocking-script 'script-sig))))
 
+(defun make-transaction-inputs (input-specs)
+  (loop for (id index) in input-specs
+        collect (make-instance
+                 'transaction-input
+                 :tx-in-id id
+                 :tx-in-index index
+                 :tx-in-unlock-script (get-unlocking-script 'script-sig))))
+
+
+(defun make-transaction-outputs-check (output-specs)
+  (require-blockchain)                  ; error checking
+  (loop for (public-key-hash amount) in output-specs
+        collect (make-instance
+                 'transaction-output
+                 :tx-out-public-key-hash public-key-hash
+                 :tx-out-amount amount
+                 :tx-out-lock-script (get-locking-script 'script-pub-key))))
 
 (defun make-transaction-outputs (output-specs)
-  (require-blockchain)                  ; error checking
   (loop for (public-key-hash amount) in output-specs
         collect (make-instance
                  'transaction-output
@@ -1039,12 +1092,12 @@ development, this signals a continuable error if there is no transaction."
      (length tx-inputs))))
 
 
-(defun make-hash-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys)
-  "Create a transaction and hash it (creating its transaction ID). Then, if
-keyword keys is provided non-nil, the transaction is signed. In the signing
-case, keys should supply one private key for each input, either as a single
-private atomic private key or singleton list in the case of a single input or as
-a list of keys in the case of two or more inputs. Normally, all transactions
+(defun make-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys)
+  "Create a transaction. Then, if keyword keys is provided non-nil,
+the transaction is signed. In the signing case, keys should supply one
+private key for each input, either as a single private atomic private
+key or singleton list in the case of a single input or as a list of
+keys in the case of two or more inputs. Normally, all transactions
 should be signed, and only coinbase transactions are not signed."
   (let* ((transaction (make-transaction tx-inputs tx-outputs)))
     ;; Got keys? Sign transaction if so:
@@ -1069,13 +1122,13 @@ should be signed, and only coinbase transactions are not signed."
    signed, and only coinbase transactions are not signed.  Each resulting
    signature is stored in the %tx-in-signature slot of each input, and note also
    that the signature stores and makes accessible its corresponding public key."
-  (let* ((message (serialize-transaction transaction))
-         (private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
-    (with-slots (tx-inputs) transaction
-      (check-private-keys-for-transaction-inputs private-keys tx-inputs)
+  (with-slots (transaction-inputs) transaction
+    (let* ((message (serialize-transaction transaction))
+           (private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
+      (check-private-keys-for-transaction-inputs private-keys transaction-inputs)
       (let ((public-keys (if (and pkeys (atom pkeys)) (list pkeys) pkeys)))
-        (check-public-keys-for-transaction-inputs public-keys tx-inputs)
-        (loop for tx-input in tx-inputs
+        (check-public-keys-for-transaction-inputs public-keys transaction-inputs)
+        (loop for tx-input in transaction-inputs
               as private-key in private-keys
               as public-key in public-keys
               as signature = (sign-hash (hash:hash/256 message) private-key)
@@ -1144,3 +1197,69 @@ ADDRESS here is taken to mean the same thing as the public key hash."
           collect amount into amounts
           finally (return (apply #'+ amounts)))))
 
+
+
+
+
+;;;; Getting Transactions for Blocks
+
+
+
+(defun transaction-must-precede-p (t1 t2)
+  "Predicate on two transactions T1 and T2. True if any input of T2
+   refers to T1, meaning T1 must precede T2 on the blockchain."
+  (loop with t1-txid = (transaction-id t1)
+        for t2-transaction-input in (transaction-inputs t2)
+        thereis (tx-ids= t1-txid t2-transaction-input)))
+
+(defun get-transactions-for-new-block (&key max)
+  (loop for tx being each hash-value of cosi-simgen:*mempool*
+        count t into tx-count
+        collect tx into transactions
+        finally
+           ;; topologically sort transactions:
+           (setq transactions (sort transactions #'transaction-must-precede-p))
+           (when (and max (> max 0) (> tx-count max))
+             ;; Now, if necessary, it's safe to remove from
+             ;; back. Reverse the list, then remove from the back
+             ;; until down to max, then rereverse the list, leaving
+             ;; variable transactions shortened from the back. Note
+             ;; that the mempool is not altered (no transactions added
+             ;; or removed).
+             (let ((rev-txs (nreverse transactions)))
+               (loop do (pop rev-txs)
+                     while (> tx-count max)
+                     do (decf tx-count))
+               (setq transactions (nreverse rev-txs))))
+           #+development (assert (= (length transactions) tx-count))
+           (ac:pr (format nil "~D Transactions" tx-count))
+           (return transactions)))  
+
+;; Note: new transactions currently do not use UTXO database, only
+;; mempool and blockchain.
+
+;; Checking for double spending is not done here: it is done in
+;; cosi/proofs/newtx:validate-transaction only.
+
+;; Topological sorting of transactions is done here for now.  There is
+;; internally a proposal to reject transactions that spend a UTXO in
+;; the same block. However, it's being considered, and I'm not sure
+;; how to implement it correctly right now, especially for early
+;; transactions. -mhd, 6/13/18
+
+;; Improvements needed here: this is very crude for now. It could
+;; potentially leave transactions hanging around a long time based
+;; merely on having a hash that gets iterated to later -- essentially
+;; a random characteristic.  Later, the ordering should be
+;; prioritized. Typically based on a combination of weightings: how
+;; long has the transaction been sitting around waiting (the longer,
+;; the higher the priority); how much is offered in fees (the more the
+;; higher priority). -mhd, 6/13/18
+
+
+
+
+(defun check-block-transactions (blk)
+  "Return nil if invalid block."
+  (declare (ignore blk))                ; stub only for now! -mhd, 6/13/18
+  t)                                    ; tell caller everything's ok

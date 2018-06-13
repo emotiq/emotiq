@@ -165,6 +165,26 @@ added to the blockchain."
       blk)))
 
 
+
+(defparameter *newtx-p* t) ; using new-transactions.lisp (package
+                           ; cosi/proofs/newtx) - MHD development!
+                           ; -mhd, 6/13/18
+
+
+
+(defun create-genesis-block (public-key)
+  "Call this to create the genesis block."
+  (when (not *newtx-p*)
+    (error "Sorry, only know how to do this for new transactions (*newtx-p*)."))
+  (let* ((genesis-transaction
+           (cosi/proofs/newtx:make-genesis-transaction
+            (cosi/proofs:public-key-to-address public-key)))
+         (transactions (list genesis-transaction)))
+    (create-block nil nil nil nil transactions)))
+    
+             
+
+
 (defun hash-256 (&rest hashables)
   "This is the hashing used in our block in a merkle tree, linking
    transaction outputs and inputs, and hashing the block header. This
@@ -198,9 +218,6 @@ added to the blockchain."
              as tx = (elt transactions i)
              as tx-out-id = (get-transaction-id tx)
              collect tx-out-id))))
-
-
-(defparameter *newtx-p* nil) ; using new-transactions.lisp (package cosi/proofs/newtx)
 
 
 (defun get-transaction-id (transaction)
