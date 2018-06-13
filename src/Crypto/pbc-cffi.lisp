@@ -843,14 +843,13 @@ library."
       (setf *curve-order* (parse-order-from-init-text))))
 
 ;; -------------------------------------------------
-;; NOTE: Mapping hash values to Elliptic curves by first mapping
-;; to the finite field, then multiplying by a curve generator is
-;; *COMPLETELY UNSAFE* for signature generation when the pairing is
-;; symmetric. Anyone could forge a signature on any message.
+;; NOTE: Mapping hash values to Elliptic curves by first mapping to
+;; the finite field, then multiplying by a curve generator is
+;; *COMPLETELY UNSAFE* for signature generation. Anyone could forge a
+;; signature on any message.
 ;;
-;; For asymmetric pairings it is still unsafe in that the discrete log
-;; of the point would become known to anyone who can compute the hash
-;; value.
+;; It is also unsfe in that the discrete log of the point would become
+;; known to anyone who can compute the hash value.
 ;;
 ;; In general, hash values are mapped to X coordinates with
 ;; pseudo-random reprobing if needed.
