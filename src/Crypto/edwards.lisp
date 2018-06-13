@@ -706,16 +706,6 @@ we are done. Else re-probe with (X^2 + 1)."
                           (lambda ()
                             (ceiling (elligator-nbits) 8))))
 
-#| ;; unused here
-(defun elligator-padding ()
-  ;; generate random padding bits for the initial byte
-  ;; of a big-endian octet Elligator encoding
-  (let* ((nbits (mod (elligator-nbits) 8)))
-    (if (zerop nbits)
-        0
-      (ash (ctr-drbg-int (- 8 nbits)) nbits))))
-|#
-
 (defun elligator-int-padding ()
   ;; generate random padding bits for an elligator int
   (let* ((enb   (elligator-nbits))
