@@ -53,7 +53,7 @@ THE SOFTWARE.
   (hash-val x))
 
 (defmethod hash-bytes ((x hash))
-  (bev-vec (bev (hash-val x))))
+  (bev-vec (hash-val x)))
 
 (defmethod hash-length ((x hash))
   (length (hash-bytes x)))
