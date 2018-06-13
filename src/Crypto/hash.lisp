@@ -110,10 +110,11 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------
 
-(defun get-hash-nbytes (nb seed)
+(defun get-hash-nbytes (nb &rest seeds)
   ;; returns a vector of nb raw-bytes
   (let ((dig (ironclad:make-digest :shake128 :output-length nb)))
-    (ironclad:update-digest dig (hashable seed))
+    (dolist (seed seeds)
+      (ironclad:update-digest dig (hashable seed)))
     (ironclad:produce-digest dig)))
 
 ;; -----------------------------------------------------
