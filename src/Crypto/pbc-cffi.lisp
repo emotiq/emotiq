@@ -827,6 +827,10 @@ library."
 (defun parse-order-from-init-text ()
   (let ((txt (curve-params-pairing-text *curve*)))
     (multiple-value-bind (start end gstart gend)
+        ;; assumes the "r ..." line is preceded and followed by
+        ;; newline chars.  This will always be true for the prefix,
+        ;; but if the r line is last, you must ensure that a newline
+        ;; follows. This may be needed by the C lib too.
         (#~m/\nr ([0-9]+).*\n/ txt)
       (declare (ignore end))
       (when start
