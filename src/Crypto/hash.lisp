@@ -108,6 +108,8 @@ THE SOFTWARE.
 (defun hash/512 (&rest args)
   (apply 'local-digest :sha3 'hash/512 args))
 
+;; -----------------------------------------------------
+
 (defun get-hash-nbytes (nb seed)
   ;; returns a vector of nb raw-bytes
   (cond
@@ -124,8 +126,13 @@ THE SOFTWARE.
       ))
    ((= nb 64)
     (hash-bytes (hash/512 seed)))
-   ((> nb 32)
+   ((> nb 48)
     (let ((bytes (hash-bytes (hash/512 seed))))
+      (subseq bytes 0 nb)))
+   ((= nb 48)
+    (hash-bytes (hash/384 seed)))
+   ((> nb 32)
+    (let ((bytes (hash-bytes (hash/384 seed))))
       (subseq bytes 0 nb)))
    ((= nb 32)
     (hash-bytes (hash/256 seed)))
@@ -134,11 +141,15 @@ THE SOFTWARE.
       (subseq bytes 0 nb)))
    ))
 
+;; -----------------------------------------------------
+
 (defmethod hash-check (item (expected string))
   (string-equal expected (hex-str (hash/256 item))))
 
 (defmethod hash= ((hash1 hash) (hash2 hash))
   (vec= hash1 hash2))
+
+;; -----------------------------------------------------
 
 (defmethod print-object ((obj hash) out-stream)
   (if *print-readably*
