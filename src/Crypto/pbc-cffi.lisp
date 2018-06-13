@@ -56,7 +56,6 @@ THE SOFTWARE.
    :secret-subkey
    
    :init-pairing
-   :need-pairing
    :set-generator  ;; 1 each for G1, and G2 groups
    
    :get-g1
@@ -753,11 +752,6 @@ SMP access. Everything else should be SMP-safe."
               ))))
       prev))) ;; return previous *curve*
 
-(defun need-pairing ()
-  "If pairing lib not already init, then do so."
-  (unless *curve*
-    (init-pairing)))
-
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
 ;; We work internally with little-endian values
@@ -808,7 +802,6 @@ SMP access. Everything else should be SMP-safe."
 (defun get-element (nb get-fn)
   "Internal routine to read a (possibly compressed) element from the C
 library."
-  (need-pairing)
   (with-fli-buffers ((buf nb))
     (assert (eql nb (funcall get-fn buf nb)))
     (xfer-foreign-to-lisp buf nb)))
@@ -851,7 +844,6 @@ library."
 
 (defmethod g1-from-hash ((hash hash))
   "Return the hash value mapped into G1"
-  (need-pairing)
   (let ((nb  (hash-length hash)))
     (with-fli-buffers ((ptbuf  *g1-size*)
                        (hbuf   nb  hash))
@@ -862,7 +854,6 @@ library."
                        
 (defmethod g2-from-hash ((hash hash))
   "Return the hash value mapped into G2"
-  (need-pairing)
   (let ((nb (hash-length hash)))
   (with-fli-buffers ((ptbuf  *g2-size*)
                      (hbuf   nb  hash))
@@ -873,7 +864,6 @@ library."
                        
 (defmethod zr-from-hash ((hash hash))
   "Return the hash value mapped into Zr"
-  (need-pairing)
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
                        (hbuf   nb  hash))
@@ -886,7 +876,6 @@ library."
 
 (defmethod set-element ((x crypto-val) set-fn nb)
   ;; internal routine
-  (need-pairing)
   (mpcompat:with-lock (*crypto-lock*)
     (let ((bytes (crypto-val-vec x)))
       (with-fli-buffers ((buf nb bytes))
@@ -906,7 +895,6 @@ library."
 
 (defmethod sign-hash ((hash hash) (skey secret-key))
   "Bare-bones BLS Signature"
-  (need-pairing)
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sigbuf *g1-size*)
                        (skbuf  *zr-size* skey)
@@ -918,7 +906,6 @@ library."
 
 (defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
   "Check bare-bones BLS Signature"
-  (need-pairing)
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sbuf *g1-size*  sig)
                        (hbuf nhash      hash)
@@ -965,7 +952,6 @@ library."
 (defun make-key-pair (seed)
   "Return a certified keying pair. Seed can be literally anything.
 Certification includes a BLS Signature on the public key."
-  (need-pairing)
   (multiple-value-bind (hsh hlen) (hash/256 seed)
     (with-fli-buffers ((sbuf *zr-size*)
                        (pbuf *g2-size*)
@@ -1092,7 +1078,6 @@ Certification includes a BLS Signature on the public key."
 ;; -----------------------------------------------
 
 (defmethod compute-pairing ((hval g1-cmpr) (gval g2-cmpr))
-  (need-pairing)
   (with-fli-buffers ((hbuf  *g1-size*  hval)
                      (gbuf  *g2-size*  gval)
                      (gtbuf *gt-size*))
@@ -1109,7 +1094,6 @@ Certification includes a BLS Signature on the public key."
 (defun binop (op a b a-siz b-siz final)
   ;; operate on operands a, b, returning in the buffer for a
   ;; it is assumed that the a-siz is also the size of result.
-  (need-pairing)
   (with-fli-buffers ((a-buf  a-siz  a)
                      (b-buf  b-siz  b))
     (funcall op a-buf b-buf) ;; result returned in first arg buffer
@@ -1169,7 +1153,6 @@ Certification includes a BLS Signature on the public key."
   ;; compute inverse of z in ring Zr
   (when (zerop (int z))
     (error "Can't invert zero"))
-  (need-pairing)
   (with-fli-buffers ((z-buf  *zr-size* z))
     (_inv-zr-val z-buf)
     (make-instance 'zr
@@ -1243,7 +1226,6 @@ Certification includes a BLS Signature on the public key."
   seed x y proof)
 
 (defmethod compute-vrf (seed (skey secret-key))
-  (need-pairing)
   (let* ((x      (zr-from-hash (hash:hash/256 seed)))
          (1/x+s  (with-mod (get-order)
                    (m/ (m+ (int x) (int skey)))))
@@ -1256,7 +1238,6 @@ Certification includes a BLS Signature on the public key."
      :proof g1)))
 
 (defmethod validate-vrf ((vrf vrf) (pkey public-key))
-  (need-pairing)
   (let* ((x   (zr-from-hash (hash:hash/256 (vrf-seed vrf))))
          (g2  (add-pts (mul-pt-zr (get-g2) x) pkey))
          (c   (compute-pairing (vrf-proof vrf) g2))
@@ -1423,3 +1404,27 @@ likely see an assertion failure"
           (doit :eight :okay#8))
       (ac:pr :done ans))))
 |#
+;; ------------------------------------------------------------------------------
+
+#-:lispworks
+(eval-when (:load-toplevel)
+  (init-pairing))
+
+#+:lispworks
+(eval-when (:load-toplevel)
+  ;; 2 choices, if building-binary, don't init-pairing; else init-pairing
+  ;; Cannot init-pairing during DELIVERY (since, multitasking not allowed during DELIVERY), must init-pairing later.
+  ;; *performing-binary-build* is created in delivery.lisp, else it is not created and not BOUNDP
+
+  ;; Trying to avoid the use of *features*.  We use a special, cl-user::*performing-binary-build*, set up
+  ;; in emotiq/etc/deliver/deliver.lisp, then write Lisp code to decide which of the 2 cases to perform (at LOAD time).
+  ;; This special is UNINTERNED in emotiq/src/startup.lisp/START.
+
+  (let ((building-binary-p (boundp 'cl-user::*performing-binary-build*)))
+
+    (format *standard-output* "~&building-binary-p ~A~&"
+            building-binary-p)
+    
+    (if building-binary-p
+        nil                                          ;; do nothing, esp. don't try to init-pairing
+      (init-pairing))))                      ;; in all other cases, init-pairing at LOAD time.
