@@ -9,11 +9,11 @@
 #   Whitespace separated list of systems to test.
 #
 #
-# For example
+# For example the following entry
 #
-#   lisp=ccl systems=":gossip-test :cosi-bls" bash test-harness.bash
+#   lisp=ccl systems=":gossip-tests :cosi-bls" bash test-harness.bash
 #
-# would invoke the test harness using `ccl` on the `gossip-test` and
+# would invoke the test harness using `ccl` on the `gossip-tests` and
 # `cosi-bls` systems.
 #
 # BUGS
@@ -28,12 +28,11 @@ DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 lisp=${lisp:-'ros'}
 
 # The default whitespace list of systems to test
-systems=${systems:-":emotiq/blockchain
-                    :crypto-pairings/t
-                    :core-crypto"}
+systems=${systems:-":crypto-pairings/t
+                    :cosi-bls"}
 
 echo Test harness invoked using implementation: ${lisp}
-echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)')
+echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)' < /dev/null)
 
 for system in ${systems}; do
     rm -rf ~/.cache/common-lisp/
