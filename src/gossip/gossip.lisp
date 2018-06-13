@@ -25,6 +25,8 @@
 (defvar *default-graphID* :root "Identifier of the default, root, ground, or 'physical' graph that a node is always part of")
 (defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
 (defvar *hmac-keypair-actor* nil "Actor managing *hmac-keypair*")
+(defvar *live-uids* nil "cons of (time . list returned by multiple-list-uids). Only reflects uids found through active pinging,
+        not those that result from unsolicited incoming messages to this machine.")
 
 (defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
 
@@ -106,7 +108,7 @@ in KEYWORDS removed."
 ; Case 4: *use-all-neighbors* = 1 and *active-ignores* = false. Lots of timeouts. Poor results. NOW A FORBIDDEN CASE.
 
 ;;; DEPRECATE. Use forward-to slot on messages for this now.
-(defun set-protocol-style (kind &optional (n 1))
+(defun set-protocol-style (kind &optional (n 2))
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
       There's no guarantee this will reach all nodes. But it's quicker and more realistic.
@@ -454,7 +456,8 @@ are in place between nodes.
                but the real-uid is used to route it to the proper node on the remote
                machine."))
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
-              All we know about it is its UID and address, which is enough to transmit a message to it."))
+              All we know about it is its UID and address, which is enough to transmit a message to it.
+              Proxy nodes never have neighbors."))
 
 (defmethod print-object ((thing proxy-gossip-node) stream)
    (with-slots (real-address) thing
@@ -537,13 +540,20 @@ are in place between nodes.
 (defmethod neighborhood ((node gossip-node) &optional (graphID *default-graphID*))
   (kvs:lookup-key (neighbors node) graphID))
 
+(defmethod dissolve-neighborhood ((node gossip-node) graphID)
+  "Removes connections associated with given graphID. graphID _must_ be specified here.
+   Returns true if graphID in fact existed on this node; nil otherwise."
+  ; TODO: must also destroy entry in locate-local-node-for-graph table (if any) for this graphID
+  (kvs:remove-key (neighbors node) graphID))
+
 (defmethod (setf neighborhood) (value (node gossip-node) &optional (graphID *default-graphID*))
   "For the benefit of pushnew"
   (kvs:relate-unique (neighbors node) graphid value))
 
 (defmethod connect ((node1 gossip-node) (node2 gossip-node) &optional (graphID *default-graphID*))
   "Establish an edge between two nodes. Because every node must know its nearest neighbors,
-   we store the edge information twice: Once in each endpoint node."
+   we store the edge information twice: Once in each endpoint node.
+   This method is only for connecting local, real nodes."
   (pushnew (uid node1) (neighborhood node2 graphID))
   (pushnew (uid node2) (neighborhood node1 graphID)))
   
@@ -672,6 +682,7 @@ the node itself would send upstream if it were an :UPSTREAM message. If final-co
 dropped on the floor.
 |#
 
+;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
   "Like solicit-wait but asks for all replies to be sent back to node directly, rather than percolated upstream.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
@@ -701,7 +712,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (list (except :name :TIMEOUT)))
+                   (except :name :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -752,7 +763,7 @@ dropped on the floor.
               (values 
                (if success
                    (first (args (first response))) ; should be a FINAL-REPLY
-                   (list (except :name :TIMEOUT)))
+                   (except :name :TIMEOUT))
                soluid))))
       (ac:unregister-actor actor-name))))
 
@@ -787,7 +798,7 @@ dropped on the floor.
                 (values 
                  (if win
                      (first (args (first response)))
-                     (list (except :name :TIMEOUT)))
+                     (except :name :TIMEOUT))
                  soluid)))
           (setf (logfn node) old-logger))))))
 
@@ -797,7 +808,7 @@ dropped on the floor.
    (address port uid1 uid2 ...)
    If error, returned list will look like
    (address port :ERRORMSG arg1 arg2 ...)"
-  (let ((rnode (ensure-proxy-node :TCP address port 0))
+  (let ((rnode (ensure-proxy-node ':TCP address port 0))
         (localnode nil)
         (allnodes nil))
     (unwind-protect
@@ -823,7 +834,7 @@ dropped on the floor.
         (localnode nil)
         (allnodes nil))
     (setf rnodes (mapcar (lambda (addressport)
-                           (ensure-proxy-node :TCP (first addressport) (second addressport) 0))
+                           (ensure-proxy-node ':TCP (first addressport) (second addressport) 0))
                          address-port-list))
     (unwind-protect
         (progn
@@ -865,7 +876,6 @@ dropped on the floor.
            node
            msg
            args)))
-
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
@@ -1191,18 +1201,47 @@ dropped on the floor.
 ;; Because these messages never involve a reply, even if the reply-to slot is non-nil in these messages,
 ;;   it will be ignored.
 
-;;; This is the application programmer's interface into the gossip system.
+; Not really using this for anything
 (defmethod announce ((msg solicitation) thisnode srcuid)
-  "Announce a message to the collective. First arg of Msg is the disposition, which
-   is expected to be an actor-ish (actor or otherwise something that ac:send can send to). Remaining
-   args are message sent to that actor-ish.
-   Recipient nodes are not expected to reply."
-  (let ((disposition (first (args msg)))
-        (downstream (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
-    (if downstream
-         (forward msg thisnode downstream) ; thisnode becomes new source for forwarding purposes
-         (when disposition ; assume it's something that we can ac:send to
-           (apply 'ac:send (cdr (args msg)))))))
+  "Announce a message to the collective. First arg of Msg is the announcement,
+   which can be any Lisp object. Recipient nodes are not expected to reply.
+   This is probably only useful for debugging gossip protocols, since the only
+   record of the announcement will be in the log."
+  (let ((content (first (args msg))))
+    (declare (ignore content))
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
+
+;;; These are the message kinds used by the high-level application programmer's gossip api.
+
+(defmethod singlecast ((msg solicitation) thisnode srcuid)
+  "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
+  Destination node is expected to be in (car args) of the solicitation.
+  Message will percolate along the graph until it reaches destination node, at which point it stops percolating.
+  Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
+  Destination node is not expected to reply (at least not with gossip-style replies)."
+  (if (eql (uid thisnode) (car (args msg)))
+      (apply 'ac:send (application-handler thisnode) (cdr (args msg)))
+      ; thisnode becomes new source for forwarding purposes
+      (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
+
+(defmethod multicast ((msg solicitation) thisnode srcuid)
+  "Announce a message to the collective. Application message is expected to be in args of the solicitation.
+  Every intermediate node will have the message
+  both delivered to it and forwarded through it.
+  Recipient nodes are not expected to reply (at least not with gossip-style replies)."
+  (apply 'ac:send (application-handler thisnode) (args msg))
+   ; thisnode becomes new source for forwarding purposes
+  (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
+
+(defmethod dissolve ((msg solicitation) thisnode srcuid)
+  "Commands every node it passes through to dissolve connections associated with a given graphID.
+   Always uses full neighborcast, no matter what the message says."
+  (forward msg thisnode (get-downstream thisnode srcuid t (graphID msg)))
+  ; must dissolve _after_ forwarding, of course
+  (dissolve-neighborhood thisnode (graphID msg)))
+
+;;; Message kinds used by gossip itself
 
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
@@ -1852,7 +1891,7 @@ gets sent back, and everything will be copacetic.
     (destructuring-bind (destuid srcuid rem-port msg) packet ;; note: if not what we were expecting, then this will signal error
       (when (debug-level 2)
         (log-event :INCOMING-UDP msg :FROM rem-address rem-port :TO destuid))
-      (let ((proxy (ensure-proxy-node :UDP rem-address rem-port srcuid)))
+      (let ((proxy (ensure-proxy-node ':UDP rem-address rem-port srcuid)))
           ;ensure a local node of type proxy-gossip-node exists on this machine with
           ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
         (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
@@ -2207,9 +2246,9 @@ gets sent back, and everything will be copacetic.
 ; (clrhash *nodes*)
 ; (run-gossip-sim :UDP)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
+(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
 
 
 #+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
@@ -2235,9 +2274,9 @@ gets sent back, and everything will be copacetic.
 ; (run-gossip-sim :UDP)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 0))
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
 
 #+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
@@ -2263,9 +2302,9 @@ gets sent back, and everything will be copacetic.
 ; (archive-log)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node ':TCP "localhost" (other-tcp-port) 0))
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node :TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+(setf rnode (ensure-proxy-node ':TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
 
 #+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network

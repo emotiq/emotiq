@@ -243,7 +243,7 @@
           (log-event :INCOMING-TCP msg :FROM rem-address :TO destuid))
         ;ensure a local node of type proxy-gossip-node exists on this machine with
         ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
+        (let ((proxy (ensure-proxy-node ':TCP rem-address rem-port srcuid)))
           (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
           ;   on THIS machine.
           )))))
