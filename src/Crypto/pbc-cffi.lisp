@@ -846,7 +846,7 @@ library."
 ;; NOTE: Mapping hash values to Elliptic curves by first mapping to
 ;; the finite field, then multiplying by a curve generator is
 ;; *COMPLETELY UNSAFE* for signature generation. Anyone could forge a
-;; signature on any message.
+;; BLS signature on any message.
 ;;
 ;; It is also unsfe in that the discrete log of the point would become
 ;; known to anyone who can compute the hash value.
