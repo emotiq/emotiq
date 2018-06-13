@@ -422,7 +422,7 @@ alpha1 9476715580407735251767803811432601203461520366585714647829339610866164227
   "Curve parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^449, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
-square roots.  This curve will wrap 1 in 5.5e27 hash/256.
+square roots.
 Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
 Barreto and Naehrig.
 Size of q^12 is 5388 bits.
