@@ -57,15 +57,6 @@ THE SOFTWARE.
   (declare (ignore env))
   (make-load-form-saving-slots point))
 
-#|
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (fboundp 'make-ecc-pt)
-    (defstruct ecc-pt
-      x y))
-  (defstruct ed-proj-pt
-    x y z))
-|#
-
 ;; ------------------------------------------------------------------------------
 ;; Curve parameters from SafeCurves
 ;; https://safecurves.cr.yp.to
