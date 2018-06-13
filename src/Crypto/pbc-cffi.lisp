@@ -844,6 +844,13 @@ library."
 ;; *COMPLETELY UNSAFE* for signature generation when the pairing is
 ;; symmetric. Anyone could forge a signature on any message.
 ;;
+;; For asymmetric pairings it is still unsafe in that the discrete log
+;; of the point would become known to anyone who can compute the hash
+;; value.
+;;
+;; In general, hash values are mapped to X coordinates with
+;; pseudo-random reprobing if needed.
+;;
 
 (defmethod g1-from-hash ((hash hash))
   "Return the hash value mapped into G1"
