@@ -94,7 +94,7 @@ THE SOFTWARE.
               (length hv)))))
 
 (defun hash/ripemd/160 (&rest args)
-  (apply 'local-digest :ripemd-160 'hash-ripemd/160 args))
+  (apply 'local-digest :ripemd-160 'hash/ripemd/160 args))
 
 (defun hash/sha2/256 (&rest args)
   (apply 'local-digest :sha256 'hash/sha2/256 args))
