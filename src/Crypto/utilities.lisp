@@ -61,14 +61,15 @@ for any other symbol."
   
 
 (defmacro defstub (function-name)
-  (setf (stub-function-p function-name) t) ; set both at compile and load time
-  `(progn
-     (setf (stub-function-p ',function-name) t)
-     (defun ,function-name (&rest args)
-       (declare (ignore args))
-       (error "~s, a stub function, called at run time, but it should not be."
-              ',function-name))
-     ',function-name))
+  (unless (fboundp function-name)
+    (setf (stub-function-p function-name) t) ; set both at compile and load time
+    `(progn
+       (setf (stub-function-p ',function-name) t)
+       (defun ,function-name (&rest args)
+         (declare (ignore args))
+         (error "~s, a stub function, called at run time, but it should not be."
+                ',function-name))
+       ',function-name)))
 
 
 
@@ -495,6 +496,7 @@ from calling the function."
     ans))
 
 
+#-:COM.RAL
 (defstub sha2_file)
 
 #+:LISPWORKS
@@ -518,6 +520,7 @@ from calling the function."
      (ironclad:digest-file dig fname))))
 
 
+#-:COM.RAL
 (defstub shad2_file)
 
 #+:LISPWORKS
@@ -722,6 +725,7 @@ from calling the function."
   nil)
   
 
+#-:COM.RAL
 (defstub gf-random-k*)
 
 (defun make-ecc-projective-pt (&key x y (z 1) alpha)
