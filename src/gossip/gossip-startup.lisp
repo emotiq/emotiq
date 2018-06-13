@@ -43,10 +43,13 @@
 
 (defun ping-other-machines (&optional (hosts *hosts*))
   "Find what other machines are alive.
-  Returns alist of augmented-data or exception monads about live public keys on other machines.
-  You can map unwrap on these things to get at the real data."
+   Returns a list of augmented-data or exception monads about live UIDs on other machines.
+   You can map unwrap on these things to get at the real data.
+   Stashes result along with time of acquisition at *live-uids*>"
   (when hosts
-    (multiple-list-uids hosts)))
+    (let ((others (multiple-list-uids hosts)))
+      (setf *live-uids* (cons (get-universal-time) others))
+      others)))
 
 (defun gossip-startup (&key root-path (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test

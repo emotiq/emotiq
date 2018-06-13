@@ -37,7 +37,7 @@
   (let ((server-port (if (equalp "localhost" server-address)
                          (other-tcp-port)
                          *nominal-gossip-port*)))
-    (setf rnode (ensure-proxy-node :TCP server-address server-port rnodenum))
+    (setf rnode (ensure-proxy-node ':TCP server-address server-port rnodenum))
     (setf localnode (make-node
                      :neighborhood (list (uid rnode))))))
 
@@ -95,7 +95,7 @@
   (clrhash *nodes*)
   (run-gossip-sim :TCP)
   (set-protocol-style :neighborcast)
-  (setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) 0))
+  (setf rnode (ensure-proxy-node ':TCP "localhost" (other-tcp-port) 0))
   )
 
 ; (setup-clientx 100)
@@ -124,7 +124,7 @@
   (let ((port (if (equalp "localhost" other-machine-address)
                   (other-tcp-port)
                   *nominal-gossip-port*)))
-    (setf rnode (ensure-proxy-node :TCP other-machine-address port m))
+    (setf rnode (ensure-proxy-node ':TCP other-machine-address port m))
     (setf localnode (make-node
                      :neighborhood (list (uid rnode))))))
 
