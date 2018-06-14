@@ -434,15 +434,21 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defun transaction-fee-too-low-p (transaction-fee)
   (< transaction-fee *minimum-transaction-fee*))               ; ---!!! review!!
 
+(defun in-legal-money-range-p (amount)
+  (and (>= amount *minimum-spend-amount*)
+       (<= amount *maximmum-spend-amount*)))
+
 
 (defun validate-transaction (transaction)
   "Validate TRANSACTION, and either accept it (by returning true) or
    reject it by returning false (nil).  This is for transactions
    transmitted via gossip network.  The following checks are done:
 
+   (Items in square brackets ([]) are not yet implemented and may be somewhat in doubt.)
+
    - Reject if transaction-inputs or transaction-outputs are nil.
 
-   - Reject if any output amount or the total is outside the legal money range.
+   [- Reject if any output amount or the total is outside the legal money range.]
 
    - Reject if this appears to be a coinbase transaction (created by block creator only).
 
@@ -478,67 +484,65 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (let ((txid (transaction-id transaction)))
     (when (find-transaction-per-id txid)
       (warn "A transaction with this ID (~a) is already on the blockchain. Rejected."
-            txid))
-    (when (find-transaction-per-id txid)
-      (warn "A transaction with this ID (~a) is already on the blockchain. Rejected."
-            txid))
-  
-  (loop with succeed-p
-        for tx-in in (transaction-inputs transaction)
-        as id = (tx-in-id tx-in)
-        as index = (tx-in-index tx-in)
-        as input-tx = (find-transaction-per-id id)
-        as input-tx-outputs 
-          = (cond
-              ((null input-tx)
-               (progn
-                 (warn "~%No transaction with TXID ~a found." id)
-                 ;; (trace-compare-all-tx-ids id)
-                 )
-               (return nil))
-              (t (transaction-outputs input-tx)))
-        as utxo
-          = (let ((tx-out 
-                    (or (nth index input-tx-outputs)
-                        (unless (tx-ids= id (transaction-id input-tx))
-                          (warn "TX ~a output does not match input spec [~a/~d]."
-                                input-tx id index)
-                          (return nil))
-                        ;; debugging:
-                        (error "TX ~a output [~a/~d] lost - likely programming error"
-                               input-tx id index))))
-              ;; ---!!! todo: verify not spent. pretend that's been
-              ;; ---!!! done here for now!
-              tx-out)
-        as input-subamount = (tx-out-amount utxo)
-        when (coinbase-transaction-input-p tx-in)
-          do (warn "Transaction with coinbase input - rejected")
-             (return nil)
-        when (or (not (slot-boundp tx-in '%tx-in-signature))
-                 (null (%tx-in-signature tx-in))
-                 (not (slot-boundp tx-in '%tx-in-public-key))
-                 (null (%tx-in-public-key tx-in)))
-          do (warn "Transaction missing witness data. Forgot to sign? Rejected.")
-             (return nil)                 
-        do (setq succeed-p (run-chainlisp-script transaction tx-in utxo))
-        when (not succeed-p)
-          do (return nil)
-        sum input-subamount into sum-of-inputs
-        finally (let ((sum-of-outputs
-                        (loop for tx-out in (transaction-outputs transaction)
-                              sum (tx-out-amount tx-out))))
-                  (when (< sum-of-inputs sum-of-outputs)
-                    (warn "TX sum of inputs values < sum of output values. Rejected.")
-                    (return nil))
-                  (when (transaction-fee-too-low-p 
-                         (- sum-of-inputs sum-of-outputs))
-                    (warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
-                          (- sum-of-inputs sum-of-outputs)
-                          *minimum-transaction-fee*)
-                    (return nil)))
-                (format t "~%Successful transaction ~a" transaction)
-                (add-transaction-to-mempool transaction)
-                (return t))))
+            txid)
+      (return-from validate-transaction nil))
+    (loop with succeed-p
+          for tx-in in (transaction-inputs transaction)
+          as id = (tx-in-id tx-in)
+          as index = (tx-in-index tx-in)
+          as input-tx = (find-transaction-per-id id)
+          as input-tx-outputs 
+            = (cond
+                ((null input-tx)
+                 (progn
+                   (warn "~%No transaction with TXID ~a found." id)
+                   ;; (trace-compare-all-tx-ids id)
+                   )
+                 (return nil))
+                (t (transaction-outputs input-tx)))
+          as utxo
+            = (let ((tx-out
+                      (or (nth index input-tx-outputs)
+                          (unless (tx-ids= id (transaction-id input-tx))
+                            (warn "TX ~a output does not match input spec [~a/~d]."
+                                  input-tx id index)
+                            (return nil))
+                          ;; debugging:
+                          (error "TX ~a output [~a/~d] lost - likely programming error"
+                                 input-tx id index))))
+                (when (double-spend-tx-out-p id index)
+                  (warn "The tx out has already been spent. TXID: ~a. Index: ~a. Rejected.")
+                  (return nil))
+                tx-out)
+          as input-subamount = (tx-out-amount utxo)
+          when (coinbase-transaction-input-p tx-in)
+            do (warn "Transaction with coinbase input - rejected")
+               (return nil)
+          when (or (not (slot-boundp tx-in '%tx-in-signature))
+                   (null (%tx-in-signature tx-in))
+                   (not (slot-boundp tx-in '%tx-in-public-key))
+                   (null (%tx-in-public-key tx-in)))
+            do (warn "Transaction missing witness data. Forgot to sign? Rejected.")
+               (return nil)                 
+          do (setq succeed-p (run-chainlisp-script transaction tx-in utxo))
+          when (not succeed-p)
+            do (return nil)
+          sum input-subamount into sum-of-inputs
+          finally (let ((sum-of-outputs
+                          (loop for tx-out in (transaction-outputs transaction)
+                                sum (tx-out-amount tx-out))))
+                    (when (< sum-of-inputs sum-of-outputs)
+                      (warn "TX sum of inputs values < sum of output values. Rejected.")
+                      (return nil))
+                    (when (transaction-fee-too-low-p 
+                           (- sum-of-inputs sum-of-outputs))
+                      (warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
+                            (- sum-of-inputs sum-of-outputs)
+                            *minimum-transaction-fee*)
+                      (return nil)))
+                  (format t "~%Successful transaction ~a" transaction)
+                  (add-transaction-to-mempool transaction)
+                  (return t))))
 
                   
 
@@ -923,6 +927,24 @@ development, this signals a continuable error if there is no transaction."
       (when (tx-ids= (transaction-id tx) id)
         (return-from find-transaction-per-id-or-double-spend
           (values tx block))))))
+
+(defun double-spend-tx-out-p (id index)
+  (do-blockchain (block)
+    (do-transactions (tx block)
+      (loop for tx-in in (transaction-inputs tx)
+            as tx-in-id = (tx-in-id tx-in)
+            as tx-in-index = (tx-in-index tx-in)
+            when (and (tx-ids= tx-in-id id)
+                      (= tx-in-index index))
+              ;; earlier spend block found (double spend attempt)
+              do (return-from 
+                  double-spend-tx-out-p
+                   t))
+      ;; Can stop search (not a double-spend) when reach ID
+      (when (tx-ids= (transaction-id tx) id)
+        (return-from double-spend-tx-out-p
+          nil)))))
+  
 
 
 (defun find-utxo (id &key no-warn)
