@@ -8,6 +8,7 @@
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
+   #:clear-local-nodes
    #:*log-filter*
    #:*log*
    #:*log-dots*
