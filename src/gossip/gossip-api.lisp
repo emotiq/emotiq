@@ -29,7 +29,7 @@
           (when startnodeID
             (setf solicitation (make-solicitation
                                 :reply-to nil
-                                :kind :singlecast
+                                :kind :k-singlecast
                                 :forward-to howmany
                                 :args message))
             (send-msg solicitation
@@ -40,7 +40,7 @@
         (progn
           (setf solicitation (make-solicitation
                               :reply-to nil
-                              :kind :singlecast
+                              :kind :k-singlecast
                               :forward-to nil
                               :args message))
           (send-msg solicitation
@@ -54,7 +54,7 @@
   Howmany determines whether traditional gossip or neighborcast is used."
   (let ((solicitation (make-solicitation
                        :reply-to nil
-                       :kind :multicast
+                       :kind :k-multicast
                        :forward-to howmany ; traditional gossip
                        :graphID graphID
                        :args message)))
@@ -109,7 +109,7 @@
   (when startnodeID
     (let ((solicitation (make-solicitation
                          :reply-to nil
-                         :kind :dissolve
+                         :kind :k-dissolve
                          :forward-to t ; neighborcast, although dissolve handler will enforce this regardless
                          :graphID graphID 
                          :args nil)))
@@ -119,10 +119,7 @@
                 nil)
       t)))
 
-(defgeneric application-handler (node)
-  (:documentation "Returns something that ac:send can send to, which is associated with node.
-    This is used by gossip to forward an application message to its application destination
-    once it reaches its destination node."))
+
 
 ;;; Utility routines
 

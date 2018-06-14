@@ -24,14 +24,14 @@
              (setf *nominal-gossip-port* gossip-port))
             (t (error "Invalid gossip-port ~S" gossip-port)))
       (cond ((consp pubkeys)
-             (clrhash *nodes*)) ; kill local nodes
+             (clear-local-nodes)) ; kill local nodes
             (t (error "Invalid or unspecified public keys ~S" pubkeys)))
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
-                       (unless (member local-pubkey keypairs :test 'eql :key 'car)
-                         (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
-                       t)
-                     pubkeys)
+               (unless (member local-pubkey keypairs :test 'eql :key 'car)
+                 (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
+               t)
+             pubkeys)
       ;; make local nodes
       (mapc (lambda (pubkey)
               (make-node :uid pubkey))
@@ -47,7 +47,8 @@
    Stashes result along with time of acquisition at *live-uids*>"
   (when hosts
     (let ((others (multiple-list-uids hosts)))
-      (setf *live-uids* (cons (get-universal-time) others))
+      (setf *remote-uids* (cons (get-universal-time) others)
+            *uber-set-cache* nil) ; invalidate this cache
       others)))
 
 (defun gossip-startup (&key root-path (ping-others nil))
