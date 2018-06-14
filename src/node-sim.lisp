@@ -224,3 +224,54 @@ This will spawn an actor which will asynchronously do the following:
                     cosi-simgen:*ip-node-tbl*))))
     collected))
 
+
+
+
+
+;;;; Single Node REPL
+
+(defun node-repl (&key node message)
+  "This runs a read-eval-print loop (REPL) for a single node. If NODE
+   is nil, this uses cosi-simgen:*top-node*. If initialization has not
+   been done (cosi-simgen:*top-node* is nil), this does the
+   initialization."
+  (when (null cosi-simgen:*top-node*)
+    (format t "~%Initialization needed....")
+    (emotiq/sim:initialize)
+    (format t "~&Initialization DONE.~%"))
+  (let ((cosi-simgen:*current-node*
+          (or node cosi-simgen:*top-node*)))
+    (node-repl-loop
+     "~a (node = ~s)"
+     (or message "Node REPL")
+     cosi-simgen:*current-node*)))
+
+
+(defparameter *node-repl-prompt* "Node Repl> ")
+(defparameter *node-repl-quitters* '(:quit :q :a))
+
+(defun node-repl-loop (format-string &rest format-args)
+  (let ((banner (apply #'format nil format-string format-args)))
+    (format t "~%~a" banner)
+    (format t "~%~a" (make-string (length banner) :initial-element #\-))
+    (loop for form 
+            = (progn (format t "~%~a" *node-repl-prompt*) (read))
+          when (member form *node-repl-quitters*)
+            do (format t "~&Quitting~%")
+               (return)
+          do (print (eval form)))))
+
+;; To do: spend a few minutes seeing if there's already a CL-REPL
+;; someone did (open source), especially one integrated with SLIME?
+
+;; To do: wrap some error handling to catch simple read errors, catch
+;; if they really want to exit to top level, etc.  For example, if you
+;; type in a variable name that's unbound, and it pops you into a
+;; debugger, and you abort from debugger, it should return to this
+;; REPL, not to the Lisp REPL.
+
+;; To do: should have Lisp's REPL variables set (*, **, ***, +, ++,
+;; +++).
+
+;; To do/sad: in SLIME when this prompts, you lose SLIME
+;; completion. How to get that back?
