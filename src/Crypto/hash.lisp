@@ -53,7 +53,7 @@ THE SOFTWARE.
   (hash-val x))
 
 (defmethod hash-bytes ((x hash))
-  (bev-vec (bev (hash-val x))))
+  (bev-vec (hash-val x)))
 
 (defmethod hash-length ((x hash))
   (length (hash-bytes x)))
@@ -83,66 +83,32 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------
 
-(defun local-ripemd/160-buffers (&rest bufs)
-  (let ((dig (ironclad:make-digest :ripemd-160)))
-    (dolist (buf bufs)
-      (ironclad:update-digest dig buf))
-    (ironclad:produce-digest dig)))
+(defun local-digest (dig-kind dig-class &rest args)
+  (let ((dig (ironclad:make-digest dig-kind)))
+    (dolist (arg args)
+      (ironclad:update-digest dig (hashable arg)))
+    (let ((hv  (ironclad:produce-digest dig)))
+      (values (make-instance dig-class
+                             :val (make-instance 'bev
+                                                 :vec hv))
+              (length hv)))))
 
 (defun hash/ripemd/160 (&rest args)
-  ;; produce a UB8V of the args
-  (let ((hv  (apply 'local-ripemd/160-buffers
-                    (mapcar 'hashable args))))
-    (values (make-instance 'hash/ripemd/160
-                           :val (make-instance 'bev
-                                               :vec hv))
-            (length hv))))
-
-(defun local-sha2/256-buffers (&rest bufs)
-  (let ((dig (ironclad:make-digest :sha256))) ; sha2/256
-    (dolist (buf bufs)
-      (ironclad:update-digest dig buf))
-    (ironclad:produce-digest dig)))
+  (apply 'local-digest :ripemd-160 'hash/ripemd/160 args))
 
 (defun hash/sha2/256 (&rest args)
-  ;; produce a UB8V of the args
-  (let ((hv  (apply 'local-sha2/256-buffers
-                    (mapcar 'hashable args))))
-    (values (make-instance 'hash/sha2/256
-                           :val (make-instance 'bev
-                                               :vec hv))
-            (length hv))))
-
-
-(defun local-sha3/256-buffers (&rest bufs)
-  (let ((dig (ironclad:make-digest :sha3/256)))
-    (dolist (buf bufs)
-      (ironclad:update-digest dig buf))
-    (ironclad:produce-digest dig)))
+  (apply 'local-digest :sha256 'hash/sha2/256 args))
 
 (defun hash/256 (&rest args)
-  ;; produce a UB8V of the args
-  (let ((hv  (apply 'local-sha3/256-buffers
-                    (mapcar 'hashable args))))
-    (values (make-instance 'hash/256
-                           :val (make-instance 'bev
-                                               :vec hv))
-            (length hv))))
+  (apply 'local-digest :sha3/256 'hash/256 args))
 
-(defun local-sha3/512-buffers (&rest bufs)
-  (let ((dig (ironclad:make-digest :sha3)))
-    (dolist (buf bufs)
-      (ironclad:update-digest dig buf))
-    (ironclad:produce-digest dig)))
+(defun hash/384 (&rest args)
+  (apply 'local-digest :sha3/384 'hash/384 args))
 
 (defun hash/512 (&rest args)
-  ;; produce a UB8V of the args
-  (let ((hv  (apply 'local-sha3/512-buffers
-                    (mapcar 'hashable args))))
-    (values (make-instance 'hash/512
-                           :val (make-instance 'bev
-                                               :vec hv))
-            (length hv))))
+  (apply 'local-digest :sha3 'hash/512 args))
+
+;; -----------------------------------------------------
 
 (defun get-hash-nbytes (nb seed)
   ;; returns a vector of nb raw-bytes
@@ -160,8 +126,13 @@ THE SOFTWARE.
       ))
    ((= nb 64)
     (hash-bytes (hash/512 seed)))
-   ((> nb 32)
+   ((> nb 48)
     (let ((bytes (hash-bytes (hash/512 seed))))
+      (subseq bytes 0 nb)))
+   ((= nb 48)
+    (hash-bytes (hash/384 seed)))
+   ((> nb 32)
+    (let ((bytes (hash-bytes (hash/384 seed))))
       (subseq bytes 0 nb)))
    ((= nb 32)
     (hash-bytes (hash/256 seed)))
@@ -170,11 +141,15 @@ THE SOFTWARE.
       (subseq bytes 0 nb)))
    ))
 
+;; -----------------------------------------------------
+
 (defmethod hash-check (item (expected string))
   (string-equal expected (hex-str (hash/256 item))))
 
 (defmethod hash= ((hash1 hash) (hash2 hash))
   (vec= hash1 hash2))
+
+;; -----------------------------------------------------
 
 (defmethod print-object ((obj hash) out-stream)
   (if *print-readably*
