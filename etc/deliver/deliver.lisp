@@ -20,8 +20,11 @@
 
 (defparameter cl-user::*performing-binary-build* :performing-binary-delivery)
 
+(ql:quickload :swank) ;; HACK: Needed for implicit dependency in the
+                      ;; RESTAS dependency of EMOTIQ-REST.  Needs to
+                      ;; occur before other quickload of
+                      ;; EMOTIQ/STARTUP dependencies.
 (ql:quickload :emotiq/startup)
-
 
 ;; After loading the Emotiq system into memory, we call DELIVER, which is somewhat
 ;; like SAVE-IMAGE.  DELIVER can perform various optimizations (tree-shaking, symbol-removal)

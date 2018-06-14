@@ -1,0 +1,42 @@
+* Release Notes
+** <2018-05-30 Wed 13:42Z> ~test-0.13-websockets~
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/test-0.13-websockets>                      |
+| Branch   | <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180530a> |
+
+1.  The HTTP testing implementation now works in the binary
+    distribution, and may be interacted with as <http://locahost:3140/client/>.
+
+2.  Implemented asynchronous messages to subscribe/unsubscribe with subsequent notifications.
+
+#+BEGIN_EXAMPLE
+UI --> Emotiq {method: "subscribe", params: ["consensus"], id: 11}
+UI indicates that it wants to subscribe to consensus events
+
+UI <-- Emotiq { result: ["true"], id: 11}
+Emotiq indicates that the subscription to events is successfull
+
+Thereafter, asynchronous notifications are sent with thethe form
+UI <-- Emotiq {method: "consensus", params: DATA1, id: null}
+UI <-- Emotiq {method: "consensus", params: DATA2, id: null}
+UI <-- Emotiq {method: "consensus", params: DATA3, id: null}
+
+Then the UI can unsubscribe via
+UI --> Emotiq {method: "unsubscribe", params: ["consensus"], id: 23}
+to which Emotiq responds
+UI <-- Emotiq {result: true, id: 23}
+#+END_EXAMPLE
+
+3.  Implemented "ping" method for simple request/response to detect
+    node liveness.
+
+4.  Documentation for message requests can be found as 
+    <https://github.com/emotiq/emotiq-wallet/blob/7c5b99937d63e3232a8191ff119069f0d195d83f/doc/emotiq-wallet-websocket.yaml>
+
+** <2018-06-04 Mon 12:13Z> ~test-0.14-websockets~
+
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/test-0.14-websockets>                      |
+| Branch   | <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180604a> |
+
+1.  Fix disconnected websockets causing synchronization updates to quit
+
+2.  Use proper JSON RPC error responses 
