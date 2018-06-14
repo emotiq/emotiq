@@ -87,7 +87,9 @@
 
    #:eassert
 
-   #:prdebug))
+   #:prdebug
+
+   #:node-repl))
   
 (defpackage emotiq/elections
   (:use #:cl)
