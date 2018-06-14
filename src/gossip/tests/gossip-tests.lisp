@@ -77,7 +77,7 @@
              (progn 
                (setf *log-dots* t)
                (setf *nodes* (gossip::make-uid-mapper))
-               (clrhash *nodes*)
+               (clear-local-nodes)
                (make-test-network)
                (ac::kill-executives)
                (assert-eql 10 (run-gossip-sim))
@@ -102,7 +102,7 @@
            (progn
              (setf *log-dots* t)
              (setf *nodes* (gossip::make-uid-mapper))
-             (clrhash *nodes*)
+             (clear-local-nodes)
              (make-test-network)
              (ac::kill-executives)
              (assert-eql 10 (run-gossip-sim))
@@ -126,7 +126,7 @@
                  (*log-filter* nil))
              (setf *log-dots* t)
              (setf *nodes* (gossip::make-uid-mapper))
-             (clrhash *nodes*)
+             (clear-local-nodes)
              (make-graph 100)
              (ac::kill-executives)
              (assert-eql 100 (run-gossip-sim))
