@@ -568,7 +568,7 @@ are in place between nodes.
   "If graphID = :UBER, return the uber-set rather than the neighbors table in the node.
    The uber-set is mostly for bootstrapping a gossip network."
   (if (eql :UBER graphID)
-      (uber-set)
+      (uber-set)s
       (kvs:lookup-key (neighbors node) graphID)))
 
 (defmethod dissolve-neighborhood ((node gossip-node) graphID)
@@ -619,17 +619,27 @@ are in place between nodes.
     (multiple-value-bind (node1 node2) (random-new-connection nodelist graphID)
       (connect node1 node2 graphID))))
 
-(defun make-graph (numnodes &optional (fraction 0.5) (graphID *default-graphID*))
+(defun make-graph (numnodes &key (fraction 0.5) (graphID *default-graphID*))
   "Build a graph with numnodes nodes. Strategy here is to first connect all the nodes in a single
-   non-cyclic linear path, then add f*n random edges, where n is the number of nodes."
-  (clear-local-nodes)
-  (make-nodes numnodes)
+   non-cyclic linear path, then add f*n random edges, where n is the number of nodes.
+   If graphID is not = *default-graphID*, a new graph will be created out of existing nodes
+   in addition to any existing graph(s) and numnodes will be ignored."
+  (when (eql graphID *default-graphID*)
+    (clear-local-nodes)
+    (make-nodes numnodes))
   (let ((nodelist (listify-nodes)))
     ; following guarantees a single connected graph
     (linear-path nodelist graphID)
     ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
     (add-random-connections nodelist (round (* fraction (length nodelist))) graphID))
   numnodes)
+
+; Demonstrate two graphs existing simultaneously with only one set of nodes.
+; (make-graph 10)
+; (make-graph 0 :graphid ':foo)
+; (gossip:visualize-nodes gossip::*nodes*)
+; (gossip:visualize-nodes gossip::*nodes* ':foo)
+; (gossip:visualize-nodes gossip::*nodes* ':uber) ; this one is always fully-connected. Always represents the pseudo-graph of all known nodes.
 
 ;;;; Graph saving/restoring routines
 
