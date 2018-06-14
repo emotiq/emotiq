@@ -40,3 +40,14 @@ UI <-- Emotiq {result: true, id: 23}
 1.  Fix disconnected websockets causing synchronization updates to quit
 
 2.  Use proper JSON RPC error responses 
+   
+** <2018-06-14 Mon 12:55Z> ~test-0.15-websockets~
+
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/test-0.15-websockets>                      |
+| Branch   | <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180614a> |
+
+1. Further fixes on making Websockets connections more robust.
+   Sockets disconnected via timeout no longer crash the server, and
+   both the read and write timeouts have been extended to an hour
+   (3600 seconds).
+
