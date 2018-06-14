@@ -76,7 +76,8 @@
 |#
 
 (defmethod dump-node ((node gossip-node) stream edgetable graphID)
-  (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\\N\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+  (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\~A\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+          (uid node)
           (short (uid node))
           (uid node))
   (dolist (neighbor (neighborhood node graphID))
@@ -84,7 +85,7 @@
            (maxuid (max neighbor (uid node)))
            (key (cons minuid maxuid)))
       (unless (gethash key edgetable) ; don't dump links twice
-        (format stream "~%  \"~A\" -- \"~A\";" (short (uid node)) neighbor)
+        (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
         (setf (gethash key edgetable) t)))))
 
 (defun write-inner-commands (stream nodelist graphID)
@@ -185,3 +186,5 @@
           (uiop:run-program (list "xdg-open" urlstring))
           (values dotpath htmlpath))))))
     
+
+; (gossip:visualize-nodes gossip::*nodes* :uber) ; should draw a fully-connected graph of all known real nodes. Not terribly useful, but a good test.
