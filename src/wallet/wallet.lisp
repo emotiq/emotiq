@@ -39,37 +39,13 @@ is non-nil.
 The default name for a wallet is *DEFAULT-WALLET-NAME*."
   (when (get-wallet-named name)
     (unless force
-      (emotiq:note "Not overwriting existing wallet at '~a'." path)
+      (emotiq:note "Not overwriting existing wallet named '~a'." name)
       (return-from create-wallet nil)))
   (let ((path (emotiq-wallet-path :name name)))
     (let ((wallet (make-wallet)))
       (values
        name
        (wallet-serialize wallet :path path)))))
-
-(defun rename-wallet (from-name to-name)
-  "Rename wallet FROM-NAME into TO-NAME
-
-Returns nil if unsuccessful."
-  (let ((from (emotiq-wallet-path :name from-name))
-        (to (emotiq-wallet-path :name to-name)))
-    (unless (probe-file from)
-      (format *standard-output* "Not renaming.~&No such wallet named '~a' already exists as '~a'."
-              from-name
-              from)
-      (return-from rename-wallet nil))
-    (when (probe-file to)
-      (format *standard-output* "Not renaming.~&A wallet named '~a' already exists as '~a'."
-              to-name
-              to)
-      (return-from rename-wallet nil))
-    (ensure-directories-exist to)
-    (prog1
-        (rename-file from to)
-      (uiop:delete-empty-directory
-       (make-pathname :name nil
-                      :type nil
-                      :defaults from)))))
 
 (defun enumerate-wallet-names ()
   "Return a list of wallet names persisted on the local node"
@@ -82,33 +58,6 @@ Returns nil if unsuccessful."
        :for directory :in directories
        :collecting (pathname-name-to-wallet-name
                     (first (last (pathname-directory directory)))))))
-
-;;; We want to allow "human readable" wallet names that have a
-;;; one-to-one mapping to valid directory names.  Using URI encoding
-;;; ensures that we can have whitespace and slash characters in the
-;;; filename.
-(defun wallet-name-to-pathname-name (name)
-  (quri:url-encode name))
-
-(defun pathname-name-to-wallet-name (name)
-  (quri:url-decode name))
-
-(defun wallet-serialize (wallet &key (path (emotiq-wallet-path)))
-  "Serialize WALLET object to PATH"
-  (ensure-directories-exist path)
-  (with-open-file
-      (o path :direction :output :element-type '(unsigned-byte 8))
-    (format *standard-output* "Serializing wallet to ~a" path)
-    (lisp-object-encoder:serialize wallet o)))
-    
-(defun wallet-deserialize (&key (path (emotiq-wallet-path)))
-  "Deserialize wallet from file at PATH"
-  (unless (probe-file path)
-    (emotiq:note "No wallet found at ~a." path)
-    (return-from wallet-deserialize nil))
-  (with-open-file
-      (o path :direction :input :element-type '(unsigned-byte 8))
-    (lisp-object-encoder:deserialize o)))
 
 (defun primary-address (wallet)
   (vec-repr:hex-str
@@ -160,21 +109,29 @@ Returns nil if unsuccessful."
 Returns an in-memory copy of wallet stripped of private key."
   (unless (not (encrypted-private-key-p wallet))
     (error "Private key already recorded as encrypted."))
-  (let* ((aes256-keying (derive-aes256-keying passphrase (salt wallet)))
-         (key (subseq aes256-keying 0 32))
-         (iv (subseq aes256-keying 32 48))
-         (cipher (ironclad:make-cipher :aes :key key :initialization-vector iv :mode :cbc)) 
-         (secret-key (secret-key wallet))
-         (encrypted-key (make-array (let* ((length (length secret-key)))
+  (let* ((aes256-keying
+          (derive-aes256-keying passphrase (salt wallet)))
+         (key
+          (subseq aes256-keying 0 32))
+         (iv
+          (subseq aes256-keying 32 48))
+         (cipher
+          (ironclad:make-cipher :aes :key key :initialization-vector iv
+                                :mode :cbc)) 
+         (secret-key
+          (secret-key wallet))
+         (encrypted-secret-key
+          (make-array (let* ((length (length secret-key)))
                                       (+ length (mod length 16)))
-                                    :element-type (unsigned-byte *)))
+                                    :element-type '(unsigned-byte *)))
          (result (copy-wallet wallet)))
     (with-slots (encrypted-private-key-p encrypted-wallet-secret)
         result
       (ironclad:encrypt cipher
                         (vec-repr:bev-vec secret-key)
-                        encrypted-wallet-secret)
-      (setf encrypted-private-key-p t))
+                        encrypted-secret-key)
+      (setf encrypted-private-key-p t
+            encrypted-wallet-secret encrypted-secret-key))
     result))
      
 #+(or)

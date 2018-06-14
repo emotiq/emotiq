@@ -47,7 +47,7 @@ Returns nil if unsuccessful."
   "Return a list of wallet names persisted on the local node"
   (let ((directories
          (directory 
-          (merge-pathnames "../*/"
+          (merge-pathnames (make-pathname :directory '(:relative :up :wild))
                            (make-pathname :name nil :type nil
                                           :defaults (emotiq-wallet-path))))))
     (loop
@@ -66,9 +66,13 @@ Returns nil if unsuccessful."
     (lisp-object-encoder:serialize wallet o)))
     
 (defun wallet-deserialize (&key (path (emotiq-wallet-path)))
-  "Deserialize wallet from file at PATH"
+  "Deserialize wallet from file at PATH
+
+Return nil if wallet cannot be found."
   (unless (probe-file path)
-    (error "No wallet found at ~a." path))
+    (return-from wallet-deserialize
+      (values nil
+              path)))
   (with-open-file
       (o path :direction :input :element-type '(unsigned-byte 8))
     (lisp-object-encoder:deserialize o)))
