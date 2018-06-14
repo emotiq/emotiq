@@ -118,8 +118,16 @@
 (defun start-server (&key (port 3145))
   (unless *acceptor*
     (setf *acceptor*
-          (make-instance 'hunchensocket:websocket-acceptor :port port)))
-  (emotiq:note "Starting websocket server on <ws://localhost:~a>"
+          (make-instance 'hunchensocket:websocket-acceptor
+                         ;; Nb. We set the timeout to an hour large
+                         ;; value because it corresponds to two
+                         ;; separate values for reads and writes,
+                         ;; which means unidirectional subscription
+                         ;; messages without corresponding replies
+                         ;; will tear down the connection.
+                         :websocket-timeout 3600  
+                         :port port)))
+  (note "Starting websocket server on <ws://localhost:~a>"
         (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
 

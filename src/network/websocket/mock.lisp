@@ -30,13 +30,18 @@
          :do (sleep (random 5))
          :do (advance)))))
 
+(defun remove-client (client)
+  (note "Removing client ~a from client connections." client)
+  (setf *consensus-clients* (remove client *consensus-clients*)))
+
 (defun notify-clients (notification)
   (dolist (client *consensus-clients*)
-    (let ((state (slot-value client 'hunchensocket::state)))
-      (if (not (eq state :connected))
-          (progn
-            (note "Removing client ~a with state ~a from client connections." client state)
-            (setf *consensus-clients* (remove client *consensus-clients*)))
+    (with-slots ((state hunchensocket::state)
+                 (write-lock hunchensocket::write-lock))
+        client
+      (if (not (and (eq state :connected)
+                    write-lock))
+          (remove-client client)
           (progn
             #+(or)
             (note "~&Notifying client ~a with ~a~&"
