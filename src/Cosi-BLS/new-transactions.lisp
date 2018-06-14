@@ -482,20 +482,31 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     (return-from validate-transaction nil))
 
   (let ((txid (transaction-id transaction)))
-    (when (find-transaction-per-id txid)
-      (warn "A transaction with this ID (~a) is already on the blockchain. Rejected."
+    (when (find-transaction-per-id txid t)
+      (warn "A transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
             txid)
       (return-from validate-transaction nil))
     (loop with succeed-p
           for tx-in in (transaction-inputs transaction)
           as id = (tx-in-id tx-in)
           as index = (tx-in-index tx-in)
-          as input-tx = (find-transaction-per-id id)
+          as input-tx = (find-transaction-per-id id t)
           as input-tx-outputs 
             = (cond
                 ((null input-tx)
                  (progn
-                   (warn "~%No transaction with TXID ~a found." id)
+                   (warn "~%Input transaction with presumed UTXO does not exist: no transaction with TXID ~a found in the mempool or on the blockchain." id)
+                   (let* ((all-transactions (list-all-transactions))
+                          (message-string
+                            (with-output-to-string (out)
+                              (format out "Transaction ID not found: ~s~%Transaction count: ~d~%" 
+                                      id
+                                      (length all-transactions))
+                              (format out "All transactions IDs:~%")
+                              (loop for tx in all-transactions
+                                    do (format out "  ~s~%" (transaction-id tx))))))
+                     (break "~a" message-string))
+                   
                    ;; (trace-compare-all-tx-ids id)
                    )
                  (return nil))
@@ -540,7 +551,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil)))
-                  (format t "~%Successful transaction ~a" transaction)
+                  (format t "~%Successful transaction ~a~%  TxID = ~s~%" 
+                          transaction (transaction-id transaction))
                   (add-transaction-to-mempool transaction)
                   (return t))))
 
@@ -633,14 +645,15 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     (flet ((emit (x)
              (format out "~a " x)))
       (loop for tx-out in (transaction-outputs transaction)
-            as hash = (tx-out-public-key-hash tx-out)
-            as amt = (tx-out-amount tx-out)
-            as script = (tx-out-lock-script tx-out)
+            as hash = (tx-out-public-key-hash tx-out) ; base58 string
+            as amt = (tx-out-amount tx-out)           ; integer
+            as script = (tx-out-lock-script tx-out)   ; chainlisp form
             do (emit hash) (emit amt) (emit script))
       (loop for tx-in in (transaction-inputs transaction)
-            as id = (tx-in-id tx-in)
-            as index = (tx-in-index tx-in)
-            do (emit id) (emit index)))))
+            as id = (tx-in-id tx-in)        ; string of 0's (coindbase case) or octet vector (not good to emit)
+            as id-hex-string = (hex-str id) ; better: emit this
+            as index = (tx-in-index tx-in)  ; integer
+            do (emit id-hex-string) (emit index)))))
 
 (defun serialize-current-transaction ()
   (serialize-transaction *current-transaction*))
@@ -906,12 +919,40 @@ development, this signals a continuable error if there is no transaction."
   `(loop for ,tx-var in (cosi/proofs:block-transactions ,blk)
          do (progn ,@body)))
 
+(defmacro do-all-transactions ((tx-var &optional block-var?) &body body)
+  (let ((block-var (or block-var? '#:block)))
+    `(do-blockchain (,block-var)
+       (do-transactions (,tx-var ,block-var)
+         ,@body))))
 
-(defun find-transaction-per-id (id)
-  (do-blockchain (block)
-    (do-transactions (tx block)
-      (when (tx-ids= (transaction-id tx) id)
-        (return-from find-transaction-per-id (values tx block))))))
+
+
+(defun list-all-transactions ()
+  (let ((result '()))
+    (do-all-transactions (tx)
+      (push tx result))
+    result))
+
+
+(defun find-transaction-per-id (id &optional also-search-mempool-p)
+  "Search blockchain for a transaction with TXID matching ID. If
+also-search-mempool-p is true, this also searches the current
+mempool. This returns the transaction as a first value if found, and
+false (nil) otherwise. In the found case, if found in the mempool,
+this returns a second value of t; if found in the blockchain, this
+returns the block the transaction was found in as a second value."
+  (let* ((result-from-mempool?
+           (and also-search-mempool-p
+                (loop for tx being each hash-value of cosi-simgen:*mempool*
+                      when (tx-ids= (transaction-id tx) id)
+                        return tx))))
+    (if result-from-mempool?
+        (values result-from-mempool? t)
+        (do-blockchain (block)
+          (do-transactions (tx block)
+            (when (tx-ids= (transaction-id tx) id)
+              (return-from find-transaction-per-id (values tx block))))))))
+
 
 (defun find-transaction-per-id-or-double-spend (id)
   (do-blockchain (block)
