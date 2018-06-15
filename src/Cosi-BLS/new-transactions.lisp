@@ -434,10 +434,6 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defun transaction-fee-too-low-p (transaction-fee)
   (< transaction-fee *minimum-transaction-fee*))               ; ---!!! review!!
 
-(defun in-legal-money-range-p (amount)
-  (and (>= amount *minimum-spend-amount*)
-       (<= amount *maximmum-spend-amount*)))
-
 
 (defun validate-transaction (transaction)
   "Validate TRANSACTION, and either accept it (by returning true) or
@@ -798,6 +794,15 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (defmacro initial-total-coin-amount ()
   `(* (initial-coin-units) (subunits-per-coin)))
+
+
+(defparameter *minimum-spend-amount* 0) ; ---!!! review!!
+(defparameter *maximmum-spend-amount* (initial-total-coin-amount))
+
+(defun in-legal-money-range-p (amount)
+  (and (>= amount *minimum-spend-amount*)
+       (<= amount *maximmum-spend-amount*)))
+
 
 
 
@@ -1234,6 +1239,41 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 
+;;;; Printing Utilities
+
+
+
+(defun dump-tx (tx)
+  (format t "TXID: ~a~%Outputs:~%" (transaction-id tx))
+  (loop for tx-out in (transaction-outputs tx)
+        do (format t "  amt = ~a (out to) addr = ~a~%"
+                   (tx-out-amount tx-out)
+                   (tx-out-public-key-hash tx-out))))
+
+(defun dump-txs (&key file mempool block blockchain)
+  (flet ((dump-loops ()
+           (when block
+             (format t "~%Dump txs in block = ~s:~%" block)
+             (loop for tx in (cosi/proofs:block-transactions block)
+                   do (dump-tx tx)))
+           (when mempool
+             (format t "~%Dump txs in mempool:~%")
+             (loop for tx being each hash-value of cosi-simgen:*mempool*
+                   do (dump-tx tx)))
+           (when blockchain
+             (format t "~%Dump txs on blockchain:~%")
+             (do-all-transactions (tx) (dump-tx tx)))))
+    (if file
+        (with-open-file (*standard-output*
+                         file
+                         :direction :output :if-exists :supersede)
+          (dump-loops))
+        (dump-loops))))
+
+
+
+
+
 ;;;; Getting Transactions for Blocks
 
 
@@ -1294,5 +1334,50 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 (defun check-block-transactions (blk)
   "Return nil if invalid block."
+  ;; It's unclear what this is supposed to do, under what
+  ;; circumstances this is called, etc. Talk to David and team.
   (declare (ignore blk))                ; stub only for now! -mhd, 6/13/18
   t)                                    ; tell caller everything's ok
+
+
+
+(defun clear-transactions-in-block-from-mempool (block)
+  (format t "~2%***   NEWTX:")
+  ;; (format t "~2%***   We added a block. About to clear mempool. Here's what's there before...")
+  ;; (cosi/proofs/newtx:dump-txs :mempool t)
+  (format t "~%   Now clearing transactions from mempool . . . ")
+
+  ;; inefficient clearing algorithm -- ok for now, improve later!
+  (loop with mempool = cosi-simgen:*mempool*
+        with transactions = (cosi/proofs:block-transactions block)
+        with block-tx-count = (length transactions)
+        ;; initially (format t "~%Transactions count in block: ~d" (length transactions))
+        ;;           (cosi/proofs/newtx:dump-txs :block block)
+        for tx being each hash-value
+          of mempool 
+            using (hash-key key)
+        when (member tx transactions :test #'eq)
+          collect tx into removed-txs
+          and do (remhash key mempool)
+             ;; thought I saw something bad happen here:
+                 (assert (null (gethash key mempool)) () "why doesn't remhash work?!")
+        finally
+           ;; check that there were a few transactions in the block
+           ;; and in the mempool in common and that all the ones in
+           ;; the block are no longer in the mempool
+           (when (= block-tx-count 0)
+             (warn "*** there were zero txs in block? strange! ***"))
+           (when (= (length removed-txs) 0)
+             (warn "*** there were zero removed txs? That's ODD! ***"))
+           (let* ((txs-in-mempool
+                    (loop for tx being each hash-value of cosi-simgen:*mempool*
+                          collect tx))
+                  (intersection (intersection txs-in-mempool transactions)))
+             (when intersection
+               (cerror
+                "continue"
+                "there are now STILL transactions in the mempool from block. How?!"))))
+  (format t "~%   DONE.~%")
+  ;; (format t "~%   Now here's what's in mempool after, take a look ...")
+  ;; (cosi/proofs/newtx:dump-txs :mempool t)
+  )

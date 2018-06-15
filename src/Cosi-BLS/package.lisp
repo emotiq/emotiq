@@ -206,6 +206,7 @@
    :vec-repr
    :edec
    :pbc)
+  (:shadow block)            ; used internally, not required for users
   (:export 
    transaction-id
    make-genesis-transaction
@@ -218,7 +219,10 @@
    initial-total-coin-amount
    validate-transaction
    get-transactions-for-new-block
-   check-block-transactions))
+   check-block-transactions
+   dump-tx
+   dump-txs
+   clear-transactions-in-block-from-mempool))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen

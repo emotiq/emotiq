@@ -1030,9 +1030,7 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; database. Just remhash from the mempool all
              ;; transactions that made it into the block.
              (*newtx-p*
-              (loop for tx in (get-block-transactions blk)
-                    as key = (bev-vec (hash/256 tx))
-                    do (remhash key *mempool*)))
+              (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk))
              (t
               ;; clear out *mempool* and spent utxos
               (replay-remove-txs-from-mempool blk)
