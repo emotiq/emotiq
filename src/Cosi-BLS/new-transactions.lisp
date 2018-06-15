@@ -1243,12 +1243,16 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 
-(defun dump-tx (tx)
-  (format t "TXID: ~a~%Outputs:~%" (transaction-id tx))
+(defun dump-tx (tx &key out-only)
+  (format t "~%  TXID: ~a~%" (transaction-id tx))
+  (unless out-only
+    (loop for tx-in in (transaction-inputs tx)
+          do (format t "    input outpoint: index = ~a/txid = ~a~%"
+                     (tx-in-index tx-in) (tx-in-id tx-in))))
+  (format t "    outputs:~%")
   (loop for tx-out in (transaction-outputs tx)
-        do (format t "  amt = ~a (out to) addr = ~a~%"
-                   (tx-out-amount tx-out)
-                   (tx-out-public-key-hash tx-out))))
+        do (format t "    amt = ~a (out to) addr = ~a~%"
+                   (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain)
   (flet ((dump-loops ()
@@ -1342,7 +1346,6 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun clear-transactions-in-block-from-mempool (block)
-  (format t "~2%***   NEWTX:")
   ;; (format t "~2%***   We added a block. About to clear mempool. Here's what's there before...")
   ;; (cosi/proofs/newtx:dump-txs :mempool t)
   (format t "~%   Now clearing transactions from mempool . . . ")
@@ -1366,17 +1369,22 @@ ADDRESS here is taken to mean the same thing as the public key hash."
            ;; and in the mempool in common and that all the ones in
            ;; the block are no longer in the mempool
            (when (= block-tx-count 0)
-             (warn "*** there were zero txs in block? strange! ***"))
+             (warn "***   NEWTX: there were zero txs in block? strange! [~d tx removed from mempool] ***"
+                   removed-txs))
            (when (= (length removed-txs) 0)
-             (warn "*** there were zero removed txs? That's ODD! ***"))
+             (warn "***   NEWTX: there were zero txs removed from mempool? That's weird! [~d tx in block] ***"
+                   block-tx-count))
            (let* ((txs-in-mempool
                     (loop for tx being each hash-value of cosi-simgen:*mempool*
                           collect tx))
                   (intersection (intersection txs-in-mempool transactions)))
+             (format t "~2%")
              (when intersection
-               (cerror
-                "continue"
-                "there are now STILL transactions in the mempool from block. How?!"))))
+               (warn
+                "***   NEWTX: there are now STILL transactions (~d) in the mempool from block. How?! [~d in block/~d removed from mempool]"
+                (length intersection)
+                block-tx-count
+                removed-txs))))
   (format t "~%   DONE.~%")
   ;; (format t "~%   Now here's what's in mempool after, take a look ...")
   ;; (cosi/proofs/newtx:dump-txs :mempool t)
