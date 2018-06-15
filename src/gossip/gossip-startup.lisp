@@ -9,7 +9,7 @@
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
                     (eripa)
-                    (usocket::host-to-hbo ev))))
+                    (usocket::host-to-vector-quad ev))))
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
