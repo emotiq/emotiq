@@ -83,16 +83,6 @@ witnesses."
   nil
   "Genesis block - first block of the blockchain.")
 
-(defun send-genesis-block ()
-  (when *genesis-block*
-    (error "Can't create more than one genesis block."))
-  (print "Construct Genesis Block")
-  (let* ((public-key (pbc:keying-triple-pkey *genesis-account*))
-         (blk (cosi/proofs:create-genesis-block public-key)))
-    (setq *genesis-block* blk)
-    (broadcast-message :genesis-block :blk blk)
-    blk))
-
 
 
 
@@ -230,73 +220,54 @@ This will spawn an actor which will asynchronously do the following:
   (ensure-simulation-keys)
   (setf *genesis-output* nil *tx-1* nil *tx-2* nil *tx-3* nil)
   (cosi-simgen:reset-nodes)
-  (emotiq/elections:make-election-beacon)                                         
+  (emotiq/elections:make-election-beacon)
   (let ((fee 10))    
     (ac:pr "Construct Genesis Block")
     (let* ((genesis-block
              (or *genesis-block*        ; if rerunning, do not redo
-                 (send-genesis-block)))
-           (genesis-transaction         ; kludgey handling here
-             (first (cosi/proofs:block-transactions genesis-block)))
-           (txid
-             (cosi/proofs/newtx:transaction-id genesis-transaction))
-           (index 0)
-           (transaction-inputs
-             (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
-
-           (user-1-public-key-hash      ; a/k/a address
-             (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-1*)))
-           (amount-1 890)               ; user gets 890 (fee = 10)
-           (change-amount-1
-             (- (cosi/proofs/newtx:initial-total-coin-amount) 
-                (+ amount-1 fee)))
-           (genesis-public-key-hash     ; a/k/a address
-             (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*)))
-           (transaction-outputs
-             (cosi/proofs/newtx:make-transaction-outputs
-              `((,user-1-public-key-hash ,amount-1)
-                (,genesis-public-key-hash ,change-amount-1))))
-           (signed-transaction          ; signed by genesis account
-             (cosi/proofs/newtx:make-and-maybe-sign-transaction
-              transaction-inputs transaction-outputs
-              :skeys (pbc:keying-triple-skey *genesis-account*)
-              :pkeys (pbc:keying-triple-pkey *genesis-account*))))
-      (setq *tx-1* signed-transaction)
-      (ac:pr (format nil "Broadcasting 1st TX."))
-      (broadcast-message :new-transaction-new :trn signed-transaction)
-
-      (sleep 5)
+                 (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
+                   ;; Establish current-node binding of genesis node
+                   ;; around call to create genesis block.
+                   (cosi/proofs:create-genesis-block
+                    (pbc:keying-triple-pkey *genesis-account*))))))
       
-      (let* ((user-2-public-key-hash
-               (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*)))
-             (amount-2 500)
-             (change-amount-2 (- amount-1 (+ amount-2 fee))))
+      (broadcast-message :genesis-block :blk genesis-block)
 
-        (setq txid (cosi/proofs/newtx:transaction-id signed-transaction))
-        (setq index 0)
-        (setq transaction-inputs
-              (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
+      (let* ((genesis-transaction       ; kludgey handling here
+               (first (cosi/proofs:block-transactions genesis-block)))
+             (txid
+               (cosi/proofs/newtx:transaction-id genesis-transaction))
+             (index 0)
+             (transaction-inputs
+               (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
 
-        (setq transaction-outputs
-              (cosi/proofs/newtx:make-transaction-outputs
-               `((,user-2-public-key-hash ,amount-2)
-                 (,user-1-public-key-hash ,change-amount-2))))
-
-        (setq signed-transaction        ; signed by user 1
-              (cosi/proofs/newtx:make-and-maybe-sign-transaction
-               transaction-inputs transaction-outputs
-               :skeys (pbc:keying-triple-skey *user-1*)
-               :pkeys (pbc:keying-triple-pkey *user-1*)))
-        (setq *tx-2* signed-transaction)
-        (ac:pr (format nil "Broadcasting 2nd TX."))
+             (user-1-public-key-hash    ; a/k/a address
+               (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-1*)))
+             (amount-1 890)             ; user gets 890 (fee = 10)
+             (change-amount-1
+               (- (cosi/proofs/newtx:initial-total-coin-amount) 
+                  (+ amount-1 fee)))
+             (genesis-public-key-hash   ; a/k/a address
+               (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*)))
+             (transaction-outputs
+               (cosi/proofs/newtx:make-transaction-outputs
+                `((,user-1-public-key-hash ,amount-1)
+                  (,genesis-public-key-hash ,change-amount-1))))
+             (signed-transaction        ; signed by genesis account
+               (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                transaction-inputs transaction-outputs
+                :skeys (pbc:keying-triple-skey *genesis-account*)
+                :pkeys (pbc:keying-triple-pkey *genesis-account*))))
+        (setq *tx-1* signed-transaction)
+        (ac:pr (format nil "Broadcasting 1st TX."))
         (broadcast-message :new-transaction-new :trn signed-transaction)
 
         (sleep 5)
-
-        (let* ((user-3-public-key-hash
-                 (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
-               (amount-3 350)
-               (change-amount-3 (- amount-2 (+ amount-3 fee))))
+      
+        (let* ((user-2-public-key-hash
+                 (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*)))
+               (amount-2 500)
+               (change-amount-2 (- amount-1 (+ amount-2 fee))))
 
           (setq txid (cosi/proofs/newtx:transaction-id signed-transaction))
           (setq index 0)
@@ -305,17 +276,43 @@ This will spawn an actor which will asynchronously do the following:
 
           (setq transaction-outputs
                 (cosi/proofs/newtx:make-transaction-outputs
-                 `((,user-3-public-key-hash ,amount-3)
-                   (,user-1-public-key-hash ,change-amount-3))))
+                 `((,user-2-public-key-hash ,amount-2)
+                   (,user-1-public-key-hash ,change-amount-2))))
 
-          (setq signed-transaction      ; signed by user 2
+          (setq signed-transaction      ; signed by user 1
                 (cosi/proofs/newtx:make-and-maybe-sign-transaction
                  transaction-inputs transaction-outputs
-                 :skeys (pbc:keying-triple-skey *user-2*)
-                 :pkeys (pbc:keying-triple-pkey *user-2*)))
-          (setq *tx-3* signed-transaction)          
-          (ac:pr (format nil "Broadcasting 3rd TX."))
-          (broadcast-message :new-transaction-new :trn signed-transaction))))))
+                 :skeys (pbc:keying-triple-skey *user-1*)
+                 :pkeys (pbc:keying-triple-pkey *user-1*)))
+          (setq *tx-2* signed-transaction)
+          (ac:pr (format nil "Broadcasting 2nd TX."))
+          (broadcast-message :new-transaction-new :trn signed-transaction)
+
+          (sleep 5)
+
+          (let* ((user-3-public-key-hash
+                   (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
+                 (amount-3 350)
+                 (change-amount-3 (- amount-2 (+ amount-3 fee))))
+
+            (setq txid (cosi/proofs/newtx:transaction-id signed-transaction))
+            (setq index 0)
+            (setq transaction-inputs
+                  (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
+
+            (setq transaction-outputs
+                  (cosi/proofs/newtx:make-transaction-outputs
+                   `((,user-3-public-key-hash ,amount-3)
+                     (,user-2-public-key-hash ,change-amount-3))))
+
+            (setq signed-transaction    ; signed by user 2
+                  (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                   transaction-inputs transaction-outputs
+                   :skeys (pbc:keying-triple-skey *user-2*)
+                   :pkeys (pbc:keying-triple-pkey *user-2*)))
+            (setq *tx-3* signed-transaction)          
+            (ac:pr (format nil "Broadcasting 3rd TX."))
+            (broadcast-message :new-transaction-new :trn signed-transaction)))))))
         
               
         
