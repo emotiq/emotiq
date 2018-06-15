@@ -219,14 +219,17 @@ This will spawn an actor which will asynchronously do the following:
                  (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
                    ;; Establish current-node binding of genesis node
                    ;; around call to create genesis block.
-                   (cosi/proofs:create-genesis-block
-                    (pbc:keying-triple-pkey *genesis-account*))))))
-      
+                   (setq *genesis-block*
+                         (cosi/proofs:create-genesis-block
+                          (pbc:keying-triple-pkey *genesis-account*))))))
+           (genesis-transaction         ; kludgey handling here
+             (first (cosi/proofs:block-transactions genesis-block))))
+
+      (format t "~%Tx 0 created/signed, now broadasting.")
+      (cosi/proofs/newtx:dump-tx genesis-transaction)      
       (broadcast-message :genesis-block :blk genesis-block)
 
-      (let* ((genesis-transaction       ; kludgey handling here
-               (first (cosi/proofs:block-transactions genesis-block)))
-             (txid
+      (let* ((txid
                (cosi/proofs/newtx:transaction-id genesis-transaction))
              (index 0)
              (transaction-inputs
@@ -251,6 +254,8 @@ This will spawn an actor which will asynchronously do the following:
                 :pkeys (pbc:keying-triple-pkey *genesis-account*))))
         (setq *tx-1* signed-transaction)
         (ac:pr (format nil "Broadcasting 1st TX."))
+        (format t "~%Tx 1 created/signed, now broadasting.")
+        (cosi/proofs/newtx:dump-tx signed-transaction)
         (broadcast-message :new-transaction-new :trn signed-transaction)
 
         (sleep 5)
@@ -275,8 +280,10 @@ This will spawn an actor which will asynchronously do the following:
                  transaction-inputs transaction-outputs
                  :skeys (pbc:keying-triple-skey *user-1*)
                  :pkeys (pbc:keying-triple-pkey *user-1*)))
+          (format t "~%Tx 2 created/signed, now broadasting.")
           (setq *tx-2* signed-transaction)
           (ac:pr (format nil "Broadcasting 2nd TX."))
+          (cosi/proofs/newtx:dump-tx signed-transaction)
           (broadcast-message :new-transaction-new :trn signed-transaction)
 
           (sleep 5)
@@ -303,6 +310,8 @@ This will spawn an actor which will asynchronously do the following:
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
             (setq *tx-3* signed-transaction)          
             (ac:pr (format nil "Broadcasting 3rd TX."))
+            (format t "~%Tx 3 created/signed, now broadasting.")
+            (cosi/proofs/newtx:dump-tx signed-transaction)
             (broadcast-message :new-transaction-new :trn signed-transaction)))))))
         
               
