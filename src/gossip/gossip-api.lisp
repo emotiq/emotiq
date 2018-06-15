@@ -9,11 +9,13 @@
 
 (in-package :gossip)
 
+;;; DONE
 (defun get-live-uids ()
   "Returns a list of live keys. Second value returned is a universal-time of last time
    the list was refreshed."
-  )
+  (uber-set))
 
+;;; DONE
 (defun singlecast (message nodeID &key graphID (howmany 2))
   "High-level API for sending message to given single nodeID. If graphID
    is supplied, message will be forwarded along the graph, starting
@@ -79,6 +81,7 @@
     ((integerp style)           (gossipcast message :graphID graphID :startnodeID startnodeID :howmany style))
     (t (error "Invalid style ~S" style))))
 
+;;; NOT DONE YET
 (defun establish-star-broadcast-group (list-of-nodeIDs &key graphID center-nodeID)
   "Creates a star topology with center-nodeID in center.
   If no center-nodeID is given, a pseudo-node is created for that purpose.
@@ -87,12 +90,14 @@
  
   )
 
+;;; NOT DONE YET
 (defun establish-gossip-broadcast-group (list-of-nodeIDs &key graphID)
  "Creates a connected graph (but usually not fully-connected) from list-of-nodeIDs.
   Returns given graphID or it makes a new one and returns that.
   If given graphID exists on any of these nodes, all connections on that graphID will be destroyed first."
   )
 
+;;; NOT DONE YET
 (defun establish-broadcast-group (list-of-nodeIDs &key graphID)
    "High-level API call. Decides itself whether
    star or gossip is best, based on number of nodes, etc. (Large number of nodes suggests
@@ -101,6 +106,7 @@
   (dissolve-graph graphID)
   )
 
+;;; DONE
 (defun dissolve-graph (graphID &key startnodeID)
   "Dissolves all connections associated with graphID.
   Starts at startnodeID if given; otherswise it finds one to start with."
@@ -118,10 +124,3 @@
                 startnodeID                   ; destination
                 nil)
       t)))
-
-
-
-;;; Utility routines
-
-(defun locate-local-node-for-graph (graphID)
-  )
