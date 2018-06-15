@@ -173,14 +173,20 @@ added to the blockchain."
 
 
 (defun create-genesis-block (public-key)
-  "Call this to create the genesis block."
+  "Create a genesis block on cosi-simgen:*BLOCKCHAIN* paying to PUBLIC-KEY. This
+   must be called on the genesis node of the blockchain, with
+   cosi-simgen:*CURRENT-NODE* appropriately bound. Note that the funds are sent
+   to a hash of the pubiic key, converted with
+   cosi/proofs:public-key-to-address."
   (when (not *newtx-p*)
     (error "Sorry, only know how to do this for new transactions (*newtx-p*)."))
   (let* ((genesis-transaction
            (cosi/proofs/newtx:make-genesis-transaction
             (cosi/proofs:public-key-to-address public-key)))
-         (transactions (list genesis-transaction)))
-    (create-block nil nil nil nil transactions)))
+         (transactions (list genesis-transaction))
+         (block (create-block nil nil nil nil transactions)))
+    (cosi-simgen:node-dispatcher :genesis-block :blk block)
+    block))
     
              
 
