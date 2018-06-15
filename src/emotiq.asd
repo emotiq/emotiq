@@ -51,21 +51,28 @@
                                        
 (defsystem "emotiq/startup"
   :depends-on (emotiq/node
-               actors)
+               actors
+               emotiq/wallet
+               emotiq-rest
+               websocket/wallet)
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "startup")))))
 
 (defsystem "emotiq/wallet"
-  :depends-on (emotiq
+  :depends-on (emotiq/logging
                ironclad
+               quri
                lisp-object-encoder
                cosi-bls)
-  :in-order-to ((test-op (test-op "emotiq-wallet-test")))
+  :in-order-to ((test-op (test-op "wallet-tests")))
   :components ((:module source
-                :pathname "./"
-                :components ((:file "wallet")))))
+                :pathname "wallet/"
+                :serial t
+                :components ((:file "name")
+                             (:file "file")
+                             (:file "wallet")))))
 
 (defsystem "emotiq/cli"
   :depends-on (emotiq/wallet

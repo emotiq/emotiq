@@ -633,7 +633,7 @@ THE SOFTWARE.
   (max 4 (ccl:cpu-count))
   #-(or :CLOZURE (AND :LISPWORKS :MACOSX)) 4)
 
-(defun default-watchdog-function ()
+(defun default-watchdog-function (age)
   (restart-case
       (error "Actor Executives are stalled (blocked waiting or compute bound). ~&Last heartbeat was ~A sec ago."
              age)
@@ -745,7 +745,7 @@ THE SOFTWARE.
            (mpcompat:process-run-function
             "Handle Stalling Actors"
             '()
-            *watchdog-hook*)
+            *watchdog-hook* age)
            )))
 
      (remove-from-pool (proc)

@@ -4,17 +4,11 @@ Building a binary is referred to as `Production`.
 
 This process must also gel with GitLab CI, which rebuilds the whole system (inside of GitLab) on every push to the repository.
 
-
 ## Development:
 
-As a first step, we need to snip all ties with non-standard libraries, e.g. `emotiq/var/local/lib/libpbc.dylib` and `emotiq/var/local/lib/libgmp.dylib`.
+As a first step, we need to snip all ties with non-standard libraries, e.g. `var/local/lib/libpbc.dylib` and `var/local/lib/libgmp.dylib` (from now on all pathes are relative to root of the source tree).
 
-A script targeted at development is called emotiq/etc/build-crypto-pairing.bash.
-Normal Emotiq developers need to wipe the emotiq/var directory (if present)
-with a command such as 'rm -rf emotiq/var".
-Then, run the developers' script on the command-line as `etc/build-crypto-pairing.bash`.  This creates the directory "emotiq/var" and puts pbc related .h files into "emotiq/var/local/include/pbc" and pbc and gmp dylibs (.dylib on mac, .so on linux) into emotiq/var/locl/lib.
-
-The script takes quite a while to run and displays many lines of config and build messages.
+This process is described in section **Building the native libraries required by CRYPTO-PAIRINGS** in the root `README.md` file.
 
 The build is only necessary for developers using the crypto-pairing libraries (PBC and GMP).
 
@@ -22,13 +16,13 @@ For development, this script needs to be run only once, and the var directory st
 
 Developers need to load these systems: `emotiq`, `emotiq/delivery`, `emotiq/utilities`, `emotiq/blockchain` and `emotiq/startup`.
 
-Developers should run `(emotiq:main)` to "run" the system.  The code to run a blockchain node are installed by modifying the function "main" in the file `emotiq/src/startup.lisp`.
+Developers should run `(emotiq:main)` to "run" the system.  The code to run a blockchain node are installed by modifying the function `main`in the file `src/startup.lisp`.
 
-Building a binary:
+## Building a binary:
 
 Building a binary (which is something developers will rarely do) is performed by another script.  The steps are:
 
-1. Delete the emotiq/var directory (e.g. "rm -rf emotiq/var")
+1. Delete the `var` directory (e.g. `rm -rf var`)
 1. Check path to the LispWorks binary at `etc/deliver/deliv-{macos,linux}.bash`
 1. Run the delivery script `etc/build-binary.sh`.
 

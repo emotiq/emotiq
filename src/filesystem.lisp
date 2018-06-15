@@ -22,6 +22,12 @@
     (ensure-directories-exist d)
     d))
 
-
-
-
+(defun emotiq/user/root/ ()
+  #+:windows
+  (error "Not implemented on Windows")
+  #+:linux
+  (merge-pathnames ".emotiq/" (user-homedir-pathname))
+  #+:darwin
+  (merge-pathnames "Emotiq/"
+                   (merge-pathnames "Library/Application Support/"
+                                    (user-homedir-pathname))))
