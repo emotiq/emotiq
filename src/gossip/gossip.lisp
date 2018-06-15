@@ -16,7 +16,8 @@
 (in-package :gossip)
 
 (defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
-       :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs")
+       :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs
+        that are not expected to be globally-unique.")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
@@ -163,23 +164,37 @@ are in place between nodes.
    (kvs:clear-store *nodes*)
    (setf *uber-set-cache* nil)) ; invalidate cache
 
+(defun local-real-nodes ()
+  "Returns a list of nodes that are real (non-proxy) and resident on this machine."
+  (loop for node being each hash-value of *nodes*
+    when (typep node 'gossip-node) collect node))
+
 (defun local-real-uids ()
   "Returns a list of UIDs representing real (non-proxy) nodes resident on this machine."
   (loop for key being each hash-key of *nodes* using (hash-value node)
     when (typep node 'gossip-node) collect key))
 
 (defun remote-real-uids ()
-  "Returns a list of UIDs representing real (non-proxy) nodes resident on other machines."
-  (let ((remote-monads (cdr *remote-uids*)))
-    (loop for item in remote-monads
-      when (typep item 'augmented-data) collect (unwrap item))))
+  "Returns a list of UIDs representing real (non-proxy) nodes resident on other machines.
+  Second value returned is a universal-time of last time remotes were pinged."
+  (let* ((remote-monads (cdr *remote-uids*))
+         (remote-uids (loop for item in remote-monads
+                        when (typep item 'augmented-data) collect (unwrap item))))
+    (setf remote-uids (apply 'append remote-uids)) ; because each is a list
+    (values remote-uids
+            (car *remote-uids*))))
 
 (defun uber-set ()
-  "Returns a complete list of UIDs of real nodes (not proxies) known on both this machine and other machines"
-  (or *uber-set-cache*
-      (setf *uber-set-cache* (union (local-real-uids)
-                                    (remote-real-uids)))))
-
+  "Returns a complete list of UIDs of real nodes (not proxies) known on both this machine and other machines.
+   Second value returned is a universal-time of last time remotes were pinged."
+  (multiple-value-bind (rr-uids timestamp) (remote-real-uids)
+    (if *uber-set-cache*
+        (values *uber-set-cache*
+                timestamp)
+        (values
+         (setf *uber-set-cache* (union (local-real-uids) rr-uids))
+               timestamp))))
+      
 (defun aws-p ()
   "Returns true if we're running on an AWS EC2 instance.
    Always runs quickly."
@@ -564,11 +579,25 @@ are in place between nodes.
                        (incf i)))
                  nodetable)))))
 
+(defgeneric locate-local-node-for-graph (graphID)
+  (:documentation "Returns UID of some local node that's part of given graphID, if any"))
+
+(defmethod locate-local-node-for-graph ((graphID (eql :UBER)))
+  "Every local real node is part of the :UBER set by definition"
+  (first (local-real-uids)))
+
+(defmethod locate-local-node-for-graph ((graphID t))
+  (let* ((localnodes (local-real-nodes))
+         (node (find-if (lambda (node)
+                          (kvs:lookup-key (neighbors node) graphID))
+                        localnodes)))
+    (when node (uid node))))
+
 (defmethod neighborhood ((node gossip-node) &optional (graphID *default-graphID*))
   "If graphID = :UBER, return the uber-set rather than the neighbors table in the node.
    The uber-set is mostly for bootstrapping a gossip network."
   (if (eql :UBER graphID)
-      (uber-set)s
+      (uber-set)
       (kvs:lookup-key (neighbors node) graphID)))
 
 (defmethod dissolve-neighborhood ((node gossip-node) graphID)
