@@ -174,6 +174,7 @@
    :signature
    
    :create-block
+   :create-genesis-block
    :hash-block 
    :update-block-signature
    :serialize-block-octets
@@ -193,7 +194,35 @@
    :block-signature-bitmap
    :block-signature-pkey
    :block-signature
-   :block-merkle-root-hash))
+   :block-merkle-root-hash
+
+   :*newtx-p*))                         ; for new transactions, short term temp! -mhd, 6/12/18
+
+(defpackage :cosi/proofs/newtx          ; New Transactions
+  (:use 
+   :common-lisp
+   :cosi
+   :crypto/modular-arith
+   :vec-repr
+   :edec
+   :pbc)
+  (:shadow block)            ; used internally, not required for users
+  (:export 
+   transaction-id
+   make-genesis-transaction
+   transaction-outputs
+   transaction-inputs
+   make-transaction
+   make-and-maybe-sign-transaction
+   make-transaction-outputs
+   make-transaction-inputs
+   initial-total-coin-amount
+   validate-transaction
+   get-transactions-for-new-block
+   check-block-transactions
+   dump-tx
+   dump-txs
+   clear-transactions-in-block-from-mempool))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen

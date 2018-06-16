@@ -165,6 +165,32 @@ added to the blockchain."
       blk)))
 
 
+
+(defparameter *newtx-p* t) ; using new-transactions.lisp (package
+                           ; cosi/proofs/newtx) - MHD development!
+                           ; -mhd, 6/13/18
+
+
+
+(defun create-genesis-block (public-key)
+  "Create a genesis block on cosi-simgen:*BLOCKCHAIN* paying to PUBLIC-KEY. This
+   must be called on the genesis node of the blockchain, with
+   cosi-simgen:*CURRENT-NODE* appropriately bound. Note that the funds are sent
+   to a hash of the pubiic key, converted with
+   cosi/proofs:public-key-to-address."
+  (when (not *newtx-p*)
+    (error "Sorry, only know how to do this for new transactions (*newtx-p*)."))
+  (let* ((genesis-transaction
+           (cosi/proofs/newtx:make-genesis-transaction
+            (cosi/proofs:public-key-to-address public-key)))
+         (transactions (list genesis-transaction))
+         (block (create-block nil nil nil nil transactions)))
+    (cosi-simgen:node-dispatcher :genesis-block :blk block)
+    block))
+    
+             
+
+
 (defun hash-256 (&rest hashables)
   "This is the hashing used in our block in a merkle tree, linking
    transaction outputs and inputs, and hashing the block header. This
@@ -200,13 +226,14 @@ added to the blockchain."
              collect tx-out-id))))
 
 
-
 (defun get-transaction-id (transaction)
   "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
    used to hash the transactions leaves of the merkle tree to produce the
    block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
    a superset thereof."
-  (vec-repr:bev-vec (hash:hash-val (hash-transaction transaction))))
+  (if *newtx-p*
+      (cosi/proofs/newtx:transaction-id transaction)
+      (vec-repr:bev-vec (hash:hash-val (hash-transaction transaction)))))
 
 ;; In Bitcoin this is known as the TXID of the transaction.
 

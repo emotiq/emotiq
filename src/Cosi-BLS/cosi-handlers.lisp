@@ -98,6 +98,18 @@ THE SOFTWARE.
   (pr (format nil "~A got genesis utxo" (short-id (current-node))))
   (really-record-new-utxo utxo))
 
+;; for new transactions:  -mhd, 6/12/18
+(defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
+  (pr (format nil "~A got genesis block" (short-id (current-node))))
+  (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
+    (error "BLK is nil, can't continue."))
+  (push blk *blockchain*)
+  (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk))
+
+;; for new transactions:  -mhd, 6/12/18
+(defmethod node-dispatcher ((msg-sym (eql :new-transaction-new)) &key trn)
+  (cosi/proofs/newtx:validate-transaction trn))
+
 (defmethod node-dispatcher ((msg-sym (eql :make-block)) &key)
   (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
 
@@ -657,6 +669,10 @@ topo-sorted partial order"
       )))
                
 (defun get-transactions-for-new-block ()
+  (when *newtx-p*
+    (return-from get-transactions-for-new-block
+      (cosi/proofs/newtx:get-transactions-for-new-block
+       :max *max-transactions*)))
   (let ((tx-pairs (get-candidate-transactions)))
     (pr "Trimming transactions")
     (multiple-value-bind (hd tl)
@@ -681,6 +697,9 @@ blockchain.
 
 Check that there are no forward references in spend position, then
 check that each TXIN and TXOUT is mathematically sound."
+  (when *newtx-p*
+    (return-from #1#
+      (cosi/proofs/newtx:check-block-transactions blk)))
   (dolist (tx (get-block-transactions blk))
     (dolist (txin (trans-txins tx))
       (let ((key  (bev (txin-hashlock txin))))
@@ -1006,9 +1025,16 @@ check that each TXIN and TXOUT is mathematically sound."
                     (check-block-multisignature blk))
            (push blk *blockchain*)
            (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
-           ;; clear out *mempool* and spent utxos
-           (replay-remove-txs-from-mempool blk)
-           (sync-database)
+           (cond
+             ;; For new tx: ultra simple for now: there's no UTXO
+             ;; database. Just remhash from the mempool all
+             ;; transactions that made it into the block.
+             (*newtx-p*
+              (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk))
+             (t
+              ;; clear out *mempool* and spent utxos
+              (replay-remove-txs-from-mempool blk)
+              (sync-database)))
            t) ;; return true to validate
        ;; unwind
        (end-holdoff)))
