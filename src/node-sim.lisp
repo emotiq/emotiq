@@ -36,7 +36,10 @@ yet seen (and, therefore, needs to validate the unseen txn(s))
 If either NEW-CONFIGURATION-P is true or the simulator has never been
 run on this node, a new simulation network will be generated.  The
 configured simulation will have the integer number of NODES as
-witnesses."
+witnesses.  
+
+N.B. :nodes has no effect unless a new configuration has been triggered (see above)."
+
   (setf actors::*maximum-age* 120)
   (when executive-threads
     (setf actors::*nbr-execs*
