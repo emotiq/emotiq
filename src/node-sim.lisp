@@ -124,7 +124,6 @@ witnesses."
 (defparameter *user-3* nil)
 (defparameter *tx-1* nil)
 (defparameter *tx-2* nil)
-(defparameter *tx-3* nil)
 
 (defun ensure-simulation-keys ()
   (unless (and *genesis-account* *user-1* *user-2* *user-3*)
@@ -140,65 +139,54 @@ witnesses."
           *user-3*
           (pbc:make-key-pair :user-3))))
 
-; test helper - in real life, we would already know the pkey of the destination,
-; here we have special variables holding the various test users
-(defun pkey-of (user)
-  (pbc:keying-triple-pkey user))
-
-(defun skey-of (user)
-  (pbc:keying-triple-skey user))
-
-(defun run (&key (amount 100) (monetary-supply 1000) (cloaked t))
+(defun run (&key (monetary-supply 1000) (cloaked t))
   "Run the block chain simulation entirely within the current process
 
 This will spawn an actor which will asynchronously do the following:
 
-  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
-      coins to *USER-1*.  The resulting transaction can be referenced
-      via *tx-1*.
+  1.  Create a genesis transaction with MONETARY-SUPPLY coins.
+      Transact 1000 coins to *USER-1*.  The resulting transaction
+      can be referenced via *tx-1*.
 
-  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
-
-  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
+  2.  In the transaction references as *TX-2*, *USER-1* sends 500
+      coins to *USER-2*, 490 coins to *USER-3*, with a fee of 10 coins.
 "
-
-  (declare (ignore amount))
   (ensure-simulation-keys)
 
   (setf *genesis-output* nil
         *tx-1*           nil
-        *tx-2*           nil
-        *tx-3*           nil)
+        *tx-2*           nil)
 
   (cosi-simgen:reset-nodes)
  
   (emotiq/elections:make-election-beacon)
                                          
-  ;(ac:spawn  ;; cosi-handlers assumes that there is one block in the blockchain, if you spawn here,
-  ; you might get errors in cosi-handlers if leader-exec runs before this code...
-  ; (lambda ()
-  (let ((fee 10))
-    (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
-           (user-1-pkey (pbc:keying-triple-pkey *user-1*))
-           (user-2-pkey (pbc:keying-triple-pkey *user-2*))
-           (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
+  (let ((fee 10)
+        (user-1-pkey (pbc:keying-triple-pkey *user-1*))
+        (user-2-pkey (pbc:keying-triple-pkey *user-2*))
+        (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
       
       (ac:pr "Construct Genesis transaction")
       (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
-        ;; secrg (see tst-blk) is ignored and not even returned
-        (let ((trans (create-transaction *genesis-account* genesis-utxo
-                                            ; user1 gets 1000 from genesis (fee = 0)
-                                         '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
+        (let ((trans (create-transaction
+                      *genesis-account* genesis-utxo
+                                        ; user1 gets 1000 from genesis (fee = 0)
+                      '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
+                                        ; force genesis block (leader-exec breaks if blockchain is nil)
+          (publish-transaction (setf *tx-1* trans) "tx-1") ; 
           (ac:pr "Find UTX for user-1")
-          (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
+          (let ((from-utxo (cosi/proofs:find-txout-for-pkey-hash
+                            (hash:hash/256 user-1-pkey)
+                            trans)))
             (ac:pr "Construct 2nd transaction")
-            (let ((trans (create-transaction *user-1* from-utxo 
-                                                ; user1 spends 500 to user2, 490 to user3, 10 for fee
-                                             '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
+            (let ((trans (create-transaction
+                          *user-1* from-utxo 
+                                        ; user1 spends 500 to user2, 490 to user3, 10 for fee
+                          '(500 490)
+                          (list user-2-pkey user-3-pkey)
+                          fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")
-              )))))))
+              (publish-transaction (setf *tx-2* trans) "tx-2")))))))
 
 
 (defun blocks ()
