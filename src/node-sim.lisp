@@ -11,7 +11,7 @@
   (assert bool-condition))
 
 (defun initialize (&key
-                     (cosi-prepare-timeout 10)
+                     (cosi-prepare-timeout 40)
                      (cosi-commit-timeout 10)
                      (executive-threads nil)
                      (nodes 8)
@@ -21,8 +21,14 @@
 
 The simulation can be configured to run across the number of EXECUTIVE-THREADS 
 
-COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait for responses during prepare phase. 
-COSI-COMMIT-TIMEOUT specifies how many seconds that cosi leaders wait for responses during commit phase. 
+COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait
+for responses during prepare phase.  The default value is 40.  For
+simulations involving computational expensive cloaked transactions
+across many nodes, this value may need to be larger to allow the
+blocks to be sealed.
+
+COSI-COMMIT-TIMEOUT specifies how many seconds that cosi leaders wait
+for responses during commit phase.
 
 Prepare can possibly take longer than commit, because the block may contain txns that a witness has not
 yet seen (and, therefore, needs to validate the unseen txn(s))
@@ -167,8 +173,8 @@ This will spawn an actor which will asynchronously do the following:
         *tx-2*           nil
         *tx-3*           nil)
 
-  (cosi-simgen:reset-nodes) 
-
+  (cosi-simgen:reset-nodes)
+ 
   (emotiq/elections:make-election-beacon)
                                          
   ;(ac:spawn  ;; cosi-handlers assumes that there is one block in the blockchain, if you spawn here,
