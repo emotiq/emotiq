@@ -1264,12 +1264,13 @@ ADDRESS here is taken to mean the same thing as the public key hash."
   (format t "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
   (unless out-only
     (loop for tx-in in (transaction-inputs tx)
-          do (format t "    input outpoint: index = ~a/txid = ~a~%"
+          do (format t "    input outpoint: index = ~a/TxID = ~a~%"
                      (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
   (format t "    outputs:~%")
   (loop for tx-out in (transaction-outputs tx)
-        do (format t "    amt = ~a (out to) addr = ~a~%"
-                   (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
+        as i from 0
+        do (format t "      [~d] amt = ~a (out to) addr = ~a~%"
+                   i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
