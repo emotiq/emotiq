@@ -51,7 +51,7 @@ witnesses."
 
   ;; should this following code be executed every time or only when a new configuration is created?
   (phony-up-nodes)
-  (emotiq/elections:set-nodes (list-of-nodes))
+  (emotiq/elections:set-nodes (keys-and-stakes))
 
   (when run-cli-p
     (emotiq/cli:main)))
@@ -108,19 +108,16 @@ witnesses."
                                     :outs out-list
                                     :fee fee))))
 
-
 (defun publish-transaction (trans name)
-  (print "Validate transaction")
   (unless (cosi/proofs:validate-transaction trans)
-    (error(format nil "transaction ~A did not validate" name)))
+    (error (format nil "transaction ~A did not validate" name)))
+  (format *error-output* "~&Broadcasting transaction ~a to all simulated nodes" name)
   (broadcast-message :new-transaction
-                     :trn trans)
-  ;; (force-epoch-end)
-  )
+                     :trn trans))
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
-  (cosi-simgen:send cosi-simgen:*leader* :make-block))
+  (cosi-simgen:send cosi-simgen:*top-node* :make-block))
 
 (defparameter *user-1* nil)
 (defparameter *user-2* nil)
@@ -205,14 +202,22 @@ This will spawn an actor which will asynchronously do the following:
 
 
 (defun blocks ()
-  "Return the blocks in the chain currently under local simulation."
+  "Return the blocks in the chain currently under local simulation
+
+The blocks constituting the chain are from the view of the `top-node` of
+the cosi-simgen implementation of the simulator."
   (cosi-simgen:node-blockchain cosi-simgen:*top-node*))
 
 (defun kill-beacon ()
   (emotiq/elections::kill-beacon))
 
+(defun nodes ()
+  "Return a list of all nodes under simulation"
+  (alexandria:hash-table-values cosi-simgen:*ip-node-tbl*))
+
 ;; ----------------------------------------------------------------
 ;; These disappear once Gossip is installed...
+;; 
 
 (defun phony-up-nodes ()
   (maphash (lambda (k node)
@@ -220,19 +225,14 @@ This will spawn an actor which will asynchronously do the following:
              (setf (cosi-simgen:node-stake node) (random 100000)))
            cosi-simgen:*ip-node-tbl*))
 
-;; hacked copy of cosi-simgen::assign-bits()
-(defun list-of-nodes ()
-  (let ((collected
-         (um:accum acc
-           (maphash (lambda (k node)
-                      (declare (ignore k))
-                      (acc (list (cosi-simgen:node-pkey node) (cosi-simgen:node-stake node))))
-                    cosi-simgen:*ip-node-tbl*))))
-    collected))
+(defun keys-and-stakes ()
+  "Return a list of lists of public key and stake for nodes"
+  (mapcar (lambda (node)
+            (list (cosi-simgen:node-pkey node) (cosi-simgen:node-stake node)))
+          (nodes)))
 
-
-
-
+;; END? of "those which disappear once Gossip in installed…"
+;; ----------------------------------------------------------------
 
 ;;;; Single Node REPL
 

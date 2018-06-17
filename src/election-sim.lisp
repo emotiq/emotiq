@@ -31,7 +31,8 @@ THE SOFTWARE.
 
 (defvar *beacon-interval*  20)
 
-;; ordered list/vector of all known stakeholders
+;; list of lists of a public key and its associated stake
+;; 
 ;; in real life, this should be an ordered list/vector of *real-nodes*
 ;; in the simulator, 1 machine, this is a list of all nodes (fake and real)
 ;; In the simulator, we only hold mock elections, and print the
@@ -40,7 +41,7 @@ THE SOFTWARE.
 (defvar *all-nodes*  nil) 
 
 (defun set-nodes (node-list)
-  "Node-list is a list of (public-key stake-amount) pairs"
+  "NODE-LIST is a list of (public-key stake-amount) pairs"
   (ac:pr (format nil "election set-nodes ~A" node-list))
   (assert node-list)
   (setf *all-nodes* node-list))

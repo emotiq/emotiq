@@ -87,6 +87,9 @@
    #:run
 
    #:blocks
+   #:nodes
+   #:keys-and-stakes
+   
    #:create-transaction
    #:force-epoch-end
 
