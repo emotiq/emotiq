@@ -1261,7 +1261,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun dump-tx (tx &key out-only)
-  (format t "~%  TxID: ~a~%" (txid-string (transaction-id tx)))
+  (format t "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
   (unless out-only
     (loop for tx-in in (transaction-inputs tx)
           do (format t "    input outpoint: index = ~a/txid = ~a~%"
@@ -1271,7 +1271,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
         do (format t "    amt = ~a (out to) addr = ~a~%"
                    (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
-(defun dump-txs (&key file mempool block blockchain)
+(defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
            (when block
              (format t "~%Dump txs in block = ~s:~%" block)
@@ -1283,13 +1283,20 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                    do (dump-tx tx)))
            (when blockchain
              (format t "~%Dump txs on blockchain:~%")
-             (do-all-transactions (tx) (dump-tx tx)))))
-    (if file
-        (with-open-file (*standard-output*
-                         file
-                         :direction :output :if-exists :supersede)
-          (dump-loops))
-        (dump-loops))))
+             (do-blockchain (block)
+               (format t " Dump txs in block = ~s:~%" block)
+               (do-transactions (tx block)
+                 (dump-tx tx))))))
+    (let ((cosi-simgen:*current-node*
+            (or node 
+                cosi-simgen:*current-node*
+                cosi-simgen:*top-node*)))
+      (if file
+          (with-open-file (*standard-output*
+                           file
+                           :direction :output :if-exists :supersede)
+            (dump-loops))
+          (dump-loops)))))
 
 
 

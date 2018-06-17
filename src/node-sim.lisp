@@ -201,19 +201,17 @@ This will spawn an actor which will asynchronously do the following:
   3.  Transfer some other amount of coins from *user-2* to *user-3* as *tx3*."
 
   (ensure-simulation-keys)
-  (setf *genesis-output* nil *tx-1* nil *tx-2* nil *tx-3* nil)
+  (setf *genesis-output* nil *tx-1* nil *tx-2* nil)
   (cosi-simgen:reset-nodes)
   (emotiq/elections:make-election-beacon)
   (let ((fee 10))    
     (ac:pr "Construct Genesis Block")
     (let* ((genesis-block
-             (or *genesis-block*        ; if rerunning, do not redo
-                 (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
-                   ;; Establish current-node binding of genesis node
-                   ;; around call to create genesis block.
-                   (setq *genesis-block*
-                         (cosi/proofs:create-genesis-block
-                          (pbc:keying-triple-pkey *genesis-account*))))))
+             (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
+               ;; Establish current-node binding of genesis node
+               ;; around call to create genesis block.
+               (cosi/proofs:create-genesis-block
+                (pbc:keying-triple-pkey *genesis-account*))))
            (genesis-transaction         ; kludgey handling here
              (first (cosi/proofs:block-transactions genesis-block)))
            (genesis-public-key-hash
@@ -301,8 +299,7 @@ This will spawn an actor which will asynchronously do the following:
                   (cosi/proofs/newtx:make-and-maybe-sign-transaction
                    transaction-inputs transaction-outputs
                    :skeys (pbc:keying-triple-skey *user-2*)
-                   :pkeys (pbc:keying-triple-pkey *user-2*)))
-            (setq *tx-3* signed-transaction)          
+                   :pkeys (pbc:keying-triple-pkey *user-2*)))          
             (ac:pr (format nil "Broadcasting 3rd TX."))
             (format t "~%Tx 3 created/signed by user-2 (~a), now broadasting."
                     user-2-public-key-hash)
@@ -339,7 +336,15 @@ This will spawn an actor which will asynchronously do the following:
             (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadasting."
                     user-2-public-key-hash)
-            (broadcast-message :new-transaction-new :trn signed-transaction)))))))
+            (broadcast-message :new-transaction-new :trn signed-transaction)
+
+
+            ;; Dump the whole blockchain now after about a minute,
+            ;; just before exiting:
+            (sleep 60)
+            (format t "~3%Here's a dump of the whole blockchain currently:~%")
+            (cosi/proofs/newtx:dump-txs :blockchain t)
+            (format t "~2%Good-bye and good luck!~%")))))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
