@@ -209,7 +209,7 @@ the cosi-simgen implementation of the simulator."
   (cosi-simgen:node-blockchain cosi-simgen:*top-node*))
 
 (defun kill-beacon ()
-  (emotiq/elections::kill-beacon))
+  (emotiq/elections:kill-beacon))
 
 (defun nodes ()
   "Return a list of all nodes under simulation"

@@ -108,6 +108,7 @@
   (:export 
    #:set-nodes
    #:make-election-beacon
+   #:kill-beacon
    #:hold-election))
 
 (defpackage emotiq/filesystem
