@@ -217,6 +217,10 @@ This will spawn an actor which will asynchronously do the following:
            (genesis-public-key-hash
              (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*))))
 
+      (format t "~&*** dump before genesis broadcast ***~&")
+(cosi/proofs/newtx:dump-txs :blockchain t)
+      (format t "~%~%*** end of dump before genesis broadcast ***~&")
+
       (format t "~%Tx 0 created/genesis, now broadasting.")
       (cosi/proofs/newtx:dump-tx genesis-transaction)      
       (broadcast-message :genesis-block :blk genesis-block)
@@ -344,7 +348,8 @@ This will spawn an actor which will asynchronously do the following:
             (sleep 60)
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")))))))
+            (format t "~2%Good-bye and good luck!~%")
+            (kill-beacon))))))) ;; this happens to work only because of the long sleep a few lines earlier
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
