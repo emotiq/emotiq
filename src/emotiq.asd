@@ -90,11 +90,12 @@
                 :components ((:file "node")))))
 
 (defsystem "emotiq/sim"  ;; a simulated node
-  :depends-on (emotiq/cli)
+  :depends-on (emotiq/cli
+               alexandria)
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
                              (:file "election-sim")
-                             (:file "node-sim")))))
+                             (:file "node-sim" :depends-on (election-sim))))))
 
 
