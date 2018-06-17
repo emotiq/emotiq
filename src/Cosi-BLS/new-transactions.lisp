@@ -479,8 +479,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
   (let ((txid (transaction-id transaction)))
     (when (find-transaction-per-id txid t)
-      (warn "A transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
-            txid)
+      ;; This is sort of a subcase of a double-spend attempt: so give
+      ;; a message to that effect. This corresponds to above rule
+      ;; 'Reject if we have a matching transaction in the mempool or
+      ;; in a block of the blockchain'
+      (warn "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
+            (txid-string txid))
       (return-from validate-transaction nil))
     (loop with succeed-p
           for tx-in in (transaction-inputs transaction)
@@ -491,16 +495,18 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             = (cond
                 ((null input-tx)
                  (progn
-                   (warn "~%Input transaction with presumed UTXO does not exist: no transaction with TXID ~a found in the mempool or on the blockchain." id)
+                   (warn
+                    "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
+                         (txid-string id))
                    (let* ((all-transactions (list-all-transactions))
                           (message-string
                             (with-output-to-string (out)
-                              (format out "Transaction ID not found: ~s~%Transaction count: ~d~%" 
+                              (format out "Transaction ID not found: ~a~%Transaction count: ~d~%" 
                                       id
                                       (length all-transactions))
                               (format out "All transactions IDs:~%")
                               (loop for tx in all-transactions
-                                    do (format out "  ~s~%" (transaction-id tx))))))
+                                    do (format out "  ~a~%" (transaction-id tx))))))
                      (break "~a" message-string))
                    
                    ;; (trace-compare-all-tx-ids id)
@@ -517,8 +523,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                           ;; debugging:
                           (error "TX ~a output [~a/~d] lost - likely programming error"
                                  input-tx id index))))
-                (when (double-spend-tx-out-p id index)
-                  (warn "The tx out has already been spent. TXID: ~a. Index: ~a. Rejected.")
+                (when (double-spend-tx-out-p id index t)
+                  (warn "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
+                        (txid-string id) index)
                   (return nil))
                 tx-out)
           as input-subamount = (tx-out-amount utxo)
@@ -547,8 +554,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil)))
-                  (format t "~%Successful transaction ~a~%  TxID = ~s~%" 
-                          transaction (transaction-id transaction))
+                  (format t "~%Successful transaction ~a~%  TxID = ~a~%" 
+                          transaction (txid-string (transaction-id transaction)))
                   (add-transaction-to-mempool transaction)
                   (return t))))
 
@@ -921,14 +928,30 @@ development, this signals a continuable error if there is no transaction."
          do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
-  `(loop for ,tx-var in (cosi/proofs:block-transactions ,blk)
+  "Bind each transaction of block BLK to TX-VAR in order from latest
+   spent to earliest spent around the execution of BODY. It's possible
+   to return using RETURN although RETURN-FROM to a lexical tag is
+   recommended as the most reliable and clear method."
+  `(loop with reversed-transactions
+           = (reverse (cosi/proofs:block-transactions ,blk))
+         for ,tx-var in reversed-transactions
          do (progn ,@body)))
 
 (defmacro do-all-transactions ((tx-var &optional block-var?) &body body)
-  (let ((block-var (or block-var? '#:block)))
+  "Iterate over all transactions of the blockchain from latest spent
+   to earliest spent around the exectution of BODY. To exit early you
+   must return using RETURN-FROM to a lexical tag."
+  (LET ((block-var (or block-var? '#:block)))
     `(do-blockchain (,block-var)
        (do-transactions (,tx-var ,block-var)
          ,@body))))
+
+;; Note that the order from latest to earliest spent is currently
+;; relied upon by, e.g., double-spend-tx-out-p to detect double-spend
+;; attempts. -mhd, 6/17/18
+
+;; ---!!! TODO: must improve architecture to avoid this
+;; ---!!! consing/copying inefficiency! -mhd, 6/17/18
 
 
 
@@ -958,61 +981,49 @@ returns the block the transaction was found in as a second value."
             (when (tx-ids= (transaction-id tx) id)
               (return-from find-transaction-per-id (values tx block))))))))
 
-
-(defun find-transaction-per-id-or-double-spend (id)
-  (do-blockchain (block)
-    (do-transactions (tx block)
-      (loop for tx-in in (transaction-inputs tx)
-            as tx-in-id = (tx-in-id tx-in)
-            when (tx-ids= tx-in-id id)
-              ;; earlier spend block found (double spend attempt)
-              do (return-from 
-                  find-transaction-per-id-or-double-spend
-                   (values tx block :double-spend)))
-      ;; If not a double-spend, then return a matched tx if found.
-      (when (tx-ids= (transaction-id tx) id)
-        (return-from find-transaction-per-id-or-double-spend
-          (values tx block))))))
-
-(defun double-spend-tx-out-p (id index)
-  (do-blockchain (block)
-    (do-transactions (tx block)
-      (loop for tx-in in (transaction-inputs tx)
-            as tx-in-id = (tx-in-id tx-in)
-            as tx-in-index = (tx-in-index tx-in)
-            when (and (tx-ids= tx-in-id id)
-                      (= tx-in-index index))
-              ;; earlier spend block found (double spend attempt)
-              do (return-from 
-                  double-spend-tx-out-p
-                   t))
-      ;; Can stop search (not a double-spend) when reach ID
-      (when (tx-ids= (transaction-id tx) id)
-        (return-from double-spend-tx-out-p
-          nil)))))
-  
-
-
-(defun find-utxo (id &key no-warn)
-  (multiple-value-bind
-        (found-tx? found-block? problem-found?)
-      (find-transaction-per-id-or-double-spend id)
-    (cond
-      (problem-found?
-       (case problem-found?
-         ((:double-spend)
-          (unless no-warn
-            (warn "Double spend attempt: TX ~a already spent in block ~a."
-                  ;; OK short term only: showing Lisp printed reps; review
-                  ;; later!
-                  found-tx? found-block?))
-          nil)
-         (otherwise
-          (unless no-warn
-            (warn "Unknown problem: ~a while finding UTXO. TX: ~a; Block: ~a"
-                  problem-found? found-tx? found-block?))
-          nil)))
-      (t (values found-tx? found-block?)))))
+(defun double-spend-tx-out-p (id index &optional also-search-mempool-p)
+  (when also-search-mempool-p
+    (loop with transaction-seen-p = nil
+          for tx being each hash-value of cosi-simgen:*mempool*
+          do (loop for tx-in in (transaction-inputs tx)
+                   as tx-in-id = (tx-in-id tx-in)
+                   as tx-in-index = (tx-in-index tx-in)
+                   when (and (tx-ids= tx-in-id id)
+                             (= tx-in-index index))
+                     ;; earlier spend block found (double spend attempt)
+                     do (return-from 
+                         double-spend-tx-out-p
+                          (values t :found-in-mempool)))
+          when (and (not transaction-seen-p)
+                    (tx-ids= (transaction-id tx) id))
+            do (setq transaction-seen-p t)
+          finally
+             ;; Can stop search (not a double-spend) if found
+             ;; transaction in mempool, evidently a UTXO.  Must go
+             ;; through whole loop, cannot exit -- mempool unordered,
+             ;; unlike the blockchain (cf below)
+             (when transaction-seen-p
+               (return-from double-spend-tx-out-p
+                 (values nil :utxo-in-mempool)))))
+  (do-all-transactions (tx)
+    (loop for tx-in in (transaction-inputs tx)
+          as tx-in-id = (tx-in-id tx-in)
+          as tx-in-index = (tx-in-index tx-in)
+          when (and (tx-ids= tx-in-id id)
+                    (= tx-in-index index))
+            ;; earlier spend block found (double spend attempt)
+            do (return-from 
+                double-spend-tx-out-p
+                 (values t :found-on-blockchain)) ; as opposed to mempool
+               ;; Can stop search (not a double-spend) when reach ID,
+               ;; indicating we have an usnpent transaction output
+               ;; (UTXO)
+               (when (tx-ids= (transaction-id tx) id)
+                 (format t "~%Hey look: the TxID~%  ~a~%is the same as the arg TxID~%  ~a~%Wow!~%"
+                         (txid-string (transaction-id tx))
+                         (txid-string id))
+                 (return-from double-spend-tx-out-p
+                   (values nil :utxo-on-blockchain))))))
 
 
 (defun trace-compare-all-tx-ids (id)
@@ -1242,13 +1253,19 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 ;;;; Printing Utilities
 
 
+(defun txid-string (transaction-id)
+  "Return a string representation of TRANSACTION-ID, a byte vector,
+   for display. The result is a lowercase hex string."
+  (nstring-downcase (format nil (hex-str transaction-id))))
+  
+
 
 (defun dump-tx (tx &key out-only)
-  (format t "~%  TXID: ~a~%" (transaction-id tx))
+  (format t "~%  TxID: ~a~%" (txid-string (transaction-id tx)))
   (unless out-only
     (loop for tx-in in (transaction-inputs tx)
           do (format t "    input outpoint: index = ~a/txid = ~a~%"
-                     (tx-in-index tx-in) (tx-in-id tx-in))))
+                     (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
   (format t "    outputs:~%")
   (loop for tx-out in (transaction-outputs tx)
         do (format t "    amt = ~a (out to) addr = ~a~%"
@@ -1258,8 +1275,8 @@ ADDRESS here is taken to mean the same thing as the public key hash."
   (flet ((dump-loops ()
            (when block
              (format t "~%Dump txs in block = ~s:~%" block)
-             (loop for tx in (cosi/proofs:block-transactions block)
-                   do (dump-tx tx)))
+             (do-transactions (tx block)
+               (dump-tx tx)))
            (when mempool
              (format t "~%Dump txs in mempool:~%")
              (loop for tx being each hash-value of cosi-simgen:*mempool*

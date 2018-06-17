@@ -223,9 +223,11 @@ This will spawn an actor which will asynchronously do the following:
                          (cosi/proofs:create-genesis-block
                           (pbc:keying-triple-pkey *genesis-account*))))))
            (genesis-transaction         ; kludgey handling here
-             (first (cosi/proofs:block-transactions genesis-block))))
+             (first (cosi/proofs:block-transactions genesis-block)))
+           (genesis-public-key-hash
+             (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*))))
 
-      (format t "~%Tx 0 created/signed, now broadasting.")
+      (format t "~%Tx 0 created/genesis, now broadasting.")
       (cosi/proofs/newtx:dump-tx genesis-transaction)      
       (broadcast-message :genesis-block :blk genesis-block)
 
@@ -241,8 +243,6 @@ This will spawn an actor which will asynchronously do the following:
              (change-amount-1
                (- (cosi/proofs/newtx:initial-total-coin-amount) 
                   (+ amount-1 fee)))
-             (genesis-public-key-hash   ; a/k/a address
-               (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*)))
              (transaction-outputs
                (cosi/proofs/newtx:make-transaction-outputs
                 `((,user-1-public-key-hash ,amount-1)
@@ -254,7 +254,8 @@ This will spawn an actor which will asynchronously do the following:
                 :pkeys (pbc:keying-triple-pkey *genesis-account*))))
         (setq *tx-1* signed-transaction)
         (ac:pr (format nil "Broadcasting 1st TX."))
-        (format t "~%Tx 1 created/signed, now broadasting.")
+        (format t "~%Tx 1 created/signed by genesis (~a), now broadasting."
+                genesis-public-key-hash)
         (cosi/proofs/newtx:dump-tx signed-transaction)
         (broadcast-message :new-transaction-new :trn signed-transaction)
 
@@ -280,7 +281,8 @@ This will spawn an actor which will asynchronously do the following:
                  transaction-inputs transaction-outputs
                  :skeys (pbc:keying-triple-skey *user-1*)
                  :pkeys (pbc:keying-triple-pkey *user-1*)))
-          (format t "~%Tx 2 created/signed, now broadasting.")
+          (format t "~%Tx 2 created/signed by user-1 (~a), now broadasting."
+                  user-1-public-key-hash)
           (setq *tx-2* signed-transaction)
           (ac:pr (format nil "Broadcasting 2nd TX."))
           (cosi/proofs/newtx:dump-tx signed-transaction)
@@ -310,8 +312,41 @@ This will spawn an actor which will asynchronously do the following:
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
             (setq *tx-3* signed-transaction)          
             (ac:pr (format nil "Broadcasting 3rd TX."))
-            (format t "~%Tx 3 created/signed, now broadasting.")
+            (format t "~%Tx 3 created/signed by user-2 (~a), now broadasting."
+                    user-2-public-key-hash)
             (cosi/proofs/newtx:dump-tx signed-transaction)
+            (broadcast-message :new-transaction-new :trn signed-transaction)
+
+            (sleep 5)
+
+            ;; here: attempt a double-spend: (with same TxID)
+            (setq signed-transaction
+                  (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                   transaction-inputs transaction-outputs
+                   :skeys (pbc:keying-triple-skey *user-2*)
+                   :pkeys (pbc:keying-triple-pkey *user-2*)))
+
+            (ac:pr (format nil "Broadcasting 4th TX [attempt to double-spend (same TxID)]."))
+            (format t "~%Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadasting."
+                    user-2-public-key-hash)
+            (broadcast-message :new-transaction-new :trn signed-transaction)
+
+            (sleep 2)
+            ;; here: attempt a double-spend: (with different TxID)
+            (setq transaction-outputs
+                  (cosi/proofs/newtx:make-transaction-outputs
+                   `((,user-3-public-key-hash 123)
+                     (,user-2-public-key-hash 321))))
+            (setq signed-transaction
+                  (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                   transaction-inputs transaction-outputs
+                   :skeys (pbc:keying-triple-skey *user-2*)
+                   :pkeys (pbc:keying-triple-pkey *user-2*)))
+
+            (sleep 2)
+            (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
+            (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadasting."
+                    user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)))))))
         
               
