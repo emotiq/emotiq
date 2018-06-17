@@ -39,8 +39,7 @@ configured simulation will have the integer number of NODES as
 witnesses."
   (setf actors::*maximum-age* 120)
   (when executive-threads
-    (setf actors::*nbr-execs*
-          executive-threads))
+    (actors:set-executive-pool executive-threads))
   (when (or new-configuration-p
               (not (and (probe-file cosi-simgen:*default-data-file*)
                         (probe-file cosi-simgen:*default-key-file*))))
