@@ -100,7 +100,7 @@
   (let ((key (make-ip-key address port)))
     (kvs:remove-key! *tcp-connection-table* key)))
 
-(defun lookup-connection (address port)
+(defun lookup-connection (address &optional (port *nominal-gossip-port*))
   "Returns open pipe to address/port, if any"
   (let* ((key (make-ip-key address port))
          (actor (kvs:lookup-key *tcp-connection-table* key))
@@ -112,6 +112,21 @@
             (t (ac:set-property actor :thread (make-select-thread actor))
                actor))
       actor)))
+
+(defun stream-at (address &optional (port *nominal-gossip-port*))
+  "For debugging. Get stream associated with connection."
+  (let ((actor (lookup-connection address port)))
+    (when actor
+      (usocket:socket (get-socket actor)))))
+
+(defun addresses ()
+  "For debugging. Get a list of addresses of open connections."
+  (mapcar 'get-peer-address
+          (loop for actor being each hash-value of *tcp-connection-table* collect actor)))
+
+; (stream-at "emq-01.aws.emotiq.ch" 65002)
+; (mapcar 'open-stream-p (mapcar 'gossip::stream-at (gossip::addresses)))
+; (mapcar 'stream-eofp (mapcar 'gossip::stream-at (gossip::addresses)))
 
 ;;; Socket-actor property functions. These can be called safely by anybody--not just by the actor itself.
 (defmethod get-socket ((sa socket-actor))
