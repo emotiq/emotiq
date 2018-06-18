@@ -1377,7 +1377,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
   (format t "~%   Now clearing transactions from mempool . . . ")
 
   ;; inefficient clearing algorithm -- ok for now, improve later!
-  (let ((removed-txs nil))
+  (let ((removed nil))
     (loop with mempool = cosi-simgen:*mempool*
           with transactions = (cosi/proofs:block-transactions block)
           with block-tx-count = (length transactions)
@@ -1387,10 +1387,13 @@ ADDRESS here is taken to mean the same thing as the public key hash."
           of mempool 
           using (hash-key key)
           when (member tx transactions :test #'eq)
-          collect tx into removed-txs)
+          collect tx into removed-txs
+          finally do (progn
+                       (format *standard-output* "removed-txs = ~A~%" removed-txs)
+                       (setf removed removed-txs)))
   
-    (mapc #'(lambda (key) (remhash key cosi-simgen:*mempool*)) removed-txs)
-    (format t "~%   DONE removing.~&" removed-txs)
+    (mapc #'(lambda (key) (remhash key cosi-simgen:*mempool*)) removed)
+    (format t "~%   DONE removing ~A.~&" removed)
     (format t "~%   Now here's what's in mempool after, take a look ...")
     (cosi/proofs/newtx:dump-txs :mempool t)
     ))

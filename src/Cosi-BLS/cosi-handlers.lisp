@@ -1031,7 +1031,10 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; database. Just remhash from the mempool all
              ;; transactions that made it into the block.
              (*newtx-p*
-              (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk))
+              (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk)
+    (format t "~%   again DONE removing.~&")
+    (format t "~%   Now here's what's in mempool after, take a look ...")
+    (cosi/proofs/newtx:dump-txs :mempool t))
              (t
               ;; clear out *mempool* and spent utxos
               (replay-remove-txs-from-mempool blk)
