@@ -1372,46 +1372,25 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun clear-transactions-in-block-from-mempool (block)
-  ;; (format t "~2%***   We added a block. About to clear mempool. Here's what's there before...")
-  ;; (cosi/proofs/newtx:dump-txs :mempool t)
+  (format t "~2%***   We added a block. About to clear mempool. Here's what's there before...")
+  (cosi/proofs/newtx:dump-txs :mempool t)
   (format t "~%   Now clearing transactions from mempool . . . ")
 
   ;; inefficient clearing algorithm -- ok for now, improve later!
-  (loop with mempool = cosi-simgen:*mempool*
-        with transactions = (cosi/proofs:block-transactions block)
-        with block-tx-count = (length transactions)
-        ;; initially (format t "~%Transactions count in block: ~d" (length transactions))
-        ;;           (cosi/proofs/newtx:dump-txs :block block)
-        for tx being each hash-value
+  (let ((removed-txs nil))
+    (loop with mempool = cosi-simgen:*mempool*
+          with transactions = (cosi/proofs:block-transactions block)
+          with block-tx-count = (length transactions)
+          ;; initially (format t "~%Transactions count in block: ~d" (length transactions))
+          ;;           (cosi/proofs/newtx:dump-txs :block block)
+          for tx being each hash-value
           of mempool 
-            using (hash-key key)
-        when (member tx transactions :test #'eq)
-          collect tx into removed-txs
-          and do (remhash key mempool)
-             ;; thought I saw something bad happen here:
-                 (assert (null (gethash key mempool)) () "why doesn't remhash work?!")
-        finally
-           ;; check that there were a few transactions in the block
-           ;; and in the mempool in common and that all the ones in
-           ;; the block are no longer in the mempool
-           (when (= block-tx-count 0)
-             (warn "***   NEWTX: there were zero txs in block? strange! [~d tx removed from mempool] ***"
-                   removed-txs))
-           (when (= (length removed-txs) 0)
-             (warn "***   NEWTX: there were zero txs removed from mempool? That's weird! [~d tx in block] ***"
-                   block-tx-count))
-           (let* ((txs-in-mempool
-                    (loop for tx being each hash-value of cosi-simgen:*mempool*
-                          collect tx))
-                  (intersection (intersection txs-in-mempool transactions)))
-             (format t "~2%")
-             (when intersection
-               (warn
-                "***   NEWTX: there are now STILL transactions (~d) in the mempool from block. How?! [~d in block/~d removed from mempool]"
-                (length intersection)
-                block-tx-count
-                removed-txs))))
-  (format t "~%   DONE.~%")
-  ;; (format t "~%   Now here's what's in mempool after, take a look ...")
-  ;; (cosi/proofs/newtx:dump-txs :mempool t)
-  )
+          using (hash-key key)
+          when (member tx transactions :test #'eq)
+          collect tx into removed-txs)
+  
+    (mapc #'(lambda (key) (remhash key cosi-simgen:*mempool*)) removed-txs)
+    (format t "~%   DONE removing.~&" removed-txs)
+    (format t "~%   Now here's what's in mempool after, take a look ...")
+    (cosi/proofs/newtx:dump-txs :mempool t)
+    ))
