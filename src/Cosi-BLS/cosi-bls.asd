@@ -55,6 +55,7 @@ THE SOFTWARE.
                                      (:file "range-proofs")
                                      (:file "transaction")
                                      (:file "cosi-handlers")
+                                     (:file "new-transactions")
                                      (:file "cosi-netw-xlat")))))
 
 
