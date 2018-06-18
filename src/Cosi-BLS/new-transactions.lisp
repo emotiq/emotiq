@@ -554,7 +554,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil)))
-                  (format t "~%Successful transaction ~a~%  TxID = ~a~%" 
+                  (format t "~%Node ~a declares Successful transaction ~a~%  TxID = ~a~%"
+                          (cosi-simgen::current-node)
                           transaction (txid-string (transaction-id transaction)))
                   (add-transaction-to-mempool transaction)
                   (return t))))
