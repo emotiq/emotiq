@@ -3,9 +3,6 @@
 (in-package #:emotiq)
 
 
-
-
-
 ;;;; Utilities
 
 (deftype octet ()
@@ -23,6 +20,8 @@
 (defmacro ovref (octet-vector index)
   "Macro (get'able and setf'able) to access octet-vector at index."
   `(aref (the octet-vector ,octet-vector) ,index))
+
+
 
 
 

@@ -61,11 +61,20 @@
 (defpackage emotiq/wallet
   (:use #:cl)
   (:export
-   #:emotiq-wallet-path
-
-   #:wallet-serialize #:wallet-deserialize
+   #:get-wallet-named
 
    #:create-wallet
+
+   #:rename-wallet
+
+   #:enumerate-wallets
+
+   #:*default-wallet-name*
+   
+   #:emotiq-wallet-path
+
+   #:primary-address
+   #:hexify
    
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
@@ -78,28 +87,35 @@
    #:run
 
    #:blocks
+   #:nodes
+   #:keys-and-stakes
+   
    #:create-transaction
    #:force-epoch-end
 
    
    #:*user-1* #:*user-2* #:*user-3*
-   #:*tx-1* #:*tx-2* #:*tx-3*
+   #:*tx-1* #:*tx-2* 
 
    #:eassert
 
-   #:prdebug))
+   #:prdebug
+
+   #:node-repl))
   
 (defpackage emotiq/elections
   (:use #:cl)
   (:export 
    #:set-nodes
    #:make-election-beacon
+   #:kill-beacon
    #:hold-election))
 
 (defpackage emotiq/filesystem
   (:use #:cl)
   (:nicknames #:emotiq/fs #:emotiq/path)
   (:export
+   #:emotiq/user/root/
    #:etc/
    #:var/log/))
 

@@ -11,7 +11,7 @@
   (assert bool-condition))
 
 (defun initialize (&key
-                     (cosi-prepare-timeout 10)
+                     (cosi-prepare-timeout 40)
                      (cosi-commit-timeout 10)
                      (executive-threads nil)
                      (nodes 8)
@@ -21,8 +21,14 @@
 
 The simulation can be configured to run across the number of EXECUTIVE-THREADS 
 
-COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait for responses during prepare phase. 
-COSI-COMMIT-TIMEOUT specifies how many seconds that cosi leaders wait for responses during commit phase. 
+COSI-PREPARE-TIMEOUT specifies how many seconds that cosi leaders wait
+for responses during prepare phase.  The default value is 40.  For
+simulations involving computational expensive cloaked transactions
+across many nodes, this value may need to be larger to allow the
+blocks to be sealed.
+
+COSI-COMMIT-TIMEOUT specifies how many seconds that cosi leaders wait
+for responses during commit phase.
 
 Prepare can possibly take longer than commit, because the block may contain txns that a witness has not
 yet seen (and, therefore, needs to validate the unseen txn(s))
@@ -30,11 +36,13 @@ yet seen (and, therefore, needs to validate the unseen txn(s))
 If either NEW-CONFIGURATION-P is true or the simulator has never been
 run on this node, a new simulation network will be generated.  The
 configured simulation will have the integer number of NODES as
-witnesses."
+witnesses.  
+
+N.B. :nodes has no effect unless a new configuration has been triggered (see above)."
+
   (setf actors::*maximum-age* 120)
   (when executive-threads
-    (setf actors::*nbr-execs*
-          executive-threads))
+    (actors:set-executive-pool executive-threads))
   (when (or new-configuration-p
               (not (and (probe-file cosi-simgen:*default-data-file*)
                         (probe-file cosi-simgen:*default-key-file*))))
@@ -45,7 +53,7 @@ witnesses."
 
   ;; should this following code be executed every time or only when a new configuration is created?
   (phony-up-nodes)
-  (emotiq/elections:set-nodes (list-of-nodes))
+  (emotiq/elections:set-nodes (keys-and-stakes))
 
   (when run-cli-p
     (emotiq/cli:main)))
@@ -102,26 +110,22 @@ witnesses."
                                     :outs out-list
                                     :fee fee))))
 
-
 (defun publish-transaction (trans name)
-  (print "Validate transaction")
   (unless (cosi/proofs:validate-transaction trans)
-    (error(format nil "transaction ~A did not validate" name)))
+    (error (format nil "transaction ~A did not validate" name)))
+  (format *error-output* "~&Broadcasting transaction ~a to all simulated nodes" name)
   (broadcast-message :new-transaction
-                     :trn trans)
-  ;; (force-epoch-end)
-  )
+                     :trn trans))
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
-  (cosi-simgen:send cosi-simgen:*leader* :make-block))
+  (cosi-simgen:send cosi-simgen:*top-node* :make-block))
 
 (defparameter *user-1* nil)
 (defparameter *user-2* nil)
 (defparameter *user-3* nil)
 (defparameter *tx-1* nil)
 (defparameter *tx-2* nil)
-(defparameter *tx-3* nil)
 
 (defun ensure-simulation-keys ()
   (unless (and *genesis-account* *user-1* *user-2* *user-3*)
@@ -137,76 +141,73 @@ witnesses."
           *user-3*
           (pbc:make-key-pair :user-3))))
 
-; test helper - in real life, we would already know the pkey of the destination,
-; here we have special variables holding the various test users
-(defun pkey-of (user)
-  (pbc:keying-triple-pkey user))
-
-(defun skey-of (user)
-  (pbc:keying-triple-skey user))
-
-(defun run (&key (amount 100) (monetary-supply 1000) (cloaked t))
+(defun run (&key (monetary-supply 1000) (cloaked t))
   "Run the block chain simulation entirely within the current process
 
 This will spawn an actor which will asynchronously do the following:
 
-  1.  Create a genesis transaction with AMOUNT coins.  Transact AMOUNT
-      coins to *USER-1*.  The resulting transaction can be referenced
-      via *tx-1*.
+  1.  Create a genesis transaction with MONETARY-SUPPLY coins.
+      Transact 1000 coins to *USER-1*.  The resulting transaction
+      can be referenced via *tx-1*.
 
-  2.  Transfer the AMOUNT of coins from *user-1* to *user-2* as *tx2*.
-
-  3.  Transfer (- amount (floor (/ amount 2))) coins from *user-2* to *user-3* as *tx3*
+  2.  In the transaction references as *TX-2*, *USER-1* sends 500
+      coins to *USER-2*, 490 coins to *USER-3*, with a fee of 10 coins.
 "
-
-  (declare (ignore amount))
   (ensure-simulation-keys)
 
   (setf *genesis-output* nil
         *tx-1*           nil
-        *tx-2*           nil
-        *tx-3*           nil)
+        *tx-2*           nil)
 
-  (cosi-simgen:reset-nodes) 
-
+  (cosi-simgen:reset-nodes)
+ 
   (emotiq/elections:make-election-beacon)
                                          
-  ;(ac:spawn  ;; cosi-handlers assumes that there is one block in the blockchain, if you spawn here,
-  ; you might get errors in cosi-handlers if leader-exec runs before this code...
-  ; (lambda ()
-  (let ((fee 10))
-    (let* ( ;(genesis-pkey  (pbc:keying-triple-pkey *genesis-account*))
-           (user-1-pkey (pbc:keying-triple-pkey *user-1*))
-           (user-2-pkey (pbc:keying-triple-pkey *user-2*))
-           (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
+  (let ((fee 10)
+        (user-1-pkey (pbc:keying-triple-pkey *user-1*))
+        (user-2-pkey (pbc:keying-triple-pkey *user-2*))
+        (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
       
       (ac:pr "Construct Genesis transaction")
       (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
-        ;; secrg (see tst-blk) is ignored and not even returned
-        (let ((trans (create-transaction *genesis-account* genesis-utxo
-                                            ; user1 gets 1000 from genesis (fee = 0)
-                                         '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
-          (publish-transaction (setf *tx-1* trans) "tx-1")  ;; force genesis block (leader-exec breaks if blockchain is nil)
+        (let ((trans (create-transaction
+                      *genesis-account* genesis-utxo
+                                        ; user1 gets 1000 from genesis (fee = 0)
+                      '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
+                                        ; force genesis block (leader-exec breaks if blockchain is nil)
+          (publish-transaction (setf *tx-1* trans) "tx-1") ; 
           (ac:pr "Find UTX for user-1")
-          (let* ((from-utxo (cosi/proofs:find-txout-for-pkey-hash (hash:hash/256 user-1-pkey) trans)))
+          (let ((from-utxo (cosi/proofs:find-txout-for-pkey-hash
+                            (hash:hash/256 user-1-pkey)
+                            trans)))
             (ac:pr "Construct 2nd transaction")
-            (let ((trans (create-transaction *user-1* from-utxo 
-                                                ; user1 spends 500 to user2, 490 to user3, 10 for fee
-                                             '(500 490) (list user-2-pkey user-3-pkey) fee :cloaked cloaked)))
+            (let ((trans (create-transaction
+                          *user-1* from-utxo 
+                                        ; user1 spends 500 to user2, 490 to user3, 10 for fee
+                          '(500 490)
+                          (list user-2-pkey user-3-pkey)
+                          fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")
-              )))))))
+              (publish-transaction (setf *tx-2* trans) "tx-2")))))))
 
 
 (defun blocks ()
-  "Return the blocks in the chain currently under local simulation."
+  "Return the blocks in the chain currently under local simulation
+
+The blocks constituting the chain are from the view of the `top-node` of
+the cosi-simgen implementation of the simulator."
   (cosi-simgen:node-blockchain cosi-simgen:*top-node*))
 
 (defun kill-beacon ()
-  (emotiq/elections::kill-beacon))
+  (emotiq/elections:kill-beacon))
+
+(defun nodes ()
+  "Return a list of all nodes under simulation"
+  (alexandria:hash-table-values cosi-simgen:*ip-node-tbl*))
 
 ;; ----------------------------------------------------------------
 ;; These disappear once Gossip is installed...
+;; 
 
 (defun phony-up-nodes ()
   (maphash (lambda (k node)
@@ -214,13 +215,59 @@ This will spawn an actor which will asynchronously do the following:
              (setf (cosi-simgen:node-stake node) (random 100000)))
            cosi-simgen:*ip-node-tbl*))
 
-;; hacked copy of cosi-simgen::assign-bits()
-(defun list-of-nodes ()
-  (let ((collected
-         (um:accum acc
-           (maphash (lambda (k node)
-                      (declare (ignore k))
-                      (acc (list (cosi-simgen:node-pkey node) (cosi-simgen:node-stake node))))
-                    cosi-simgen:*ip-node-tbl*))))
-    collected))
+(defun keys-and-stakes ()
+  "Return a list of lists of public key and stake for nodes"
+  (mapcar (lambda (node)
+            (list (cosi-simgen:node-pkey node) (cosi-simgen:node-stake node)))
+          (nodes)))
 
+;; END? of "those which disappear once Gossip in installed…"
+;; ----------------------------------------------------------------
+
+;;;; Single Node REPL
+
+(defun node-repl (&key node message)
+  "This runs a read-eval-print loop (REPL) for a single node. If NODE
+   is nil, this uses cosi-simgen:*top-node*. If initialization has not
+   been done (cosi-simgen:*top-node* is nil), this does the
+   initialization."
+  (when (null cosi-simgen:*top-node*)
+    (format t "~%Initialization needed....")
+    (emotiq/sim:initialize)
+    (format t "~&Initialization DONE.~%"))
+  (let ((cosi-simgen:*current-node*
+          (or node cosi-simgen:*top-node*)))
+    (node-repl-loop
+     "~a (node = ~s)"
+     (or message "Node REPL")
+     cosi-simgen:*current-node*)))
+
+
+(defparameter *node-repl-prompt* "Node Repl> ")
+(defparameter *node-repl-quitters* '(:quit :q :a))
+
+(defun node-repl-loop (format-string &rest format-args)
+  (let ((banner (apply #'format nil format-string format-args)))
+    (format t "~%~a" banner)
+    (format t "~%~a" (make-string (length banner) :initial-element #\-))
+    (loop for form 
+            = (progn (format t "~%~a" *node-repl-prompt*) (read))
+          when (member form *node-repl-quitters*)
+            do (format t "~&Quitting~%")
+               (return)
+          do (print (eval form)))))
+
+;; To do: spend a few minutes seeing if there's already a CL-REPL
+;; someone did (open source), especially one integrated with SLIME?
+
+;; To do: wrap some error handling to catch simple read errors, catch
+;; if they really want to exit to top level, etc.  For example, if you
+;; type in a variable name that's unbound, and it pops you into a
+;; debugger, and you abort from debugger, it should return to this
+;; REPL, not to the Lisp REPL.
+
+;; To do: should have Lisp's REPL variables set (*, **, ***, +, ++,
+;; +++).
+
+;; To do/sad: in SLIME when this prompts, you lose SLIME
+;; completion. How to get that back?

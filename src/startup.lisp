@@ -26,6 +26,14 @@
 ;; "Entry Point" for development - does nothing, just load and go
 (defun main (&optional how-started-message?)
   (message-running-state how-started-message?)
+  ;; Create a default wallet on disk if one doesn't already exist
+  (emotiq/wallet:create-wallet)
+  ;; Start the websocket interface for the Electron wallet
+  ;; listening <ws://localhost:3145/wallet> .
+  (websocket/wallet:start-server :port 3145)
+  ;; Start the REST server which provides support for testing the
+  ;; WebSocket implementation at <http://localhost:3140/client/>
+  (emotiq-rest:start-server :port 3140)
   (emotiq:start-node))
 
 ;; Entry Point for binary version of the system.
