@@ -1203,6 +1203,7 @@ check that each TXIN and TXOUT is mathematically sound."
     
 (defun leader-exec (prepare-timeout commit-timeout)
   (let ((trns  (get-transactions-for-new-block)))
+(format *standard-output* "~&leader sees transactions ~a~&" trns)
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else
