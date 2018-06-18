@@ -788,6 +788,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (setf (node-hold-off-timer node)  (let ((this-node node))
                                             (ac::make-timer
                                              (lambda ()
+                                               (format *standard-output* "~% **** hold-off timer fired ****~%")
                                                (send (node-pkey this-node) :end-holdoff)))))
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))

@@ -5,6 +5,10 @@
 ### Cloaked
 ```lisp
 (ql:quickload :emotiq/sim)
+(emotiq/sim:initialize :cosi-prepare-timeout 340)  ;; takes several keywords - see node-sim.lisp
+(emotiq/sim::run-new-tx) 
+
+(ql:quickload :emotiq/sim)
 (emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
 (emotiq/sim:run) 
 ```    

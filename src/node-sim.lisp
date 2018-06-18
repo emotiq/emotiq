@@ -221,6 +221,8 @@ This will spawn an actor which will asynchronously do the following:
       (cosi/proofs/newtx:dump-tx genesis-transaction)      
       (broadcast-message :genesis-block :blk genesis-block)
 
+      (format *standard-output* "prepare timeout= ~a commit timeout=~a~%" cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*)
+
       (let* ((txid
                (cosi/proofs/newtx:transaction-id genesis-transaction))
              (index 0)
