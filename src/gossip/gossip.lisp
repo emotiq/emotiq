@@ -533,7 +533,7 @@ are in place between nodes.
       (apply 'gossip-dispatcher node msg))))
 
 (defun make-node (&rest args)
-  "Makes a new node"
+  "Makes a new [real, non-proxy] node"
   (let ((neighborhood (getf args :neighborhood))) ; allow to specify :neighborhood as list, for *default-graphID*
     (with-keywords-removed (args (:neighborhood))
       (let* ((node (apply 'make-instance 'gossip-node args))
@@ -555,6 +555,13 @@ are in place between nodes.
                  (:udp (apply 'make-instance 'udp-gossip-node args))))
          (actor (make-gossip-actor node)))
     (setf (actor node) actor)
+    ; rule: We should never have a proxy and a real node with same uid.
+    ;  Furthermore: uid of a proxy should always be forced to match its real-uid, except when its real-uid=0.
+    (unless (= 0 (real-uid node))
+      (let ((oldnode (lookup-node (real-uid node))))
+        (when oldnode
+          (log-event :WARN oldnode "being replaced by proxy" node)))
+      (setf (slot-value node 'uid) (real-uid node)))
     (kvs:relate-unique! *nodes* (uid node) node)
     ; proxies are not part of uber-set, therefore no cache invalidation needed
     (memoize-proxy node proxy-subtable)))
