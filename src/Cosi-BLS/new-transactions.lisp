@@ -1379,15 +1379,15 @@ ADDRESS here is taken to mean the same thing as the public key hash."
   ;; inefficient clearing algorithm -- ok for now, improve later!
   (let ((removed nil))
     (loop with mempool = cosi-simgen:*mempool*
-          with transactions = (cosi/proofs:block-transactions block)
+          with transactions = (mapcar #'hash:hash/256 (cosi/proofs:block-transactions block))
           with block-tx-count = (length transactions)
           ;; initially (format t "~%Transactions count in block: ~d" (length transactions))
           ;;           (cosi/proofs/newtx:dump-txs :block block)
           for tx being each hash-value
           of mempool 
           using (hash-key key)
-          when (member tx transactions :test #'eq)
-          collect tx into removed-txs
+          when (member (hash:hash/256 tx) transactions :test #'hash:hash=)
+          collect key into removed-txs
           finally do (progn
                        (format *standard-output* "removed-txs = ~A~%" removed-txs)
                        (setf removed removed-txs)))

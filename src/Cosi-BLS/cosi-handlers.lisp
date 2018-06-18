@@ -27,6 +27,9 @@ THE SOFTWARE.
 |#
 
 (in-package :cosi-simgen)
+
+(defparameter *winner* nil)
+
 ;; ---------------------------------------------------------------
 
 (defun NYI (&rest args)
@@ -82,6 +85,7 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (setf *tx-changes* (make-tx-changes))
+  (setf *winner* (cosi-simgen::current-node))
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)

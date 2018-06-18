@@ -343,11 +343,12 @@ This will spawn an actor which will asynchronously do the following:
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
-            (sleep 60)
+            ;(sleep 60)
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
             (format t "~2%Good-bye and good luck!~%")
-            (kill-beacon)))))))
+            #+nil(emotiq/elections::fire-election)
+            #+nil(kill-beacon)))))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
