@@ -4,7 +4,7 @@
 
 (in-package :gossip)
 
-(defparameter *hosts* nil "Hosts as read from gossip/config")
+(defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
@@ -78,7 +78,7 @@ with this list if desired."
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
       ;; FIXME don't use specials unless you can avoid them…
-      (setf *hosts* hosts)
+      (setf *hosts* (remove (usocket::host-to-hbo (eripa)) hosts :key (lambda (host) (usocket::host-to-hbo (car host)))))
       (emotiq:note "Gossip init finished.")
       (if ping-others
           (handler-bind 
