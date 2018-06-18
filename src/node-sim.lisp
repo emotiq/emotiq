@@ -249,7 +249,7 @@ This will spawn an actor which will asynchronously do the following:
         (cosi/proofs/newtx:dump-tx signed-transaction)
         (broadcast-message :new-transaction-new :trn signed-transaction)
 
-        (sleep 5)
+        ;(sleep 5)
       
         (let* ((user-2-public-key-hash
                  (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*)))
@@ -278,7 +278,7 @@ This will spawn an actor which will asynchronously do the following:
           (cosi/proofs/newtx:dump-tx signed-transaction)
           (broadcast-message :new-transaction-new :trn signed-transaction)
 
-          (sleep 5)
+          ;(sleep 5)
 
           (let* ((user-3-public-key-hash
                    (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
@@ -306,7 +306,7 @@ This will spawn an actor which will asynchronously do the following:
             (cosi/proofs/newtx:dump-tx signed-transaction)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
-            (sleep 5)
+            ;(sleep 5)
 
             ;; here: attempt a double-spend: (with same TxID)
             (setq signed-transaction
@@ -320,7 +320,7 @@ This will spawn an actor which will asynchronously do the following:
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
-            (sleep 2)
+            ;(sleep 2)
             ;; here: attempt a double-spend: (with different TxID)
             (setq transaction-outputs
                   (cosi/proofs/newtx:make-transaction-outputs
@@ -332,7 +332,7 @@ This will spawn an actor which will asynchronously do the following:
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
 
-            (sleep 2)
+            ;(sleep 2)
             (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadasting."
                     user-2-public-key-hash)
@@ -344,7 +344,8 @@ This will spawn an actor which will asynchronously do the following:
             (sleep 60)
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")))))))
+            (format t "~2%Good-bye and good luck!~%")
+            (kill-beacon)))))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation

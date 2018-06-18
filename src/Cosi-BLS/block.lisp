@@ -185,7 +185,7 @@ added to the blockchain."
             (cosi/proofs:public-key-to-address public-key)))
          (transactions (list genesis-transaction))
          (block (create-block nil nil nil nil transactions)))
-    (cosi-simgen:node-dispatcher :genesis-block :blk block)
+    ;(cosi-simgen:node-dispatcher :genesis-block :blk block)
     block))
     
              
