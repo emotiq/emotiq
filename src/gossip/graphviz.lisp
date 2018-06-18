@@ -58,12 +58,15 @@
            (concatenate 'string (subseq orig 0 4) "..." (subseq orig (- (length orig) 4))))
           (t orig))))
 
+;; Note: Firefox won't show second and succeeding lines as smaller if you have a minimum
+;;   font size set.
+;;   https://stackoverflow.com/questions/29878587/firefox-doesnt-respect-font-size-in-svg-text#29879109
 (defmethod dump-node ((node proxy-gossip-node) stream edgetable graphID)
   "Dump proxy node showing UID, real address, and real port"
   (declare (ignore edgetable graphID))
   (format stream "~%  \"~A\" [fontsize=\"10.0\", tooltip=\"~A\", label=<~A<BR /> ~
         <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
-                     (short (uid node))
+                     (uid node)
                      (uid node)
                      (short (uid node))
                      (real-address node)
