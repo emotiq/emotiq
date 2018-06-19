@@ -84,7 +84,9 @@
 
   (:export
    #:initialize
+   
    #:run
+   #:run-new-tx
 
    #:blocks
    #:nodes

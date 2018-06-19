@@ -25,6 +25,7 @@
                (:file "monads")
                (:file "logging")
                (:file "gossip")
+               (:file "gossip-api")
                (:file "http-fetch")
                (:file "graphviz")
                (:file "gossip-startup")))

@@ -8,6 +8,7 @@
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
+   #:clear-local-nodes
    #:*log-filter*
    #:*log*
    #:*log-dots*
@@ -34,6 +35,14 @@
    #:save-text-log
    #:deserialize-log
    #:visualize-nodes
+
+   ; API
+   #:application-handler
+   #:get-live-uids
+   #:singlecast
+   #:broadcast
+   #:establish-broadcast-group
+   #:dissolve-graph
    ))
 
 (defpackage gossip/config
