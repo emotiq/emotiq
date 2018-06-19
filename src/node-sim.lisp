@@ -56,9 +56,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (emotiq/elections:set-nodes (keys-and-stakes))
 
   (when run-cli-p
-    (emotiq/cli:main))
-
-  (emotiq/tracker:start-tracker))
+    (emotiq/cli:main)))
 
 (defvar *genesis-account*
   nil
@@ -156,6 +154,7 @@ This will spawn an actor which will asynchronously do the following:
       coins to *USER-2*, 490 coins to *USER-3*, with a fee of 10 coins.
 "
   (ensure-simulation-keys)
+  (emotiq/tracker:start-tracker)
 
   (setf *genesis-output* nil
         *tx-1*           nil
