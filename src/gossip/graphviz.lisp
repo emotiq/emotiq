@@ -20,10 +20,19 @@
 
 (in-package :gossip)
 
+(defvar *graphviz-command-location-punt* "/usr/local/bin/sfdp" "Best guess as to location of sfdp program if find-sfdp fails")
+
 (defvar *graphviz-command* nil "Location of graphviz sfdp program")
 
-(defun find-graphviz ()
-  (let ((loc (uiop:run-program (list "which" "sfdp") :output :string)))
+#|
+DISCUSSION: "which" as a shell command doesn't work unless $PATH is set up correctly.
+In CCL, $PATH seems to inherit from whatever $PATH is set to in .bash_profile.
+But in the Lispworks IDE, $PATH is just "/usr/bin:/bin:/usr/sbin:/sbin", which
+usually won't be where the sfdp command is located. Furthermore, which throws
+an error when it fails, so we have to wrap an ignore-errors around the call.
+|#
+(defun find-sfdp ()
+  (let ((loc (ignore-errors (uiop:run-program (list "which" "sfdp") :output :string))))
     (when (and loc (eql 0 (ignore-errors (position #\/ loc))))
       (string-trim '(#\newline) loc))))
 
@@ -116,7 +125,9 @@
   (let ((cmd *graphviz-command*))
     (unless cmd
       (setf cmd
-            (setf *graphviz-command* (find-graphviz))))
+            (setf *graphviz-command* (find-sfdp))))
+    (unless cmd
+      (setf cmd *graphviz-command-location-punt*))
     (cond (cmd
            (uiop:run-program (list cmd
                                    "-Tsvg"
