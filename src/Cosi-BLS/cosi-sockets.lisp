@@ -109,7 +109,7 @@ THE SOFTWARE.
   (socket-send ref (return-addr-ip ref) (return-addr-port ref) msg))
 
 (defmethod send ((node null) &rest msg)
-  (ac:pr :sent-to-null msg)
+  (emotiq:note ":sent-to-null~A" msg)
   msg)
 
 (defmethod send (dest &rest msg)
@@ -164,7 +164,7 @@ THE SOFTWARE.
           (let ((true-dest (dest-ip dest)))
             ;; for debug... -------------------
             (when (eq true-dest (node-self *my-node*))
-              (pr (format nil "forwarding-to-me: ~A" msg)))
+              (emotiq:note "forwarding-to-me: ~A" msg))
             ;; ------------------
             (apply 'send true-dest msg)))
         ))))
@@ -225,8 +225,7 @@ THE SOFTWARE.
         (let ((true-dest (dest-ip dest)))
           (when true-dest
             (when (equal true-dest (node-self *my-node*))
-              (ac:pr
-               (format nil "forwarding-to-me: ~A" msg)))
+              (emotiq:note "forwarding-to-me: ~A" msg))
             (apply 'send true-dest msg))))
       )))
 
@@ -242,13 +241,11 @@ THE SOFTWARE.
   (defun #1=serve-cosi-port (socket)
     (let ((maxbuf (make-array *max-buffer-length*
                               :element-type '(unsigned-byte 8))))
-      ;; (pr :server-starting-up)
       (unwind-protect
           (loop
 	    (multiple-value-bind (buf buf-len rem-ip rem-port)
 		(usocket:socket-receive socket maxbuf (length maxbuf))
 	      (declare (ignore rem-ip rem-port))
-	      ;; (pr :sock-read buf-len rem-ip rem-port (loenc:decode buf))
               (when (eql :SHUTDOWN-SERVER *shutting-down*)
                 (setf *shutting-down* nil)
                 (return-from #1#))
@@ -258,7 +255,6 @@ THE SOFTWARE.
                 (port-router saf-buf))))
         ;; unwinding
         (usocket:socket-close socket)
-        ;; (pr :server-stopped)
         )))
   
   (defun start-ephemeral-server (&optional (port 0))
@@ -284,9 +280,8 @@ THE SOFTWARE.
         (error "Packet too large for UDP transmission"))
       (let ((socket (usocket:socket-connect ip port
                                             :protocol :datagram)))
-        ;; (pr :sock-send (length packet) real-ip packet)
         (unless (eql nb (usocket:socket-send socket packet nb))
-          (pr :socket-send-error ip packet))
+          (emotiq:note ":socket-send-error ~A ~A" ip packet))
         (usocket:socket-close socket)
         ))))
 
@@ -313,7 +308,7 @@ THE SOFTWARE.
     (declare (ignore bytes-num ip-address port-num))
     (let ((status (comm:async-io-state-read-status async-io-state)))
       (when status ;; something went wrong
-        (pr (format nil "UDP example server: got error ~s, restarting" status))
+        (emotiq:note "UDP example server: got error ~s, restarting" status)
         (comm:close-async-io-state async-io-state)
         (start-server)
         (return-from #1#))
