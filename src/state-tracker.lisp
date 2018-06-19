@@ -15,16 +15,17 @@
   (if (and
        (eql (first msg) :reset)
        (null *tracking-actor*))
-      nil  ;; don't care about this condition
+      (emotiq:note "Don't care :reset")  ;; don't care about this condition
     (actors:send *tracking-actor* msg)))
 
 (defun start-tracker ()
   "returns an actor that can be sent messages about changes to the system state"
-  (emotiq/note "running start-tracker")
   (setf *state* (make-instance 'system-state)
-        *tracking-actor* #'do-tracking))
+        *tracking-actor* (actors:make-actor #'do-tracking))
+  (emotiq:note "running start-tracker ~A ~A" *state* *tracking-actor*))
 
 (defun do-tracking (&rest msg)
+  (emotiq:note "do-tracking ~A" msg)
   (case (first msg) 
     (:reset
      (setf (system-leader *state*) nil
