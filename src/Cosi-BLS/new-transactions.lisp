@@ -494,23 +494,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
           as input-tx-outputs 
             = (cond
                 ((null input-tx)
-                 (progn
-                   (warn
-                    "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
-                         (txid-string id))
-                   (let* ((all-transactions (list-all-transactions))
-                          (message-string
-                            (with-output-to-string (out)
-                              (format out "Transaction ID not found: ~a~%Transaction count: ~d~%" 
-                                      id
-                                      (length all-transactions))
-                              (format out "All transactions IDs:~%")
-                              (loop for tx in all-transactions
-                                    do (format out "  ~a~%" (transaction-id tx))))))
-                     (break "~a" message-string))
-                   
-                   ;; (trace-compare-all-tx-ids id)
-                   )
+                 (warn
+                  "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
+                  (txid-string id))
                  (return nil))
                 (t (transaction-outputs input-tx)))
           as utxo
