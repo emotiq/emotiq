@@ -15,7 +15,7 @@
   :components ((:file "hunchensocket-serve")))             
 
 (defsystem websocket/wallet
-  :depends-on (emotiq/wallet
+  :depends-on (model/wallet
                emotiq/logging
                cl-who
                parenscript
@@ -25,13 +25,13 @@
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
-               (:module mock
+               (:module async
                         :pathname "./"
                         :depends-on (package)
-                        :components ((:file "mock")))
+                        :components ((:file "async")))
                (:module source
                         :pathname "./"
-                        :depends-on (mock)
+                        :depends-on (async)
                         :components ((:file "serve")))))
 
 

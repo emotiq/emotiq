@@ -1,6 +1,6 @@
 (defsystem "emotiq-rest"
-  :depends-on (emotiq/wallet
-               emotiq/logging
+  :depends-on (emotiq/logging
+               model/wallet
                restas 
                cosi-bls
                parenscript

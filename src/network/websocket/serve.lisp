@@ -54,13 +54,6 @@
             ((string= method "subscribe")
            ;;; FIXME: locking under load
              (if (find "consensus" (alexandria:assoc-value request :params) :test 'string=)
-                 (progn 
-                   (pushnew client *consensus-clients*)
-                   (unless *consensus-thread*
-                     (emotiq:note "Spawning thread to mock consensus replies.")
-                     (bt:make-thread (lambda () (consensus)))
-                     (setf *consensus-thread* t))
-                   (setf result '(:true)))
                  ;; error
                  (setf result nil
                        error `(:object (:code . -32602)
@@ -79,18 +72,13 @@
             ((string= method "ping")
                (setf result "pong"))
             ((string= method "wallet")
-             (setf result `(:object
-                            (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
-                            (:amount . 0))))
+             (setf result (model/wallet:get-wallet "My Wallet")))
             ((string= method "recovery-phrase")
-             (setf result 
-                   `(:object
-                     (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
-                     (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize)))))))
+             (setf result (model/wallet:recovery-phrase)))
             ((string= method "enumerate-wallets")
-             (setf result (emotiq/wallet:enumerate-wallets)))
+             (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")
-             (setf result (transactions)))
+             (setf result (model/wallet:transactions)))
             (t
              (setf result nil
                    error `(:object (:code . -32601)
