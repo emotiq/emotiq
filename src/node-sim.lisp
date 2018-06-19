@@ -190,6 +190,7 @@ This will spawn an actor which will asynchronously do the following:
                           fee :cloaked cloaked)))
               ;; allow leader elections to create this block
               (publish-transaction (setf *tx-2* trans) "tx-2"))))))
+  (sleep 60)
   (emotiq/tracker:query-current-state))
 
 

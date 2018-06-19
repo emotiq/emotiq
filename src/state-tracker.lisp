@@ -6,6 +6,7 @@
    
 ;(let (state
 ;      tracking-actor)
+; a lexical binding at the top-level reduces the effectiveness of the LW debugger
 
 (defparameter *state* nil)
 (defparameter *tracking-actor* nil)
@@ -19,6 +20,7 @@
 
 (defun start-tracker ()
   "returns an actor that can be sent messages about changes to the system state"
+  (emotiq/note "running start-tracker")
   (setf *state* (make-instance 'system-state)
         *tracking-actor* #'do-tracking))
 
