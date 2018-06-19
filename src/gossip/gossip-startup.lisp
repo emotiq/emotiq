@@ -4,12 +4,12 @@
 
 (in-package :gossip)
 
-(defparameter *hosts* nil "Hosts as read from gossip/config")
+(defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
                     (eripa)
-                    (usocket::host-to-hbo ev))))
+                    (usocket::host-to-vector-quad ev))))
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
@@ -24,15 +24,14 @@
              (setf *nominal-gossip-port* gossip-port))
             (t (error "Invalid gossip-port ~S" gossip-port)))
       (cond ((consp pubkeys)
-             (clrhash *nodes*)) ; kill local nodes
+             (clear-local-nodes)) ; kill local nodes
             (t (error "Invalid or unspecified public keys ~S" pubkeys)))
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
-                       (unless (member local-pubkey keypairs :test 'eql :key 'car)
-                         (error "Pubkey ~S is not present in ~a"
-                                local-pubkey gossip/config::*keypairs-filename*))
-                       t)
-                     pubkeys)
+               (unless (member local-pubkey keypairs :test 'eql :key 'car)
+                 (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
+               t)
+             pubkeys)
       ;; make local nodes
       (mapc (lambda (pubkey)
               (make-node :uid pubkey))
@@ -43,10 +42,14 @@
 
 (defun ping-other-machines (&optional (hosts *hosts*))
   "Find what other machines are alive.
-  Returns alist of augmented-data or exception monads about live public keys on other machines.
-  You can map unwrap on these things to get at the real data."
+   Returns a list of augmented-data or exception monads about live UIDs on other machines.
+   You can map unwrap on these things to get at the real data.
+   Stashes result along with time of acquisition at *live-uids*>"
   (when hosts
-    (multiple-list-uids hosts)))
+    (let ((others (multiple-list-uids hosts)))
+      (setf *remote-uids* (cons (get-universal-time) others)
+            *uber-set-cache* nil) ; invalidate this cache
+      others)))
 
 (defun gossip-startup (&key root-path (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test
@@ -74,8 +77,7 @@ with this list if desired."
         (gossip/config:get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
-      ;; FIXME don't use specials unless you can avoid them…
-      (setf *hosts* hosts)
+      (setf *hosts* (remove (usocket::host-to-hbo (eripa)) hosts :key (lambda (host) (usocket::host-to-hbo (car host)))))
       (emotiq:note "Gossip init finished.")
       (if ping-others
           (handler-bind 
@@ -111,7 +113,7 @@ with this list if desired."
        (unless gossip-inited
          (gossip-init ':init)))
       (:uninit
-       ;;; XXX Don't we need to shutdown/unbind the socket listener?
+       (graceful-shutdown)
        (log-event-for-pr ':quit)
        (setf *logging-actor* nil)
        (setf *hmac-keypair-actor* nil)
