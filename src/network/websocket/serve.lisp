@@ -1,18 +1,5 @@
 (in-package :websocket/wallet)
 
-(defun note (message-or-format &rest args)
-  "Emit a note of progress to the appropiate logging system."
-  (let ((formats '(simple-date-time:|yyyymmddThhmmssZ|
-                   simple-date-time:|yyyy-mm-dd hh:mm:ss|)))
-    (format *error-output* 
-            "~&~a ~a~&"
-            (apply (second formats)
-                   (list (simple-date-time:now)))
-            (apply 'format 
-                 nil
-                 message-or-format
-                 (if args args nil)))))
-
 (defclass wallet-server (hunchensocket:websocket-resource)
   ((path :initarg :path :reader path))
   (:default-initargs :client-class 'wallet-client))
@@ -103,7 +90,7 @@
 
 (defvar *acceptor* nil)
 
-(defun start-server (&key (port 3145))
+(defun start-server (&key (port 3145) (host "127.0.0.1"))
   (unless *acceptor*
     (setf *acceptor*
           (make-instance 'hunchensocket:websocket-acceptor
@@ -114,9 +101,11 @@
                          ;; messages without corresponding replies
                          ;; will tear down the connection.
                          :websocket-timeout 3600  
-                         :port port)))
-  (note "Starting websocket server on <ws://localhost:~a>"
-        (slot-value *acceptor* 'hunchentoot::port))
+                         :port port
+                         :address host)))
+  (emotiq:note "Starting websocket server on <ws://~a:~a>"
+               (slot-value *acceptor* 'hunchentoot::address)
+               (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
 
 (defclass json-rpc ()
