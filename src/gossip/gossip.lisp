@@ -51,10 +51,13 @@
 (defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
    in an effort to find an unused local port")
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
+
+; Actuals below can differ from nominal if you're running multiple servers on the same machine in different processes.
 (defvar *actual-udp-gossip-port* nil "Local gossip UDP network port actually in use")
 (defvar *actual-tcp-gossip-port* nil "Local gossip TCP network port actually in use")
 (defvar *udp-gossip-socket* nil "Local passive UDP gossip socket, if any")
 (defvar *tcp-gossip-socket* nil "Local passive TCP gossip socket, if any")
+
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
 (defparameter *shutdown-msg* (make-array 8 :element-type '(UNSIGNED-BYTE 8) :initial-contents #(115 104 117 116 100 111 119 110)) "shutdown")
@@ -2020,7 +2023,6 @@ gets sent back, and everything will be copacetic.
             (log-event "Got connection from " (usocket:get-peer-address socket)))
           
           ;; At this point, we have a live incoming stream. Although it may be closing.
-          
           (multiple-value-bind (success errorp)
                                (wait-for-stream-input (usocket:socket-stream socket) 10) ; should have data within 10 seconds
             (when (and (null success)
@@ -2124,9 +2126,8 @@ gets sent back, and everything will be copacetic.
   (setf *shutting-down* :SHUTDOWN-SERVER)
   (uiop:if-let (process (find-process *udp-gossip-server-name*))
     (progn
-      (sleep .5)
       (internal-send-socket "127.0.0.1" port *shutdown-msg*)
-      (sleep .5)
+      (sleep .5) ; give it a chance to shutdown gracefully
       (process-kill process)
       (when *udp-gossip-socket*
         (usocket:socket-close *udp-gossip-socket*))
@@ -2136,14 +2137,12 @@ gets sent back, and everything will be copacetic.
 (defmethod shutdown-gossip-server ((mode (eql :TCP)) &optional (port *nominal-gossip-port*))
   (declare (ignore port)) ; probably don't need this
   (setf *shutting-down* :SHUTDOWN-SERVER)
+  (sleep .5) ; give it a chance to shutdown gracefully
   (uiop:if-let (process (find-process *tcp-gossip-server-name*))
-    (progn
-      (sleep .5)
-      (process-kill process)
-      (when *tcp-gossip-socket*
-        (usocket:socket-close *tcp-gossip-socket*))
-      (setf *tcp-gossip-socket* nil
-            *actual-tcp-gossip-port* nil))))
+    (process-kill process))
+  ; listening socket will be closed automatically by unwind-protect when process is killed
+  (setf *tcp-gossip-socket* nil
+        *actual-tcp-gossip-port* nil))
 
 (defmethod transmit-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   (declare (ignore srcuid))
