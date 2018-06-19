@@ -54,7 +54,8 @@
                actors
                emotiq/wallet
                emotiq-rest
-               websocket/wallet)
+               websocket/wallet
+               emotiq/tracker)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -99,3 +100,10 @@
                              (:file "node-sim" :depends-on (election-sim))))))
 
 
+(defsystem "emotiq/tracker"
+  :depends-on (actors)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "state-tracker")))))
+                                       

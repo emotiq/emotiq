@@ -82,13 +82,16 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (setf *tx-changes* (make-tx-changes))
+  (emotiq/tracker:track :new-leader *current-node*)
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
   (setf *tx-changes* (make-tx-changes))
+  (emotiq/tracker:track :new-witness *current-node*)
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
+  (emotiq/tracker:track :reset)
   (reset-nodes))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
@@ -99,12 +102,15 @@ THE SOFTWARE.
   (really-record-new-utxo utxo))
 
 (defmethod node-dispatcher ((msg-sym (eql :make-block)) &key)
+  (emotiq/tracker:track :make-block)
   (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-prepare)) &key reply-to blk timeout)
+  (emotiq/tracker:track :prepare)
   (node-compute-cosi reply-to :prepare blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-commit)) &key reply-to blk timeout)
+  (emotiq/tracker:track :commit)
   (node-compute-cosi reply-to :commit blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
@@ -114,6 +120,7 @@ THE SOFTWARE.
   (reply reply-to :pkey+zkp (node-pkeyzkp *current-node*)))
 
 (defmethod node-dispatcher ((msg-sym (eql :election)) &key new-leader-pkey)
+  (emotiq/tracker:track :election)
   (node-elect-new-leader new-leader-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
@@ -128,6 +135,7 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (ac:pr "Block committed to blockchain")
+  (emotiq/tracker:track :block-finished)
   (ac:pr (format nil "Block signatures = ~D"
                  (logcount (block-signature-bitmap (first *blockchain*))))))
 
