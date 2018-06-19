@@ -553,14 +553,13 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                       (warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
-                      (return nil)))
-                  (format t "~%Successful transaction ~a~%  TxID = ~a~%" 
-                          transaction (txid-string (transaction-id transaction)))
-                  (add-transaction-to-mempool transaction)
-                  (return t))))
-
-                  
-
+                      (return nil))
+                    (emotiq:note "~%Node ~a declares Successful transaction ~a~%  TxID = ~a~%"
+                                 (cosi-simgen:current-node)
+                                 transaction
+                                 (txid-string (transaction-id transaction)))
+                    (add-transaction-to-mempool transaction)
+                    (return t)))))
 
 (defun run-chainlisp-script (transaction transaction-input utxo)
   (in-transaction (transaction)

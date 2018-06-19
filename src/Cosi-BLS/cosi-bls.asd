@@ -28,7 +28,8 @@ THE SOFTWARE.
   :version     "1.0.3"
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
-  :depends-on (ironclad
+  :depends-on (emotiq/logging
+               ironclad
                actors
                core-crypto
                crypto-pairings
