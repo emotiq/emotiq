@@ -28,24 +28,27 @@
 
 (restas:define-route
  %enumerate-wallets
- ("/"
-  :content-type "application/json")
- (cl-json:encode-json-to-string  (emotiq/wallet:enumerate-wallets)))
+    ("/"
+     :content-type "application/json")
+  (as-json
+   (model/wallet:enumerate-wallets)))
 
 (restas:define-route
  %get-wallet
- ("/:name"
-  :content-type "application/json")
- (let ((wallet (emotiq/wallet:get-wallet-named (hunchentoot:url-decode name))))
-   (cl-json:encode-json-to-string wallet)))
+    ("/:name"
+     :content-type "application/json")
+  (as-json
+   (model/wallet:get-wallet (hunchentoot:url-decode name))))
 
 (restas:define-route
  %get-wallet-addresses
- ("/:name/address/"
-  :content-type "application/json")
- (let ((wallet (emotiq/wallet:get-wallet-named (hunchentoot:url-decode name))))
-   (cl-json:encode-json-to-string
-    (list (emotiq/wallet:primary-address wallet)))))
+    ("/:name/address/"
+     :content-type "application/json")
+  (as-json
+   (model/wallet:get-wallet-addresses (hunchentoot:url-decode name))))
+
+
+
 
 
 

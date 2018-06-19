@@ -1,9 +1,6 @@
-(in-package :websocket/wallet)
+(in-package :model/wallet)
 
-(defvar *consensus-thread* nil)
-(defvar *consensus-clients*  nil)
-
-(defun consensus ()
+(defun mock (notify-hook)
   (let ((epoch (+ 1000 (random 10000)))
         (local-epoch 0)
         (iterations-until-sync 20)
@@ -26,28 +23,9 @@
                                      (:epoch . ,epoch)
                                      (:local-epoch . ,local-epoch)
                                      (:synchronized . ,(cl-json:json-bool (= local-epoch epoch)))))))
-               (notify-clients notification))
+               (apply notify-hook notification))
          :do (sleep (random 5))
          :do (advance)))))
-
-(defun remove-client (client)
-  (note "Removing client ~a from client connections." client)
-  (setf *consensus-clients* (remove client *consensus-clients*)))
-
-(defun notify-clients (notification)
-  (dolist (client *consensus-clients*)
-    (with-slots ((state hunchensocket::state)
-                 (write-lock hunchensocket::write-lock))
-        client
-      (if (not (and (eq state :connected)
-                    write-lock))
-          (remove-client client)
-          (progn
-            #+(or)
-            (note "~&Notifying client ~a with ~a~&"
-                  client
-                  notification)
-            (send-as-json client notification))))))
 
 (defun transactions ()
   (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))

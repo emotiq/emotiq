@@ -71,3 +71,13 @@ Returns the mime type of the file as the second value."
          result
          (mime-type (pathname-type result)))
         "No bindable representation found.")))
+
+(defun as-json (args)
+  "ARGS as a json string"
+  (handler-case
+      (cl-json:with-guessing-encoder
+        (cl-json:encode-json-to-string args))
+    (error ()
+      (cl-json:with-explicit-encoder
+        (cl-json:encode-json-to-string args)))))
+
