@@ -28,21 +28,21 @@
 
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
   (when cosi-simgen::*holdoff*
-    (ac:pr "Election delayed by holdoff"))
+    (emotiq:note "Election delayed by holdoff"))
   (unless cosi-simgen::*holdoff*
     (let* ((node   (cosi-simgen:current-node))
            (me     (cosi-simgen:node-pkey node))
            (stake  (cosi-simgen:node-stake node))
            (winner (emotiq/elections:hold-election n)))
       (setf (cosi-simgen:node-current-leader node) winner)
-      (ac:pr (format nil "~A got :hold-an-election ~A" (cosi-simgen::short-id node) n))
+      (ac:pr "~A got :hold-an-election ~A" (cosi-simgen::short-id node) n)
       (let ((iwon (vec-repr:int= winner me)))
-        (ac:pr (format nil "election results ~A (stake = ~A)"
-                       (if iwon " *ME* " " not me ")
-                       stake))
-        (ac:pr (format nil "winner ~A me=~A"
-                       (cosi-simgen::short-id winner)
-                       (cosi-simgen::short-id me)))
+        (emotiq:note "election results ~A (stake = ~A)"
+                     (if iwon " *ME* " " not me ")
+                     stake)
+        (emotiq:note "winner ~A me=~A"
+                     (cosi-simgen::short-id winner)
+                     (cosi-simgen::short-id me))
         (if iwon
             (progn
               (cosi-simgen:send me :become-leader)
@@ -53,34 +53,3 @@
   ;; (emotiq/elections::kill-beacon) ;; for simulator - so that we don't get a periodic call for elections when the simulated run is finished
   (call-next-method))
 
-#|
-(defun node-dispatcher (node &rest msg)
-
-  (if (and (= 2 (length msg))
-           (eq :hold-an-election (first msg))
-           (numberp (second msg)))
-      (let ((n (second msg)))
-        (ac:pr (format nil "got :hold-an-election ~A" n))
-        (let ((winner (emotiq/elections:hold-election n)))
-          (let ((me (eq winner node)))
-            (ac:pr (format nil "election results(~A) ~A" n (if me " *ME* " " not me ")))
-            (ac:pr (format nil "winner ~A me=~A" winner node))
-            (cosi-simgen::send node :make-block))))
-    
-    ;; elsif
-    (if (and (= 1 (length msg))
-             (eq :make-block (first msg)))
-        (when (cosi-simgen::node-blockchain node) ;; don't publish empty blocks
-          (cosi-simgen::leader-exec node cosi-simgen::*cosi-prepare-timeout* cosi-simgen::*cosi-commit-timeout*))
-
-      ;; elsif
-      (if (and (= 1 (length msg))
-               (eq :block-finished (first msg))) ;; sent by tail end of cosi-handlers/leader-exec
-          (progn
-            (emotiq/elections::kill-beacon) ;; for simulator - so that we don't get a periodic call for elections when the simulated run is finished
-            (ac:pr "Block committed to blockchain")
-            (ac:pr (format nil "Block signatures = ~D" (logcount (cosi/proofs:block-signature-bitmap new-block)))))
-        
-        ;; else delegate message to cosi-simgen::node-dispatcher
-        (apply 'cosi-simgen::node-dispatcher node msg)))))
-|#
