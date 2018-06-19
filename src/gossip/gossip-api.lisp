@@ -9,13 +9,11 @@
 
 (in-package :gossip)
 
-;;; DONE
 (defun get-live-uids ()
   "Returns a list of live keys. Second value returned is a universal-time of last time
    the list was refreshed."
   (uber-set))
 
-;;; DONE
 (defun singlecast (message nodeID &key graphID (howmany 2))
   "High-level API for sending message to given single nodeID. If graphID
    is supplied, message will be forwarded along the graph, starting
@@ -50,7 +48,6 @@
                     nil)))))
 
 ; Normally you wouldn't call this as a high-level application programmer. Call broadcast instead.
-;;; DONE
 (defun gossipcast (message &key (graphID *default-graphID*) startnodeID (howmany 2))
   "Sends message via traditional gossip.
   Howmany determines whether traditional gossip or neighborcast is used."
@@ -64,7 +61,6 @@
               startnodeID                   ; destination
               nil)))
 
-;;; DONE
 (defun broadcast (message &key (style ':neighborcast) (graphID *default-graphID*) startnodeID)
   "High-level API for broadcasting a message along a graph.
    If startnodeID is provided, it will be used as the starting node.
@@ -106,7 +102,6 @@
   (dissolve-graph graphID)
   )
 
-;;; DONE
 (defun dissolve-graph (graphID &key startnodeID)
   "Dissolves all connections associated with graphID.
   Starts at startnodeID if given; otherswise it finds one to start with."
