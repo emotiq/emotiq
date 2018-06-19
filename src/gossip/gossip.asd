@@ -25,7 +25,7 @@
                (:file "monads")
                (:file "logging")
                (:file "gossip")
-               ; (:file "gossip-api") ; not done yet
+               (:file "gossip-api") ; not done yet
                (:file "http-fetch")
                (:file "graphviz")
                (:file "gossip-startup")))
