@@ -243,10 +243,6 @@ THE SOFTWARE.
                             :after "Run the environment start up functions"
                             :once))))
       
-      (format *standard-output* "~&com-ral-p ~A~&building-binary-p ~A~&"
-              com-ral-p
-              building-binary-p)
-
       (if com-ral-p
           (create-lispworks-action-to-install-actors)
         (if building-binary-p

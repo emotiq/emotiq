@@ -493,8 +493,8 @@ THE SOFTWARE.
 (define-condition invalid-send-target (simple-error)
   ((target :initarg :target :initform nil :accessor target))
   (:documentation "An error indicating a target of SEND that cannot be resolved into something valid.")
-  (:report (lambda (condition stream)
-	     (format stream "~%Invalid SEND target: ~&  ~S" (target condition)))))
+  (:report (lambda (condition)
+	     (emotiq:note "~%Invalid SEND target: ~&  ~S" (target condition)))))
 
 (defmethod send (other-obj &rest message)
   (let ((mfn (car message)))
@@ -753,7 +753,7 @@ THE SOFTWARE.
      
      (push-new-executive ()
        (push (mpcompat:process-run-function
-              (format nil "Actor Executive ~D" (incf *executive-counter*))
+              (emotiq:note"Actor Executive ~D" (incf *executive-counter*))
               '()
               'executive-loop)
              *executive-processes*)

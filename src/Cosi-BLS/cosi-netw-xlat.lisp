@@ -63,18 +63,6 @@ THE SOFTWARE.
 
 ;; -----------------
 
-#|
-(defmethod ac:send ((node node) &rest msg)
-  (when (node-byz node)
-    (pr (format nil "Byzantine-node: ~A" (short-id node))))
-  (unless (node-byz node)
-    (if (eq node *current-node*)
-        (apply 'ac:send (node-self node) msg)
-      (apply 'ac:send (node-pkey node) msg))))
-|#
-
-;; -----------------
-
 (defun reply (reply-to &rest msg)
   (apply 'send reply-to :answer msg))
 
@@ -90,10 +78,10 @@ THE SOFTWARE.
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
   (let ((node (gethash (int pkey) *pkey-node-tbl*)))
     (unless node
-      (pr (format nil "Unknown pkey: ~A" (short-id pkey))))
+      (emotiq:note "Unknown pkey: ~A" (short-id pkey)))
     (when node
       (when (node-byz node)
-        (pr (format nil "Byzantine node: ~A" (short-id pkey))))
+        (emotiq:note "Byzantine node: ~A" (short-id pkey)))
       (unless (node-byz node)
         (if (eq node *current-node*)
             (apply 'ac:send (node-self node) msg)
@@ -158,7 +146,7 @@ THE SOFTWARE.
               (pr :Non-existent-node))
             (when node
               (when (eq node *my-node*)
-                (pr (format nil "fowarding-by-default-to-me: ~A" msg)))
+                (emotiq:note "fowarding-by-default-to-me: ~A" msg)))
               (apply 'ac:send (node-self node) msg)))))
       )))
 
@@ -168,7 +156,6 @@ THE SOFTWARE.
   (send *handler* (copy-seq buf)))
 
 (defvar *sender* (make-actor (lambda (ip port packet)
-                               ;; (pr (format nil "~A ~A ~D ~A" ip port (length packet) packet))
                                (internal-send-socket ip port packet))))
 
 (defun shutdown-server (&optional (port *cosi-port*))
@@ -224,8 +211,7 @@ THE SOFTWARE.
         (let ((true-dest (dest-ip dest)))
           (when true-dest
             (when (equal true-dest (node-self *my-node*))
-              (ac:pr
-               (format nil "forwarding-to-me: ~A" msg)))
+              (emotiq:note "forwarding-to-me: ~A" msg))
             (apply 'send true-dest msg))))
       )))
 
@@ -311,7 +297,7 @@ THE SOFTWARE.
     (declare (ignore bytes-num ip-address port-num))
     (let ((status (comm:async-io-state-read-status async-io-state)))
       (when status ;; something went wrong
-        (pr (format nil "UDP example server: got error ~s, restarting" status))
+        (emotiq:note "UDP example server: got error ~s, restarting" status)
         (comm:close-async-io-state async-io-state)
         (start-server)
         (return-from #1#))
@@ -357,7 +343,7 @@ THE SOFTWARE.
   
   (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
-      (ac:pr (format nil "internal-send-socket nb=~A" nb))
+      (emotiq:note "internal-send-socket nb=~A" nb))
       (when (> nb *max-buffer-length*)
         (error "Packet too large for UDP transmission"))
       (internal-udp-cosi-client-send-request 'comm:close-async-io-state

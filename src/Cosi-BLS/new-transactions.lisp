@@ -673,12 +673,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (def-script-op public-key-equal-verify (public-key public-key-hash)
   (cond
     ((not (typep public-key 'pbc:public-key))
-     (format t "~%Arg public-key (~s) is not of correct type: ~s~%"
-             public-key 'pbc:public-key)
+     (emotiq:note "~%Arg public-key (~s) is not of correct type: ~s~%"
+                  public-key 'pbc:public-key)
      (fail-script-op))
     ((not (stringp public-key-hash))
-     (format t "~%Public-key-hash ~s not a string but string expected~%"
-             public-key-hash)
+     (emotiq:note "~%Public-key-hash ~s not a string but string expected~%"
+                  public-key-hash)
      (fail-script-op))
     (t
      (let* ((public-key-hash-from-public-key
@@ -687,13 +687,13 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             (l2 (length public-key-hash-from-public-key)))
        (cond
          ((not (stringp public-key-hash-from-public-key))
-          (format t "~%Public-key hash ~s derived from public-key ~s not a string but string expected~%"
-                  public-key-hash-from-public-key public-key)
+          (emotiq:note "~%Public-key hash ~s derived from public-key ~s not a string but string expected~%"
+                       public-key-hash-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
-          (format t "~%Public key hash ~s length ~s ~%  not same as public key ~s hash ~s length ~s~%"
-                  public-key-hash l2
-                  public-key public-key-hash-from-public-key l2)
+          (emotiq:note"~%Public key hash ~s length ~s ~%  not same as public key ~s hash ~s length ~s~%"
+                      public-key-hash l2
+                      public-key public-key-hash-from-public-key l2)
           (fail-script-op))
          ((string= public-key-hash public-key-hash-from-public-key)
           t)
@@ -1018,21 +1018,21 @@ returns the block the transaction was found in as a second value."
                ;; indicating we have an usnpent transaction output
                ;; (UTXO)
                (when (tx-ids= (transaction-id tx) id)
-                 (format t "~%Hey look: the TxID~%  ~a~%is the same as the arg TxID~%  ~a~%Wow!~%"
-                         (txid-string (transaction-id tx))
-                         (txid-string id))
+                 (emotiq:note "~%Hey look: the TxID~%  ~a~%is the same as the arg TxID~%  ~a~%Wow!~%"
+                              (txid-string (transaction-id tx))
+                              (txid-string id))
                  (return-from double-spend-tx-out-p
                    (values nil :utxo-on-blockchain))))))
 
 
 (defun trace-compare-all-tx-ids (id)
-  (format t "~%Trace:~%")
+  (emotiq:note "~%Trace:~%")
   (do-blockchain (blk)
     (do-transactions (tx blk)
-      (format t "~%TX id = ~s   vs~%  ~s [~a]"
+      (emotiq:note "~%TX id = ~s   vs~%  ~s [~a]"
               (transaction-id tx) id
               (tx-ids= (transaction-id tx) id))))
-  (format t "~&end trace~%"))
+  (emotiq:note "~&end trace~%"))
     
 
 
@@ -1260,31 +1260,31 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun dump-tx (tx &key out-only)
-  (format t "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
+  (emotiq:note "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
   (unless out-only
     (loop for tx-in in (transaction-inputs tx)
-          do (format t "    input outpoint: index = ~a/TxID = ~a~%"
-                     (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
-  (format t "    outputs:~%")
+          do (emotiq:note "    input outpoint: index = ~a/TxID = ~a~%"
+                          (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
+  (emotiq:note "    outputs:~%")
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
-        do (format t "      [~d] amt = ~a (out to) addr = ~a~%"
-                   i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
+        do (emotiq:note "      [~d] amt = ~a (out to) addr = ~a~%"
+                        i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
            (when block
-             (format t "~%Dump txs in block = ~s:~%" block)
+             (emotiq:note "~%Dump txs in block = ~s:~%" block)
              (do-transactions (tx block)
                (dump-tx tx)))
            (when mempool
-             (format t "~%Dump txs in mempool:~%")
+             (emotiq:note "~%Dump txs in mempool:~%")
              (loop for tx being each hash-value of cosi-simgen:*mempool*
                    do (dump-tx tx)))
            (when blockchain
-             (format t "~%Dump txs on blockchain:~%")
+             (emotiq:note "~%Dump txs on blockchain:~%")
              (do-blockchain (block)
-               (format t " Dump txs in block = ~s:~%" block)
+               (emotiq:note " Dump txs in block = ~s:~%" block)
                (do-transactions (tx block)
                  (dump-tx tx))))))
     (let ((cosi-simgen:*current-node*
@@ -1333,7 +1333,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                      do (decf tx-count))
                (setq transactions (nreverse rev-txs))))
            #+development (assert (= (length transactions) tx-count))
-           (ac:pr (format nil "~D Transactions" tx-count))
+           (emotiq:note "~D Transactions" tx-count)
            (return transactions)))  
 
 ;; Note: new transactions currently do not use UTXO database, only
@@ -1370,16 +1370,12 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun clear-transactions-in-block-from-mempool (block)
-  ;; (format t "~2%***   We added a block. About to clear mempool. Here's what's there before...")
-  ;; (cosi/proofs/newtx:dump-txs :mempool t)
-  (format t "~%   Now clearing transactions from mempool . . . ")
+  (emotiq:note "~%   Now clearing transactions from mempool . . . ")
 
   ;; inefficient clearing algorithm -- ok for now, improve later!
   (loop with mempool = cosi-simgen:*mempool*
         with transactions = (mapcar #'hash:hash/256 (cosi/proofs:block-transactions block))
         with block-tx-count = (length transactions)
-        ;; initially (format t "~%Transactions count in block: ~d" (length transactions))
-        ;;           (cosi/proofs/newtx:dump-txs :block block)
         for tx being each hash-value
           of mempool 
             using (hash-key key)
@@ -1402,14 +1398,11 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                     (loop for tx being each hash-value of cosi-simgen:*mempool*
                           collect tx))
                   (intersection (intersection txs-in-mempool transactions)))
-             (format t "~2%")
+             (emotiq:note "~2%")
              (when intersection
                (warn
                 "***   NEWTX: there are now STILL transactions (~d) in the mempool from block. How?! [~d in block/~d removed from mempool]"
                 (length intersection)
                 block-tx-count
                 removed-txs))))
-  (format t "~%   DONE.~%")
-  ;; (format t "~%   Now here's what's in mempool after, take a look ...")
-  ;; (cosi/proofs/newtx:dump-txs :mempool t)
-  )
+  (emotiq:note "~%   DONE.~%"))
