@@ -4,26 +4,29 @@
   ((leader :accessor system-leader :initform nil)
    (witnesses :accessor system-witness-list :initform nil)))
    
-(let (state
-      tracking-actor)
+;(let (state
+;      tracking-actor)
 
-  (defun track (&rest msg)
-    (actors:send tracking-actor msg))
+(defparameter *state* nil)
+(defparameter *tracking-actor* nil)
 
-  (defun start-tracker ()
-    "returns an actor that can be sent messages about changes to the system state"
-    (setf state (make-instance 'system-state)
-          tracking-actor #'do-tracking))
+(defun track (&rest msg)
+  (actors:send *tracking-actor* msg))
 
-  (defun do-tracking (&rest msg)
-    (case (first msg) 
-      (:reset
-       (setf (system-leader state) nil
-             (system-witness-list state) nil))
-      
-      (:election
-       (setf (system-leader state) nil
-             (system-witness-list state) nil))
+(defun start-tracker ()
+  "returns an actor that can be sent messages about changes to the system state"
+  (setf *state* (make-instance 'system-state)
+        *tracking-actor* #'do-tracking))
+
+(defun do-tracking (&rest msg)
+  (case (first msg) 
+    (:reset
+     (setf (system-leader *state*) nil
+           (system-witness-list *state*) nil))
+    
+    (:election
+     (setf (system-leader *state*) nil
+             (system-witness-list *state*) nil))
 
       ((:make-block :block-finished :commit :prepare)
        ;; tbd
@@ -31,20 +34,20 @@
       
       (:new-leader
        (let ((leader-node (second msg)))
-         (setf (system-leader state) leader-node)))
+         (setf (system-leader *state*) leader-node)))
       
       (:new-witness
-       (push (second msg) (system-witness-list state)))))
+       (push (second msg) (system-witness-list *state*)))))
           
-  (defun query-current-state ()
-    "return 
-    (let ((result nil))
-      (push (cons :leader (stringify-node (system-leader state))) result)
-      (let ((witnesses nil))
-        (dolist (w (system-witness-list state))
-          (push (stringify-node w) witnesses))
-        (push (cons :witnesses witnesses) result)
-      result))))
+(defun query-current-state ()
+  "return current system state as an alist"
+  (let ((result nil))
+    (push (cons :leader (stringify-node (system-leader *state*))) result)
+    (let ((witnesses nil))
+      (dolist (w (system-witness-list *state*))
+        (push (stringify-node w) witnesses))
+      (push (cons :witnesses witnesses) result)
+      result)))
 
 (defun stringify-node (n)
   "return some string representation for given node"

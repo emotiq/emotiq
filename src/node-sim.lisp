@@ -56,7 +56,9 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (emotiq/elections:set-nodes (keys-and-stakes))
 
   (when run-cli-p
-    (emotiq/cli:main)))
+    (emotiq/cli:main))
+
+  (emotiq/tracker:start-tracker))
 
 (defvar *genesis-account*
   nil
@@ -188,7 +190,8 @@ This will spawn an actor which will asynchronously do the following:
                           (list user-2-pkey user-3-pkey)
                           fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")))))))
+              (publish-transaction (setf *tx-2* trans) "tx-2"))))))
+  (emotiq/tracker:query-current-state))
 
 
 (defun blocks ()

@@ -92,13 +92,13 @@
 
 (defsystem "emotiq/sim"  ;; a simulated node
   :depends-on (emotiq/cli
-               alexandria)
+               alexandria
+               emotiq/tracker)
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
                              (:file "election-sim")
                              (:file "node-sim" :depends-on (election-sim))))))
-
 
 (defsystem "emotiq/tracker"
   :depends-on (actors)
