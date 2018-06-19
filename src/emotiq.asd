@@ -101,7 +101,7 @@
                              (:file "node-sim" :depends-on (election-sim))))))
 
 (defsystem "emotiq/tracker"
-  :depends-on (actors emotiq/logging)
+  :depends-on (actors emotiq/logging cosi-bls)
   :components ((:module source
                 :pathname "./"
                 :serial t
