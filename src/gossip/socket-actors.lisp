@@ -101,7 +101,7 @@
     (kvs:remove-key! *tcp-connection-table* key)))
 
 (defun lookup-connection (address &optional (port *nominal-gossip-port*))
-  "Returns open pipe to address/port, if any"
+  "Returns actor managing open connection to address/port, if any"
   (let* ((key (make-ip-key address port))
          (actor (kvs:lookup-key *tcp-connection-table* key))
          (process (when actor (ac:get-property actor :thread))))
@@ -119,10 +119,13 @@
     (when actor
       (usocket:socket (get-socket actor)))))
 
+(defun connections ()
+  "Get a list of open connections"
+  (loop for connection being each hash-value of *tcp-connection-table* collect connection))
+
 (defun addresses ()
   "For debugging. Get a list of addresses of open connections."
-  (mapcar 'get-peer-address
-          (loop for actor being each hash-value of *tcp-connection-table* collect actor)))
+  (mapcar 'get-peer-address (connections)))
 
 ; (stream-at "emq-01.aws.emotiq.ch" 65002)
 ; (mapcar 'open-stream-p (mapcar 'gossip::stream-at (gossip::addresses)))
@@ -177,7 +180,6 @@
 
 (defun send-socket-shutdown-message (actor &optional reason)
   "Send a socket-shutdown message to an actor."
-  
   (ac:send actor :shutdown reason))
 
 ; Would be nice to convert this to a single external thread that monitors all
@@ -290,3 +292,22 @@
     (ac:set-property actor :thread (make-select-thread actor))
     (memoize-connection address port actor)
     actor))
+
+(defun graceful-shutdown ()
+  "Gracefully shutdown the gossip server"
+  ; shutdown all open connections
+  (let ((connections (connections)))
+    (mapc (lambda (connection) (send-socket-shutdown-message connection :graceful-shutdown)) connections))
+  ; shutdown passive listener
+  (shutdown-gossip-server t))
+
+(defun gossip-final-cleanup ()
+  "Only call this when lisp quits"
+  ; close all open sockets forcibly
+  (let* ((connections (connections))
+         (sockets (when connections (mapcar 'get-socket connections))))
+    (mapc 'usocket:socket-close sockets)))
+
+#+OPENMCL
+(eval-when (:load-toplevel :execute)
+  (pushnew 'gossip-final-cleanup ccl:*lisp-cleanup-functions*))

@@ -77,7 +77,6 @@ with this list if desired."
         (gossip/config:get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
-      ;; FIXME don't use specials unless you can avoid them…
       (setf *hosts* (remove (usocket::host-to-hbo (eripa)) hosts :key (lambda (host) (usocket::host-to-hbo (car host)))))
       (emotiq:note "Gossip init finished.")
       (if ping-others
@@ -114,7 +113,7 @@ with this list if desired."
        (unless gossip-inited
          (gossip-init ':init)))
       (:uninit
-       ;;; XXX Don't we need to shutdown/unbind the socket listener?
+       (graceful-shutdown)
        (log-event-for-pr ':quit)
        (setf *logging-actor* nil)
        (setf *hmac-keypair-actor* nil)
