@@ -20,10 +20,19 @@
 
 (in-package :gossip)
 
+(defvar *graphviz-command-location-punt* "/usr/local/bin/sfdp" "Best guess as to location of sfdp program if find-sfdp fails")
+
 (defvar *graphviz-command* nil "Location of graphviz sfdp program")
 
-(defun find-graphviz ()
-  (let ((loc (uiop:run-program (list "which" "sfdp") :output :string)))
+#|
+DISCUSSION: "which" as a shell command doesn't work unless $PATH is set up correctly.
+In CCL, $PATH seems to inherit from whatever $PATH is set to in .bash_profile.
+But in the Lispworks IDE, $PATH is just "/usr/bin:/bin:/usr/sbin:/sbin", which
+usually won't be where the sfdp command is located. Furthermore, which throws
+an error when it fails, so we have to wrap an ignore-errors around the call.
+|#
+(defun find-sfdp ()
+  (let ((loc (ignore-errors (uiop:run-program (list "which" "sfdp") :output :string))))
     (when (and loc (eql 0 (ignore-errors (position #\/ loc))))
       (string-trim '(#\newline) loc))))
 
@@ -58,12 +67,15 @@
            (concatenate 'string (subseq orig 0 4) "..." (subseq orig (- (length orig) 4))))
           (t orig))))
 
+;; Note: Firefox won't show second and succeeding lines as smaller if you have a minimum
+;;   font size set.
+;;   https://stackoverflow.com/questions/29878587/firefox-doesnt-respect-font-size-in-svg-text#29879109
 (defmethod dump-node ((node proxy-gossip-node) stream edgetable graphID)
   "Dump proxy node showing UID, real address, and real port"
   (declare (ignore edgetable graphID))
   (format stream "~%  \"~A\" [fontsize=\"10.0\", tooltip=\"~A\", label=<~A<BR /> ~
         <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
-                     (short (uid node))
+                     (uid node)
                      (uid node)
                      (short (uid node))
                      (real-address node)
@@ -76,7 +88,8 @@
 |#
 
 (defmethod dump-node ((node gossip-node) stream edgetable graphID)
-  (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\\N\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+  (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\~A\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
+          (uid node)
           (short (uid node))
           (uid node))
   (dolist (neighbor (neighborhood node graphID))
@@ -84,7 +97,7 @@
            (maxuid (max neighbor (uid node)))
            (key (cons minuid maxuid)))
       (unless (gethash key edgetable) ; don't dump links twice
-        (format stream "~%  \"~A\" -- \"~A\";" (short (uid node)) neighbor)
+        (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
         (setf (gethash key edgetable) t)))))
 
 (defun write-inner-commands (stream nodelist graphID)
@@ -112,7 +125,9 @@
   (let ((cmd *graphviz-command*))
     (unless cmd
       (setf cmd
-            (setf *graphviz-command* (find-graphviz))))
+            (setf *graphviz-command* (find-sfdp))))
+    (unless cmd
+      (setf cmd *graphviz-command-location-punt*))
     (cond (cmd
            (uiop:run-program (list cmd
                                    "-Tsvg"
@@ -185,3 +200,5 @@
           (uiop:run-program (list "xdg-open" urlstring))
           (values dotpath htmlpath))))))
     
+
+; (gossip:visualize-nodes gossip::*nodes* :uber) ; should draw a fully-connected graph of all known real nodes. Not terribly useful, but a good test.

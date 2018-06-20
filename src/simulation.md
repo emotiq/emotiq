@@ -1,5 +1,8 @@
 # Running the local node simulation
 
+The reference behavior of the Emotiq chain with all nodes in the local
+process.
+
 ## Running
 
 ### Cloaked
@@ -16,7 +19,18 @@
 (emotiq/sim:run :cloaked nil)
 ```
 
+### New Transactions
+```lisp
+(ql:quickload :emotiq/sim)
+(emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
+(emotiq/sim:run-new-tx)
+```
+
+
+
 ## Explanation    
+
+### EMOTIQ/SIM:RUN
 
 The simulation performs the following steps:
 
@@ -31,6 +45,11 @@ The simulation performs the following steps:
 Various diagnostic messages from the actor threads will
 appear to `cl:*standard-output*` and `cl:*standard-error*`.
 
+### EMOTIQ/SIM:RUN-NEW-TX
+
+Simulation with "new transactions".
+
+### Interactive Introspection
 After the simulation completes, one may inspect the created blocks
 via:
 ```lisp

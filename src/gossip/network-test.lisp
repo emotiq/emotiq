@@ -14,7 +14,7 @@
   (setf *default-uid-style* :tiny)
   (unless (>= *last-tiny-uid* n)
     (setf *last-tiny-uid* n))
-  (clrhash *nodes*)
+  (clear-local-nodes)
   (make-graph 10)
   (run-gossip-sim :TCP))
 
@@ -32,12 +32,12 @@
   (unless (>= *last-tiny-uid* n)
     (setf *last-tiny-uid* n))
   (set-protocol-style :neighborcast)
-  (clrhash *nodes*)
+  (clear-local-nodes)
   (run-gossip-sim :TCP)
   (let ((server-port (if (equalp "localhost" server-address)
                          (other-tcp-port)
                          *nominal-gossip-port*)))
-    (setf rnode (ensure-proxy-node :TCP server-address server-port rnodenum))
+    (setf rnode (ensure-proxy-node ':TCP server-address server-port rnodenum))
     (setf localnode (make-node
                      :neighborhood (list (uid rnode))))))
 
@@ -92,10 +92,10 @@
   (setf *default-uid-style* :tiny)
   (unless (>= *last-tiny-uid* n)
     (setf *last-tiny-uid* n))
-  (clrhash *nodes*)
+  (clear-local-nodes)
   (run-gossip-sim :TCP)
   (set-protocol-style :neighborcast)
-  (setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) 0))
+  (setf rnode (ensure-proxy-node ':TCP "localhost" (other-tcp-port) 0))
   )
 
 ; (setup-clientx 100)
@@ -118,13 +118,13 @@
   (setf *default-uid-style* :tiny)
   (unless (>= *last-tiny-uid* n)
     (setf *last-tiny-uid* n))
-  (clrhash *nodes*)
+  (clear-local-nodes)
   (run-gossip-sim :TCP)
   (set-protocol-style :neighborcast)
   (let ((port (if (equalp "localhost" other-machine-address)
                   (other-tcp-port)
                   *nominal-gossip-port*)))
-    (setf rnode (ensure-proxy-node :TCP other-machine-address port m))
+    (setf rnode (ensure-proxy-node ':TCP other-machine-address port m))
     (setf localnode (make-node
                      :neighborhood (list (uid rnode))))))
 

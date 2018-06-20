@@ -100,8 +100,8 @@
   (let ((key (make-ip-key address port)))
     (kvs:remove-key! *tcp-connection-table* key)))
 
-(defun lookup-connection (address port)
-  "Returns open pipe to address/port, if any"
+(defun lookup-connection (address &optional (port *nominal-gossip-port*))
+  "Returns actor managing open connection to address/port, if any"
   (let* ((key (make-ip-key address port))
          (actor (kvs:lookup-key *tcp-connection-table* key))
          (process (when actor (ac:get-property actor :thread))))
@@ -112,6 +112,24 @@
             (t (ac:set-property actor :thread (make-select-thread actor))
                actor))
       actor)))
+
+(defun stream-at (address &optional (port *nominal-gossip-port*))
+  "For debugging. Get stream associated with connection."
+  (let ((actor (lookup-connection address port)))
+    (when actor
+      (usocket:socket (get-socket actor)))))
+
+(defun connections ()
+  "Get a list of open connections"
+  (loop for connection being each hash-value of *tcp-connection-table* collect connection))
+
+(defun addresses ()
+  "For debugging. Get a list of addresses of open connections."
+  (mapcar 'get-peer-address (connections)))
+
+; (stream-at "emq-01.aws.emotiq.ch" 65002)
+; (mapcar 'open-stream-p (mapcar 'gossip::stream-at (gossip::addresses)))
+; (mapcar 'stream-eofp (mapcar 'gossip::stream-at (gossip::addresses)))
 
 ;;; Socket-actor property functions. These can be called safely by anybody--not just by the actor itself.
 (defmethod get-socket ((sa socket-actor))
@@ -162,7 +180,6 @@
 
 (defun send-socket-shutdown-message (actor &optional reason)
   "Send a socket-shutdown message to an actor."
-  
   (ac:send actor :shutdown reason))
 
 ; Would be nice to convert this to a single external thread that monitors all
@@ -243,7 +260,7 @@
           (log-event :INCOMING-TCP msg :FROM rem-address :TO destuid))
         ;ensure a local node of type proxy-gossip-node exists on this machine with
         ;  given rem-address, rem-port, and srcuid (the last of which will be the proxy node's real-uid that it points to).
-        (let ((proxy (ensure-proxy-node :TCP rem-address rem-port srcuid)))
+        (let ((proxy (ensure-proxy-node ':TCP rem-address rem-port srcuid)))
           (incoming-message-handler msg (uid proxy) destuid) ; use uid of proxy here because destuid needs to see a source that's meaningful
           ;   on THIS machine.
           )))))
@@ -275,3 +292,22 @@
     (ac:set-property actor :thread (make-select-thread actor))
     (memoize-connection address port actor)
     actor))
+
+(defun graceful-shutdown ()
+  "Gracefully shutdown the gossip server"
+  ; shutdown all open connections
+  (let ((connections (connections)))
+    (mapc (lambda (connection) (send-socket-shutdown-message connection :graceful-shutdown)) connections))
+  ; shutdown passive listener
+  (shutdown-gossip-server t))
+
+(defun gossip-final-cleanup ()
+  "Only call this when lisp quits"
+  ; close all open sockets forcibly
+  (let* ((connections (connections))
+         (sockets (when connections (mapcar 'get-socket connections))))
+    (mapc 'usocket:socket-close sockets)))
+
+#+OPENMCL
+(eval-when (:load-toplevel :execute)
+  (pushnew 'gossip-final-cleanup ccl:*lisp-cleanup-functions*))
