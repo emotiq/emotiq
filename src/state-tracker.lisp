@@ -15,7 +15,7 @@
   (if (and
        (eql (first msg) :reset)
        (null *tracking-actor*))
-      (emotiq:note "Don't care :reset")  ;; don't care about this condition
+      (emotiq:note "~%*** Don't care :reset ***~%")  ;; don't care about this condition
     (actors:send *tracking-actor* msg)))
 
 (defun start-tracker ()
@@ -28,9 +28,9 @@
   (emotiq:note "do-tracking ~A" msg)
   (case (first msg) 
     (:reset
-     (setf (system-leader *state*) nil
-           (system-witness-list *state*) nil))
-    
+     (emotiq:note "tracker got :reset")
+     (start-tracker))
+
     (:election
      (setf (system-leader *state*) nil
              (system-witness-list *state*) nil))

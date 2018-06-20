@@ -57,9 +57,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
 
   (when run-cli-p
     (emotiq/cli:main))
-  
   (emotiq/tracker:start-tracker)
-
   (values))
 
 (defvar *genesis-account*
@@ -349,10 +347,12 @@ This will spawn an actor which will asynchronously do the following:
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
-            (sleep 60)
+            (sleep 30)
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")))))))
+            (format t "~2%Good-bye and good luck!~%")
+            (emotiq/tracker:query-current-state)
+            ))))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
