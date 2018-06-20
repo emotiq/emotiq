@@ -67,6 +67,7 @@ THE SOFTWARE.
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
 
 (defun end-holdoff ()
+  (emotiq/tracker:track "end-holdoff")
   (ac::unschedule-timer (node-hold-off-timer *current-node*))
   (setf *holdoff* nil))
 
