@@ -56,7 +56,9 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (emotiq/elections:set-nodes (keys-and-stakes))
 
   (when run-cli-p
-    (emotiq/cli:main)))
+    (emotiq/cli:main))
+  (emotiq/tracker:start-tracker)
+  (values))
 
 (defvar *genesis-account*
   nil
@@ -161,7 +163,7 @@ This will spawn an actor which will asynchronously do the following:
 
   (cosi-simgen:reset-nodes)
  
-  (emotiq/elections:make-election-beacon)
+  ;(emotiq/elections:make-election-beacon)
                                          
   (let ((fee 10)
         (user-1-pkey (pbc:keying-triple-pkey *user-1*))
@@ -188,7 +190,9 @@ This will spawn an actor which will asynchronously do the following:
                           (list user-2-pkey user-3-pkey)
                           fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")))))))
+              (publish-transaction (setf *tx-2* trans) "tx-2"))))))
+  (sleep 60)
+  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state)))
 
 (defun run-new-tx ()
   "Using new tx feature, run the block chain simulation entirely within the current process.
@@ -205,7 +209,7 @@ This will spawn an actor which will asynchronously do the following:
   (ensure-simulation-keys)
   (setf *genesis-output* nil *tx-1* nil *tx-2* nil)
   (cosi-simgen:reset-nodes)
-  (emotiq/elections:make-election-beacon)
+  ;(emotiq/elections:make-election-beacon)
   (let ((fee 10))    
     (ac:pr "Construct Genesis Block")
     (let* ((genesis-block
@@ -343,10 +347,17 @@ This will spawn an actor which will asynchronously do the following:
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
-            (sleep 60)
-            (format t "~3%Here's a dump of the whole blockchain currently:~%")
+            (emotiq/elections:fire-election)
+            (sleep (+ 5 cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*))
+            ;(sleep 30)
+            (emotiq:note "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")))))))
+            (emotiq:note "~2%Good-bye and good luck!~%")
+            (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
+            ;(kill-beacon)
+            (values)
+            ))))))
+
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation

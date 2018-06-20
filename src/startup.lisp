@@ -34,6 +34,8 @@
   ;; Start the REST server which provides support for testing the
   ;; WebSocket implementation at <http://localhost:3140/client/>
   (emotiq-rest:start-server :port 3140)
+  ;; Start the state tracker for the system
+  (emotiq/tracker:start-tracker)
   (emotiq:start-node))
 
 ;; Entry Point for binary version of the system.

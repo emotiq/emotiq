@@ -11,6 +11,8 @@
   ;;; haven't written this yet but it will ping others periodically
   ;;; must work with David to figure out what to do with the information it
   #+(or)
-  (gossip:start-pinger-daemon))
+  (gossip:start-pinger-daemon)
+
+  (emotiq/tracker:query-current-state))
 
 

@@ -42,7 +42,7 @@ THE SOFTWARE.
 
 (defun set-nodes (node-list)
   "NODE-LIST is a list of (public-key stake-amount) pairs"
-  (ac:pr (format nil "election set-nodes ~A" node-list))
+  (emotiq:note "election set-nodes ~A" node-list)
   (assert node-list)
   (setf *all-nodes* node-list))
 
@@ -58,7 +58,8 @@ THE SOFTWARE.
    (lambda (&rest msg)
      (labels ((hold-election ()
                 (let ((rand (/ (random 1000000) 1000000)))
-                  (ac:pr (format nil "sending :hold-an-election = ~A" rand))
+                  (emotiq/tracker:track :election)
+                  (emotiq:note "election-sim sending :hold-an-election = ~A" rand)
                   (mapc #'(lambda (pair)
                             (destructuring-bind (node-pkey node-stake) pair
                               (ac:send node-pkey :hold-an-election
@@ -66,15 +67,15 @@ THE SOFTWARE.
                         *all-nodes*))))
        (um:dcase msg
          (:start ()
-          (ac:pr "Beacon started")
+          (emotiq:note "Beacon started")
           ;; recv also restarts the clock
           (ac:recv
             ((list :start)
-             (ac:pr "Beacon already running")
+             (emotiq:note "Beacon already running")
              (ac:retry-recv))
             
             ((list :kill)
-             (ac:pr "Beacon terminated"))
+             (emotiq:note "Beacon terminated"))
             
             ((list :hold-election)
              (hold-election)
@@ -87,7 +88,7 @@ THE SOFTWARE.
             ))
 
          (:kill ()
-          (ac:pr "Beacon wasn't running"))
+          (emotiq:note "Beacon wasn't running"))
          
          (:hold-election ()
           (hold-election))

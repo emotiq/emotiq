@@ -111,7 +111,8 @@
    #:set-nodes
    #:make-election-beacon
    #:kill-beacon
-   #:hold-election))
+   #:hold-election
+   #:fire-election))
 
 (defpackage emotiq/filesystem
   (:use #:cl)
@@ -120,5 +121,13 @@
    #:emotiq/user/root/
    #:etc/
    #:var/log/))
+
+(defpackage emotiq/tracker
+  (:use #:cl)
+  (:export
+   #:start-tracker
+   #:track
+   #:query-current-state))
+
 
 
