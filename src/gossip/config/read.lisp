@@ -21,16 +21,14 @@
 
 (defun get-values ()
   "Return the values for the current network configuration.
-
 The first value is the database of all keypairs in the test network.
-
 The second value contains all hosts.
-
 The third value contains the configuration of this node."
   (unless (and *keypair-db-path*
                *hosts-db-path*
                *machine-db-path*)
     (initialize))
+  (handler-case
   (let ((keypairs (read-pairs-database *keypair-db-path*))
         (hosts nil)
         (local-machine nil))
@@ -38,10 +36,13 @@ The third value contains the configuration of this node."
              (error "~S file not found or invalid" filename)))
       (unless keypairs (badfile *keypairs-filename*))
       (setf hosts (read-pairs-database *hosts-db-path*))
-      (unless hosts (badfile *hosts-filename*))
+          (unless hosts (gossip::log-event :WARN (format nil "'~A' invalid or empty" *hosts-filename*)))
       (setf local-machine (read-local-machine-configuration *machine-db-path*))
       (unless local-machine (badfile *machine-filename*))
-      (values keypairs hosts local-machine))))
+          (values keypairs hosts local-machine)))
+    (error (e)
+           (emotiq:note "Configuration strategy failed because ~a" e)
+           nil)))
 
 (defun read-pairs-database (pathname)
   (when (and pathname (probe-file pathname))

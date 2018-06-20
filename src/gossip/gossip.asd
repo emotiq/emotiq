@@ -2,7 +2,7 @@
   :name "Gossip"
   :description "Gossip protocols"
   :author "Shannon Spires <svs@emotiq.ch>"
-  :version "0.2.1"
+  :version "0.2.2"
   :maintainer "Shannon Spires <svs@emotiq.ch>"
   :depends-on (gossip/config
                emotiq/logging
@@ -25,6 +25,7 @@
                (:file "monads")
                (:file "logging")
                (:file "gossip")
+               (:file "gossip-api")
                (:file "http-fetch")
                (:file "graphviz")
                (:file "gossip-startup")))

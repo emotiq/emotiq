@@ -16,12 +16,21 @@
 (in-package :gossip)
 
 (defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
-       :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs")
+       :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs
+        that are not expected to be globally-unique.")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
+(defvar *default-graphID* :root "Identifier of the default, root, ground, or 'physical' graph that a node is always part of")
+(defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
+(defvar *hmac-keypair-actor* nil "Actor managing *hmac-keypair*")
+(defvar *remote-uids* nil "cons of (time . list returned by multiple-list-uids). Only reflects uids found through active pinging
+        of other machines, not those that result from unsolicited incoming messages to this machine.")
+(defvar *uber-set-cache* nil "Nodes of the uber-set known by this machine")
+
+; TODO: Document what uber-network and uber-set mean
 
 (defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
 
@@ -42,10 +51,13 @@
 (defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
    in an effort to find an unused local port")
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
+
+; Actuals below can differ from nominal if you're running multiple servers on the same machine in different processes.
 (defvar *actual-udp-gossip-port* nil "Local gossip UDP network port actually in use")
 (defvar *actual-tcp-gossip-port* nil "Local gossip TCP network port actually in use")
 (defvar *udp-gossip-socket* nil "Local passive UDP gossip socket, if any")
 (defvar *tcp-gossip-socket* nil "Local passive TCP gossip socket, if any")
+
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 (defparameter *shutting-down*     nil "True to shut down gossip-server")
 (defparameter *shutdown-msg* (make-array 8 :element-type '(UNSIGNED-BYTE 8) :initial-contents #(115 104 117 116 100 111 119 110)) "shutdown")
@@ -59,6 +71,31 @@
 (defvar *debug-level* 1 "True to log debugging information while handling gossip requests. Larger values log more messages.")
 
 (defvar *transport* nil "Network transport endpoint.")
+
+(defun remove-keywords (arg-list keywords)
+  (let ((clean-tail arg-list))
+    ;; First, determine a tail in which there are no keywords to be removed.
+    (loop for arg-tail on arg-list by #'cddr
+	  for (key) = arg-tail
+	  do (when (member key keywords :test #'eq)
+	       (setq clean-tail (cddr arg-tail))))
+    ;; Cons up the new arg list until we hit the clean-tail, then nconc that on
+    ;; the end.
+    (loop for arg-tail on arg-list by #'cddr
+	  for (key value) = arg-tail
+	  if (eq arg-tail clean-tail)
+	    nconc clean-tail
+	    and do (loop-finish)
+	  else if (not (member key keywords :test #'eq))
+	    nconc (list key value)
+	  end)))
+
+(defmacro with-keywords-removed ((var keywords &optional (new-var var))
+				 &body body)
+  "binds NEW-VAR (defaults to VAR) to VAR with the keyword arguments specified
+in KEYWORDS removed."
+  `(let ((,new-var (remove-keywords ,var ',keywords)))
+     ,@body))
 
 (defun debug-level (&optional (level nil level-supplied-p))
   (cond (level-supplied-p
@@ -80,7 +117,7 @@
 ; Case 4: *use-all-neighbors* = 1 and *active-ignores* = false. Lots of timeouts. Poor results. NOW A FORBIDDEN CASE.
 
 ;;; DEPRECATE. Use forward-to slot on messages for this now.
-(defun set-protocol-style (kind &optional (n 1))
+(defun set-protocol-style (kind &optional (n 2))
   "Set style of protocol.
    :gossip style to pick one neighbor at random to send solicitations to.
       There's no guarantee this will reach all nodes. But it's quicker and more realistic.
@@ -127,6 +164,42 @@ are in place between nodes.
 #+OpenMCL
 (ccl:defglobal *nodes* (make-uid-mapper) "Table for mapping node UIDs to nodes known by local machine")
 
+(defun clear-local-nodes ()
+  "Delete all knowledge of local real and proxy nodes. Usually used only for testing and startup."
+   (kvs:clear-store *nodes*)
+   (setf *uber-set-cache* nil)) ; invalidate cache
+
+(defun local-real-nodes ()
+  "Returns a list of nodes that are real (non-proxy) and resident on this machine."
+  (loop for node being each hash-value of *nodes*
+    when (typep node 'gossip-node) collect node))
+
+(defun local-real-uids ()
+  "Returns a list of UIDs representing real (non-proxy) nodes resident on this machine."
+  (loop for key being each hash-key of *nodes* using (hash-value node)
+    when (typep node 'gossip-node) collect key))
+
+(defun remote-real-uids ()
+  "Returns a list of UIDs representing real (non-proxy) nodes resident on other machines.
+  Second value returned is a universal-time of last time remotes were pinged."
+  (let* ((remote-monads (cdr *remote-uids*))
+         (remote-uids (loop for item in remote-monads
+                        when (typep item 'augmented-data) collect (unwrap item))))
+    (setf remote-uids (apply 'append remote-uids)) ; because each is a list
+    (values remote-uids
+            (car *remote-uids*))))
+
+(defun uber-set ()
+  "Returns a complete list of UIDs of real nodes (not proxies) known on both this machine and other machines.
+   Second value returned is a universal-time of last time remotes were pinged."
+  (multiple-value-bind (rr-uids timestamp) (remote-real-uids)
+    (if *uber-set-cache*
+        (values *uber-set-cache*
+                timestamp)
+        (values
+         (setf *uber-set-cache* (union (local-real-uids) rr-uids))
+               timestamp))))
+      
 (defun aws-p ()
   "Returns true if we're running on an AWS EC2 instance.
    Always runs quickly."
@@ -275,7 +348,11 @@ are in place between nodes.
    (reply-to :initarg :reply-to :initform nil :accessor reply-to
              :documentation "Nil for no reply expected. :UPSTREAM or :GOSSIP or :NEIGHBORCAST indicate
              replies should happen by one of those mechanisms, or a UID to request a direct reply to
-             a specific node."))
+             a specific node.")
+   (graphid :initarg :graphid :initform *default-graphID* :accessor graphid
+            :documentation "Which graph should this message propagate through? Since nodes can be part of multiple
+             graphs, which identifies which set of neighbors to use when forwarding the message. *default-graphID* will be the default ground
+             graph which can be considered a 'physical' graph, while the rest are 'logical' but this is just a convention."))
   (:documentation "An initial message sent to a gossip network or gossip node. Some solicitations require replies;
     some don't."))
 
@@ -289,7 +366,8 @@ are in place between nodes.
 (defmethod copy-message :around ((msg solicitation))
   (let ((new-msg (call-next-method)))
     (setf (forward-to new-msg) (forward-to msg)
-          (reply-to new-msg) (reply-to msg))
+          (reply-to new-msg) (reply-to msg)
+          (graphID new-msg)  (graphID msg))
     new-msg))
 
 (defclass solicitation-uid-mixin ()
@@ -392,9 +470,9 @@ are in place between nodes.
                   thread. No locking needed. Only used for duration of a solicitation/reply cycle.")
    (local-kvs :initarg :local-kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor local-kvs
         :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
-   (neighbors :initarg :neighbors :initform nil :accessor neighbors
-              :documentation "List of UIDs of direct neighbors of this node. This is the mechanism that establishes
-              the connectivity of the node graph.")
+   (neighbors :initarg :neighbors :initform (kvs:make-store ':hashtable :test 'equal) :accessor neighbors
+              :documentation "Table of lists of UIDs of direct neighbors of this node. This is the mechanism that establishes
+              the connectivity of the node graph. Table is indexed by graphID.")
    (timers :initarg :timers :initform nil :accessor timers
             :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
@@ -423,7 +501,8 @@ are in place between nodes.
                but the real-uid is used to route it to the proper node on the remote
                machine."))
   (:documentation "A local [to this process] standin for a real gossip-node located elsewhere.
-              All we know about it is its UID and address, which is enough to transmit a message to it."))
+              All we know about it is its UID and address, which is enough to transmit a message to it.
+              Proxy nodes never have neighbors."))
 
 (defmethod print-object ((thing proxy-gossip-node) stream)
    (with-slots (real-address) thing
@@ -459,12 +538,19 @@ are in place between nodes.
       (apply 'gossip-dispatcher node msg))))
 
 (defun make-node (&rest args)
-  "Makes a new node"
+  "Makes a new [real, non-proxy] node"
+  (let ((neighborhood (getf args :neighborhood))) ; allow to specify :neighborhood as list, for *default-graphID*
+    (with-keywords-removed (args (:neighborhood))
   (let* ((node (apply 'make-instance 'gossip-node args))
          (actor (make-gossip-actor node)))
+        (when neighborhood
+          (mapcar (lambda (uid)
+                    (pushnew uid (neighborhood node)))
+                  neighborhood))
     (setf (actor node) actor)
     (kvs:relate-unique! *nodes* (uid node) node)
-    node))
+        (setf *uber-set-cache* nil) ; invalidate cache
+        node))))
 
 (defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -474,7 +560,15 @@ are in place between nodes.
                  (:udp (apply 'make-instance 'udp-gossip-node args))))
          (actor (make-gossip-actor node)))
     (setf (actor node) actor)
+    ; rule: We should never have a proxy and a real node with same uid.
+    ;  Furthermore: uid of a proxy should always be forced to match its real-uid, except when its real-uid=0.
+    (unless (= 0 (real-uid node))
+      (let ((oldnode (lookup-node (real-uid node))))
+        (when oldnode
+          (log-event :WARN oldnode "being replaced by proxy" node)))
+      (setf (slot-value node 'uid) (real-uid node)))
     (kvs:relate-unique! *nodes* (uid node) node)
+    ; proxies are not part of uber-set, therefore no cache invalidation needed
     (memoize-proxy node proxy-subtable)))
 
 ;;;; Graph making routines
@@ -497,22 +591,54 @@ are in place between nodes.
                        (incf i)))
                  nodetable)))))
 
-(defmethod connect ((node1 gossip-node) (node2 gossip-node))
-  "Establish an edge between two nodes. Because every node must know its nearest neighbors,
-   we store the edge information twice: Once in each endpoint node."
-  (pushnew (uid node1) (neighbors node2))
-  (pushnew (uid node2) (neighbors node1)))
-  
-(defmethod connected? ((node1 gossip-node) (node2 gossip-node))
-  (or (member (uid node2) (neighbors node1) :test 'equal)
-      ; redundant if we connected the graph correctly in the first place
-      (member (uid node1) (neighbors node2) :test 'equal)))
+(defgeneric locate-local-node-for-graph (graphID)
+  (:documentation "Returns UID of some local node that's part of given graphID, if any"))
 
-(defun linear-path (nodelist)
+(defmethod locate-local-node-for-graph ((graphID (eql :UBER)))
+  "Every local real node is part of the :UBER set by definition"
+  (first (local-real-uids)))
+
+(defmethod locate-local-node-for-graph ((graphID t))
+  (let* ((localnodes (local-real-nodes))
+         (node (find-if (lambda (node)
+                          (kvs:lookup-key (neighbors node) graphID))
+                        localnodes)))
+    (when node (uid node))))
+
+(defmethod neighborhood ((node gossip-node) &optional (graphID *default-graphID*))
+  "If graphID = :UBER, return the uber-set rather than the neighbors table in the node.
+   The uber-set is mostly for bootstrapping a gossip network."
+  (if (eql :UBER graphID)
+      (uber-set)
+      (kvs:lookup-key (neighbors node) graphID)))
+
+(defmethod dissolve-neighborhood ((node gossip-node) graphID)
+  "Removes connections associated with given graphID. graphID _must_ be specified here.
+   Returns true if graphID in fact existed on this node; nil otherwise."
+  ; TODO: must also destroy entry in locate-local-node-for-graph table (if any) for this graphID
+  (kvs:remove-key (neighbors node) graphID))
+
+(defmethod (setf neighborhood) (value (node gossip-node) &optional (graphID *default-graphID*))
+  "For the benefit of pushnew"
+  (kvs:relate-unique (neighbors node) graphid value))
+
+(defmethod connect ((node1 gossip-node) (node2 gossip-node) &optional (graphID *default-graphID*))
+  "Establish an edge between two nodes. Because every node must know its nearest neighbors,
+   we store the edge information twice: Once in each endpoint node.
+   This method is only for connecting local, real nodes."
+  (pushnew (uid node1) (neighborhood node2 graphID))
+  (pushnew (uid node2) (neighborhood node1 graphID)))
+  
+(defmethod connected? ((node1 gossip-node) (node2 gossip-node) &optional (graphID *default-graphID*))
+  (or (member (uid node2) (neighborhood node1 graphID) :test 'equal)
+      ; redundant if we connected the graph correctly in the first place
+      (member (uid node1) (neighborhood node2 graphID) :test 'equal)))
+
+(defun linear-path (nodelist &optional (graphID *default-graphID*))
   "Create a linear path through the nodes"
   (when (second nodelist)
-    (connect (first nodelist) (second nodelist))
-    (linear-path (cdr nodelist))))
+    (connect (first nodelist) (second nodelist) graphID)
+    (linear-path (cdr nodelist) graphID)))
 
 (defun random-connection (nodelist)
   (let* ((len (length nodelist))
@@ -522,29 +648,39 @@ are in place between nodes.
         (random-connection nodelist)
         (values node1 node2))))
 
-(defun random-new-connection (nodelist)
+(defun random-new-connection (nodelist graphID)
   (multiple-value-bind (node1 node2) (random-connection nodelist)
-    (if (connected? node1 node2)
-        (random-new-connection nodelist)
+    (if (connected? node1 node2 graphID)
+        (random-new-connection nodelist graphID)
         (values node1 node2))))
 
-(defun add-random-connections (nodelist n)
+(defun add-random-connections (nodelist n graphID)
   "Adds n random edges between pairs in nodelist, where no connection currently exists."
   (dotimes (i n)
-    (multiple-value-bind (node1 node2) (random-new-connection nodelist)
-      (connect node1 node2))))
+    (multiple-value-bind (node1 node2) (random-new-connection nodelist graphID)
+      (connect node1 node2 graphID))))
 
-(defun make-graph (numnodes &optional (fraction 0.5))
+(defun make-graph (numnodes &key (fraction 0.5) (graphID *default-graphID*))
   "Build a graph with numnodes nodes. Strategy here is to first connect all the nodes in a single
-   non-cyclic linear path, then add f*n random edges, where n is the number of nodes."
-  (clrhash *nodes*)
-  (make-nodes numnodes)
+   non-cyclic linear path, then add f*n random edges, where n is the number of nodes.
+   If graphID is not = *default-graphID*, a new graph will be created out of existing nodes
+   in addition to any existing graph(s) and numnodes will be ignored."
+  (when (eql graphID *default-graphID*)
+    (clear-local-nodes)
+    (make-nodes numnodes))
   (let ((nodelist (listify-nodes)))
     ; following guarantees a single connected graph
-    (linear-path nodelist)
+    (linear-path nodelist graphID)
     ; following --probably-- makes the graph an expander but we'll not try to guarantee that for now
-    (add-random-connections nodelist (round (* fraction (length nodelist)))))
+    (add-random-connections nodelist (round (* fraction (length nodelist))) graphID))
   numnodes)
+
+; Demonstrate two graphs existing simultaneously with only one set of nodes.
+; (make-graph 10)
+; (make-graph 0 :graphid ':foo)
+; (gossip:visualize-nodes gossip::*nodes*)
+; (gossip:visualize-nodes gossip::*nodes* ':foo)
+; (gossip:visualize-nodes gossip::*nodes* ':uber) ; this one is always fully-connected. Always represents the pseudo-graph of all known nodes.
 
 ;;;; Graph saving/restoring routines
 
@@ -606,7 +742,7 @@ are in place between nodes.
 
 (defun restore-graph-from-file (pathname)
   "Restores a graph from a file saved by save-graph-to-file."
-  (clrhash *nodes*)
+  (clear-local-nodes)
   (load pathname))
 
 ;;;; End of Graph saving/restoring routines
@@ -628,6 +764,7 @@ the node itself would send upstream if it were an :UPSTREAM message. If final-co
 dropped on the floor.
 |#
 
+;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
   "Like solicit-wait but asks for all replies to be sent back to node directly, rather than percolated upstream.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
@@ -645,7 +782,7 @@ dropped on the floor.
           (let* ((solicitation (make-solicitation
                                 :reply-to (uid node)
                                 :kind kind
-                                :forward-to ':neighborcast
+                                :forward-to t ; neighborcast
                                 :args args))
                  (soluid (uid solicitation)))
             (send-msg solicitation
@@ -753,18 +890,19 @@ dropped on the floor.
    (address port uid1 uid2 ...)
    If error, returned list will look like
    (address port :ERRORMSG arg1 arg2 ...)"
-  (let ((rnode (ensure-proxy-node :TCP address port 0))
+  (let ((rnode (ensure-proxy-node ':TCP address port 0))
         (localnode nil)
         (allnodes nil))
     (unwind-protect
         (progn
-          (setf localnode (make-node
-                           :NEIGHBORS (list (uid rnode))))
+          (setf localnode (make-node))
+          (pushnew (uid rnode) (neighborhood localnode))
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
           (setf allnodes (remove (uid localnode) allnodes)))
       (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
+      (setf *uber-set-cache* nil) ; invalidate cache
       )))
 
 (defun multiple-list-uids (address-port-list)
@@ -779,14 +917,19 @@ dropped on the floor.
         (localnode nil)
         (allnodes nil))
     (setf rnodes (mapcar (lambda (addressport)
-                           (ensure-proxy-node :TCP (first addressport) (second addressport) 0))
+                           (ensure-proxy-node ':TCP (first addressport) (second addressport) 0))
                          address-port-list))
     (unwind-protect
         (progn
-          (setf localnode (make-node :NEIGHBORS (mapcar 'uid rnodes)))
+          (setf localnode (make-node))
+          (mapcar (lambda (rnode)
+                    (pushnew (uid rnode) (neighborhood localnode)))
+                  rnodes)
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
           ; remove localnode's uid because it will have been included
+          (unless (listp allnodes) ; it's perfectly legal for solicit-xxx to return a single object rather than a list
+            (setf allnodes (list allnodes)))
           (setf allnodes (remove-if
                           (lambda (ad)
                             (and (typep ad 'augmented-data)
@@ -796,6 +939,7 @@ dropped on the floor.
                                       (first (data ad)))))
                           allnodes)))
       (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
+      (setf *uber-set-cache* nil) ; invalidate cache
       )))
 
 ; (make-graph 10)
@@ -804,7 +948,6 @@ dropped on the floor.
 
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
-
 
 ; Logcmd: Keyword that describes what a node has done with a given message UID
 ; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
@@ -817,17 +960,14 @@ dropped on the floor.
            msg
            args)))
 
-
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler methods for bootstrapping messages
    before #'neighbors connectivity has been established.
    See Note D."
   (let ((no-forward-msg (copy-message msg))
-        (nodes (listify-nodes)))
+        (nodes (local-real-uids)))
     (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
-    (setf nodes (remove-if (lambda (node) (typep node 'proxy-gossip-node)) nodes))
-    (setf nodes (mapcar 'uid nodes))
     (forward msg srcuid nodes)))
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
@@ -943,7 +1083,7 @@ dropped on the floor.
         item))))
 
 (defun use-some-neighbors (neighbors howmany)
-  "Pick a few random neighbors based on value of *use-all-neighbors*"
+  "Pick a few random neighbors based on value of howmany"
   (when neighbors
     (let ((len (length neighbors)))
       (cond ((integerp howmany)
@@ -959,8 +1099,8 @@ dropped on the floor.
             (t
              nil)))))
 
-(defmethod get-downstream ((node gossip-node) srcuid howmany)
-  (let ((all-neighbors (remove srcuid (neighbors node))))
+(defmethod get-downstream ((node gossip-node) srcuid howmany &optional (graphID *default-graphID*))
+  (let ((all-neighbors (remove srcuid (neighborhood node graphID))))
     (use-some-neighbors all-neighbors howmany)))
 
 (defun send-active-ignore (to from kind soluid failure-reason)
@@ -1142,6 +1282,7 @@ dropped on the floor.
 ;; Because these messages never involve a reply, even if the reply-to slot is non-nil in these messages,
 ;;   it will be ignored.
 
+; Not really using this for anything
 (defmethod announce ((msg solicitation) thisnode srcuid)
   "Announce a message to the collective. First arg of Msg is the announcement,
    which can be any Lisp object. Recipient nodes are not expected to reply.
@@ -1151,6 +1292,46 @@ dropped on the floor.
     (declare (ignore content))
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
+
+;;; These are the message kinds used by the high-level application programmer's gossip api.
+
+(defgeneric application-handler (node)
+  (:documentation "Returns something that ac:send can send to, which is associated with node.
+    This is used by gossip to forward an application message to its application destination
+    once it reaches its destination node."))
+
+(defmethod k-singlecast ((msg solicitation) thisnode srcuid)
+  "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
+  Destination node is expected to be in (car args) of the solicitation.
+  Message will percolate along the graph until it reaches destination node, at which point it stops percolating.
+  Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
+  Destination node is not expected to reply (at least not with gossip-style replies)."
+  (if (eql (uid thisnode) (car (args msg)))
+      (apply 'ac:send (application-handler thisnode) (cdr (args msg)))
+      ; thisnode becomes new source for forwarding purposes
+      (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
+
+(defmethod k-multicast ((msg solicitation) thisnode srcuid)
+  "Announce a message to the collective. Application message is expected to be in args of the solicitation.
+  Every intermediate node will have the message
+  both delivered to it and forwarded through it.
+  Recipient nodes are not expected to reply (at least not with gossip-style replies)."
+  (apply 'ac:send (application-handler thisnode) (args msg))
+   ; thisnode becomes new source for forwarding purposes
+  (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
+
+(defmethod k-dissolve ((msg solicitation) thisnode srcuid)
+  "Commands every node it passes through to dissolve connections associated with a given graphID.
+   Always uses full neighborcast, no matter what the message says."
+  (forward msg thisnode (get-downstream thisnode srcuid t (graphID msg)))
+  ; must dissolve _after_ forwarding, of course
+  (dissolve-neighborhood thisnode (graphID msg)))
+
+(defmethod k-connect ((msg solicitation) thisnode srcuid)
+  "Tells nodes this message passes through to connect to each other with given graphID"
+  )
+
+;;; Message kinds used by gossip itself
 
 (defmethod gossip-relate ((msg solicitation) thisnode srcuid)
   "Establishes a global non-unique key/value pair. If key currently has a value or set of values,
@@ -1162,7 +1343,7 @@ dropped on the floor.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
 (defmethod gossip-relate-unique ((msg solicitation) thisnode srcuid)
   "Establishes a global unique key/value pair. [Unique means there will be only one value for this key.]
@@ -1174,7 +1355,7 @@ dropped on the floor.
     (declare (ignore other))
     (setf (local-kvs thisnode) (kvs:relate-unique (local-kvs thisnode) key value))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
 (defmethod gossip-remove-key ((msg solicitation) thisnode srcuid)
   "Remove a global key/value pair. Removes key/value pair on this node and then forwards 
@@ -1186,7 +1367,7 @@ dropped on the floor.
   (let ((key (first (args msg))))
     (kvs:remove-key! (local-kvs thisnode) key)
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
 (defmethod gossip-tally ((msg solicitation) thisnode srcuid)
   "Increment the value of a given key by an increment amount.
@@ -1196,7 +1377,7 @@ dropped on the floor.
         (increment (second (args msg))))
     (setf (local-kvs thisnode) (kvs:tally (local-kvs thisnode) key increment))
     ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))))
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
 ;;; TODO: add this to key-value-store
 (defmethod tally-nondestructive ((store list) key amount &key (test #'equal))
@@ -1233,7 +1414,7 @@ dropped on the floor.
   "Generic handler for solicitations requiring replies (SRRs)"
   (let* ((kind (kind msg))
          (soluid (uid msg))
-         (downstream (get-downstream thisnode srcuid (forward-to msg))) ; don't forward to the source of this solicitation
+         (downstream (get-downstream thisnode srcuid (forward-to msg) (graphID msg))) ; don't forward to the source of this solicitation
          (timer nil)
          (seconds-to-wait *max-seconds-to-wait*)
          (cleanup (make-timeout-handler thisnode msg kind)))
@@ -1315,13 +1496,18 @@ dropped on the floor.
 (defgeneric initial-reply-value (kind thisnode msgargs)
   (:documentation "Initial the reply-value for the given kind of message. Must return an augmented-data object."))
 
+(defmethod maybe-augment-datum ((datum augmented-data) kind)
+  (declare (ignore kind))
+  datum)
+
+(defmethod maybe-augment-datum (datum kind)
+  (augment datum `((:kind . ,kind) (:eripa . ,(eripa)) (:port . ,*actual-tcp-gossip-port*))))
+
 (defmethod initial-reply-value :around (kind thisnode msgargs)
   "Ensure an augmented-data object is getting returned."
   (declare (ignore thisnode msgargs))
   (let ((datum (call-next-method)))
-    (if (typep datum 'augmented-data)
-        datum
-        (augment datum `((:kind . ,kind) (:eripa . ,(eripa)) (:port . ,*actual-tcp-gossip-port*))))))
+    (maybe-augment-datum datum kind)))
 
 (defmethod initial-reply-value ((kind (eql :gossip-lookup-key)) (thisnode gossip-node) msgargs)
   (let* ((key (first msgargs))
@@ -1401,13 +1587,13 @@ dropped on the floor.
 
 (defmethod find-address-for-node ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))
+  ;(forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))
   ; wait a finite time for all replies
   )
 
 (defmethod find-node-with-address ((msg solicitation) thisnode srcuid)
   "Find address for a node with a given uid. Equivalent to reverse DNS lookup."
-  ;(forward msg thisnode (get-downstream thisnode srcuid (forward-to msg)))
+  ;(forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))
   ; wait a finite time for all replies
   )
 
@@ -1819,12 +2005,23 @@ gets sent back, and everything will be copacetic.
 
 ;;; The need for this is rather dubious.  No one other than the
 ;;; signing node can authenticate this HMAC. 
-(let (hmac-keypair)
+
+(defun actor-keypair-fn (cmd &rest logmsg)
+  "Test-and-set function that the *hmac-keypair-actor* runs.
+  It's critical that only one actor run pbc:make-key-pair at a time"
+  (declare (ignore cmd)) ; everything is interpreted as :TAS
+  (destructuring-bind (mbox &rest other) logmsg
+    (declare (ignore other))
+    (unless *hmac-keypair*
+      (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
+    (ac:send mbox *hmac-keypair*)))
+
   (defun hmac-keypair ()
-    (unless hmac-keypair
-      (setf hmac-keypair
-            (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
-    hmac-keypair)
+  (or *hmac-keypair*
+    (let ((mbox (mpcompat:make-mailbox)))
+      (ac:send *hmac-keypair-actor* :TAS mbox)
+      (first (mpcompat:mailbox-read mbox)))))
+
   (defun sign-message (msg)
     "Sign and return an authenticated message packet. Packet includes
     original message."
@@ -1832,7 +2029,7 @@ gets sent back, and everything will be copacetic.
                                   (pbc:keying-triple-sig  (hmac-keypair))))
     (pbc:sign-message msg
                       (pbc:keying-triple-pkey (hmac-keypair))
-                      (pbc:keying-triple-skey (hmac-keypair)))))
+                    (pbc:keying-triple-skey (hmac-keypair))))
 
 ;; ------------------------------------------------------------------------------
 
@@ -1866,10 +2063,9 @@ gets sent back, and everything will be copacetic.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
-  (shutdown-gossip-server t)
   (archive-log)
   (sleep .5)
-  (start-gossip-server)
+  (start-gossip-transport usocket:*wildcard-host* *nominal-gossip-port*)
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
@@ -1941,27 +2137,27 @@ gets sent back, and everything will be copacetic.
 ; UDP TESTS
 ; Test 1
 ; ON SERVER MACHINE
-; (clrhash *nodes*)
+; (clear-local-nodes)
 #+TEST1
 (setf localnode (make-node
-  :UID 200
-  :NEIGHBORS nil))
+  :UID 200))
 ; (run-gossip-sim :UDP)
 
 ; ON CLIENT MACHINE
-; (clrhash *nodes*)
+; (clear-local-nodes)
 ; (run-gossip-sim :UDP)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
+(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
 
 
 #+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
-  :UID 201
-  :NEIGHBORS (list (uid rnode))))
+  :UID 201))
+#+TEST1
+(pushnew (uid rnode) (neighborhood localnode))
 ; (solicit-wait localnode :count-alive)
 ; (solicit-wait localnode :list-alive)
 ; (solicit-wait localnode :list-addresses)
@@ -1970,24 +2166,26 @@ gets sent back, and everything will be copacetic.
 
 ; Test 2: List live nodes at given address
 ; ; ON SERVER MACHINE
-; (clrhash *nodes*)
+; (clear-local-nodes)
 ; (make-graph 10)
 ; (run-gossip-sim :UDP)
 
 ; ON CLIENT MACHINE
-; (clrhash *nodes*)
+; (clear-local-nodes)
 ; (run-gossip-sim :UDP)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :UDP "localhost" (other-udp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 0))
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node :UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
 
 #+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
-  :UID 201
-  :NEIGHBORS (list (uid rnode))))
+  :UID 201))
+#+TEST2
+(pushnew (uid rnode) (neighborhood localnode))
+
 ; (solicit-direct localnode :count-alive)
 ; (solicit-direct localnode :list-alive)
 ; (inspect *log*)
@@ -1995,25 +2193,26 @@ gets sent back, and everything will be copacetic.
 
 ; Test 3: List live nodes at given address via TCP
 ; ; ON SERVER MACHINE
-; (clrhash *nodes*)
+; (clear-local-nodes)
 ; (make-graph 1)
 ; (run-gossip-sim :TCP)
 
 ; ON CLIENT MACHINE
-; (clrhash *nodes*)
+; (clear-local-nodes)
 ; (run-gossip-sim :TCP)
 ; (archive-log)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
-(setf rnode (ensure-proxy-node :TCP "localhost" (other-tcp-port) 0)) ; assumes there's a node numbered 200 on another Lisp process at 65003
+(setf rnode (ensure-proxy-node ':TCP "localhost" (other-tcp-port) 0))
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node :TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+(setf rnode (ensure-proxy-node ':TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
 
 #+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
 (setf localnode (make-node
-  :UID 201
-  :NEIGHBORS (list (uid rnode))))
+  :UID 201))
+#+TEST3
+(pushnew (uid rnode) (neighborhood localnode))
 ; (visualize-nodes *nodes*)
 ; (solicit-direct localnode :count-alive)
 ; (solicit-direct localnode :list-alive)
@@ -2070,9 +2269,13 @@ gets sent back, and everything will be copacetic.
 (setf node (make-node
   :UID 253
   :ADDRESS 'NIL
-  :NEIGHBORS '(248 250 251)
   :LOGFN 'GOSSIP::DEFAULT-LOGGING-FUNCTION
   :KVS (as-hash-table 'eql '((key1 . 1) (key2 . 2) (key3 . 3)))))
+
+#+TESTING
+(mapc (lambda (uid)
+          (pushnew uid (neighborhood node)))
+        '(248 250 251))
 
 #+TESTING
 (save-node node *standard-output*)
