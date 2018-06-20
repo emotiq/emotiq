@@ -348,10 +348,11 @@ This will spawn an actor which will asynchronously do the following:
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
             (sleep 30)
-            (format t "~3%Here's a dump of the whole blockchain currently:~%")
+            (emotiq:note "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")
-            (emotiq/tracker:query-current-state)
+            (emotiq:note "~2%Good-bye and good luck!~%")
+            (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
+            (kill-beacon)
             ))))))
 
 (defun blocks ()

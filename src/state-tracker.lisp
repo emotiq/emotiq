@@ -25,7 +25,6 @@
   (emotiq:note "running start-tracker ~A ~A" *state* *tracking-actor*))
 
 (defun do-tracking (msg)
-  (emotiq:note "do-tracking ~A" msg)
   (case (first msg) 
     (:reset
      (emotiq:note "tracker got :reset - state cleared")
