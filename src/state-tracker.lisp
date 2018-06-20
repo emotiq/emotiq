@@ -35,7 +35,7 @@
      (start-tracker))
 
     (:block-finished
-     (emotiq:note "Block finished state = ~A" (query-current-state)))
+     (emotiq:note "Tracker: :block-finished, state = ~A" (query-current-state)))
 
     ((:make-block :commit :prepare)
      ;; tbd

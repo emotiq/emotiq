@@ -163,7 +163,7 @@ This will spawn an actor which will asynchronously do the following:
 
   (cosi-simgen:reset-nodes)
  
-  (emotiq/elections:make-election-beacon)
+  ;(emotiq/elections:make-election-beacon)
                                          
   (let ((fee 10)
         (user-1-pkey (pbc:keying-triple-pkey *user-1*))
@@ -209,7 +209,7 @@ This will spawn an actor which will asynchronously do the following:
   (ensure-simulation-keys)
   (setf *genesis-output* nil *tx-1* nil *tx-2* nil)
   (cosi-simgen:reset-nodes)
-  (emotiq/elections:make-election-beacon)
+  ;(emotiq/elections:make-election-beacon)
   (let ((fee 10))    
     (ac:pr "Construct Genesis Block")
     (let* ((genesis-block
@@ -347,12 +347,14 @@ This will spawn an actor which will asynchronously do the following:
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
-            (sleep 30)
+            (emotiq/elections:fire-election)
+            (sleep (+ 5 cosi-simgen:*cosi-prepare-timeout* cosi-simgen:*cosi-commit-timeout*))
+            ;(sleep 30)
             (emotiq:note "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
             (emotiq:note "~2%Good-bye and good luck!~%")
             (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
-            (kill-beacon)
+            ;(kill-beacon)
             ))))))
 
 
