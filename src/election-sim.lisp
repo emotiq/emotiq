@@ -58,6 +58,7 @@ THE SOFTWARE.
    (lambda (&rest msg)
      (labels ((hold-election ()
                 (let ((rand (/ (random 1000000) 1000000)))
+                  (emotiq/tracker:track :election)
                   (emotiq:note "election-sim sending :hold-an-election = ~A" rand)
                   (mapc #'(lambda (pair)
                             (destructuring-bind (node-pkey node-stake) pair
