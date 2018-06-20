@@ -28,11 +28,11 @@
   (emotiq:note "do-tracking ~A" msg)
   (case (first msg) 
     (:reset
-     (emotiq:note "tracker got :reset")
+     (emotiq:note "tracker got :reset - state cleared")
      (start-tracker))
 
     (:election
-     (emotiq:note "tracker got :election")
+     (emotiq:note "tracker got :election - state cleared")
      (start-tracker))
 
     ((:make-block :block-finished :commit :prepare)
@@ -41,10 +41,13 @@
     
     (:new-leader
      (let ((leader-node (second msg)))
+       (emotiq:note "New Leader ~A" (stringify-node leader-node))
        (setf (system-leader *state*) leader-node)))
     
     (:new-witness
-     (push (second msg) (system-witness-list *state*)))))
+     (let ((witness-node (second msg)))
+       (emotiq:note "New witness ~A" (stringify-node witness-node))
+       (push witness-node(system-witness-list *state*))))))
 
 (defun query-current-state ()
   "return current system state as an alist"
@@ -58,4 +61,4 @@
 
 (defun stringify-node (n)
   "return some string representation for given node"
-  (cosi-simgen:node-pkey n))
+  (cosi-simgen::node-ip n)) ;; whatever is most appropriate - is node-ip is useful, then export it
