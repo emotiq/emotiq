@@ -34,7 +34,10 @@
      (emotiq:note "Tracker: :election - state cleared")
      (start-tracker))
 
-    ((:make-block :block-finished :commit :prepare)
+    (:block-finished
+     (emotiq:note "Block finished state = ~A" (query-current-state)))
+
+    ((:make-block :commit :prepare)
      ;; tbd
      )
     

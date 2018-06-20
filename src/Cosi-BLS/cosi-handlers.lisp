@@ -146,10 +146,10 @@ THE SOFTWARE.
   (node-remove-node node-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
-  (ac:pr "Block committed to blockchain")
   (emotiq/tracker:track :block-finished)
-  (ac:pr (format nil "Block signatures = ~D"
-                 (logcount (block-signature-bitmap (first *blockchain*))))))
+  (emotiq:note "Block committed to blockchain")
+  (emotiq:note "Block signatures = ~D"
+               (logcount (block-signature-bitmap (first *blockchain*)))))
 
 ;; ------------------------------------------------------------------------------------
 
