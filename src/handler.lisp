@@ -1,5 +1,3 @@
-;; create a hook to node-dispatcher from cosi-handlers.lisp
-
 (in-package :emotiq/sim)
 
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
