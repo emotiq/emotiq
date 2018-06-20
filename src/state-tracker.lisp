@@ -27,11 +27,11 @@
 (defun do-tracking (msg)
   (case (first msg) 
     (:reset
-     (emotiq:note "tracker got :reset - state cleared")
+     (emotiq:note "Tracker: :reset - state cleared")
      (start-tracker))
 
     (:election
-     (emotiq:note "tracker got :election - state cleared")
+     (emotiq:note "Tracker: :election - state cleared")
      (start-tracker))
 
     ((:make-block :block-finished :commit :prepare)
@@ -40,13 +40,13 @@
     
     (:new-leader
      (let ((leader-node (second msg)))
-       (emotiq:note "New Leader ~A" (stringify-node leader-node))
+       (emotiq:note "Tracker: New Leader ~A" (stringify-node leader-node))
        (setf (system-leader *state*) leader-node)))
     
     (:new-witness
      (let ((witness-node (second msg)))
-       (emotiq:note "New witness ~A" (stringify-node witness-node))
-       (push witness-node(system-witness-list *state*))))))
+       (emotiq:note "Tracker: New witness ~A" (stringify-node witness-node))
+       (push witness-node (system-witness-list *state*))))))
 
 (defun query-current-state ()
   "return current system state as an alist"
