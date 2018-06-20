@@ -355,6 +355,7 @@ This will spawn an actor which will asynchronously do the following:
             (emotiq:note "~2%Good-bye and good luck!~%")
             (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
             ;(kill-beacon)
+            (values)
             ))))))
 
 

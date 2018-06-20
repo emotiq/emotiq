@@ -111,7 +111,8 @@
    #:set-nodes
    #:make-election-beacon
    #:kill-beacon
-   #:hold-election))
+   #:hold-election
+   #:fire-election))
 
 (defpackage emotiq/filesystem
   (:use #:cl)
