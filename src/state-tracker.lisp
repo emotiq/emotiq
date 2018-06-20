@@ -49,11 +49,11 @@
 (defun query-current-state ()
   "return current system state as an alist"
   (let ((result nil))
-    (push (cons :leader (stringify-node (system-leader *state*))) result)
     (let ((witnesses nil))
       (dolist (w (system-witness-list *state*))
         (push (stringify-node w) witnesses))
       (push (cons :witnesses witnesses) result)
+      (push (cons :leader (stringify-node (system-leader *state*))) result)
       result)))
 
 (defun stringify-node (n)
