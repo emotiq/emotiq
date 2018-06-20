@@ -24,7 +24,7 @@
         *tracking-actor* (actors:make-actor #'do-tracking))
   (emotiq:note "running start-tracker ~A ~A" *state* *tracking-actor*))
 
-(defun do-tracking (&rest msg)
+(defun do-tracking (msg)
   (emotiq:note "do-tracking ~A" msg)
   (case (first msg) 
     (:reset
@@ -32,20 +32,20 @@
      (start-tracker))
 
     (:election
-     (setf (system-leader *state*) nil
-             (system-witness-list *state*) nil))
+     (emotiq:note "tracker got :election")
+     (start-tracker))
 
-      ((:make-block :block-finished :commit :prepare)
-       ;; tbd
-       )
-      
-      (:new-leader
-       (let ((leader-node (second msg)))
-         (setf (system-leader *state*) leader-node)))
-      
-      (:new-witness
-       (push (second msg) (system-witness-list *state*)))))
-          
+    ((:make-block :block-finished :commit :prepare)
+     ;; tbd
+     )
+    
+    (:new-leader
+     (let ((leader-node (second msg)))
+       (setf (system-leader *state*) leader-node)))
+    
+    (:new-witness
+     (push (second msg) (system-witness-list *state*)))))
+
 (defun query-current-state ()
   "return current system state as an alist"
   (let ((result nil))
