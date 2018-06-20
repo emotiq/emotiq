@@ -205,7 +205,6 @@ This will spawn an actor which will asynchronously do the following:
   (ensure-simulation-keys)
   (setf *genesis-output* nil *tx-1* nil *tx-2* nil)
   (cosi-simgen:reset-nodes)
-  (emotiq/elections:make-election-beacon)
   (let ((fee 10))    
     (ac:pr "Construct Genesis Block")
     (let* ((genesis-block
@@ -251,8 +250,6 @@ This will spawn an actor which will asynchronously do the following:
         (cosi/proofs/newtx:dump-tx signed-transaction)
         (broadcast-message :new-transaction-new :trn signed-transaction)
 
-        (sleep 5)
-      
         (let* ((user-2-public-key-hash
                  (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*)))
                (amount-2 500)
@@ -280,8 +277,6 @@ This will spawn an actor which will asynchronously do the following:
           (cosi/proofs/newtx:dump-tx signed-transaction)
           (broadcast-message :new-transaction-new :trn signed-transaction)
 
-          (sleep 5)
-
           (let* ((user-3-public-key-hash
                    (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
                  (amount-3 350)
@@ -308,8 +303,6 @@ This will spawn an actor which will asynchronously do the following:
             (cosi/proofs/newtx:dump-tx signed-transaction)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
-            (sleep 5)
-
             ;; here: attempt a double-spend: (with same TxID)
             (setq signed-transaction
                   (cosi/proofs/newtx:make-and-maybe-sign-transaction
@@ -322,7 +315,6 @@ This will spawn an actor which will asynchronously do the following:
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
-            (sleep 2)
             ;; here: attempt a double-spend: (with different TxID)
             (setq transaction-outputs
                   (cosi/proofs/newtx:make-transaction-outputs
@@ -334,12 +326,13 @@ This will spawn an actor which will asynchronously do the following:
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
 
-            (sleep 2)
             (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
+
+            (emotiq/elections:fire-election)
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
