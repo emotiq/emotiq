@@ -192,7 +192,7 @@ This will spawn an actor which will asynchronously do the following:
               ;; allow leader elections to create this block
               (publish-transaction (setf *tx-2* trans) "tx-2"))))))
   (sleep 60)
-  (emotiq/tracker:query-current-state))
+  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state)))
 
 (defun run-new-tx ()
   "Using new tx feature, run the block chain simulation entirely within the current process.
@@ -354,6 +354,7 @@ This will spawn an actor which will asynchronously do the following:
             (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
             (kill-beacon)
             ))))))
+
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
