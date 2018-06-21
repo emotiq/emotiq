@@ -1143,19 +1143,31 @@ returns the block the transaction was found in as a second value."
 
 (defun make-transaction-inputs (input-specs &key transaction-type)
   "Make transaction inputs for TRANSACTION-TYPE, which defaults to :SPEND."
-  (loop with unlock-script 
-          = (map-transaction-type-to-unlock-script (or transaction-type :spend))
+  (loop with transaction-type = (or transaction-type :spend)
+        with unlock-script 
+          = (map-transaction-type-to-unlock-script transaction-type)
         for (id index) in input-specs
         collect (make-instance
                  'transaction-input
                  :tx-in-id id
                  :tx-in-index index
-                 :tx-in-unlock-script (get-unlocking-script 'script-sig))))
+                 :tx-in-unlock-script unlock-script)))
+
+
+
+;;; MAP-TRANSACTION-TYPE-TO-UNLOCK-SCRIPT: map transaction-type to its
+;;; corresponding Chainlisp function name.
+;;;
+;;; The currently supported types :spend, :spend-cloaked, and :collect all
+;;; supply the same function: SCRIPT-SIG, which supplies the public key hash
+;;; (a/k/a address) and signature for verification, needed to unlock the value
+;;; of the transaction at hand.
 
 (defun map-transaction-type-to-unlock-script (transaction-type)
   (get-unlocking-script 
    (ecase transaction-type
-     (:spend 'script-sig))))
+     ((:spend :spend-cloaked :collect) 
+      'script-sig))))
   
 
 
