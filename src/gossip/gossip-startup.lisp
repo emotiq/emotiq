@@ -104,10 +104,14 @@ with this list if desired."
        #+IGNORE ; #+OPENMCL ; these hemlock streams are just too slow when they get to a couple thousand lines
        ; in CCL, we'll just inspect the *log*
        (if (find-package :gui)
-           (setf *logstream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
-           (setf *logstream* *standard-output*))
-       #+(or (not :openmcl) (not :shannon))
-       (setf *logstream* *error-output*)
+           (setf emotiq:*notestream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
+           (setf emotiq:*notestream* *error-output*))
+       (setf emotiq:*notestream* 
+             #+(or (not :openmcl) (not :shannon))
+             *error-output*
+             #-(or (not :openmcl) (not :shannon))
+             nil
+             )
        (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
        (setf *hmac-keypair-actor* (ac:make-actor #'actor-keypair-fn))
        (archive-log)

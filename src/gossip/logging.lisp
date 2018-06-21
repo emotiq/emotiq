@@ -1,14 +1,11 @@
 (in-package :gossip)
 
 (defvar *log* nil "Log of gossip actions.")
-(defvar *logstream* nil "Log stream for gossip log messages. This is in addition to the *log*, so it's fine if this is nil.")
 (defvar *logging-actor* nil "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
 (defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *log-object-extension* ".log" "File extension for object-based logs")
 (defparameter *log-string-extension* ".txt" "File extension for string-based logs")
-(defparameter *log-dots* nil "True if you want the logger to send a period to *standard-output* for each log message.
-    Only used if *logstream* is nil. Mostly for debugging.")
 
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
