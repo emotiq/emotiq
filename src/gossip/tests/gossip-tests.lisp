@@ -18,7 +18,8 @@
   (gossip::gossip-init ':maybe))
 
 (defun teardown-fixture ()
-  (gossip::gossip-init ':uninit))
+  ;(gossip::gossip-init ':uninit) ; don't do this!
+  )
 
 (defun %aliveness (uid)
   "Runs test sending initial message to node with given uid"
