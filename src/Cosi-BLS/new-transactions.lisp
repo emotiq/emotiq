@@ -741,7 +741,21 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (and (public-key-equal-verify public-key ^tx-public-key-hash)
        (check-signature public-key signature)))
 
+(def-locking-script script-pub-key-cloaked (public-key signature proof message)
+  (and (public-key-equal-verify public-key ^tx-public-key-hash)
+       (check-signature public-key signature)
+       ;; proof: a "bulletproof" (cloaked amount) giving the amount of tokens to
+       ;; transfer
 
+       ;; message: a message encrypted with recipient's public key containing
+       ;; the amount and gamma
+       ))
+
+;;; foo asdf aslk
+
+
+;;;
+;;;
 
 (def-unlocking-script script-sig ()
   (list ^public-key ^signature))
@@ -1171,13 +1185,25 @@ returns the block the transaction was found in as a second value."
   
 
 
-(defun make-transaction-outputs (output-specs)
-  (loop for (public-key-hash amount) in output-specs
+(defun make-transaction-outputs (output-specs &key transaction-type)
+  (loop with transaction-type = (or transaction-type :spend)
+        with lock-script
+          = (map-transaction-type-to-lock-script transaction-type)
+        for (public-key-hash amount) in output-specs
         collect (make-instance
                  'transaction-output
                  :tx-out-public-key-hash public-key-hash
                  :tx-out-amount amount
-                 :tx-out-lock-script (get-locking-script 'script-pub-key))))
+                 :tx-out-lock-script lock-script)))
+
+
+
+(defun map-transaction-type-to-lock-script (transaction-type)
+  (get-locking-script 
+   (ecase transaction-type
+     (:spend 'script-pub-key)
+     (:spend-cloaked 'script-pub-key-cloaked)
+     (:spend-cloaked 'script-collect))))
 
 
 (defun check-private-keys-for-transaction-inputs (private-keys tx-inputs)
