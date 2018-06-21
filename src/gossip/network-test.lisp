@@ -16,7 +16,7 @@
     (setf *last-tiny-uid* n))
   (clear-local-nodes)
   (make-graph 10)
-  (run-gossip-sim :TCP))
+  (run-gossip-sim))
 
 ; (setup-server 200)
 ; (visualize-nodes *nodes*)
