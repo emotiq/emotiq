@@ -84,7 +84,7 @@
 ;;; Generic functions supporting multiple transport implementations.
 ;;;
 
-(defgeneric start (address port msg peer-up peer-down backend backend-parameters))
+(defgeneric start (address port mrh peer-up peer-down backend backend-parameters))
 (defgeneric stop (transport))
 (defgeneric transmit-message (transport address port message))
 (defgeneric status-of (transport))
@@ -122,7 +122,7 @@
   ;; Queue of messages waiting to be delivered.
   transmit-queue)
 
-(defmethod start (address port msg peer-up peer-down
+(defmethod start (address port mrh peer-up peer-down
                           (backend (eql :tcp)) backend-parameters)
   (declare (ignore backend-parameters))
   (edebug 5 :transport "Starting transport on" address :PORT port)
@@ -130,7 +130,7 @@
                                                :reuse-address t
                                                :element-type '(unsigned-byte 8)))
          (transport (make-instance 'tcp-threads-transport
-                                   :message-received-hook msg
+                                   :message-received-hook mrh
                                    :peer-up-hook peer-up
                                    :peer-down-hook peer-down
                                    :listen-socket listen-socket)))
@@ -188,7 +188,7 @@
       (loop
          (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
            (when (message-received-hook transport)
-             (funcall (message-received-hook transport) msg))
+             (funcall (message-received-hook transport) msg (usocket:get-peer-address socket) (usocket:get-peer-port socket)))
            (edebug 5 :transport "Received message from" socket msg)))
     (error (err)
       (edebug 5 :error "Read thread error" err)
