@@ -8,6 +8,7 @@
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
+   #:edebug
    #:clear-local-nodes
    #:*log-filter*
    #:*log*
@@ -54,6 +55,7 @@
 
 (defpackage :gossip/transport
   (:use :cl)
+  (:IMPORT-FROM :gossip :edebug)
   (:export
    #:start-transport
    #:stop-transport

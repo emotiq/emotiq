@@ -6,6 +6,27 @@
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *log-object-extension* ".log" "File extension for object-based logs")
 (defparameter *log-string-extension* ".txt" "File extension for string-based logs")
+(defvar *debug-level* 1 "True to log debugging information while handling gossip requests. Larger values log more messages.")
+
+(defun debug-level (&optional (level nil level-supplied-p))
+  (cond (level-supplied-p
+         (when *debug-level*
+           (if (numberp *debug-level*)
+               (if (numberp level)
+                   (>= *debug-level* level)
+                   nil)
+               t)))
+        (t *debug-level*)))
+
+(defun (setf debug-level) (val)
+  (setf *debug-level* val))
+
+(defmacro edebug (level tag &rest args)
+  "Syntactic sugar for wrapping debug-level around a log-event call"
+  `(when (debug-level ,level)
+     (typecase ,tag 
+       (gossip-mixin (node-log ,tag ,@args))
+       (t (log-event ,tag ,@args)))))
 
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."

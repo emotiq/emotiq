@@ -68,8 +68,6 @@
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
 
-(defvar *debug-level* 1 "True to log debugging information while handling gossip requests. Larger values log more messages.")
-
 (defvar *transport* nil "Network transport endpoint.")
 
 (defun remove-keywords (arg-list keywords)
@@ -97,18 +95,6 @@ in KEYWORDS removed."
   `(let ((,new-var (remove-keywords ,var ',keywords)))
      ,@body))
 
-(defun debug-level (&optional (level nil level-supplied-p))
-  (cond (level-supplied-p
-         (when *debug-level*
-           (if (numberp *debug-level*)
-               (if (numberp level)
-                   (>= *debug-level* level)
-                   t)
-               t)))
-        (t *debug-level*)))
-
-(defun (setf debug-level) (val)
-  (setf *debug-level* val))
 
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
@@ -533,8 +519,7 @@ are in place between nodes.
     :node node
     :fn 
     (lambda (&rest msg)
-      (when (debug-level 5)
-        (log-event "Gossip Actor" (ac::current-actor) "received" msg))
+      (edebug 5 "Gossip Actor" (ac::current-actor) "received" msg)
       (apply 'gossip-dispatcher node msg))))
 
 (defun make-node (&rest args)
@@ -979,8 +964,7 @@ dropped on the floor.
       (if (null destnode)
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
-    (when (debug-level 5)
-      (log-event "send-msg" msg destnode srcuid))
+    (edebug 5 "send-msg" msg destnode srcuid)
     (handler-case
         (ac:send destactor
                  :gossip ; actor-verb
@@ -1121,12 +1105,12 @@ dropped on the floor.
                   (final-reply :final-reply-accepted)
                   (t nil) ; don't log timeouts here. Too much noise.
                   )))
-    (when (case logsym
-            (:interim-reply-accepted (debug-level 4))
-            (:accepted (debug-level 3))
-            (:final-reply-accepted (debug-level 2))
-            (t nil))
-      (node-log node logsym msg (kind msg) :from srcuid (args msg)))
+    (edebug (case logsym
+             (:interim-reply-accepted 4)
+             (:accepted 4)
+             (:final-reply-accepted 4)
+             (t nil))
+           node logsym msg (kind msg) :from srcuid (args msg))
     (if *gossip-absorb-errors*
         (handler-case (funcall kindsym msg node srcuid)
           (error (c) (node-log node :ERROR msg c)))
@@ -1136,7 +1120,7 @@ dropped on the floor.
   (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
     (cond (kindsym ; message accepted
            (locally-dispatch-msg kindsym node msg srcuid))
-          (t (when (debug-level 4) (node-log node :ignore msg :from srcuid failure-reason))))))
+          (t (edebug 4 node :ignore msg :from srcuid failure-reason)))))
 
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
@@ -1148,8 +1132,7 @@ dropped on the floor.
              (memoize-message node msg srcuid)
              (locally-dispatch-msg kindsym node msg srcuid))
             (t ; not accepted
-             (when (debug-level 4)
-               (node-log node :ignore msg :from srcuid failure-reason))
+             (edebug 4 node :ignore msg :from srcuid failure-reason)
              (case failure-reason
                (:active-ignore ; RECEIVE an active-ignore. Whomever sent it is telling us they're ignoring us.
                 ; Which means we need to ensure we're not waiting on them to reply.
@@ -1215,14 +1198,12 @@ dropped on the floor.
       (let ((timer (kvs:lookup-key (timers node) soluid)))
         (cond (timed-out-p
                ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-               (when (debug-level 3)
-                 (node-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t))))
+               (edebug 3 node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
               (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                (cond (timer
                       (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
                       ; if no timer, then this is a leaf node
-                      (when (debug-level 3)
-                        (node-log node :DONE-WAITING-WIN msg)))
+                      (edebug 3 node :DONE-WAITING-WIN msg))
                      (t ; note: Following log message doesn't necessarily mean anything is wrong.
                       ; If node is singly-connected to the graph, it's to be expected
                       (node-log node :NO-TIMER-FOUND msg)))))
@@ -1445,8 +1426,7 @@ dropped on the floor.
                     (if (eql :UPSTREAM (reply-to msg)) ; See Note D
                         (progn
                           (prepare-repliers thisnode soluid downstream)
-                          (when (debug-level 3)
-                            (node-log thisnode :WAITING msg downstream)))
+                          (edebug 3 node thisnode :WAITING msg downstream))
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
                           (node-log thisnode :WAITING msg :ANONYMOUS)
@@ -1611,8 +1591,7 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (when (debug-level 1)
-             (node-log srcnode :FINALREPLY soluid :to where-to-send-reply data))
+           (edebug 1 srcnode :FINALREPLY soluid :to where-to-send-reply data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
@@ -1622,8 +1601,7 @@ dropped on the floor.
           ((null where-to-send-reply)
            (node-log srcnode :NO-REPLY-DESTINATION! soluid data))
           (t
-           (when (debug-level 1)
-             (node-log srcnode :FINALREPLY soluid :TO where-to-send-reply data))
+           (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (ac:send where-to-send-reply reply)))))
 
 (defun coalesce&reply (reply-to thisnode reply-kind soluid)
@@ -1716,16 +1694,14 @@ gets sent back, and everything will be copacetic.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
                                          :args (list coalesced-data))))
-          (when (debug-level 4)
-            (node-log thisnode :SEND-INTERIM-REPLY reply :to where-to-send-reply coalesced-data))
+          (edebug 4 thisnode :SEND-INTERIM-REPLY reply :to where-to-send-reply coalesced-data)
           (send-msg reply
                     where-to-send-reply
                     (uid thisnode)))
         ; if no place left to reply to, just log the result.
         ;   This can mean that thisnode autonomously initiated the request, or
         ;   somebody running the sim told it to.
-        (when (debug-level 4)
-          (node-log thisnode :INTERIMREPLY soluid coalesced-data)))))
+        (edebug 4 thisnode :INTERIMREPLY soluid coalesced-data))))
 
 (defun send-delayed-interim-reply (thisnode reply-kind soluid)
   "Called by a node actor to tell itself (or another actor, but we never do that now)
@@ -1736,8 +1712,7 @@ gets sent back, and everything will be copacetic.
   (let ((msg (make-solicitation
               :kind :maybe-sir
               :args (list soluid reply-kind))))
-    (when (debug-level 4)
-      (node-log thisnode :ECHO-MAYBE-SIR nil))
+    (edebug 4 thisnode :ECHO-MAYBE-SIR nil)
     (send-self msg)))
 
 (defun later-reply? (new old)
@@ -2016,19 +1991,19 @@ gets sent back, and everything will be copacetic.
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
     (ac:send mbox *hmac-keypair*)))
 
-  (defun hmac-keypair ()
+(defun hmac-keypair ()
   (or *hmac-keypair*
-    (let ((mbox (mpcompat:make-mailbox)))
-      (ac:send *hmac-keypair-actor* :TAS mbox)
-      (first (mpcompat:mailbox-read mbox)))))
+      (let ((mbox (mpcompat:make-mailbox)))
+        (ac:send *hmac-keypair-actor* :TAS mbox)
+        (first (mpcompat:mailbox-read mbox)))))
 
-  (defun sign-message (msg)
-    "Sign and return an authenticated message packet. Packet includes
-    original message."
-    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
-                                  (pbc:keying-triple-sig  (hmac-keypair))))
-    (pbc:sign-message msg
-                      (pbc:keying-triple-pkey (hmac-keypair))
+(defun sign-message (msg)
+  "Sign and return an authenticated message packet. Packet includes
+  original message."
+  (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
+                                (pbc:keying-triple-sig  (hmac-keypair))))
+  (pbc:sign-message msg
+                    (pbc:keying-triple-pkey (hmac-keypair))
                     (pbc:keying-triple-skey (hmac-keypair))))
 
 ;; ------------------------------------------------------------------------------
@@ -2058,7 +2033,7 @@ gets sent back, and everything will be copacetic.
   (locally-receive-msg gossip-msg node srcuid))
 
 
-(defun run-gossip-sim (&optional (protocol :TCP))
+(defun run-gossip-sim ()
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
@@ -2195,11 +2170,11 @@ gets sent back, and everything will be copacetic.
 ; ; ON SERVER MACHINE
 ; (clear-local-nodes)
 ; (make-graph 1)
-; (run-gossip-sim :TCP)
+; (run-gossip-sim)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim :TCP)
+; (run-gossip-sim)
 ; (archive-log)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
