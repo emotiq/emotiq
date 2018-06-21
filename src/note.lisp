@@ -1,10 +1,11 @@
 (in-package :emotiq)
 
+(defvar *notestream* *error-output* "Output stream for Emotiq notes")
+
 ;;; N.b. deliberately not a macro so we can theoretically inspect the
 ;;; call stack.
 (defun note (message-or-format &rest args)
   "Emit a note of progress to the appropiate logging system
-
 MESSAGE-OR-FORMAT is either a simple string containing a message, or
 a CL:FORMAT control string referencing the values contained in ARGS."
   (let ((formats '(simple-date-time:|yyyymmddThhmmssZ|
@@ -18,7 +19,7 @@ a CL:FORMAT control string referencing the values contained in ARGS."
                           nil
                           message-or-format
                           (if args args nil)))))
-      (format *error-output* message)
+      (when *notestream* (format *notestream* message))
       message)))
 
 
