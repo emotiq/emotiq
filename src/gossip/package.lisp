@@ -11,7 +11,6 @@
    #:clear-local-nodes
    #:*log-filter*
    #:*log*
-   #:*log-dots*
    #:make-graph
    #:solicit
    #:solicit-wait

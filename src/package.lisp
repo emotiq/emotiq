@@ -46,6 +46,7 @@
   (:export
    #:start-node)
   (:export
+   #:*notestream*
    #:note)
   (:export
    #:production-p
