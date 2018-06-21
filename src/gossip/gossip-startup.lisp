@@ -37,7 +37,7 @@
               (make-node :uid pubkey))
             pubkeys)
       ;; clear log and start server
-      (run-gossip-sim :TCP)
+      (run-gossip-sim)
       t)))
 
 (defun ping-other-machines (&optional (hosts *hosts*))
