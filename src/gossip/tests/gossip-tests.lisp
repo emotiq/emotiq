@@ -70,12 +70,10 @@
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking 
-      (let ((oldnodes *nodes*)
-            (oldlogdots *log-dots*))
+      (let ((oldnodes *nodes*))
         (set-protocol-style :neighborcast)
         (unwind-protect
              (progn 
-               (setf *log-dots* t)
                (setf *nodes* (gossip::make-uid-mapper))
                (clear-local-nodes)
                (make-test-network)
@@ -85,8 +83,7 @@
                       (uids (mapcar #'gossip::uid nodes)))
                                         ; do same test starting at every possible node
                  (mapc '%aliveness uids)))
-          (setf *nodes* oldnodes
-                *log-dots* oldlogdots)))))
+          (setf *nodes* oldnodes)))))
 
 ; (let ((*print-failures* t)) (run-tests '(key-value)))
 (define-test key-value
@@ -95,12 +92,10 @@
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking              
-    (let ((oldnodes *nodes*)
-          (oldlogdots *log-dots*))
+    (let ((oldnodes *nodes*))
       (set-protocol-style :neighborcast)
       (unwind-protect
            (progn
-             (setf *log-dots* t)
              (setf *nodes* (gossip::make-uid-mapper))
              (clear-local-nodes)
              (make-test-network)
@@ -110,21 +105,18 @@
                     (uids (mapcar #'gossip::uid nodes)))
             ;; do same test starting at every possible node
                (mapc '%key-value uids)))
-        (setf *nodes* oldnodes
-              *log-dots* oldlogdots)))))
+        (setf *nodes* oldnodes)))))
 
 (define-test partial-gossip "Test partial-gossip with parameter 2"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking
-    (let ((oldnodes *nodes*)
-          (oldlogdots *log-dots*))
+    (let ((oldnodes *nodes*))
       (set-protocol-style :gossip 2)
       (unwind-protect
            (let ((results nil)
                  (*log-filter* nil))
-             (setf *log-dots* t)
              (setf *nodes* (gossip::make-uid-mapper))
              (clear-local-nodes)
              (make-graph 100)
@@ -139,8 +131,7 @@
                                     (> x 90)
                                     t))
                               results))))
-        (setf *nodes* oldnodes
-              *log-dots* oldlogdots)))))
+        (setf *nodes* oldnodes)))))
 
 ; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
 ; (let ((*print-failures* t)) (run-tests :all))
