@@ -120,7 +120,7 @@ with this list if desired."
       (:maybe
        (unless gossip-inited
          (gossip-init ':init)))
-      (:uninit
+      (:uninit ; be very careful with this. Bad things can happen if you kill the *logging-actor*, *hmac-keypair-actor* etc.
        (graceful-shutdown)
        (log-event-for-pr ':quit)
        (setf *logging-actor* nil)
