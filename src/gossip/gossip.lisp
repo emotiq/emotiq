@@ -70,6 +70,31 @@
 
 (defvar *transport* nil "Network transport endpoint.")
 
+;; ------------------------------------------------------------------------------
+;; Generic handling for expected authenticated messages. Check for
+;; valid deserialization, check deserialization is a
+;; pbc:signed-message, check for valid signature, then call user's
+;; handler with embedded authenticated message. If any failure along
+;; the way, just drop the message on the floor.
+
+(defun do-process-authenticated-packet (deserialize-fn body-fn)
+  "Handle decoding and authentication. If fails in either case just do nothing."
+  (let ((decoded (ignore-errors
+                   ;; might not be a valid serialization
+                   (funcall deserialize-fn))))
+    (when (and decoded
+               (ignore-errors
+                 ;; might not be a pbc:signed-message
+                 (pbc:check-message decoded)))
+      (funcall body-fn (pbc:signed-message-msg decoded)))))
+
+(defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
+  "Macro to simplify decoding and authentication"
+  `(do-process-authenticated-packet (lambda ()
+                                      ,deserializer)
+                                    (lambda (,packet-arg)
+                                      ,@body)))
+
 (defun remove-keywords (arg-list keywords)
   (let ((clean-tail arg-list))
     ;; First, determine a tail in which there are no keywords to be removed.
@@ -1426,7 +1451,7 @@ dropped on the floor.
                     (if (eql :UPSTREAM (reply-to msg)) ; See Note D
                         (progn
                           (prepare-repliers thisnode soluid downstream)
-                          (edebug 3 node thisnode :WAITING msg downstream))
+                          (edebug 3 thisnode thisnode :WAITING msg downstream))
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
                           (node-log thisnode :WAITING msg :ANONYMOUS)
@@ -1949,16 +1974,17 @@ gets sent back, and everything will be copacetic.
                                             :peer-up-hook 'transport-peer-up
                                             :peer-down-hook 'transport-peer-down))))
 
-(defun transport-message-received (peer-address peer-port message)
+(defun transport-message-received (message peer-address peer-port)
   "Callback for transport layer on incoming message from other node."
   (with-authenticated-packet (packet)
-      ;; Unpack envelope containing Gossip metadata.
-      (destructuring-bind (destuid srcuid msg) packet
-        (log-event "Gossip transport message received" peer-address peer-port)
-        ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-        (let ((proxy (ensure-proxy-node :tcp peer-address peer-port srcuid)))
-          ;; Note: Use uid of proxy for during local processing.
-          (incoming-message-handler msg (uid proxy) destuid)))))
+    message ; has already been deserialized at this point
+    ;; Unpack envelope containing Gossip metadata.
+    (destructuring-bind (destuid srcuid msg) packet
+      (log-event "Gossip transport message received" peer-address peer-port)
+      ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
+      (let ((proxy (ensure-proxy-node :tcp peer-address peer-port srcuid)))
+        ;; Note: Use uid of proxy for during local processing.
+        (incoming-message-handler msg (uid proxy) destuid)))))
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
