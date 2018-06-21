@@ -11,6 +11,8 @@
 (defparameter *connect-timeout* 300 "Seconds before an unestablished outbound connection is abandoned.")
 (defparameter *idle-timeout*    300 "Seconds before an idle outbound connection is closed.") ;; XXX unused
 
+(defvar *transport-debug* t)
+
 ;;;
 ;;; High-level interface functions.
 ;;;
@@ -125,6 +127,7 @@
 (defmethod start (address port msg peer-up peer-down
                           (backend (eql :tcp)) backend-parameters)
   (declare (ignore backend-parameters))
+  (dbg "Starting transport on ~A port ~A" address port)
   (let* ((listen-socket (usocket:socket-listen address (or port 0)
                                                :reuse-address t
                                                :element-type '(unsigned-byte 8)))
@@ -137,11 +140,14 @@
           (mpcompat:process-run-function (format nil "gossip/transport accept on ~A" listen-socket)
                                          nil
                                          (lambda ()
+                                           (dbg "Started listen thread for ~A" transport)
                                            (run-tcp-listen-thread transport))))
+    (dbg "Started transport ~A" transport)
     transport))
 
 (defmethod stop ((transport tcp-threads-transport))
   ;; XXX detect when already stopped and... what?
+  (dbg "Stopping transport ~A" transport)
   (with-slots (lock listen-socket listen-process readers writers sockets) transport
     (mpcompat:with-lock (lock)
       ;; Stop worker processes.
@@ -150,7 +156,8 @@
       (ignore-errors (usocket:socket-close listen-socket))
       ;; Close existing connections.
       (dolist (socket sockets)
-        (ignore-errors (usocket:socket-close socket))))))
+        (ignore-errors (usocket:socket-close socket)))))
+  (dbg "Stopped transport ~A" transport))
 
 (defmethod status-of ((transport tcp-threads-transport))
   (list :listen-address (usocket:get-local-address (listen-socket transport))
@@ -167,9 +174,11 @@
              (let ((process (mpcompat:process-run-function (format nil "gossip/transport reader on ~A" socket)
                                                            nil
                                                            (lambda ()
+                                                             (dbg "Started read thread for ~A" transport)
                                                              (run-tcp-read-thread transport socket)))))
                (push process (readers transport)))))
       (error (err)
+        (dbg "Listen thread error: ~A" err)
         (when peer-down-hook
           (funcall peer-down-hook (princ-to-string err)))))))
 
@@ -179,9 +188,14 @@
   "Transfer objects from SOCKET to MESSAGE-RECEIVED-HOOK."
   (handler-case
       (loop
-         (funcall (message-received-hook transport)
-                  (loenc:deserialize (usocket:socket-stream socket))))
-    (error ())))
+         (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
+           (when (message-received-hook transport)
+             (funcall (message-received-hook transport) msg))
+           (dbg "Received message from ~A: ~A" socket msg)))
+    (error (err)
+      (dbg "Read thread error: ~A" err)
+      (usocket:socket-close socket))))
+                  
 
 ;;; Writing
 
@@ -191,11 +205,14 @@
     (handler-case
         ;; Establish new connection.
         (let ((socket (connect-to address port)))
+          (dbg "Ready to write to ~A port ~A" address port)
           (mpcompat:with-lock (lock) (push socket sockets))
           ;; Loop transferring messages from mailbox to socket.
           (unwind-protect
                (loop (loenc:serialize (mpcompat:mailbox-read mailbox)
-                                      (usocket:socket-stream socket)))
+                                      (usocket:socket-stream socket))
+                  (finish-output (usocket:socket-stream socket))
+                  (dbg "Sent message to ~A port ~A" address port))
             (ignore-errors (usocket:socket-close socket))
             ;; Clear state related to this connection.
             (mpcompat:with-lock ((lock transport))
@@ -203,21 +220,22 @@
               (setf sockets (remove socket sockets)))))
       (error (err)
         ;; Notify that peer is down and then terminate.
+        (dbg "Write thread error: ~A" err)
+        ;; Purge message queue to drop messages and forget connection.
+        (mpcompat:with-lock (lock)
+          (setf (gethash (list address port) message-queues) nil))
         (when peer-down-hook
           (funcall peer-down-hook address port (princ-to-string err)))))))
 
 (defun connect-to (address port)
   "Return a new socket conneted to ADDRESS:PORT.
   Retries automatically during *CONNECT-TIMEOUT*."
-  (loop with deadline = (+ (usec:get-time-usec) (* *connect-timeout* 1000000))
-        for retry-delay = 0.1 then (min 10 (* retry-delay 2))
-        when (> (usec:get-time-usec) deadline) do (error "Failed to establish connection before timeout")
-        do (handler-case (return (usocket:socket-connect address port
-                                                         :protocol :stream
-                                                         :nodelay :if-supported
-                                                         :timeout 10
-                                                         :element-type '(unsigned-byte 8)))
-             (usocket:socket-error () (sleep retry-delay)))))
+  (dbg "Connecting to ~A port ~A" address port)
+  (usocket:socket-connect address port
+                          :protocol :stream
+                          :nodelay :if-supported
+                          :timeout 10
+                          :element-type '(unsigned-byte 8)))
 
 (defmethod transmit-message ((transport tcp-threads-transport) address port message)
   (mpcompat:mailbox-send (get-message-queue transport address port) message))
@@ -235,6 +253,8 @@
                                   (push (mpcompat:process-run-function (format nil "gossip/transport writer to ~A:~A" address port)
                                                                        nil
                                                                        (lambda ()
+                                                                         (dbg "Started write thread for ~A to ~A port ~A"
+                                                                              transport address port)
                                                                          (run-tcp-write-thread transport address port mailbox)))
                                         writers)
                                   mailbox))))))
@@ -252,7 +272,7 @@
 
 (defun test-2 ()
   (let* ((n 0)
-         (msg (lambda (&rest msg) (incf n)))
+         (msg (lambda (&rest msg) (declare (ignore msg)) (incf n)))
          (transports (loop for i from 1 to 10 collect (start-transport :address "localhost" :message-received-hook msg)))
          (ports (loop for tr in transports collect (getf (status tr) :listen-port))))
     (unwind-protect
@@ -265,6 +285,7 @@
       (mapc #'stop-transport transports))
     n))
 
-(defun msg (format &rest args)
-  (format t "~&~?~%" format args))
+(defun dbg (format &rest args)
+  (when *transport-debug*
+    (format t "~&GOSSIP/TRANSPORT: ~?~%" format args)))
 
