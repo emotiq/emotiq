@@ -23,6 +23,37 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
+;;;; Transaction Types
+
+;;; A `transaction' in Emotiq Lisp software is implemented an instance of class
+;;; TRANSACTION. The Lisp type of an instance of this class is TRANSACTION. In
+;;; the following discussion, however, the word "type" is used in its generic
+;;; meaning, not Lisp/programming-language sense.
+
+;;; Emotiq has six types of transactions:
+;;;
+;;;   - Spend transaction to transfer tokens, with two subtypes
+;;;     - cloaked
+;;;     - uncloaked
+;;;   - Collect transaction for collecting block fees
+;;;   - Stake transaction for sending tokens into PoS escrow
+;;;   - Unstake transaction for withdrawing tokens from PoS escrow
+;;;   - Slash trasaction to request punishment for a cheating node
+;;;   - Disperse transaction to disperse tokens from a cheating node escrow between validators
+
+;;; A transaction instance indentifies its type via its transaction-type slot,
+;;; which should be set near the beginning of the life of the transaction
+;;; initialized to one of the following valid values, which in turn determine
+;;; valid values for other slots of a transaction.  A `transaction type' is
+;;; represented as a Lisp keyword. The defined types so far are:
+;;;
+;;;   :spend -- for an uncloaked spend transaction
+;;;   :spend-cloaked -- for a cloaked spend transaction
+;;;   :collect -- for a collect transaction
+
+
+
+
 ;;;; Transaction Objects
 
 
@@ -33,7 +64,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; as a so-called "change address".
 
 (defclass transaction ()
-  (;; [First put outputs, since they start out at first unspent until a
+  ((transaction-type
+    :reader transaction-type :initarg :transaction-type :initform :spend)
+
+   ;; [First put outputs, since they start out at first unspent until a
    ;; later transaction arrives with inputs authorized to redeem them.]
 
    ;; sequence of transaction-output structures (see below)
@@ -41,6 +75,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
    ;; sequence of transaction-input structions (see below)
    (transaction-inputs :reader transaction-inputs :initarg :transaction-inputs)
+
 
    (lock-time :initform 0))) ; not yet used, planned for later use ala Bitcoin
 
@@ -100,12 +135,22 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   ((tx-out-public-key-hash              ; like the Bitcoin address
     :reader tx-out-public-key-hash
     :initarg :tx-out-public-key-hash)
+   (tx-out-lock-script               ; what Bitcoin calls scriptPubKey
+    :reader tx-out-lock-script
+    :initarg :tx-out-lock-script)
+
+   ;; for uncloaked spend transaction or for collect transaction: amount
    (tx-out-amount              ; integer number of smallest coin units
     :reader tx-out-amount
     :initarg :tx-out-amount)
-   (tx-out-lock-script               ; what Bitcoin calls scriptPubKey
-    :reader tx-out-lock-script
-    :initarg :tx-out-lock-script)))
+
+   ;; for cloaked spend transaction: proof, message
+   (tx-out-proof
+    :reader tx-out-proof
+    :initarg :tx-out-proof)
+   (tx-out-message
+    :reader tx-out-message
+    :initarg :tx-out-message)))
 
 (defclass transaction-input ()
   ((tx-in-id :reader tx-in-id :initarg :tx-in-id)
@@ -1096,13 +1141,22 @@ returns the block the transaction was found in as a second value."
 
 
 
-(defun make-transaction-inputs (input-specs)
-  (loop for (id index) in input-specs
+(defun make-transaction-inputs (input-specs &key transaction-type)
+  "Make transaction inputs for TRANSACTION-TYPE, which defaults to :SPEND."
+  (loop with unlock-script 
+          = (map-transaction-type-to-unlock-script (or transaction-type :spend))
+        for (id index) in input-specs
         collect (make-instance
                  'transaction-input
                  :tx-in-id id
                  :tx-in-index index
                  :tx-in-unlock-script (get-unlocking-script 'script-sig))))
+
+(defun map-transaction-type-to-unlock-script (transaction-type)
+  (get-unlocking-script 
+   (ecase transaction-type
+     (:spend 'script-sig))))
+  
 
 
 (defun make-transaction-outputs (output-specs)
