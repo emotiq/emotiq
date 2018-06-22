@@ -33,7 +33,8 @@
         (return-from hunchensocket:text-message-received nil))
       (let ((response
              (make-instance 'response
-                            :result `(:true)
+                            :result nil
+                            :error nil
                             :id (alexandria:assoc-value request :id))))
         (with-slots (result error)
             response
@@ -41,6 +42,7 @@
             ((string= method "subscribe")
            ;;; FIXME: locking under load
              (if (find "consensus" (alexandria:assoc-value request :params) :test 'string=)
+                   (add-client client response)
                  ;; error
                  (setf result nil
                        error `(:object (:code . -32602)

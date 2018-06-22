@@ -1,6 +1,8 @@
+;;;; Wherein we mock the reports of consensus status from a modeled EMTQ chain
 (in-package :model/wallet)
 
 (defun mock (notify-hook)
+  "Run a service that sends json messages to the function of one argument specified via NOTIFY-HOOK"
   (let ((epoch (+ 1000 (random 10000)))
         (local-epoch 0)
         (iterations-until-sync 20)
@@ -16,18 +18,19 @@
              (setf i (1+ i))))
       (loop
          :do (let ((notification
-                    (make-instance 'request
-                                   :method "consensus"
-                                   :params
-                                   `(:object
-                                     (:epoch . ,epoch)
-                                     (:local-epoch . ,local-epoch)
-                                     (:synchronized . ,(cl-json:json-bool (= local-epoch epoch)))))))
-               (apply notify-hook notification))
+                    `(:object 
+                      (:method . "consensus")
+                      (:params .
+                               (:object
+                                (:epoch . ,epoch)
+                                (:local-epoch . ,local-epoch)
+                                (:synchronized . ,(cl-json:json-bool (= local-epoch epoch))))))))
+               (funcall notify-hook notification))
          :do (sleep (random 5))
          :do (advance)))))
 
 (defun transactions ()
+  "Return the model for mock of transactions from the current wallet open on the node"
   (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))
     `(:array
       (:object (:id . "C9746DE0C63763A650FCA")

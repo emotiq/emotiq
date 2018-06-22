@@ -1,13 +1,15 @@
-(defsystem model)
+(defsystem model
+  :components 
+  ((:module package :pathname "./"
+            :components ((:file package)))))
 
 (defsystem model/wallet
-  :depends-on (cl-json
+  :depends-on (model
+               cl-json
                emotiq/wallet)
-  :components ((:module package :pathname "./"
-                        :components ((:file package)))
-               (:module source :pathname "./"
-                        :depends-on (package)
+  :components ((:module source :pathname "./"
                         :components ((:file "mock")
+                                     (:file "model")
                                      (:file "dictionary")
                                      (:file "wallet")))))
 
