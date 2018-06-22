@@ -1385,6 +1385,54 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 
+;;;; Waiting for Transactions
+
+(defun wait-for-tx-count (n &key interval timeout node)
+  "Alternate sleeping for a small INTERVAL while waiting for there to
+   have been a total of N transaction on the blockchain. INTERVAL
+   defaults to about 1/10th of a second, and a user-specified value is
+   restricted to a reasonable range > 0 and <= 1 second.  The
+   blockchain is with respect to NODE, which can be a specified node,
+   and otherwise defaults to the current node, if non-nil, and
+   otherwise the top node. A timeout occurs when TIMEOUT, which
+   defaults to nil, has been supplied non-nil, in which case it should
+   ben an interval in seconds. Then, when that amount of time has
+   elapsed, a timeout has been reached, and the function returns.  If
+   the count is reached, this returns true; if a timeout occurs, this
+   returns nil; otherwise, this does not return, and simply continues
+   alternating between checking the count of transactions and sleeping
+   for brief intervals."
+  (when interval
+    (setq interval (max 1 (min 1/1000 interval))))
+  (loop with start-ut = (get-universal-time)
+        with interval = (or interval 1/10)
+        with cosi-simgen:*current-node*
+          = (or node 
+                cosi-simgen:*current-node*
+                cosi-simgen:*top-node*)
+        as count                        ; see note!
+          = (let ((count-so-far 0))
+              (do-all-transactions (tx)
+                tx                   ; (ignored, just to gag compiler)
+                (incf count-so-far))
+              count-so-far)
+        when (>= count n)
+          return t
+        when (and timeout
+                  (>= (- (get-universal-time) start-ut)
+                      timeout))
+          return nil
+        do (sleep interval)))
+
+;; Consider having some output or animation while waiting, or maybe
+;; printing dots (...)?
+
+;; The counting method is inefficient, since it counts all the way
+;; from the beginning each time. Only OK for low-transaction-count
+;; early blockchains, OK for now. Improve later! -mhd, 6/22/18
+
+
+
 
 
 ;;;; Getting Transactions for Blocks
@@ -1441,16 +1489,6 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 ;; long has the transaction been sitting around waiting (the longer,
 ;; the higher the priority); how much is offered in fees (the more the
 ;; higher priority). -mhd, 6/13/18
-
-
-
-
-(defun check-block-transactions (blk)
-  "Return nil if invalid block."
-  ;; It's unclear what this is supposed to do, under what
-  ;; circumstances this is called, etc. Talk to David and team.
-  (declare (ignore blk))                ; stub only for now! -mhd, 6/13/18
-  t)                                    ; tell caller everything's ok
 
 
 
