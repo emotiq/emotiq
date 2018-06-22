@@ -123,4 +123,10 @@
    #:etc/
    #:var/log/))
 
+(defpackage emotiq/tracker
+  (:use #:cl)
+  (:export
+   #:start-tracker
+   #:query-current-state
+   #:track))
 
