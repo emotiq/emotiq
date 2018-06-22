@@ -54,7 +54,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   ;; should this following code be executed every time or only when a new configuration is created?
   (phony-up-nodes)
   (emotiq/elections:set-nodes (keys-and-stakes))
-
+  (emotiq/tracker:start-tracker)
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -188,7 +188,9 @@ This will spawn an actor which will asynchronously do the following:
                           (list user-2-pkey user-3-pkey)
                           fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")))))))
+              (publish-transaction (setf *tx-2* trans) "tx-2"))))))
+  (sleep 60)
+  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state)))
 
 (defun run-new-tx ()
   "Using new tx feature, run the block chain simulation entirely within the current process.
@@ -339,7 +341,9 @@ This will spawn an actor which will asynchronously do the following:
             (sleep 60)
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")))))))
+            (format t "~2%Good-bye and good luck!~%"))))))
+  (emoti:note "current state = ~A" (emotiq/tracker:query-current-state))
+  (values))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
