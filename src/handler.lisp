@@ -2,7 +2,7 @@
 
 (defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
   (when cosi-simgen::*holdoff*
-    (ac:pr "Election delayed by holdoff"))
+    (emotiq:note "Election delayed by holdoff"))
   (unless cosi-simgen::*holdoff*
     (let* ((node   (cosi-simgen:current-node))
            (me     (cosi-simgen:node-pkey node))
