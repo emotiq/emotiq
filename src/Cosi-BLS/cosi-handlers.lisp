@@ -388,6 +388,8 @@ Later it may become an ADS structure"
   nil)
 
 (defmethod node-check-transaction ((msg transaction))
+  (when *newtx-p*                       ; sanity check
+    (error "This method must not be called in new-transactions mode."))
   (when (check-transaction-math msg)
     (let ((key (bev-vec (hash/256 msg))))
       (when (gethash key *mempool*)

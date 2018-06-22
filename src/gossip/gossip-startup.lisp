@@ -28,10 +28,10 @@
             (t (error "Invalid or unspecified public keys ~S" pubkeys)))
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
-               (unless (member local-pubkey keypairs :test 'eql :key 'car)
+                       (unless (member local-pubkey keypairs :test 'eql :key 'car)
                  (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
-               t)
-             pubkeys)
+                       t)
+                     pubkeys)
       ;; make local nodes
       (mapc (lambda (pubkey)
               (make-node :uid pubkey))
@@ -71,23 +71,27 @@ with this list if desired."
       ((error (lambda (e)
                 (emotiq:note "Cannot configure local machine: ~a" e))))
     (when root-path 
-      (gossip/config:initialize :root-path root-path))
-    (gossip-init ':maybe)
-    (multiple-value-bind (keypairs hosts local-machine)
-        (gossip/config:get-values)
+    (gossip/config:initialize :root-path root-path))
+  (gossip-init ':maybe)
+  (multiple-value-bind (keypairs hosts local-machine)
+      (gossip/config:get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
       (setf *hosts* (remove (usocket::host-to-hbo (eripa)) hosts :key (lambda (host) (usocket::host-to-hbo (car host)))))
       (emotiq:note "Gossip init finished.")
-      (if ping-others
+    (if ping-others
           (handler-bind 
               ((error (lambda (e)
                         (emotiq:note "Failed to run connectivity tests: ~a" e))))
-            (let ((other-machines (ping-other-machines hosts)))
-              (unless other-machines
+        (let ((other-machines (ping-other-machines hosts)))
+          (unless other-machines
                 (emotiq:note "No other hosts to check for ping others routine."))
               other-machines))
-          hosts))))
+        hosts))))
+
+(defun graceful-shutdown ()
+  "Gracefully shutdown the gossip server"
+  (shutdown-gossip-server))
 
 (let ((gossip-inited nil))
   (defun gossip-init (&optional (cmd))
@@ -119,6 +123,20 @@ with this list if desired."
        (setf *hmac-keypair-actor* nil)
        (setf gossip-inited nil))
       (:query gossip-inited))))
+
+#|
+; might not need this any more
+(defun gossip-final-cleanup ()
+  "Only call this when lisp quits"
+  ; close all open sockets forcibly
+  (let* ((connections (connections))
+         (sockets (when connections (mapcar 'get-socket connections))))
+    (mapc 'usocket:socket-close sockets)))
+
+#+OPENMCL
+(eval-when (:load-toplevel :execute)
+  (pushnew 'gossip-final-cleanup ccl:*lisp-cleanup-functions*))
+|#
 
 ; (gossip-startup)
 ; (mapcar 'unwrap (gossip-startup :ping-others t))

@@ -494,23 +494,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
           as input-tx-outputs 
             = (cond
                 ((null input-tx)
-                 (progn
-                   (warn
-                    "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
-                         (txid-string id))
-                   (let* ((all-transactions (list-all-transactions))
-                          (message-string
-                            (with-output-to-string (out)
-                              (format out "Transaction ID not found: ~a~%Transaction count: ~d~%" 
-                                      id
-                                      (length all-transactions))
-                              (format out "All transactions IDs:~%")
-                              (loop for tx in all-transactions
-                                    do (format out "  ~a~%" (transaction-id tx))))))
-                     (break "~a" message-string))
-                   
-                   ;; (trace-compare-all-tx-ids id)
-                   )
+                 (warn
+                  "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
+                  (txid-string id))
                  (return nil))
                 (t (transaction-outputs input-tx)))
           as utxo
@@ -1101,6 +1087,13 @@ returns the block the transaction was found in as a second value."
   (let ((key (get-hash-key-of-transaction transaction)))
     (setf (gethash key cosi-simgen:*mempool*) transaction)))
 
+(defun remove-transaction-from-mempool (transaction mempool)
+  "Remove TRANSACTION, a transaction instance, from MEMPOOL, and return true if
+   there was such an entry or false (nil) otherwise."
+  (remhash (get-hash-key-of-transaction transaction) mempool))
+
+
+
 
 
 (defun make-transaction-inputs (input-specs)
@@ -1370,46 +1363,23 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun clear-transactions-in-block-from-mempool (block)
-  ;; (format t "~2%***   We added a block. About to clear mempool. Here's what's there before...")
-  ;; (cosi/proofs/newtx:dump-txs :mempool t)
-  (format t "~%   Now clearing transactions from mempool . . . ")
-
-  ;; inefficient clearing algorithm -- ok for now, improve later!
+  "Remove transactions that have just been added the block from the mempool that
+   is globally bound to cosi-simgen:*mempool*. Note that these transactions may
+   not be identical EQ Lisp instances, so even if you're holding a pointer to
+   transaction that's in the mempool in your hand, to find the corresponding
+   instance in the block, you must compare must compare two instances using
+   their hash keys, not EQ. That also acts as a vefification that the contents
+   are exactly the same, have not undergone any changes after being encoded,
+   transferred from one node to the other over the network, and decoded, etc."
   (loop with mempool = cosi-simgen:*mempool*
-        with transactions = (mapcar #'hash:hash/256 (cosi/proofs:block-transactions block))
-        with block-tx-count = (length transactions)
-        ;; initially (format t "~%Transactions count in block: ~d" (length transactions))
-        ;;           (cosi/proofs/newtx:dump-txs :block block)
-        for tx being each hash-value
-          of mempool 
-            using (hash-key key)
-        when (member (hash:hash/256 tx) transactions :test #'hash:hash=)
-          collect tx into removed-txs
-          and do (remhash key mempool)
-             ;; thought I saw something bad happen here:
-                 (assert (null (gethash key mempool)) () "why doesn't remhash work?!")
+        for transaction in (cosi/proofs:block-transactions block)
+        count (remove-transaction-from-mempool transaction mempool)
+          into n-removed
         finally
-           ;; check that there were a few transactions in the block
-           ;; and in the mempool in common and that all the ones in
-           ;; the block are no longer in the mempool
-           (when (= block-tx-count 0)
-             (warn "***   NEWTX: there were zero txs in block? strange! [~d tx removed from mempool] ***"
-                   removed-txs))
-           (when (= (length removed-txs) 0)
-             (warn "***   NEWTX: there were zero txs removed from mempool? That's weird! [~d tx in block] ***"
-                   block-tx-count))
-           (let* ((txs-in-mempool
-                    (loop for tx being each hash-value of cosi-simgen:*mempool*
-                          collect tx))
-                  (intersection (intersection txs-in-mempool transactions)))
-             (format t "~2%")
-             (when intersection
-               (warn
-                "***   NEWTX: there are now STILL transactions (~d) in the mempool from block. How?! [~d in block/~d removed from mempool]"
-                (length intersection)
-                block-tx-count
-                removed-txs))))
-  (format t "~%   DONE.~%")
-  ;; (format t "~%   Now here's what's in mempool after, take a look ...")
-  ;; (cosi/proofs/newtx:dump-txs :mempool t)
-  )
+           (format t "~%Removed ~d transaction~p from mempool.~%"
+                   n-removed n-removed)
+           (cosi/proofs/newtx:dump-txs :mempool t)))
+
+;; Modularity issue: note that this should not really "know" that
+;; block-transactions is list. It is now specified as sequence, and it's left
+;; open for it to become a merkle tree; clean up later!  -mhd, 6/20/18
