@@ -1,7 +1,7 @@
 (in-package :gossip)
 
 (defvar *log* nil "Log of gossip actions.")
-(defvar *logging-actor* nil "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
+(defvar *logging-actor* 'ac:do-nothing "Actor which serves as gatekeeper to *log* to ensure absolute serialization of log messages and no resource contention for *log*.")
 (defvar *archived-logs* (make-array 10 :adjustable t :fill-pointer 0) "Previous historical logs")
 (defparameter *log-filter* t "t to log all messages; nil to log none")
 (defparameter *log-object-extension* ".log" "File extension for object-based logs")
@@ -77,10 +77,9 @@
     logmsg))
 
 (defun log-event-for-pr (cmd &rest items)
-  "Syntactic sugar to play nicely with ac:pr"
+  "Syntactic sugar to play nicely with ac:pr. Note this is NOT an actor function, so don't call actor-only functions from it."
   (case cmd
-    (:quit (setf ac::*shared-printer-actor* #'ac::blind-print))
-    (:init (setf ac::*shared-printer-actor* #'log-event-for-pr))
+    (:quit (ac:become 'ac::blind-print))
     (t (apply 'default-logging-function :PR items))))
 
 (defun default-logging-function (logcmd &rest args)
@@ -174,6 +173,7 @@
           ;;
           ;; TODO: use the timestamp directly
           (emotiq:note "~&~{~a~^ ~}~&" (rest logmsg)))
+    (:quit (ac:become 'ac:do-nothing))
           
     ; :save saves current log to files without modifying it
     (:save (%save-log :copy-first nil))

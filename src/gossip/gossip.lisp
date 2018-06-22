@@ -79,13 +79,17 @@
 
 (defun do-process-authenticated-packet (deserialize-fn body-fn)
   "Handle decoding and authentication. If fails in either case just do nothing."
-  (let ((decoded (ignore-errors
+  (let ((decoded (handler-case
                    ;; might not be a valid serialization
-                   (funcall deserialize-fn))))
+                   (funcall deserialize-fn)
+                   (error (e) (log-event :error "Invalid deserialization" e)
+                          nil))))
     (when (and decoded
-               (ignore-errors
-                 ;; might not be a pbc:signed-message
-                 (pbc:check-message decoded)))
+               (handler-case
+                   ;; might not be a pbc:signed-message
+                   (pbc:check-message decoded)
+                 (error (e) (log-event :error "Invalid signature" e)
+                        nil)))
       (funcall body-fn (pbc:signed-message-msg decoded)))))
 
 (defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
@@ -953,7 +957,7 @@ dropped on the floor.
       )))
 
 ; (make-graph 10)
-; (run-gossip-sim)
+; (run-gossip)
 ; (list-uids "localhost" 65002)
 
 (defun lookup-node (uid)
@@ -2007,11 +2011,11 @@ gets sent back, and everything will be copacetic.
 ;;; The need for this is rather dubious.  No one other than the
 ;;; signing node can authenticate this HMAC. 
 
-(defun actor-keypair-fn (cmd &rest logmsg)
+(defun actor-keypair-fn (cmd &rest args)
   "Test-and-set function that the *hmac-keypair-actor* runs.
   It's critical that only one actor run pbc:make-key-pair at a time"
   (declare (ignore cmd)) ; everything is interpreted as :TAS
-  (destructuring-bind (mbox &rest other) logmsg
+  (destructuring-bind (mbox &rest other) args
     (declare (ignore other))
     (unless *hmac-keypair*
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
@@ -2059,7 +2063,7 @@ gets sent back, and everything will be copacetic.
   (locally-receive-msg gossip-msg node srcuid))
 
 
-(defun run-gossip-sim ()
+(defun run-gossip ()
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
@@ -2114,7 +2118,7 @@ gets sent back, and everything will be copacetic.
 ; (make-graph 10)
 ; (set-protocol-style :gossip 2)
 ; (get-protocol-style)
-; (run-gossip-sim)
+; (run-gossip)
 ; (solicit-wait (random-node) :count-alive)
 ; (solicit-wait (random-node) :list-alive)
 ; (visualize-nodes *nodes*)
@@ -2142,11 +2146,11 @@ gets sent back, and everything will be copacetic.
 #+TEST1
 (setf localnode (make-node
   :UID 200))
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
@@ -2169,11 +2173,11 @@ gets sent back, and everything will be copacetic.
 ; ; ON SERVER MACHINE
 ; (clear-local-nodes)
 ; (make-graph 10)
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 0))
@@ -2196,11 +2200,11 @@ gets sent back, and everything will be copacetic.
 ; ; ON SERVER MACHINE
 ; (clear-local-nodes)
 ; (make-graph 1)
-; (run-gossip-sim)
+; (run-gossip)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim)
+; (run-gossip)
 ; (archive-log)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
@@ -2222,7 +2226,7 @@ gets sent back, and everything will be copacetic.
 ; (solicit-wait localnode :list-addresses)
 ; (inspect *log*)
 
-; (run-gossip-sim)
+; (run-gossip)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
 ; (solicit-direct (first (listify-nodes)) :list-alive)
 ; (solicit-direct (first (listify-nodes)) :count-alive)
@@ -2256,7 +2260,7 @@ gets sent back, and everything will be copacetic.
 
 ; TEST NO-REPLY MESSAGES
 ; (make-graph 10)
-; (run-gossip-sim)
+; (run-gossip)
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (get-kvs :foo) ; should return a list of (node . BAR)
 ; (solicit (first (listify-nodes)) :gossip-remove-key :foo)

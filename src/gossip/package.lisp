@@ -17,8 +17,7 @@
    #:solicit-wait
    #:solicit-progress
    #:solicit-direct
-   #:stop-gossip-sim
-   #:run-gossip-sim
+   #:run-gossip
    #:as-hash-table
    #:make-node
    #:listify-nodes

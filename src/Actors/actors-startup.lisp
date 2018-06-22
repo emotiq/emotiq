@@ -204,8 +204,7 @@ THE SOFTWARE.
                     (dolist (item things-to-print)
                       (print item)))
             
-            (:quit ()
-                   (setf *shared-printer-actor* #'blind-print))
+            (:quit () (become 'blind-print))
             )))
     (register-actor *shared-printer-actor* :SHARED-PRINTER)))
 
