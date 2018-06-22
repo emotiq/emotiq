@@ -37,7 +37,7 @@
               (make-node :uid pubkey))
             pubkeys)
       ;; clear log and start server
-      (run-gossip-sim)
+      (run-gossip)
       t)))
 
 (defun ping-other-machines (&optional (hosts *hosts*))
@@ -96,7 +96,7 @@ with this list if desired."
 (let ((gossip-inited nil))
   (defun gossip-init (&optional (cmd))
     "Call this once before using gossip system. Should return true if everything succeeded."
-    ; make actor:pr calls go to global log.
+
     ; NOTE: We're not just substituting *logging-actor* here because we want the timestamp to
     ;   be made ASAP after function is called, not when logging finally happens.
     (case cmd
@@ -106,25 +106,23 @@ with this list if desired."
        (if (find-package :gui)
            (setf emotiq:*notestream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
            (setf emotiq:*notestream* *error-output*))
-       (setf emotiq:*notestream* 
-             #+(or (not :openmcl) (not :shannon))
-             *error-output*
-             #-(or (not :openmcl) (not :shannon))
-             nil
-             )
+       #+(or (not :openmcl) (not :shannon))
+       (setf emotiq:*notestream* *error-output*)
+       #-(or (not :openmcl) (not :shannon))
+       (setf emotiq:*notestream* nil)
        (setf *logging-actor* (ac:make-actor #'actor-logger-fn))
        (setf *hmac-keypair-actor* (ac:make-actor #'actor-keypair-fn))
        (archive-log)
-       (log-event-for-pr ':init)
+       (setf ac::*shared-printer-actor* (ac:make-actor #'log-event-for-pr))     ; make actor:pr calls go to global log.
        (setf gossip-inited t))
       (:maybe
        (unless gossip-inited
          (gossip-init ':init)))
-      (:uninit ; be very careful with this. Bad things can happen if you kill the *logging-actor*, *hmac-keypair-actor* etc.
+      (:uninit
        (graceful-shutdown)
-       (log-event-for-pr ':quit)
-       (setf *logging-actor* nil)
-       (setf *hmac-keypair-actor* nil)
+       (ac:send ac::*shared-printer-actor* ':quit)
+       (ac:send *logging-actor* ':quit)
+       ;(setf *hmac-keypair-actor* nil)
        (setf gossip-inited nil))
       (:query gossip-inited))))
 

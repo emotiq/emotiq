@@ -18,7 +18,7 @@
   (gossip::gossip-init ':maybe))
 
 (defun teardown-fixture ()
-  ;(gossip::gossip-init ':uninit) ; don't do this!
+  (gossip::gossip-init ':uninit)
   )
 
 (defun %aliveness (uid)
@@ -79,7 +79,7 @@
                (clear-local-nodes)
                (make-test-network)
                (ac::kill-executives)
-               (assert-eql 10 (run-gossip-sim))
+               (assert-eql 10 (run-gossip))
                (let* ((nodes (listify-nodes))
                       (uids (mapcar #'gossip::uid nodes)))
                                         ; do same test starting at every possible node
@@ -101,7 +101,7 @@
              (clear-local-nodes)
              (make-test-network)
              (ac::kill-executives)
-             (assert-eql 10 (run-gossip-sim))
+             (assert-eql 10 (run-gossip))
              (let* ((nodes (listify-nodes))
                     (uids (mapcar #'gossip::uid nodes)))
             ;; do same test starting at every possible node
@@ -122,7 +122,7 @@
              (clear-local-nodes)
              (make-graph 100)
              (ac::kill-executives)
-             (assert-eql 100 (run-gossip-sim))
+             (assert-eql 100 (run-gossip))
              (dotimes (i 100)
                (push (unwrap (solicit-wait (random-node) :count-alive)) results))
              (setf results (mapcar (lambda (x) (if (numberp x) x nil)) results)) ; ensure :TIMEOUT doesn't appear in data
