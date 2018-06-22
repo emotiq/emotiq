@@ -200,5 +200,4 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
           (uiop:run-program (list "xdg-open" urlstring))
           (values dotpath htmlpath))))))
     
-
 ; (gossip:visualize-nodes gossip::*nodes* :uber) ; should draw a fully-connected graph of all known real nodes. Not terribly useful, but a good test.

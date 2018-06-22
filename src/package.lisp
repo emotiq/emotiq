@@ -110,6 +110,7 @@
   (:export 
    #:set-nodes
    #:make-election-beacon
+   #:fire-election
    #:kill-beacon
    #:hold-election
    #:fire-election))

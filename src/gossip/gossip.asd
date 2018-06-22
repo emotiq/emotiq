@@ -7,7 +7,7 @@
   :depends-on (gossip/config
                emotiq/logging
                quicklisp
-               uiop
+	       uiop
                mpcompat
                key-value-store
                actors
@@ -21,7 +21,7 @@
                (:file "ccl-sockets-patch")
                #+(and OPENMCL EASYGUI)
                (:file "hemlock-log-streams")
-               (:file "socket-actors")
+               (:file "gossip-transport")
                (:file "monads")
                (:file "logging")
                (:file "gossip")
@@ -32,7 +32,6 @@
 
 (defsystem "gossip/config"
   :depends-on (emotiq/filesystem
-               emotiq/logging
                crypto-pairings)
   :components ((:module package :pathname "."
                         :components ((:file "package")))
