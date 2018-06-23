@@ -1997,11 +1997,11 @@ gets sent back, and everything will be copacetic.
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
-  (log-event "Transport connection to peer established" peer-address peer-port))
+  (log-event :TRANSPORT "Transport connection to peer established" peer-address peer-port))
 
 (defun transport-peer-down (peer-address peer-port reason)
   "Callback for transport layer event."
-  (log-event "Transport connection to peer failed" peer-address peer-port reason))
+  (log-event :TRANSPORT "Transport connection to peer failed" peer-address peer-port reason))
 
 (defun shutdown-gossip-server ()
   "Stop the Gossip Transport network endpoint (if currently running)."
@@ -2026,11 +2026,16 @@ gets sent back, and everything will be copacetic.
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
     (actor-send mbox *hmac-keypair*)))
 
+#+IGNORE
 (defun hmac-keypair ()
   (or *hmac-keypair*
       (let ((mbox (mpcompat:make-mailbox)))
         (actor-send *hmac-keypair-actor* :TAS mbox)
         (first (mpcompat:mailbox-read mbox)))))
+
+(defun hmac-keypair ()
+  (or *hmac-keypair*
+      (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))))
 
 (defun sign-message (msg)
   "Sign and return an authenticated message packet. Packet includes
