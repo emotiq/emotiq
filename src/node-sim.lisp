@@ -342,7 +342,7 @@ This will spawn an actor which will asynchronously do the following:
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
             (format t "~2%Good-bye and good luck!~%"))))))
-  (emoti:note "current state = ~A" (emotiq/tracker:query-current-state))
+  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
   (values))
 
 (defun blocks ()
