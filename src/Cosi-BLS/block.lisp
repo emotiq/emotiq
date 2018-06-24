@@ -225,25 +225,6 @@ added to the blockchain."
              collect tx-out-id))))
 
 
-
-(defun check-block-transactions (block)
-  "Return nil if invalid block. This is run by a CoSi block
-   validator. So it should check the merkle tree(s)."
-  (and (or (hash:hash= 
-            (cosi/proofs:compute-merkle-root-hash (block-transactions block))
-            (block-merkle-root-hash block))
-           (progn 
-             (warn "Merkle tree check failed!")
-             nil))
-       ;; ---*** To do: there need be a merkle tree for input scripts,
-       ;; ---*** and when there is, check it here, too. -mhd, 6/22/18
-       )
-  )
-
-
-
-
-
 (defun get-transaction-id (transaction)
   "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
    used to hash the transactions leaves of the merkle tree to produce the

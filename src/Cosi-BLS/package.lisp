@@ -196,8 +196,7 @@
    :block-signature
    :block-merkle-root-hash
 
-   :*newtx-p*   ; for new transactions, short term temp! -mhd, 6/12/18
-   :check-block-transactions))
+   :*newtx-p*))                         ; for new transactions, short term temp! -mhd, 6/12/18
 
 (defpackage :cosi/proofs/newtx          ; New Transactions
   (:use 
@@ -224,8 +223,7 @@
    dump-tx
    dump-txs
    clear-transactions-in-block-from-mempool
-   txid-string
-   wait-for-tx-count))
+   txid-string))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
