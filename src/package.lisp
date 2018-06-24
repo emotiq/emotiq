@@ -130,3 +130,12 @@
    #:query-current-state
    #:track))
 
+(defpackage emotiq/ate
+  (:use #:cl)
+  (:export
+   #:begin
+   #:wind-down
+   #:begin-sim
+   #:wind-down-sim
+   #:introspect))
+
