@@ -108,11 +108,9 @@
                 :components ((:file "state-tracker")))))
                                        
 (defsystem "emotiq/ate"
-  :depends-on (emotiq emotiq/tracker emotiq/sim gossip)
+  :depends-on (emotiq emotiq/tracker emotiq/sim emotiq/startup gossip)
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "ate")))))
                                        
-
-
