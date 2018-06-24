@@ -709,7 +709,7 @@ Check that there are no forward references in spend position, then
 check that each TXIN and TXOUT is mathematically sound."
   (when *newtx-p*
     (return-from #1#
-      (cosi/proofs/newtx:check-block-transactions blk)))
+      (cosi/proofs:check-block-transactions blk)))
   (dolist (tx (get-block-transactions blk))
     (dolist (txin (trans-txins tx))
       (let ((key  (bev (txin-hashlock txin))))
