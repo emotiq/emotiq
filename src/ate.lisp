@@ -4,11 +4,13 @@
 
 (defun begin ()
   "load and run a non-simulation Emotiq Node"
+  (error "NIY emotiq/ate:begin")
   (asdf:make :emotiq/startup)
   (emotiq:main))
 
 (defun wind-down ()
   "kill a non-simulation Emotiq Node"
+  (error "NIY emotiq/ate:wind-down")
   (kill-wallet)
   (gossip:shutdown-gossip-server)
   (actors:kill-executives))
