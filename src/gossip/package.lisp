@@ -43,6 +43,8 @@
    #:broadcast
    #:establish-broadcast-group
    #:dissolve-graph
+
+   #:shutdown-gossip-server
    ))
 
 (defpackage gossip/config
