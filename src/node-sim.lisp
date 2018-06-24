@@ -336,14 +336,7 @@ This will spawn an actor which will asynchronously do the following:
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
-            ;; (when (not (cosi/proofs/newtx:wait-for-tx-count 4 :timeout 60))
-            ;;   (cerror
-            ;;    "Continue regardless."
-            ;;    "Timed out, waited 60 sec for 4 transactions on blockchain."))
-            ;; ^-- not read for prime time!
             (sleep 60)
-
-            
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
             (format t "~2%Good-bye and good luck!~%")))))))
