@@ -118,6 +118,7 @@
       (unwind-protect
            (let ((results nil)
                  (*log-filter* nil))
+             (declare (special *log-filter*))
              (setf *nodes* (gossip::make-uid-mapper))
              (clear-local-nodes)
              (make-graph 100)
