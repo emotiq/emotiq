@@ -33,3 +33,9 @@
   "wind down the wallet"
   ;; is this necessary?
   )
+
+;; common to real and simulated
+(defun introspect ()
+  "return an alist of current system state"
+  ;; TODO:  add more interesting stuff to tracker
+  (emotiq/tracker:query-current-state))
