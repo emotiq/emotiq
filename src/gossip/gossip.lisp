@@ -68,9 +68,36 @@
 (defvar *tcp-gossip-server-name* "TCP Gossip Server")
 (defvar *udp-gossip-server-name* "UDP Gossip Server")
 
-(defvar *debug-level* 1 "True to log debugging information while handling gossip requests. Larger values log more messages.")
-
 (defvar *transport* nil "Network transport endpoint.")
+
+;; ------------------------------------------------------------------------------
+;; Generic handling for expected authenticated messages. Check for
+;; valid deserialization, check deserialization is a
+;; pbc:signed-message, check for valid signature, then call user's
+;; handler with embedded authenticated message. If any failure along
+;; the way, just drop the message on the floor.
+
+(defun do-process-authenticated-packet (deserialize-fn body-fn)
+  "Handle decoding and authentication. If fails in either case just do nothing."
+  (let ((decoded (handler-case
+                   ;; might not be a valid serialization
+                   (funcall deserialize-fn)
+                   (error (e) (log-event :error "Invalid deserialization" e)
+                          nil))))
+    (when (and decoded
+               (handler-case
+                   ;; might not be a pbc:signed-message
+                   (pbc:check-message decoded)
+                 (error (e) (log-event :error "Invalid signature" e)
+                        nil)))
+      (funcall body-fn (pbc:signed-message-msg decoded)))))
+
+(defmacro with-authenticated-packet ((packet-arg) deserializer &body body)
+  "Macro to simplify decoding and authentication"
+  `(do-process-authenticated-packet (lambda ()
+                                      ,deserializer)
+                                    (lambda (,packet-arg)
+                                      ,@body)))
 
 (defun remove-keywords (arg-list keywords)
   (let ((clean-tail arg-list))
@@ -97,18 +124,6 @@ in KEYWORDS removed."
   `(let ((,new-var (remove-keywords ,var ',keywords)))
      ,@body))
 
-(defun debug-level (&optional (level nil level-supplied-p))
-  (cond (level-supplied-p
-         (when *debug-level*
-           (if (numberp *debug-level*)
-               (if (numberp level)
-                   (>= *debug-level* level)
-                   t)
-               t)))
-        (t *debug-level*)))
-
-(defun (setf debug-level) (val)
-  (setf *debug-level* val))
 
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
@@ -533,8 +548,7 @@ are in place between nodes.
     :node node
     :fn 
     (lambda (&rest msg)
-      (when (debug-level 5)
-        (log-event "Gossip Actor" (ac::current-actor) "received" msg))
+      (edebug 5 "Gossip Actor" (ac::current-actor) "received" msg)
       (apply 'gossip-dispatcher node msg))))
 
 (defun make-node (&rest args)
@@ -943,7 +957,7 @@ dropped on the floor.
       )))
 
 ; (make-graph 10)
-; (run-gossip-sim)
+; (run-gossip)
 ; (list-uids "localhost" 65002)
 
 (defun lookup-node (uid)
@@ -979,8 +993,7 @@ dropped on the floor.
       (if (null destnode)
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
-    (when (debug-level 5)
-      (log-event "send-msg" msg destnode srcuid))
+    (edebug 5 "send-msg" msg destnode srcuid)
     (handler-case
         (ac:send destactor
                  :gossip ; actor-verb
@@ -1121,12 +1134,12 @@ dropped on the floor.
                   (final-reply :final-reply-accepted)
                   (t nil) ; don't log timeouts here. Too much noise.
                   )))
-    (when (case logsym
-            (:interim-reply-accepted (debug-level 4))
-            (:accepted (debug-level 3))
-            (:final-reply-accepted (debug-level 2))
-            (t nil))
-      (node-log node logsym msg (kind msg) :from srcuid (args msg)))
+    (edebug (case logsym
+             (:interim-reply-accepted 4)
+             (:accepted 4)
+             (:final-reply-accepted 4)
+             (t nil))
+           node logsym msg (kind msg) :from srcuid (args msg))
     (if *gossip-absorb-errors*
         (handler-case (funcall kindsym msg node srcuid)
           (error (c) (node-log node :ERROR msg c)))
@@ -1136,7 +1149,7 @@ dropped on the floor.
   (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
     (cond (kindsym ; message accepted
            (locally-dispatch-msg kindsym node msg srcuid))
-          (t (when (debug-level 4) (node-log node :ignore msg :from srcuid failure-reason))))))
+          (t (edebug 4 node :ignore msg :from srcuid failure-reason)))))
 
 (defmethod locally-receive-msg ((msg gossip-message-mixin) (node gossip-node) srcuid)
   "The main dispatch function for gossip messages. Runs entirely within an actor.
@@ -1148,8 +1161,7 @@ dropped on the floor.
              (memoize-message node msg srcuid)
              (locally-dispatch-msg kindsym node msg srcuid))
             (t ; not accepted
-             (when (debug-level 4)
-               (node-log node :ignore msg :from srcuid failure-reason))
+             (edebug 4 node :ignore msg :from srcuid failure-reason)
              (case failure-reason
                (:active-ignore ; RECEIVE an active-ignore. Whomever sent it is telling us they're ignoring us.
                 ; Which means we need to ensure we're not waiting on them to reply.
@@ -1215,14 +1227,12 @@ dropped on the floor.
       (let ((timer (kvs:lookup-key (timers node) soluid)))
         (cond (timed-out-p
                ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
-               (when (debug-level 3)
-                 (node-log node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t))))
+               (edebug 3 node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
               (t ; done, but didn't time out. Everything's good. So unschedule the timeout message.
                (cond (timer
                       (ac::unschedule-timer timer) ; cancel a timer prematurely, if any.
                       ; if no timer, then this is a leaf node
-                      (when (debug-level 3)
-                        (node-log node :DONE-WAITING-WIN msg)))
+                      (edebug 3 node :DONE-WAITING-WIN msg))
                      (t ; note: Following log message doesn't necessarily mean anything is wrong.
                       ; If node is singly-connected to the graph, it's to be expected
                       (node-log node :NO-TIMER-FOUND msg)))))
@@ -1445,8 +1455,7 @@ dropped on the floor.
                     (if (eql :UPSTREAM (reply-to msg)) ; See Note D
                         (progn
                           (prepare-repliers thisnode soluid downstream)
-                          (when (debug-level 3)
-                            (node-log thisnode :WAITING msg downstream)))
+                          (edebug 3 thisnode thisnode :WAITING msg downstream))
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
                           (node-log thisnode :WAITING msg :ANONYMOUS)
@@ -1611,8 +1620,7 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (when (debug-level 1)
-             (node-log srcnode :FINALREPLY soluid :to where-to-send-reply data))
+           (edebug 1 srcnode :FINALREPLY soluid :to where-to-send-reply data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
@@ -1622,8 +1630,7 @@ dropped on the floor.
           ((null where-to-send-reply)
            (node-log srcnode :NO-REPLY-DESTINATION! soluid data))
           (t
-           (when (debug-level 1)
-             (node-log srcnode :FINALREPLY soluid :TO where-to-send-reply data))
+           (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (ac:send where-to-send-reply reply)))))
 
 (defun coalesce&reply (reply-to thisnode reply-kind soluid)
@@ -1716,16 +1723,14 @@ gets sent back, and everything will be copacetic.
         (let ((reply (make-interim-reply :solicitation-uid soluid
                                          :kind reply-kind
                                          :args (list coalesced-data))))
-          (when (debug-level 4)
-            (node-log thisnode :SEND-INTERIM-REPLY reply :to where-to-send-reply coalesced-data))
+          (edebug 4 thisnode :SEND-INTERIM-REPLY reply :to where-to-send-reply coalesced-data)
           (send-msg reply
                     where-to-send-reply
                     (uid thisnode)))
         ; if no place left to reply to, just log the result.
         ;   This can mean that thisnode autonomously initiated the request, or
         ;   somebody running the sim told it to.
-        (when (debug-level 4)
-          (node-log thisnode :INTERIMREPLY soluid coalesced-data)))))
+        (edebug 4 thisnode :INTERIMREPLY soluid coalesced-data))))
 
 (defun send-delayed-interim-reply (thisnode reply-kind soluid)
   "Called by a node actor to tell itself (or another actor, but we never do that now)
@@ -1736,8 +1741,7 @@ gets sent back, and everything will be copacetic.
   (let ((msg (make-solicitation
               :kind :maybe-sir
               :args (list soluid reply-kind))))
-    (when (debug-level 4)
-      (node-log thisnode :ECHO-MAYBE-SIR nil))
+    (edebug 4 thisnode :ECHO-MAYBE-SIR nil)
     (send-self msg)))
 
 (defun later-reply? (new old)
@@ -1974,16 +1978,17 @@ gets sent back, and everything will be copacetic.
                                             :peer-up-hook 'transport-peer-up
                                             :peer-down-hook 'transport-peer-down))))
 
-(defun transport-message-received (peer-address peer-port message)
+(defun transport-message-received (message peer-address peer-port)
   "Callback for transport layer on incoming message from other node."
   (with-authenticated-packet (packet)
-      ;; Unpack envelope containing Gossip metadata.
-      (destructuring-bind (destuid srcuid msg) packet
-        (log-event "Gossip transport message received" peer-address peer-port)
-        ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-        (let ((proxy (ensure-proxy-node :tcp peer-address peer-port srcuid)))
-          ;; Note: Use uid of proxy for during local processing.
-          (incoming-message-handler msg (uid proxy) destuid)))))
+    message ; has already been deserialized at this point
+    ;; Unpack envelope containing Gossip metadata.
+    (destructuring-bind (destuid srcuid msg) packet
+      (log-event "Gossip transport message received" peer-address peer-port)
+      ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
+      (let ((proxy (ensure-proxy-node :tcp peer-address peer-port srcuid)))
+        ;; Note: Use uid of proxy for during local processing.
+        (incoming-message-handler msg (uid proxy) destuid)))))
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
@@ -2006,29 +2011,29 @@ gets sent back, and everything will be copacetic.
 ;;; The need for this is rather dubious.  No one other than the
 ;;; signing node can authenticate this HMAC. 
 
-(defun actor-keypair-fn (cmd &rest logmsg)
+(defun actor-keypair-fn (cmd &rest args)
   "Test-and-set function that the *hmac-keypair-actor* runs.
   It's critical that only one actor run pbc:make-key-pair at a time"
   (declare (ignore cmd)) ; everything is interpreted as :TAS
-  (destructuring-bind (mbox &rest other) logmsg
+  (destructuring-bind (mbox &rest other) args
     (declare (ignore other))
     (unless *hmac-keypair*
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
     (ac:send mbox *hmac-keypair*)))
 
-  (defun hmac-keypair ()
+(defun hmac-keypair ()
   (or *hmac-keypair*
-    (let ((mbox (mpcompat:make-mailbox)))
-      (ac:send *hmac-keypair-actor* :TAS mbox)
-      (first (mpcompat:mailbox-read mbox)))))
+      (let ((mbox (mpcompat:make-mailbox)))
+        (ac:send *hmac-keypair-actor* :TAS mbox)
+        (first (mpcompat:mailbox-read mbox)))))
 
-  (defun sign-message (msg)
-    "Sign and return an authenticated message packet. Packet includes
-    original message."
-    (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
-                                  (pbc:keying-triple-sig  (hmac-keypair))))
-    (pbc:sign-message msg
-                      (pbc:keying-triple-pkey (hmac-keypair))
+(defun sign-message (msg)
+  "Sign and return an authenticated message packet. Packet includes
+  original message."
+  (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
+                                (pbc:keying-triple-sig  (hmac-keypair))))
+  (pbc:sign-message msg
+                    (pbc:keying-triple-pkey (hmac-keypair))
                     (pbc:keying-triple-skey (hmac-keypair))))
 
 ;; ------------------------------------------------------------------------------
@@ -2058,7 +2063,7 @@ gets sent back, and everything will be copacetic.
   (locally-receive-msg gossip-msg node srcuid))
 
 
-(defun run-gossip-sim (&optional (protocol :TCP))
+(defun run-gossip ()
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
@@ -2113,7 +2118,7 @@ gets sent back, and everything will be copacetic.
 ; (make-graph 10)
 ; (set-protocol-style :gossip 2)
 ; (get-protocol-style)
-; (run-gossip-sim)
+; (run-gossip)
 ; (solicit-wait (random-node) :count-alive)
 ; (solicit-wait (random-node) :list-alive)
 ; (visualize-nodes *nodes*)
@@ -2141,11 +2146,11 @@ gets sent back, and everything will be copacetic.
 #+TEST1
 (setf localnode (make-node
   :UID 200))
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
@@ -2168,11 +2173,11 @@ gets sent back, and everything will be copacetic.
 ; ; ON SERVER MACHINE
 ; (clear-local-nodes)
 ; (make-graph 10)
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim :UDP)
+; (run-gossip :UDP)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 0))
@@ -2195,11 +2200,11 @@ gets sent back, and everything will be copacetic.
 ; ; ON SERVER MACHINE
 ; (clear-local-nodes)
 ; (make-graph 1)
-; (run-gossip-sim :TCP)
+; (run-gossip)
 
 ; ON CLIENT MACHINE
 ; (clear-local-nodes)
-; (run-gossip-sim :TCP)
+; (run-gossip)
 ; (archive-log)
 ; (set-protocol-style :neighborcast)
 #+TEST-LOCALHOST
@@ -2221,7 +2226,7 @@ gets sent back, and everything will be copacetic.
 ; (solicit-wait localnode :list-addresses)
 ; (inspect *log*)
 
-; (run-gossip-sim)
+; (run-gossip)
 ; (solicit-wait (first (listify-nodes)) :list-alive)
 ; (solicit-direct (first (listify-nodes)) :list-alive)
 ; (solicit-direct (first (listify-nodes)) :count-alive)
@@ -2255,7 +2260,7 @@ gets sent back, and everything will be copacetic.
 
 ; TEST NO-REPLY MESSAGES
 ; (make-graph 10)
-; (run-gossip-sim)
+; (run-gossip)
 ; (solicit (first (listify-nodes)) :gossip-relate-unique :foo :bar)
 ; (get-kvs :foo) ; should return a list of (node . BAR)
 ; (solicit (first (listify-nodes)) :gossip-remove-key :foo)

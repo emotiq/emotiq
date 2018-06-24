@@ -1,5 +1,7 @@
 (in-package :emotiq)
 
+(defparameter *notestream* *error-output*)
+
 ;;; N.b. deliberately not a macro so we can theoretically inspect the
 ;;; call stack.
 (defun note (message-or-format &rest args)
@@ -18,7 +20,7 @@ a CL:FORMAT control string referencing the values contained in ARGS."
                           nil
                           message-or-format
                           (if args args nil)))))
-      (format *error-output* message)
+      (format *notestream* message)
       message)))
 
 
