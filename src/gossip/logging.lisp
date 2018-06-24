@@ -66,15 +66,18 @@
 
 (defun archive-log ()
   "Archive existing *log* and start a new one. Thread-safe."
-  (ac:send *logging-actor* :archive))
+  (actor-send *logging-actor* :archive))
 
 (defun log-event (&rest args)
   "General mechanism for logging events. Sends timestamp and args to *logging-actor*.
-   No filtering is done here.
-   Also returns effective log message."
+  No filtering is done here.
+  Also returns effective log message."
   (let ((logmsg (cons (usec::get-universal-time-usec) args)))
-    (apply 'ac:send *logging-actor* :log logmsg)
-    logmsg))
+    ; Don't use actor-send here. If we get an error while trying to log, just drop it on the floor.
+    ;   Using actor-send would cause an infinite loop.
+    (handler-case (progn (apply 'ac:send *logging-actor* :log logmsg)
+                    logmsg)
+      (error () nil))))
 
 (defun log-event-for-pr (cmd &rest items)
   "Syntactic sugar to play nicely with ac:pr. Note this is NOT an actor function, so don't call actor-only functions from it."
@@ -158,11 +161,11 @@
 
 (defun save-log ()
   "Saves current *log* to a file. Thread-safe."
-  (ac:send *logging-actor* :save))
+  (actor-send *logging-actor* :save))
 
 (defun save-text-log ()
   "Saves current *log* to a file. Thread-safe."
-   (ac:send *logging-actor* :save-text))
+   (actor-send *logging-actor* :save-text))
 
 (defun actor-logger-fn (cmd &rest logmsg)
   "Function that the *logging-actor* runs"
