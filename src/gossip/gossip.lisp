@@ -778,6 +778,11 @@ the node itself would send upstream if it were an :UPSTREAM message. If final-co
 dropped on the floor.
 |#
 
+(defun actor-send (&rest args)
+  "Error-safe version of ac:send"
+  (handler-case (apply 'ac:send args)
+    (error (e) (log-event :ERROR e))))
+
 ;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
   "Like solicit-wait but asks for all replies to be sent back to node directly, rather than percolated upstream.
@@ -788,7 +793,7 @@ dropped on the floor.
                   (uid node)
                   node))
          (mbox (mpcompat:make-mailbox))
-         (actor (ac:make-actor (lambda (&rest msg) (apply 'ac:send mbox msg))))
+         (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
     (unwind-protect
         (progn 
@@ -839,7 +844,7 @@ dropped on the floor.
                   (uid node)
                   node))
          (mbox (mpcompat:make-mailbox))
-         (actor (ac:make-actor (lambda (&rest msg) (apply 'ac:send mbox msg))))
+         (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
     (unwind-protect
         (progn
@@ -986,7 +991,7 @@ dropped on the floor.
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
-         (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can ac:send to
+         (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can actor-send to
                         (actor destnode)
                         destuid)))
     (when (null destactor)
@@ -995,7 +1000,7 @@ dropped on the floor.
           (error "Cannot find actor for node ~S" destnode)))
     (edebug 5 "send-msg" msg destnode srcuid)
     (handler-case
-        (ac:send destactor
+        (actor-send destactor
                  :gossip ; actor-verb
                  srcuid  ; first arg of actor-msg
                  msg)    ; second arg of actor-msg
@@ -1011,7 +1016,7 @@ dropped on the floor.
   Should only be called from within a gossip-actor's code; otherwise nothing happens."
   (multiple-value-bind (node actor) (current-node)
     (when node ; actor will always be true too
-      (ac:send actor :gossip (uid node) msg))))
+      (actor-send actor :gossip (uid node) msg))))
 
 ;;;  TODO: Might want to also check hopcount and reject message where hopcount is too large.
 ;;;        Might want to not accept maybe-sir messages at all if their soluid is expired.
@@ -1204,7 +1209,7 @@ dropped on the floor.
 
 (defun send-gossip-timeout-message (actor soluid)
   "Send a gossip-timeout message to an actor. (We're not using the actors' native timeout mechanisms at this time.)"
-  (ac:send actor
+  (actor-send actor
            :gossip
            'ac::*master-timer* ; source of timeout messages is always *master-timer* thread
            (make-system-async :solicitation-uid soluid
@@ -1306,7 +1311,7 @@ dropped on the floor.
 ;;; These are the message kinds used by the high-level application programmer's gossip api.
 
 (defgeneric application-handler (node)
-  (:documentation "Returns something that ac:send can send to, which is associated with node.
+  (:documentation "Returns something that actor-send can send to, which is associated with node.
     This is used by gossip to forward an application message to its application destination
     once it reaches its destination node."))
 
@@ -1317,7 +1322,7 @@ dropped on the floor.
   Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
   Destination node is not expected to reply (at least not with gossip-style replies)."
   (if (eql (uid thisnode) (car (args msg)))
-      (apply 'ac:send (application-handler thisnode) (cdr (args msg)))
+      (apply 'actor-send (application-handler thisnode) (cdr (args msg)))
       ; thisnode becomes new source for forwarding purposes
       (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
@@ -1326,7 +1331,7 @@ dropped on the floor.
   Every intermediate node will have the message
   both delivered to it and forwarded through it.
   Recipient nodes are not expected to reply (at least not with gossip-style replies)."
-  (apply 'ac:send (application-handler thisnode) (args msg))
+  (apply 'actor-send (application-handler thisnode) (args msg))
    ; thisnode becomes new source for forwarding purposes
   (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
 
@@ -1631,7 +1636,7 @@ dropped on the floor.
            (node-log srcnode :NO-REPLY-DESTINATION! soluid data))
           (t
            (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
-           (ac:send where-to-send-reply reply)))))
+           (actor-send where-to-send-reply reply)))))
 
 (defun coalesce&reply (reply-to thisnode reply-kind soluid)
   "Generic cleanup function needed for any message after all final replies have come in or
@@ -2019,12 +2024,12 @@ gets sent back, and everything will be copacetic.
     (declare (ignore other))
     (unless *hmac-keypair*
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
-    (ac:send mbox *hmac-keypair*)))
+    (actor-send mbox *hmac-keypair*)))
 
 (defun hmac-keypair ()
   (or *hmac-keypair*
       (let ((mbox (mpcompat:make-mailbox)))
-        (ac:send *hmac-keypair-actor* :TAS mbox)
+        (actor-send *hmac-keypair-actor* :TAS mbox)
         (first (mpcompat:mailbox-read mbox)))))
 
 (defun sign-message (msg)

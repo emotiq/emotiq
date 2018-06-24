@@ -19,8 +19,7 @@
   :components ((:file "package")
                #+OPENMCL
                (:file "ccl-sockets-patch")
-               #+(and OPENMCL EASYGUI)
-               (:file "hemlock-log-streams")
+               ;; #+(and OPENMCL EASYGUI) (:file "hemlock-log-streams")
                (:file "logging")
                (:file "gossip-transport")
                (:file "monads")
