@@ -1387,7 +1387,12 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 ;;;; Waiting for Transactions
 
-(defun wait-for-tx-count (n &key interval timeout node)
+(defparameter *wait-for-tx-count-tick-print* ".")
+(defparameter *wait-for-tx-count-tick-every* 10)
+(defparameter *wait-for-tx-count-message* "Waiting for tx count: ")
+
+(defun wait-for-tx-count (n &key interval timeout node
+                                 tick-print tick-every message)
   "Alternate sleeping for a small INTERVAL while waiting for there to
    have been a total of N transaction on the blockchain. INTERVAL
    defaults to about 1/10th of a second, and a user-specified value is
@@ -1404,6 +1409,15 @@ ADDRESS here is taken to mean the same thing as the public key hash."
    for brief intervals."
   (when interval
     (setq interval (max 1 (min 1/1000 interval))))
+  (setq tick-print
+        (or tick-print
+            *wait-for-tx-count-tick-print*))
+  (setq message
+        (or message
+            *wait-for-tx-count-message*))
+  (setq tick-every
+        (or tick-every
+            *wait-for-tx-count-tick-every*))
   (loop with start-ut = (get-universal-time)
         with interval = (or interval 1/10)
         with cosi-simgen:*current-node*
@@ -1416,16 +1430,18 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                 tx                   ; (ignored, just to gag compiler)
                 (incf count-so-far))
               count-so-far)
+        as time-through
+        initially
+           (format t "~%~a~d" message n)
         when (>= count n)
-          return t
+          return (values t (- (get-universal-time) start-ut))
         when (and timeout
                   (>= (- (get-universal-time) start-ut)
                       timeout))
           return nil
-        do (sleep interval)))
-
-;; Consider having some output or animation while waiting, or maybe
-;; printing dots (...)?
+        do (sleep interval)
+        when (= (mod time-through tick-every) 0)
+          do (princ tick-print)))
 
 ;; The counting method is inefficient, since it counts all the way
 ;; from the beginning each time. Only OK for low-transaction-count
