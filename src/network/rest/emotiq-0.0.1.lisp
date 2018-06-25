@@ -11,6 +11,12 @@
 (restas:mount-module -wallet- (:route.wallet/0)
   (:url "/wallet/"))
 
+(restas:mount-module -simulator- (:route.simulator/0)
+  (:url "/simulator/"))
+
+(restas:mount-module -node- (:route.node/0)
+  (:url "/node/"))
+
 (restas:mount-module -dictionary- (:route.dictionary/0)
   (:url "/dictionary/"))
 
@@ -30,6 +36,14 @@
            (:div
             :id "wallet"
             (:a :href (restas:genurl '-wallet-.%api) "Wallet"))
+
+           (:div
+            :id "simulator"
+            (:a :href (restas:genurl '-simulator-.%api) "Simulator"))
+
+           (:div
+            :id "node"
+            (:a :href (restas:genurl '-node-.%api) "Node"))
 
            (:div
             :id "dictionary"
