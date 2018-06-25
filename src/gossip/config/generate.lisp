@@ -8,25 +8,27 @@
 (defun generate (records &key (root #p"/var/tmp/conf/"))
   "Generate configuration directories of an Emotiq testnet for RECORDS at directory ROOT
 
-
 The ROOT defaults to '/var/tmp/conf'."
-  (let ((key-records (generate-keys records)))
+  (let ((key-records (generate-keys records))
+        directories)
     (dolist (key-record key-records)
       (destructuring-bind (host eripa port (public private))
           key-record
         (declare (ignore private))
         (let ((directory (merge-pathnames (format nil "~a/" host) root)))
           (emotiq:note "~&Writing configuration to '~a'.~&" directory)
-             (ensure-directories-exist directory)
-             (write-local-machine-conf
-              (merge-pathnames "local-machine.conf" directory)
-              eripa port public)
-             (write-hosts-conf
-              (merge-pathnames "hosts.conf" directory)
+          (ensure-directories-exist directory)
+          (write-local-machine-conf
+           (merge-pathnames "local-machine.conf" directory)
+           eripa port public)
+          (write-hosts-conf
+           (merge-pathnames "hosts.conf" directory)
            key-records)
-             (write-keypairs-conf
-              (merge-pathnames "keypairs.conf" directory)
-           key-records))))))
+          (write-keypairs-conf
+           (merge-pathnames "keypairs.conf" directory)
+           key-records)
+          (push directory directories))))
+    directories))
 
 (defun generate-keys (records)
   (loop
