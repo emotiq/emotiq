@@ -223,7 +223,8 @@
    dump-tx
    dump-txs
    clear-transactions-in-block-from-mempool
-   txid-string))
+   txid-string
+   wait-for-tx-count))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
