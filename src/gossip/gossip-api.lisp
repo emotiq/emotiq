@@ -14,7 +14,7 @@
    the list was refreshed."
   (uber-set))
 
-(defun singlecast (message nodeID &key graphID (howmany 2))
+(defun singlecast (message nodeID &key graphID (howmany 2) startnodeID)
   "High-level API for sending message to given single nodeID. If graphID
    is supplied, message will be forwarded along the graph, starting
    with some locally-known node that's part of that graph.
@@ -24,25 +24,26 @@
    Howmany is only used if graphID is supplied."
   (let ((solicitation nil))
     (if graphID
-        ; Find a local node in that graphID to send to, with forwarding.
-        (let ((startnodeID (locate-local-node-for-graph graphID)))
+        (progn
+          (unless startnodeID
+            (setf startnodeID (locate-local-node-for-graph graphID)))
           (when startnodeID
             (setf solicitation (make-solicitation
                                 :reply-to nil
                                 :kind :k-singlecast
                                 :forward-to howmany
-                                :args message))
+                                :args (cons nodeID message)))
             (send-msg solicitation
                       startnodeID                   ; destination
                       nil)))
         
-        ; otherwise ensure there's a node with the given nodeID (real or proxy) and send to it directly NOT DONE YET
+        ; otherwise ensure there's a node with the given nodeID (real or proxy) and send to it directly
         (progn
           (setf solicitation (make-solicitation
                               :reply-to nil
                               :kind :k-singlecast
                               :forward-to nil
-                              :args message))
+                              :args (cons nodeID message)))
           (send-msg solicitation
                     nodeID                   ; destination
                     nil)))))
