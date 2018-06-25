@@ -25,6 +25,7 @@
 (defparameter *max-buffer-length* 65500)
 (defvar *default-graphID* :root "Identifier of the default, root, ground, or 'physical' graph that a node is always part of")
 (defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
+(defvar *hmac-keypair-lock* (mpcompat:make-lock) "Lock for *hmac-keypair*")
 (defvar *hmac-keypair-actor* nil "Actor managing *hmac-keypair*")
 (defvar *remote-uids* nil "cons of (time . list returned by multiple-list-uids). Only reflects uids found through active pinging
         of other machines, not those that result from unsolicited incoming messages to this machine.")
@@ -2034,8 +2035,9 @@ gets sent back, and everything will be copacetic.
         (first (mpcompat:mailbox-read mbox)))))
 
 (defun hmac-keypair ()
-  (or *hmac-keypair*
-      (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))))
+  (mpcompat:with-lock (*hmac-keypair-lock*)
+    (or *hmac-keypair*
+        (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))))
 
 (defun sign-message (msg)
   "Sign and return an authenticated message packet. Packet includes
