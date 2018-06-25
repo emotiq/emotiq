@@ -1,3 +1,4 @@
+
 ;;; gossip.lisp
 ;;; 11-May-2018 SVS
 
@@ -14,6 +15,16 @@
 ;;;; NOTES: "Upstream" means "back to the solicitor: the node that sent me a solicitation in the first place"
 
 (in-package :gossip)
+
+(defun run ()
+  (actors:set-executive-pool 3)
+  (loop
+   do
+   (format t "~&starting a run~&")
+   (gossip-startup)
+   (ping-other-machines)
+   (shutdown-gossip-server)))
+   
 
 (defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs
