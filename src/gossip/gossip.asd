@@ -2,7 +2,7 @@
   :name "Gossip"
   :description "Gossip protocols"
   :author "Shannon Spires <svs@emotiq.ch>"
-  :version "0.2.2"
+  :version "0.2.3"
   :maintainer "Shannon Spires <svs@emotiq.ch>"
   :depends-on (gossip/config
                emotiq/logging
@@ -31,7 +31,9 @@
 
 (defsystem "gossip/config"
   :depends-on (emotiq/filesystem
+               emotiq/logging
                crypto-pairings)
+    :in-order-to ((test-op (test-op "gossip-config-tests")))
   :components ((:module package :pathname "."
                         :components ((:file "package")))
                (:module config :pathname "config/"
