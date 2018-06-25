@@ -63,4 +63,9 @@
 
 (defun stringify-node (n)
   "return some string representation for given node"
-  (cosi-simgen::node-ip n)) ;; whatever is most appropriate - is node-ip is useful, then export it
+  (or
+   ;; whatever is most appropriate - is node-ip is useful, then export it
+   (ignore-errors (cosi-simgen::node-ip n))
+   (ignore-errors (format nil "~s" n))
+   "Failed to stringify node"))
+

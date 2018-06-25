@@ -5,8 +5,7 @@
 
 (in-package :route.wallet/0/0/1)
 
-(restas:define-route
- %api
+(restas:define-route %api
  ("/api/"
   :content-type "text/html")
  (as-html
