@@ -201,6 +201,144 @@ THE SOFTWARE.
     ((ed-proj-pt- :x x) (zerop x))
     ))
 
+;; ---------------------------------------------------------
+;; Attempt faster modular field arithmetic
+
+(defun fast-m* (arg &rest args)
+  (declare (integer arg)
+           (optimize  (speed 3)
+                      (safety 0)))
+  (setf arg (mmod arg))
+  (dolist (opnd args)
+    (declare (integer opnd))
+    (setf arg (mmod (* arg (the integer (mmod opnd))))))
+  arg)
+
+(defvar *fast-q-mods*
+  (let ((arr (make-array 256 :initial-element 0)))
+    (with-mod *ed-q*
+      (loop for ix from 0 below 256
+            for v = (ash 1 (integer-length *ed-q*)) then (+ v v)
+            do
+            (setf (aref arr ix) (mmod v)))
+      arr)))
+    
+(defun fast-mod (arg base)
+  (declare (integer arg base)
+           (optimize (speed 3)
+                     (safety 0)))
+  (let* ((nb0   (integer-length base))
+         (m     (mod (ash 1 nb0) base))
+         (nbm1  (1- nb0))
+         (mnbm1 (- nbm1)))
+    (declare (fixnum nb0 nbm1)
+             (integer m))
+    (um:nlet-tail iter ((a arg))
+      (declare (integer a))
+      (let* ((f    (ldb (byte nbm1 0) a))
+             (w    (ash a mnbm1)))
+        (declare (fixnum nb)
+                 (integer f w))
+        (if (zerop w)
+            f
+          (iter  (+ f (* w m))))
+        ))))
+  
+(defun fast-q-mod (arg)
+  (declare (integer arg)
+           (optimize (speed 3)
+                     (safety 0)))
+  (um:nlet-tail iter ((a arg))
+    (declare (integer a))
+    (let* ((f  (ldb (byte 251 0) a))
+           (w  (ash a -251)))
+      (declare (integer f w))
+      (if (zerop w)
+          (if (< f *ed-q*)
+              f
+            (- f *ed-q*))
+        (iter (+ f (* 9 w))))
+      )))
+
+(defun fast-q-mod* (arg1 arg2)
+  (declare (integer arg1 arg2)
+           (optimize (speed 3)
+                     (safety 0)))
+  
+  (let ((a1-0    (ldb (byte 64   0) arg1))
+        (a1-64   (ldb (byte 64  64) arg1))
+        (a1-128  (ldb (byte 64 128) arg1))
+        (a1-192  (ldb (byte 64 192) arg1))
+        (a1-256  (ash arg1 -256))
+        
+        (a2-0    (ldb (byte 64   0) arg2))
+        (a2-64   (ldb (byte 64  64) arg2))
+        (a2-128  (ldb (byte 64 128) arg2))
+        (a2-192  (ldb (byte 64 192) arg2))
+        (a2-256  (ash arg2 -256)))
+    
+    (declare (integer a1-0 a1-64 a1-128 a1-192 a1-256
+                      a2-0 a2-64 a2-128 a2-192 a2-256))
+
+    (fast-q-mod (+ (* a1-0 a2-0)
+                   (* 288 (+ (* a1-64  a2-192)
+                             (* a1-128 a2-128)
+                             (* a1-192 a2-64)
+                             (* a1-256 a2-256 288)))
+                   
+                   (ash (+ (* a1-0  a2-64)
+                           (* a1-64 a2-0)
+                           (* 288 (+ (* a1-128 a2-192)
+                                     (* a1-192 a2-128))))
+                        64)
+                   
+                   (ash (+ (* a1-0   a2-128)
+                           (* a1-64  a2-64)
+                           (* a1-128 a2-0)
+                           (* a1-192 a2-192 288))
+                        128)
+                   
+                   (ash (+ (* a1-0   a2-192)
+                           (* a1-64  a2-128)
+                           (* a1-128 a2-64)
+                           (* a1-192 a2-0))
+                        192)
+                   ))))
+  
+#|
+(with-mod *ed-q*
+  (let ((x (* *ed-r* *ed-r*)))
+    (time (loop repeat 1000000 do
+                (mmod x)))))
+  
+(with-mod *ed-q*
+  (let ((x (* *ed-r* *ed-r*)))
+    (time (loop repeat 1000000 do
+                (fast-mod x *ed-q*)))))
+
+(with-mod *ed-q*
+  (let ((x (* *ed-r* *ed-r*)))
+    (time (loop repeat 1000000 do
+                (fast-q-mod x)))))
+
+;; --------------------------------------------
+
+(with-mod *ed-q*
+  (time (loop repeat 1000000 do
+              (m* *ed-r* *ed-r*))))
+
+(time (loop repeat 1000000 do
+            (fast-q-mod* *ed-r* *ed-r*)))
+
+
+ |#
+#|
+(lw:defadvice (m* fast-m* :around) (arg &rest args)
+  (apply 'fast-m* arg args))
+|#
+
+;; ---------------------------------------------------------
+
 (defun ed-affine (pt)
   (optima:ematch pt
     ((ecc-pt-) pt)
@@ -213,31 +351,34 @@ THE SOFTWARE.
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
-     (let* ((alpha (random-between 1 *ed-q*)))
+     (progn ;; let* ((alpha (random-between 1 *ed-q*)))
          (with-mod *ed-q*
            (make-ed-proj-pt
-            :x (m* alpha x)
-            :y (m* alpha y)
-            :z alpha)
+            :x x ;; (m* alpha x)
+            :y y ;; (m* alpha y)
+            :z 1 ;; alpha
+            )
            )))
     ((ed-proj-pt-) pt)
     ))
 
 (defun ed-random-projective (pt)
   (with-mod *ed-q*
-    (let* ((alpha (random-between 1 *ed-q*)))
-      (declare (integer alpha))
+    (progn ;; let* ((alpha (random-between 1 *ed-q*)))
+      ;; (declare (integer alpha))
       (optima:ematch pt
         ((ecc-pt- :x x :y y)
          (make-ed-proj-pt
-          :x (m* alpha x)
-          :y (m* alpha y)
-          :z alpha))
+          :x x ;; (m* alpha x)
+          :y y ;; (m* alpha y)
+          :z 1 ;; alpha
+          ))
         ((ed-proj-pt- :x x :y y :z z)
          (make-ed-proj-pt
-          :x (m* alpha x)
-          :y (m* alpha y)
-          :z (m* alpha z)))
+          :x x ;; (m* alpha x)
+          :y y ;; (m* alpha y)
+          :z z ;; (m* alpha z)
+          ))
         ))))
 
 (defun ed-unify-pair-type (pt1 pt2)
