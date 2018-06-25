@@ -484,7 +484,7 @@ THE SOFTWARE.
 
 (defun ed-add (pt1 pt2)
   ;; contageon to randomized projective coords for added security
-  (reset-blinders)
+  ;; (reset-blinders)
   (multiple-value-bind (upt1 upt2)
       (ed-unify-pair-type pt1 pt2)
     (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))

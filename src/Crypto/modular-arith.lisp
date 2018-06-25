@@ -93,11 +93,11 @@ THE SOFTWARE.
     (if (< x 2)  ;; x = 0,1
         x
       ;; else
-      (let* ((exp (+ exponent (get-blinder (m-1))))
+      (let* ((exp exponent) ;; (+ exponent (get-blinder (m-1))))
              (n   (integer-length exp)))
         (declare (fixnum n)
                  (integer exp))
-        (do ((b  (+ x (get-blinder))
+        (do ((b  x ;; (+ x (get-blinder))
                  (m* b b))
              (p  1)
              (ix 0    (1+ ix)))
@@ -208,11 +208,11 @@ THE SOFTWARE.
 
 (defun m* (arg &rest args)
   (declare (integer arg))
-  (let* ((blinder (get-blinder)))
-    (declare (integer blinder))
+  (progn ;; let* ((blinder (get-blinder)))
+    ;; (declare (integer blinder))
     (dolist (opnd args)
       (declare (integer opnd))
-      (setf arg (mmod (* arg (+ opnd blinder))))))
+      (setf arg (mmod (* arg opnd #|(+ opnd blinder)|# )))))
   arg)
     
 
@@ -221,23 +221,24 @@ THE SOFTWARE.
 
 (defun m+ (arg &rest args)
   (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (+ arg blinder)))
-    (declare (integer blinder ans))
+  (let* (;; (blinder (get-blinder))
+         (ans     arg ;; (+ arg blinder)
+                  ))
+    (declare (integer #|blinder|# ans))
     (dolist (opnd args)
       (declare (integer opnd))
-      (incf ans (+ opnd blinder)))
+      (incf ans opnd #|(+ opnd blinder)|#))
     (mmod ans)))
 
 (defun m- (arg &rest args)
   (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (- arg blinder)))
-    (declare (integer blinder ans))
+  (let* (;; (blinder (get-blinder))
+         (ans     arg)) ;; (- arg blinder)))
+    (declare (integer #|blinder|# ans))
     (if args
         (dolist (opnd args)
           (declare (integer opnd))
-          (decf ans (+ opnd blinder)))
+          (decf ans opnd #|(+ opnd blinder)|#))
       (setf ans (- ans)))
     (mmod ans)))
 
