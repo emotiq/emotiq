@@ -8,17 +8,16 @@
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
+   #:edebug
    #:clear-local-nodes
    #:*log-filter*
    #:*log*
-   #:*log-dots*
    #:make-graph
    #:solicit
    #:solicit-wait
    #:solicit-progress
    #:solicit-direct
-   #:stop-gossip-sim
-   #:run-gossip-sim
+   #:run-gossip
    #:as-hash-table
    #:make-node
    #:listify-nodes
@@ -43,6 +42,8 @@
    #:broadcast
    #:establish-broadcast-group
    #:dissolve-graph
+
+   #:shutdown-gossip-server
    ))
 
 (defpackage gossip/config
@@ -55,6 +56,7 @@
 
 (defpackage :gossip/transport
   (:use :cl)
+  (:IMPORT-FROM :gossip :edebug)
   (:export
    #:start-transport
    #:stop-transport

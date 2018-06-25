@@ -54,7 +54,8 @@
                actors
                emotiq/wallet
                emotiq-rest
-               websocket/wallet)
+               websocket/wallet
+	       emotiq/tracker)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -91,11 +92,25 @@
 
 (defsystem "emotiq/sim"  ;; a simulated node
   :depends-on (emotiq/cli
-               alexandria)
+               alexandria
+	       emotiq/tracker)
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
                              (:file "election-sim")
                              (:file "node-sim" :depends-on (election-sim))))))
 
-
+(defsystem "emotiq/tracker"
+  :depends-on (emotiq actors emotiq/logging cosi-bls)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "state-tracker")))))
+                                       
+(defsystem "emotiq/ate"
+  :depends-on (emotiq emotiq/tracker emotiq/sim emotiq/startup gossip)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "ate")))))
+                                       

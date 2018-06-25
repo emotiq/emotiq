@@ -1,3 +1,6 @@
+
+;;; THIS FILE IS OBSOLETE
+
 (ql:quickload :gossip)
 
 (in-package :gossip)
@@ -16,7 +19,7 @@
     (setf *last-tiny-uid* n))
   (clear-local-nodes)
   (make-graph 10)
-  (run-gossip-sim :TCP))
+  (run-gossip))
 
 ; (setup-server 200)
 ; (visualize-nodes *nodes*)
@@ -33,7 +36,7 @@
     (setf *last-tiny-uid* n))
   (set-protocol-style :neighborcast)
   (clear-local-nodes)
-  (run-gossip-sim :TCP)
+  (run-gossip)
   (let ((server-port (if (equalp "localhost" server-address)
                          (other-tcp-port)
                          *nominal-gossip-port*)))
@@ -93,7 +96,7 @@
   (unless (>= *last-tiny-uid* n)
     (setf *last-tiny-uid* n))
   (clear-local-nodes)
-  (run-gossip-sim :TCP)
+  (run-gossip)
   (set-protocol-style :neighborcast)
   (setf rnode (ensure-proxy-node ':TCP "localhost" (other-tcp-port) 0))
   )
@@ -119,7 +122,7 @@
   (unless (>= *last-tiny-uid* n)
     (setf *last-tiny-uid* n))
   (clear-local-nodes)
-  (run-gossip-sim :TCP)
+  (run-gossip)
   (set-protocol-style :neighborcast)
   (let ((port (if (equalp "localhost" other-machine-address)
                   (other-tcp-port)

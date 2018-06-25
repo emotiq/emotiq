@@ -150,6 +150,8 @@ THE SOFTWARE.
    #:*maximum-age*
    #:*nbr-execs*
    #:*heartbeat-interval*
+
+   #:kill-executives
    ))
 
 (defpackage #:linda

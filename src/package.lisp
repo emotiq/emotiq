@@ -46,6 +46,7 @@
   (:export
    #:start-node)
   (:export
+   #:*notestream*
    #:note)
   (:export
    #:production-p
@@ -122,4 +123,19 @@
    #:etc/
    #:var/log/))
 
+(defpackage emotiq/tracker
+  (:use #:cl)
+  (:export
+   #:start-tracker
+   #:query-current-state
+   #:track))
+
+(defpackage emotiq/ate
+  (:use #:cl)
+  (:export
+   #:begin
+   #:wind-down
+   #:begin-sim
+   #:wind-down-sim
+   #:introspect))
 

@@ -3,6 +3,14 @@
 ;;; Makes log streams in Hemlock with CCL IDE, so you can just
 ;;; write to Hemlock windows as if they were streams.
 
+#+EXAMPLE
+(if (find-package :gui)
+    (setf emotiq:*notestream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log"))
+    (setf emotiq:*notestream* *error-output*))
+; 24-Jun-2018
+; The above works, but these hemlock streams are much too slow when they get to a couple 
+;  thousand lines.
+
 (in-package :gui)
 
 (export '(MAKE-LOG-WINDOW) :gui)

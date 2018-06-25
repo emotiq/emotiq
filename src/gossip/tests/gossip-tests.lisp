@@ -18,7 +18,8 @@
   (gossip::gossip-init ':maybe))
 
 (defun teardown-fixture ()
-  (gossip::gossip-init ':uninit))
+  (gossip::gossip-init ':uninit)
+  )
 
 (defun %aliveness (uid)
   "Runs test sending initial message to node with given uid"
@@ -70,23 +71,20 @@
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking 
-      (let ((oldnodes *nodes*)
-            (oldlogdots *log-dots*))
+      (let ((oldnodes *nodes*))
         (set-protocol-style :neighborcast)
         (unwind-protect
              (progn 
-               (setf *log-dots* t)
                (setf *nodes* (gossip::make-uid-mapper))
                (clear-local-nodes)
                (make-test-network)
                (ac::kill-executives)
-               (assert-eql 10 (run-gossip-sim))
+               (assert-eql 10 (run-gossip))
                (let* ((nodes (listify-nodes))
                       (uids (mapcar #'gossip::uid nodes)))
                                         ; do same test starting at every possible node
                  (mapc '%aliveness uids)))
-          (setf *nodes* oldnodes
-                *log-dots* oldlogdots)))))
+          (setf *nodes* oldnodes)))))
 
 ; (let ((*print-failures* t)) (run-tests '(key-value)))
 (define-test key-value
@@ -95,41 +93,37 @@
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking              
-    (let ((oldnodes *nodes*)
-          (oldlogdots *log-dots*))
+    (let ((oldnodes *nodes*))
       (set-protocol-style :neighborcast)
       (unwind-protect
            (progn
-             (setf *log-dots* t)
              (setf *nodes* (gossip::make-uid-mapper))
              (clear-local-nodes)
              (make-test-network)
              (ac::kill-executives)
-             (assert-eql 10 (run-gossip-sim))
+             (assert-eql 10 (run-gossip))
              (let* ((nodes (listify-nodes))
                     (uids (mapcar #'gossip::uid nodes)))
             ;; do same test starting at every possible node
                (mapc '%key-value uids)))
-        (setf *nodes* oldnodes
-              *log-dots* oldlogdots)))))
+        (setf *nodes* oldnodes)))))
 
 (define-test partial-gossip "Test partial-gossip with parameter 2"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking
-    (let ((oldnodes *nodes*)
-          (oldlogdots *log-dots*))
+    (let ((oldnodes *nodes*))
       (set-protocol-style :gossip 2)
       (unwind-protect
            (let ((results nil)
                  (*log-filter* nil))
-             (setf *log-dots* t)
+             (declare (special *log-filter*))
              (setf *nodes* (gossip::make-uid-mapper))
              (clear-local-nodes)
              (make-graph 100)
              (ac::kill-executives)
-             (assert-eql 100 (run-gossip-sim))
+             (assert-eql 100 (run-gossip))
              (dotimes (i 100)
                (push (unwrap (solicit-wait (random-node) :count-alive)) results))
              (setf results (mapcar (lambda (x) (if (numberp x) x nil)) results)) ; ensure :TIMEOUT doesn't appear in data
@@ -139,8 +133,7 @@
                                     (> x 90)
                                     t))
                               results))))
-        (setf *nodes* oldnodes
-              *log-dots* oldlogdots)))))
+        (setf *nodes* oldnodes)))))
 
 ; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
 ; (let ((*print-failures* t)) (run-tests :all))
