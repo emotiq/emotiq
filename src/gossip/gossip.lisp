@@ -25,8 +25,6 @@
 (defparameter *max-buffer-length* 65500)
 (defvar *default-graphID* :root "Identifier of the default, root, ground, or 'physical' graph that a node is always part of")
 (defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
-(defvar *hmac-keypair-lock* (mpcompat:make-lock) "Lock for *hmac-keypair*")
-(defvar *hmac-keypair-actor* nil "Actor managing *hmac-keypair*")
 (defvar *remote-uids* nil "cons of (time . list returned by multiple-list-uids). Only reflects uids found through active pinging
         of other machines, not those that result from unsolicited incoming messages to this machine.")
 (defvar *uber-set-cache* nil "Nodes of the uber-set known by this machine")
@@ -2027,27 +2025,21 @@ gets sent back, and everything will be copacetic.
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
     (actor-send mbox *hmac-keypair*)))
 
-#+IGNORE
 (defun hmac-keypair ()
   (or *hmac-keypair*
-      (let ((mbox (mpcompat:make-mailbox)))
-        (actor-send *hmac-keypair-actor* :TAS mbox)
-        (first (mpcompat:mailbox-read mbox)))))
-
-(defun hmac-keypair ()
-  (mpcompat:with-lock (*hmac-keypair-lock*)
-    (or *hmac-keypair*
-        (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))))
+      (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))))
 
 (defun sign-message (msg)
   "Sign and return an authenticated message packet. Packet includes
   original message."
-  (let ((keypair (hmac-keypair)))
-    (assert (pbc:check-public-key (pbc:keying-triple-pkey keypair)
-                                  (pbc:keying-triple-sig  keypair)))
-    (pbc:sign-message msg
-                      (pbc:keying-triple-pkey keypair)
-                      (pbc:keying-triple-skey keypair))))
+  (let ((keypair1 (hmac-keypair)))
+    (let ((keypair2 (hmac-keypair)))
+      (assert (eq keypair1 keypair2))  ;; assert fail means probable race condition
+      (assert (pbc:check-public-key (pbc:keying-triple-pkey keypair1)
+                                    (pbc:keying-triple-sig  keypair2)))
+      (pbc:sign-message msg
+                        (pbc:keying-triple-pkey keypair1)
+                        (pbc:keying-triple-skey keypair2)))))
 
 ;; ------------------------------------------------------------------------------
 
