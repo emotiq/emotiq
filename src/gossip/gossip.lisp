@@ -1983,15 +1983,15 @@ gets sent back, and everything will be copacetic.
                                             :peer-up-hook 'transport-peer-up
                                             :peer-down-hook 'transport-peer-down))))
 
-(defun transport-message-received (message peer-address peer-port)
+(defun transport-message-received (message peer-address)
   "Callback for transport layer on incoming message from other node."
   (with-authenticated-packet (packet)
     message ; has already been deserialized at this point
     ;; Unpack envelope containing Gossip metadata.
-    (destructuring-bind (destuid srcuid msg) packet
-      (log-event "Gossip transport message received" peer-address peer-port)
+    (destructuring-bind (destuid srcuid rem-port msg) packet
+      (log-event "Gossip transport message received" peer-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-      (let ((proxy (ensure-proxy-node :tcp peer-address peer-port srcuid)))
+      (let ((proxy (ensure-proxy-node :tcp peer-address rem-port srcuid)))
         ;; Note: Use uid of proxy for during local processing.
         (incoming-message-handler msg (uid proxy) destuid)))))
 
@@ -2056,6 +2056,7 @@ gets sent back, and everything will be copacetic.
                              ;; Pack message in a signed envelope containing Gossip metadata.
                              (sign-message (list (real-uid node) ; destuid
                                                  srcuid          ; srcuid
+                                                 *nominal-gossip-port*
                                                  gossip-msg))))  ; message (payload)
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
