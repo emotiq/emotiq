@@ -1508,17 +1508,6 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 
-(defun check-block-transactions (blk) 
-  "Return nil if invalid block. This is run by a CoSi block
-   validator. Validate by recomputing the full merkle hash on all the
-   transactions and comparing with that with that saved in the
-   merkle-root-hash slot of the block."
-  (hash:hash= 
-   (cosi/proofs:compute-merkle-root-hash (cosi/proofs:block-transactions blk))
-   (cosi/proofs:block-merkle-root-hash blk)))
- 
-
-
 (defun clear-transactions-in-block-from-mempool (block)
   "Remove transactions that have just been added the block from the mempool that
    is globally bound to cosi-simgen:*mempool*. Note that these transactions may
