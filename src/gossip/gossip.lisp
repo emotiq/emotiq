@@ -2042,11 +2042,12 @@ gets sent back, and everything will be copacetic.
 (defun sign-message (msg)
   "Sign and return an authenticated message packet. Packet includes
   original message."
-  (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
-                                (pbc:keying-triple-sig  (hmac-keypair))))
-  (pbc:sign-message msg
-                    (pbc:keying-triple-pkey (hmac-keypair))
-                    (pbc:keying-triple-skey (hmac-keypair))))
+  (let ((keypair (hmac-keypair)))
+    (assert (pbc:check-public-key (pbc:keying-triple-pkey keypair)
+                                  (pbc:keying-triple-sig  keypair)))
+    (pbc:sign-message msg
+                      (pbc:keying-triple-pkey keypair)
+                      (pbc:keying-triple-skey keypair))))
 
 ;; ------------------------------------------------------------------------------
 
