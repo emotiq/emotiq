@@ -32,6 +32,7 @@
                                 :reply-to nil
                                 :kind :k-singlecast
                                 :forward-to howmany
+                                :graphID graphID
                                 :args (cons nodeID message)))
             (send-msg solicitation
                       startnodeID                   ; destination
