@@ -26,7 +26,7 @@
                    :encrypted-wallet-secret encrypted-wallet-secret
                    :encrypted-private-key-p encrypted-private-key-p)))
 
-(defvar *default-wallet-name* "My Wallet")
+;;(defvar *default-wallet-name* "My Wallet")
 
 (defun create-wallet (&key
                         (name *default-wallet-name*)
