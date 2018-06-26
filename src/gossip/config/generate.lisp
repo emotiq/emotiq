@@ -15,7 +15,9 @@ The ROOT defaults to '/var/tmp/conf'."
       (destructuring-bind (host eripa port (public private))
           key-record
         (declare (ignore private))
-        (let ((directory (merge-pathnames (format nil "~a:~a" host port) root)))
+        (let ((directory (make-pathname :directory (append (pathname-directory root)
+                                                           (list (format nil "~a:~a" host port)))
+                                        :defaults root)))
           (emotiq:note "~&Writing configuration to '~a'.~&" directory)
           (ensure-directories-exist directory)
           (write-local-machine-conf
