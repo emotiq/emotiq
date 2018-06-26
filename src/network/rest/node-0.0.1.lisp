@@ -18,7 +18,7 @@
             "[Get status from the tracker]")))))))
 
 (restas:define-route %tracker
-    ("/"
+    ("/tracker"
      :method :get
      :content-type "text/plain")
   (format nil "~a"
@@ -28,6 +28,7 @@
     ("/:node/"
      :method :delete
      :content-type "application/javascript")
+  (declare (ignore node))
   "Unimplemented termination of node")
 
 

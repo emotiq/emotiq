@@ -15,40 +15,70 @@
       (:h1 "Simulator API")
       (:ul
        (:li
-        (:p "[Make a new simulation]"
+        (:span "[Run a new simulation]"
             (:form :method :post
                    :action (restas:genurl '%create)
-                   (:input :type "submit" :value "Create")))))
-       (:ul
-        (:li
-         (:a :href (restas:genurl '%wind-down-sim :name "Simulator" :id 0)
-             "[Stop the simulator]")))))))
+                   (:input :type "submit" :value "Create"))))
+       (:li
+        (:a :href (restas:genurl '%results)
+            "[Output from simulation]")))
+      (:h2 "See Also")
+      (:p "The running simulator will also update the node tracker information")
+      (:p
+       (:a :href "../../node/api/"
+                  ;; HACK: under RESTAS we seemingly cannot
+                  ;; automatically generate a reference to a route
+                  ;; that has been mounted as a sibling, so we cheat
+                  ;; by just specifying the relative path.
+           #+(or) (restas:genurl 'route.emotiq/0::-node-.%api)
+           "[Node API]"))))))
 
-;; TODO: delete this kludge and replace with wind-down-sim which unitializes pr
-(defparameter *simulator-p* nil) 
+(defparameter *simulator-output* nil)
 
 (restas:define-route %create ("/"
                              :method :post
                              :content-type "text/plain")
-  ;;; TODO: redirect to single simulator reference
-  (let ((output (make-string-output-stream)))
-    (let ((*error-output* output)
-          (*standard-output* output))
-      (when (not *simulator-p*)  ;; prevent multiple initializations, TODO: kludge, fix this
-        (emotiq/sim:initialize)
-        (setf *simulator-p* t))
-      (values
-       output
-       (emotiq/sim:run-new-tx)))))
+  (when *simulator-output*
+    (setf (hunchentoot:return-code*) hunchentoot:+http-conflict+)
+    (return-from %create "Only one simulator can be created."))
+  (bt:make-thread #'run-simulator)
+  (setf (hunchentoot:return-code*) hunchentoot:+http-created+)
+  (restas:genurl* '%results))
+
+(defun run-simulator ()
+  (setf *simulator-output* (make-string-output-stream))
+  (let ((*error-output* *simulator-output*)
+        (*standard-output* *simulator-output*))
+    (emotiq/sim:initialize)
+    (emotiq/sim:run-new-tx)))
+
+(defvar *simulator-results* "") 
+
+(restas:define-route %results ("/0"
+                               :content-type "text/plain")
+  (when *simulator-output*
+    (let ((new-output (get-output-stream-string *simulator-output*)))
+      (when new-output
+        (setf *simulator-results*
+              (concatenate 'string
+                           *simulator-results*
+                           new-output)))
+      *simulator-results*)))
 
 (restas:define-route %wind-down-sim
-    ("/:id/"
+    ("/:id"
      :method :delete
      :content-type "text/plain")
   (declare (ignore id))
+  (unless *simulator-output*
+    (setf (hunchentoot:return-code*) hunchentoot:+http-conflict+)
+    (return-from %wind-down-sim "No simulator available to delete."))
   (gossip:shutdown-gossip-server)
   (actors:kill-executives)
-  (setf *simulator-p* nil))
+  (setf *simulator-output* nil
+        *simulator-results* ""))
+
+
 
 
 

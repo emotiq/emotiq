@@ -28,7 +28,7 @@
    (:html
     (:body
      (:div :id "navigation"
-           (:h1 "Wallet")
+           (:h1 "Emotiq REST API")
            (:div
             :id "client"
             (:a :href (restas:genurl '-client-.%index) "Client"))

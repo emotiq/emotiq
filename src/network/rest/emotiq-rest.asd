@@ -28,8 +28,8 @@
                                       (:file "client-0.0.1")                               
                                       (:file "dictionary-0.0.1")
                                       (:file "wallet-0.0.1")
-                                      (:file "simulator-0.0.1")
                                       (:file "node-0.0.1")
+                                      (:file "simulator-0.0.1")
                                       (:file "emotiq-0.0.1")))))
 
 
