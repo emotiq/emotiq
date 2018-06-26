@@ -44,14 +44,13 @@
   Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
   some partial information is propagating in case of node failures.")
 
-(defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used.")
-
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
                                        Can be an integer to pick up to n neighbors.")
 ;;;; DEPRECATE
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
-
+(defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
+   in an effort to find an unused local port")
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 
 ; Actuals below can differ from nominal if you're running multiple servers on the same machine in different processes.
@@ -72,7 +71,7 @@
 
 (defvar *transport* nil "Network transport endpoint.")
 
-(defvar *ll-application-handler* nil "Set to a function to be called when the API methods reach their target.")
+(defvar *application-handler* nil "Set to a function to be called when the API methods reach their target.")
 
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
@@ -555,37 +554,20 @@ are in place between nodes.
       (edebug 5 "Gossip Actor" (ac::current-actor) "received" msg)
       (apply 'gossip-dispatcher node msg))))
 
-(defun memoize-node (node &optional (invalidate-cache t))
-  "Ensure this node is memoized on *nodes*"
-  (kvs:relate-unique! *nodes* (uid node) node)
-  (when invalidate-cache
-    (setf *uber-set-cache* nil))
-  node)
-
-(defun %make-node (&rest args)
-  "Makes a new [real, non-proxy] gossip node. Doesn't memoize it."
+(defun make-node (&rest args)
+  "Makes a new [real, non-proxy] node"
   (let ((neighborhood (getf args :neighborhood))) ; allow to specify :neighborhood as list, for *default-graphID*
     (with-keywords-removed (args (:neighborhood))
-      (let ((node (apply 'make-instance 'gossip-node args)))
+  (let* ((node (apply 'make-instance 'gossip-node args))
+         (actor (make-gossip-actor node)))
         (when neighborhood
           (mapcar (lambda (uid)
                     (pushnew uid (neighborhood node)))
                   neighborhood))
-        node))))
-
-(defmethod initialize-node ((node gossip-node) &key pkey skey)
-  (declare (ignore skey))
-  (let* ((actor (make-gossip-actor node)))
     (setf (actor node) actor)
-    (when pkey ; pkey, if given, takes precedence over UID
-      (setf (slot-value node 'uid) pkey))
-    (memoize-node node)))
-
-(defmethod make-node ((kind (eql :gossip)) &rest rest &key pkey skey &allow-other-keys)
-  (with-keywords-removed (rest (:pkey :skey))
-    (let ((node (apply '%make-node rest)))
-      (initialize-node node :pkey pkey :skey skey)
-      node)))
+    (kvs:relate-unique! *nodes* (uid node) node)
+        (setf *uber-set-cache* nil) ; invalidate cache
+        node))))
 
 (defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -602,13 +584,14 @@ are in place between nodes.
         (when oldnode
           (log-event :WARN oldnode "being replaced by proxy" node)))
       (setf (slot-value node 'uid) (real-uid node)))
-    (memoize-node node nil) ; proxies are not part of uber-set, therefore no cache invalidation needed
+    (kvs:relate-unique! *nodes* (uid node) node)
+    ; proxies are not part of uber-set, therefore no cache invalidation needed
     (memoize-proxy node proxy-subtable)))
 
 ;;;; Graph making routines
 (defun make-nodes (numnodes)
   (dotimes (i numnodes)
-    (make-node ':gossip)))
+    (make-node)))
 
 (defun listify-nodes (&optional (nodetable *nodes*))
   (loop for node being each hash-value of nodetable collect node))
@@ -751,7 +734,7 @@ are in place between nodes.
   (let ((*package* (find-package :gossip)))
     (flet ((write-slot (initarg value) ; assumes accessors and initargs are named the same
              (format stream "~%  ~S ~A" initarg (readable-value value))))
-      (format stream "(make-node ':gossip")
+      (format stream "(make-node")
       (write-slot :uid (uid node))
       (write-slot :address (address node))
       (write-slot :neighbors (neighbors node))
@@ -934,7 +917,7 @@ dropped on the floor.
         (allnodes nil))
     (unwind-protect
         (progn
-          (setf localnode (make-node ':gossip))
+          (setf localnode (make-node))
           (pushnew (uid rnode) (neighborhood localnode))
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
@@ -960,7 +943,7 @@ dropped on the floor.
                          address-port-list))
     (unwind-protect
         (progn
-          (setf localnode (make-node ':gossip))
+          (setf localnode (make-node))
           (mapcar (lambda (rnode)
                     (pushnew (uid rnode) (neighborhood localnode)))
                   rnodes)
@@ -998,6 +981,11 @@ dropped on the floor.
            node
            msg
            args)))
+
+(defmethod application-handler ((node gossip-mixin))
+  (or *application-handler*
+      (lambda (node &rest args)
+        (apply 'node-log node :APPLICATION-HANDLER args))))
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
@@ -1317,7 +1305,7 @@ dropped on the floor.
 ;; Because these messages never involve a reply, even if the reply-to slot is non-nil in these messages,
 ;;   it will be ignored.
 
-; Not really using this for anything, because it doesn't really do anything except traverse
+; Not really using this for anything
 (defmethod announce ((msg solicitation) thisnode srcuid)
   "Announce a message to the collective. First arg of Msg is the announcement,
    which can be any Lisp object. Recipient nodes are not expected to reply.
@@ -1330,35 +1318,10 @@ dropped on the floor.
 
 ;;; These are the message kinds used by the high-level application programmer's gossip api.
 
-(defgeneric lowlevel-application-handler (node)
-  (:documentation "Returns something that actor-send can send to, which is associated with node.
-   This is used by gossip to forward an raw gossip-message-mixin once it reaches its destination node.
-   Function should accept 2 args: node and gossip-message-mixin."))
-
 (defgeneric application-handler (node)
   (:documentation "Returns something that actor-send can send to, which is associated with node.
     This is used by gossip to forward an application message to its application destination
-    once it reaches its destination node.
-    Function should accept &rest application-message."))
-
-(defmethod lowlevel-application-handler ((node gossip-mixin))
-  "Default method"
-  (or *ll-application-handler*
-      (lambda (node msg)
-        (apply 'node-log node :LL-APPLICATION-HANDLER msg))))
-
-(defmethod application-handler ((node gossip-mixin))
-  "Default method"
-  (lambda (&rest args)
-    (apply 'node-log node :APPLICATION-HANDLER args)))
-
-(defun handoff-to-application-handlers (node msg highlevel-message-extractor)
-  (let ((lowlevel-application-handler (lowlevel-application-handler node))
-        (application-handler (application-handler node)))
-    (when lowlevel-application-handler ; mostly for gossip's use, not the application programmer's
-      (actor-send lowlevel-application-handler node msg))
-    (when application-handler
-      (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))))
+    once it reaches its destination node."))
 
 (defmethod k-singlecast ((msg solicitation) thisnode srcuid)
   "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
@@ -1367,7 +1330,7 @@ dropped on the floor.
   Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
   Destination node is not expected to reply (at least not with gossip-style replies)."
   (if (eql (uid thisnode) (car (args msg)))
-      (handoff-to-application-handlers thisnode msg (lambda (msg) (cdr (args msg))))
+      (apply 'actor-send (application-handler thisnode) thisnode (cdr (args msg)))
       ; thisnode becomes new source for forwarding purposes
       (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
@@ -1376,22 +1339,9 @@ dropped on the floor.
   Every intermediate node will have the message
   both delivered to it and forwarded through it.
   Recipient nodes are not expected to reply (at least not with gossip-style replies)."
-  (handoff-to-application-handlers thisnode msg 'args)
+  (apply 'actor-send (application-handler thisnode) thisnode (args msg))
    ; thisnode becomes new source for forwarding purposes
   (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
-
-(defmethod k-hello ((msg solicitation) thisnode srcuid)
-  "Announce a UID, IP address, and port to the collective.
-  (This is different from the automatic ensure-proxy-node that happens with every incoming
-   connection because that implicitly proxifies only the immediate upstream sender.
-   This explicitly proxifies a particular node.)
-  Every intermediate node will have the message
-  both delivered to it and forwarded through it.
-  Recipient nodes are not expected to reply."
-  (destructuring-bind (uid ipaddr ipport) (args msg)
-    (ensure-proxy-node :tcp ipaddr ipport uid)
-    ; thisnode becomes new source for forwarding purposes
-    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
 (defmethod k-dissolve ((msg solicitation) thisnode srcuid)
   "Commands every node it passes through to dissolve connections associated with a given graphID.
@@ -2042,15 +1992,15 @@ gets sent back, and everything will be copacetic.
                                             :peer-up-hook 'transport-peer-up
                                             :peer-down-hook 'transport-peer-down))))
 
-(defun transport-message-received (message)
+(defun transport-message-received (message peer-address)
   "Callback for transport layer on incoming message from other node."
   (with-authenticated-packet (packet)
     message ; has already been deserialized at this point
     ;; Unpack envelope containing Gossip metadata.
-    (destructuring-bind (destuid srcuid rem-address rem-port msg) packet
-      (log-event "Gossip transport message received" rem-address rem-port)
+    (destructuring-bind (destuid srcuid rem-port msg) packet
+      (log-event "Gossip transport message received" peer-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-      (let ((proxy (ensure-proxy-node :tcp rem-address rem-port srcuid)))
+      (let ((proxy (ensure-proxy-node :tcp peer-address rem-port srcuid)))
         ;; Note: Use uid of proxy for during local processing.
         (incoming-message-handler msg (uid proxy) destuid)))))
 
@@ -2117,7 +2067,6 @@ gets sent back, and everything will be copacetic.
                              ;; Pack message in a signed envelope containing Gossip metadata.
                              (sign-message (list (real-uid node) ; destuid
                                                  srcuid          ; srcuid
-                                                 (eripa)
                                                  *nominal-gossip-port*
                                                  gossip-msg))))  ; message (payload)
 
@@ -2134,6 +2083,7 @@ gets sent back, and everything will be copacetic.
   (incf (hopcount gossip-msg))
   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
   (locally-receive-msg gossip-msg node srcuid))
+
 
 (defun run-gossip ()
   "Archive the current log and clear it.
@@ -2216,7 +2166,7 @@ gets sent back, and everything will be copacetic.
 ; ON SERVER MACHINE
 ; (clear-local-nodes)
 #+TEST1
-(setf localnode (make-node ':gossip
+(setf localnode (make-node
   :UID 200))
 ; (run-gossip :UDP)
 
@@ -2231,7 +2181,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node ':gossip
+(setf localnode (make-node
   :UID 201))
 #+TEST1
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2258,7 +2208,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node ':gossip
+(setf localnode (make-node
   :UID 201))
 #+TEST2
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2286,7 +2236,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node ':gossip
+(setf localnode (make-node
   :UID 201))
 #+TEST3
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2343,7 +2293,7 @@ gets sent back, and everything will be copacetic.
 ; (get-kvs :foo) ; should return a list of (node . 2)
 
 #+TESTING
-(setf node (make-node ':gossip
+(setf node (make-node
   :UID 253
   :ADDRESS 'NIL
   :LOGFN 'GOSSIP::DEFAULT-LOGGING-FUNCTION
