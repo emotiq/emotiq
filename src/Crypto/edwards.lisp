@@ -399,7 +399,7 @@ THE SOFTWARE.
           (iter (ash k -1) (cons 0 ans)))
         ))))
         
-(defun ed-naf4-mul (pt n)
+(defun ed-basic-mul (pt n)
   (declare (integer n))
   (cond ((zerop n) (ed-projective
                     (ed-neutral-point)))
@@ -436,7 +436,7 @@ THE SOFTWARE.
         ))
 
 ;; ----------------------------------------------------------------
-        
+#|        
 (defun naf (k)
   (declare (integer k))
   ;; non-adjacent form encoding of integers
@@ -471,7 +471,7 @@ THE SOFTWARE.
                       ))
               v))
         ))
-
+|#
 ;; ----------------------------------------------------------------
         
 (defun ed-mul (pt n)
@@ -479,8 +479,7 @@ THE SOFTWARE.
   (let* ((alpha  (* *ed-r* *ed-h* (random-between 1 #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  ;; (ed-basic-mul pt n)
-  (ed-naf4-mul pt n))
+  (ed-basic-mul pt n))
 
 (defun ed-div (pt n)
   (with-mod *ed-r*
