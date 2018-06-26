@@ -352,7 +352,8 @@ This will spawn an actor which will asynchronously do the following:
             (cosi/proofs/newtx:dump-txs :blockchain t)
             (emotiq:note "~2%Good-bye and good luck!~%"))))))
   (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
-  (values))
+  (emotiq:note "number of blocks ~A" (length (blocks)) )
+  (values (length (blocks))))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
