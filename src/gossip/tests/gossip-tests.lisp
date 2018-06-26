@@ -118,7 +118,6 @@
       (unwind-protect
            (let ((results nil)
                  (*log-filter* nil))
-             (declare (special *log-filter*))
              (setf *nodes* (gossip::make-uid-mapper))
              (clear-local-nodes)
              (make-graph 100)
@@ -143,19 +142,20 @@
   (nth (random (length list)) list))
 
 
-(define-test singlecast-test "Test singlecast"
+(define-test singlecast-local "Test singlecast"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
   ;;; rather than bind them.
   (with-networking
       (let ((oldnodes *nodes*)
             (numnodes 100)
-            (old-application-handler *ll-application-handler*))
+            (old-application-handler *ll-application-handler*)
+            (old-remotes gossip::*remote-uids*))
         (unwind-protect
             (let ((results nil)
                   (*log-filter* nil)
                   (msg '(foo message)))
-              (declare (special *log-filter*))
+              (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
               (setf *ll-application-handler* (lambda (node full-msg) (setf results (list (gossip::hopcount full-msg) node full-msg))))
               (clear-local-nodes)
@@ -172,13 +172,61 @@
                             ;   it's fully-connected.)
                             :graphID ':uber)
                 (mpcompat:process-wait-with-timeout "answer-wait" 5 (lambda () results))
-                (assert-equal msg (cdr (gossip::args (third results))))
+                (assert-true results)
+                (when results (assert-equal msg (cdr (gossip::args (third results)))))
+                (when *debug* (format t "~%SINGLECAST-LOCAL Hopcount=~D" (first results)))
                ; (print results) contains hopcount, node, and full message
                 ))
           (setf *nodes* oldnodes
-                *ll-application-handler* old-application-handler)))))
+                *ll-application-handler* old-application-handler
+                gossip::*remote-uids* old-remotes)))))
 
-; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-test)))
+; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-local)))
+
+; Also need tests on singlecast-remote and singlecast-direct [no graphID]
+
+(define-test broadcast-local "Test broadcast"
+  ;;; careful with globals. Remember that they get a different value
+  ;;; in each thread if you're not careful.  So we set them here
+  ;;; rather than bind them.
+  (with-networking
+      (let ((oldnodes *nodes*)
+            (numnodes 100)
+            (old-application-handler *ll-application-handler*)
+            (old-remotes gossip::*remote-uids*))
+        (unwind-protect
+            (let ((results nil)
+                  (resultlock (mpcompat:make-lock))
+                  (*log-filter* nil)
+                  (msg '(foo message)))
+              (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
+              (setf *nodes* (gossip::make-uid-mapper))
+              ; every node that receives the message will push its id onto results
+              (setf *ll-application-handler* (lambda (node full-msg)
+                                               (declare (ignore full-msg))
+                                               (mpcompat:with-lock (resultlock)
+                                                 (push node results))))
+              (clear-local-nodes)
+              (gossip::make-nodes numnodes)
+              (ac::kill-executives)
+              (assert-eql numnodes (length (get-live-uids)))
+              (assert-eql numnodes (run-gossip))
+              (let* ((somelocal (gossip::locate-local-node-for-graph :uber)))
+                (assert-true (member somelocal (get-live-uids)))
+                (broadcast msg :style ':neighborcast :graphID ':uber :startnodeID somelocal)
+                ; wait until over half of nodes have seen the message, or 5 seconds, whichever comes first
+                (mpcompat:process-wait-with-timeout "answer-wait" 5 (lambda () (> (length results) (/ numnodes 2))))
+                (assert-true results)
+                (when *debug* (format t "~%BROADCAST-LOCAL ~D" (length results)))
+                (sleep 1) ; just to allow the remainder of nodes to see the message
+                (assert-true (= (length results) numnodes))))
+          (setf *nodes* oldnodes
+                *ll-application-handler* old-application-handler
+                gossip::*remote-uids* old-remotes)))))
+
+; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(broadcast-local)))
+
+; Also need tests on broadcast-remote and broadcast-gossip [not neighborcast]
 
 (defun make-test-network ()
   "Interesting graph of 10 nodes."
