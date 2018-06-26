@@ -118,7 +118,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
                      :trn trans))
 
 (defun force-epoch-end ()
-  (ac:pr "force-epoch-end")
+  (emotiq:note "force-epoch-end")
   (cosi-simgen:send cosi-simgen:*top-node* :make-block))
 
 (defparameter *user-1* nil)
@@ -168,7 +168,7 @@ This will spawn an actor which will asynchronously do the following:
         (user-2-pkey (pbc:keying-triple-pkey *user-2*))
         (user-3-pkey (pbc:keying-triple-pkey *user-3*)))
       
-      (ac:pr "Construct Genesis transaction")
+      (emotiq:note "Construct Genesis transaction")
       (let ((genesis-utxo (send-genesis-utxo :monetary-supply monetary-supply :cloaked cloaked)))
         (let ((trans (create-transaction
                       *genesis-account* genesis-utxo
@@ -176,11 +176,11 @@ This will spawn an actor which will asynchronously do the following:
                       '(1000) (list user-1-pkey) 0 :cloaked cloaked)))
                                         ; force genesis block (leader-exec breaks if blockchain is nil)
           (publish-transaction (setf *tx-1* trans) "tx-1") ; 
-          (ac:pr "Find UTX for user-1")
+          (emotiq:note "Find UTX for user-1")
           (let ((from-utxo (cosi/proofs:find-txout-for-pkey-hash
                             (hash:hash/256 user-1-pkey)
                             trans)))
-            (ac:pr "Construct 2nd transaction")
+            (emotiq:note"Construct 2nd transaction")
             (let ((trans (create-transaction
                           *user-1* from-utxo 
                                         ; user1 spends 500 to user2, 490 to user3, 10 for fee
@@ -208,7 +208,7 @@ This will spawn an actor which will asynchronously do the following:
   (setf *genesis-output* nil *tx-1* nil *tx-2* nil)
   (cosi-simgen:reset-nodes)
   (let ((fee 10))    
-    (ac:pr "Construct Genesis Block")
+    (emotiq:note "Construct Genesis Block")
     (let* ((genesis-block
              (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
                ;; Establish current-node binding of genesis node
@@ -246,7 +246,7 @@ This will spawn an actor which will asynchronously do the following:
                 :skeys (pbc:keying-triple-skey *genesis-account*)
                 :pkeys (pbc:keying-triple-pkey *genesis-account*))))
         (setq *tx-1* signed-transaction)
-        (ac:pr (format nil "Broadcasting 1st TX."))
+        (emotiq:note "Broadcasting 1st TX.")
         (format t "~%Tx 1 created/signed by genesis (~a), now broadcasting."
                 genesis-public-key-hash)
         (cosi/proofs/newtx:dump-tx signed-transaction)
@@ -275,7 +275,7 @@ This will spawn an actor which will asynchronously do the following:
           (format t "~%Tx 2 created/signed by user-1 (~a), now broadcasting."
                   user-1-public-key-hash)
           (setq *tx-2* signed-transaction)
-          (ac:pr (format nil "Broadcasting 2nd TX."))
+          (emotiq:note "Broadcasting 2nd TX.")
           (cosi/proofs/newtx:dump-tx signed-transaction)
           (broadcast-message :new-transaction-new :trn signed-transaction)
 
@@ -299,7 +299,7 @@ This will spawn an actor which will asynchronously do the following:
                    transaction-inputs transaction-outputs
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))          
-            (ac:pr (format nil "Broadcasting 3rd TX."))
+            (emotiq:note "Broadcasting 3rd TX.")
             (format t "~%Tx 3 created/signed by user-2 (~a), now broadcasting."
                     user-2-public-key-hash)
             (cosi/proofs/newtx:dump-tx signed-transaction)
@@ -312,7 +312,7 @@ This will spawn an actor which will asynchronously do the following:
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
 
-            (ac:pr (format nil "Broadcasting 4th TX [attempt to double-spend (same TxID)]."))
+            (emotiq:note "Broadcasting 4th TX [attempt to double-spend (same TxID)].")
             (format t "~%Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
@@ -328,7 +328,7 @@ This will spawn an actor which will asynchronously do the following:
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
 
-            (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
+            (emotiq:note "Broadcasting 5th TX [attempt to double-spend (diff TxID)].")
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
