@@ -71,7 +71,7 @@
 
 (defvar *transport* nil "Network transport endpoint.")
 
-(defvar *application-handler* nil "Set to a function to be called when the API methods reach their target.")
+(defvar *ll-application-handler* nil "Set to a function to be called when the API methods reach their target.")
 
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
@@ -982,11 +982,6 @@ dropped on the floor.
            msg
            args)))
 
-(defmethod application-handler ((node gossip-mixin))
-  (or *application-handler*
-      (lambda (node &rest args)
-        (apply 'node-log node :APPLICATION-HANDLER args))))
-
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler methods for bootstrapping messages
@@ -1318,10 +1313,35 @@ dropped on the floor.
 
 ;;; These are the message kinds used by the high-level application programmer's gossip api.
 
+(defgeneric lowlevel-application-handler (node)
+  (:documentation "Returns something that actor-send can send to, which is associated with node.
+   This is used by gossip to forward an raw gossip-message-mixin once it reaches its destination node.
+   Function should accept 2 args: node and gossip-message-mixin."))
+
 (defgeneric application-handler (node)
   (:documentation "Returns something that actor-send can send to, which is associated with node.
     This is used by gossip to forward an application message to its application destination
-    once it reaches its destination node."))
+    once it reaches its destination node.
+    Function should accept node and &rest application-message."))
+
+(defmethod lowlevel-application-handler ((node gossip-mixin))
+  "Default method"
+  (or *ll-application-handler*
+      (lambda (node msg)
+        (apply 'node-log node :LL-APPLICATION-HANDLER msg))))
+
+(defmethod application-handler ((node gossip-mixin))
+  "Default method"
+  (lambda (node &rest args)
+    (apply 'node-log node :APPLICATION-HANDLER args)))
+
+(defun handoff-to-application-handlers (node msg highlevel-message-extractor)
+  (let ((lowlevel-application-handler (lowlevel-application-handler node))
+        (application-handler (application-handler node)))
+    (when lowlevel-application-handler ; mostly for gossip's use, not the application programmer's
+      (actor-send lowlevel-application-handler node msg))
+    (when application-handler
+      (apply 'actor-send application-handler node (funcall highlevel-message-extractor msg)))))
 
 (defmethod k-singlecast ((msg solicitation) thisnode srcuid)
   "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
@@ -1330,7 +1350,7 @@ dropped on the floor.
   Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
   Destination node is not expected to reply (at least not with gossip-style replies)."
   (if (eql (uid thisnode) (car (args msg)))
-      (apply 'actor-send (application-handler thisnode) thisnode (cdr (args msg)))
+      (handoff-to-application-handlers thisnode msg (lambda (msg) (cdr (args msg))))
       ; thisnode becomes new source for forwarding purposes
       (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
@@ -1339,7 +1359,7 @@ dropped on the floor.
   Every intermediate node will have the message
   both delivered to it and forwarded through it.
   Recipient nodes are not expected to reply (at least not with gossip-style replies)."
-  (apply 'actor-send (application-handler thisnode) thisnode (args msg))
+  (handoff-to-application-handlers thisnode msg 'args)
    ; thisnode becomes new source for forwarding purposes
   (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
 
@@ -2083,7 +2103,6 @@ gets sent back, and everything will be copacetic.
   (incf (hopcount gossip-msg))
   ; Remember the srcuid that sent me this message, because that's where reply will be forwarded to
   (locally-receive-msg gossip-msg node srcuid))
-
 
 (defun run-gossip ()
   "Archive the current log and clear it.
