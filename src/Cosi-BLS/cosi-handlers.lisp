@@ -894,13 +894,11 @@ check that each TXIN and TXOUT is mathematically sound."
   (or *cosi-gossip-neighborhood-graph*
       (setf *cosi-gossip-neighborhood-graph*
             (or :UBER ;; for now while debugging
-                #|
-                (gossip:establish-gossip-broadcast-group
+                (gossip:establish-broadcast-group
                  (remove (node-pkey my-node) (get-witness-list)
                          :test 'int=)
-                 :graphID :cosi)
-                |#)
-            )))
+                 :graphID :cosi)))
+      ))
 
 (defun gossip-neighborcast (my-node &rest msg)
   "Gossip-neighborcast - send message to all witness nodes."
