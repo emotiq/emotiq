@@ -202,151 +202,16 @@ THE SOFTWARE.
     ))
 
 ;; ---------------------------------------------------------
-;; Attempt faster modular field arithmetic
-
-(defun fast-m* (arg &rest args)
-  (declare (integer arg)
-           (optimize  (speed 3)
-                      (safety 0)))
-  (setf arg (mmod arg))
-  (dolist (opnd args)
-    (declare (integer opnd))
-    (setf arg (mmod (* arg (the integer (mmod opnd))))))
-  arg)
-
-(defvar *fast-q-mods*
-  (let ((arr (make-array 256 :initial-element 0)))
-    (with-mod *ed-q*
-      (loop for ix from 0 below 256
-            for v = (ash 1 (integer-length *ed-q*)) then (+ v v)
-            do
-            (setf (aref arr ix) (mmod v)))
-      arr)))
-    
-(defun fast-mod (arg base)
-  (declare (integer arg base)
-           (optimize (speed 3)
-                     (safety 0)))
-  (let* ((nb0   (integer-length base))
-         (m     (mod (ash 1 nb0) base))
-         (nbm1  (1- nb0))
-         (mnbm1 (- nbm1)))
-    (declare (fixnum nb0 nbm1)
-             (integer m))
-    (um:nlet-tail iter ((a arg))
-      (declare (integer a))
-      (let* ((f    (ldb (byte nbm1 0) a))
-             (w    (ash a mnbm1)))
-        (declare (fixnum nb)
-                 (integer f w))
-        (if (zerop w)
-            f
-          (iter  (+ f (* w m))))
-        ))))
-  
-(defun fast-q-mod (arg)
-  (declare (integer arg)
-           (optimize (speed 3)
-                     (safety 0)))
-  (um:nlet-tail iter ((a arg))
-    (declare (integer a))
-    (let* ((f  (ldb (byte 251 0) a))
-           (w  (ash a -251)))
-      (declare (integer f w))
-      (if (zerop w)
-          (if (< f *ed-q*)
-              f
-            (- f *ed-q*))
-        (iter (+ f (* 9 w))))
-      )))
-
-(defun fast-q-mod* (arg1 arg2)
-  (declare (integer arg1 arg2)
-           (optimize (speed 3)
-                     (safety 0)))
-  
-  (let ((a1-0    (ldb (byte 64   0) arg1))
-        (a1-64   (ldb (byte 64  64) arg1))
-        (a1-128  (ldb (byte 64 128) arg1))
-        (a1-192  (ldb (byte 64 192) arg1))
-        (a1-256  (ash arg1 -256))
-        
-        (a2-0    (ldb (byte 64   0) arg2))
-        (a2-64   (ldb (byte 64  64) arg2))
-        (a2-128  (ldb (byte 64 128) arg2))
-        (a2-192  (ldb (byte 64 192) arg2))
-        (a2-256  (ash arg2 -256)))
-    
-    (declare (integer a1-0 a1-64 a1-128 a1-192 a1-256
-                      a2-0 a2-64 a2-128 a2-192 a2-256))
-
-    (fast-q-mod (+ (* a1-0 a2-0)
-                   (* 288 (+ (* a1-64  a2-192)
-                             (* a1-128 a2-128)
-                             (* a1-192 a2-64)
-                             (* a1-256 a2-256 288)))
-                   
-                   (ash (+ (* a1-0  a2-64)
-                           (* a1-64 a2-0)
-                           (* 288 (+ (* a1-128 a2-192)
-                                     (* a1-192 a2-128))))
-                        64)
-                   
-                   (ash (+ (* a1-0   a2-128)
-                           (* a1-64  a2-64)
-                           (* a1-128 a2-0)
-                           (* a1-192 a2-192 288))
-                        128)
-                   
-                   (ash (+ (* a1-0   a2-192)
-                           (* a1-64  a2-128)
-                           (* a1-128 a2-64)
-                           (* a1-192 a2-0))
-                        192)
-                   ))))
-  
-#|
-(with-mod *ed-q*
-  (let ((x (* *ed-r* *ed-r*)))
-    (time (loop repeat 1000000 do
-                (mmod x)))))
-  
-(with-mod *ed-q*
-  (let ((x (* *ed-r* *ed-r*)))
-    (time (loop repeat 1000000 do
-                (fast-mod x *ed-q*)))))
-
-(with-mod *ed-q*
-  (let ((x (* *ed-r* *ed-r*)))
-    (time (loop repeat 1000000 do
-                (fast-q-mod x)))))
-
-;; --------------------------------------------
-
-(with-mod *ed-q*
-  (time (loop repeat 1000000 do
-              (m* *ed-r* *ed-r*))))
-
-(time (loop repeat 1000000 do
-            (fast-q-mod* *ed-r* *ed-r*)))
-
-
- |#
-#|
-(lw:defadvice (m* fast-m* :around) (arg &rest args)
-  (apply 'fast-m* arg args))
-|#
-
-;; ---------------------------------------------------------
 
 (defun ed-affine (pt)
   (optima:ematch pt
     ((ecc-pt-) pt)
     ((ed-proj-pt- :x x :y y :z z)
      (with-mod *ed-q*
-       (make-ecc-pt
-        :x (m/ x z)
-        :y (m/ y z))))))
+       (let ((1/z (m/ z)))
+         (make-ecc-pt
+          :x (m* x 1/z)
+          :y (m* y 1/z)))))))
 
 (defun ed-projective (pt)
   (optima:ematch pt
@@ -508,6 +373,70 @@ THE SOFTWARE.
 (defun ed-sub (pt1 pt2)
   (ed-add pt1 (ed-negate pt2)))
 
+;; ----------------------------------------------------------------
+;; NAF multiplication, 4 bits at a time...
+
+(defun naf4 (k)
+  (declare (integer k))
+  (labels ((mods (x)
+             (declare (integer x))
+             (let ((xm (ldb (byte 4 0) x)))
+               (declare (fixnum xm))
+               (if (>= xm 8)
+                   (- xm 16)
+                 xm))))
+    (um:nlet-tail iter ((k   k)
+                        (ans nil))
+      (declare (integer k)
+               (list ans))
+      (if (zerop k)
+          ans
+        (if (oddp k)
+            (let ((di (mods k)))
+              (declare (fixnum di))
+              (iter (ash (- k di) -4) (cons di ans)))
+          ;; else
+          (iter (ash k -1) (cons 0 ans)))
+        ))))
+        
+(defun ed-naf4-mul (pt n)
+  (declare (integer n))
+  (cond ((zerop n) (ed-projective
+                    (ed-neutral-point)))
+        
+        ((or (= n 1)
+             (ed-neutral-point-p pt)) pt)
+        
+        (t (let* ((r0   (ed-projective pt))
+                  (r0x2 (ed-add r0 r0))
+                  (precomp (loop for ix from 1 below 8 by 2
+                                 for r1 = r0 then (ed-add r1 r0x2)
+                                 collect (cons ix r1)
+                                 collect (cons (- ix) (ed-negate r1))))
+                  (nns   (naf4 n)))
+             
+             (um:nlet-tail iter ((nns  nns)
+                                 (qans nil))
+               (if (endp nns)
+                   (or qans (ed-neutral-point))
+                 (let ((qsum  (and qans (ed-add qans qans)))
+                       (nnhd  (car nns)))
+                   (declare (fixnum nnhd))
+                   (unless (zerop nnhd)
+                     (let ((kpt (cdr (assoc nnhd precomp))))
+                       (if qsum
+                           (setf qsum (ed-add qsum qsum)
+                                 qsum (ed-add qsum qsum)
+                                 qsum (ed-add qsum qsum)
+                                 qsum (ed-add qsum kpt))
+                         ;; else
+                         (setf qsum kpt))))
+                   (iter (cdr nns) qsum))))
+             ))
+        ))
+
+;; ----------------------------------------------------------------
+        
 (defun naf (k)
   (declare (integer k))
   ;; non-adjacent form encoding of integers
@@ -543,12 +472,15 @@ THE SOFTWARE.
               v))
         ))
 
+;; ----------------------------------------------------------------
+        
 (defun ed-mul (pt n)
   #|
   (let* ((alpha  (* *ed-r* *ed-h* (random-between 1 #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  (ed-basic-mul pt n))
+  ;; (ed-basic-mul pt n)
+  (ed-naf4-mul pt n))
 
 (defun ed-div (pt n)
   (with-mod *ed-r*
@@ -635,7 +567,7 @@ THE SOFTWARE.
 (defun ed-valid-point-p (pt)
   (and (not (ed-neutral-point-p pt))
        (ed-satisfies-curve pt)
-       (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*)))
+       (not (ed-neutral-point-p (ed-mul pt *ed-h*)))
        pt))
 
 (defun ed-validate-point (pt)
@@ -705,10 +637,10 @@ we are done. Else re-probe with (X^2 + 1)."
                 (or (ed-valid-point-p
                      ;; Watch out! This multiply by cofactor is necessary
                      ;; to prevent winding up in a small subgroup.
-                     (ed-basic-mul (make-ecc-pt
-                                    :x x
-                                    :y y)
-                                   *ed-h*))
+                     (ed-mul (make-ecc-pt
+                              :x x
+                              :y y)
+                             *ed-h*))
                     (iter (m+ 1 (m* x x)))))
             ;; else 
             (iter (m+ 1 (m* x x)))
