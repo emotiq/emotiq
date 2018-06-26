@@ -5,7 +5,6 @@
 (in-package :test-harness)
 
 (defun test-system (system)
-  (mp:initialize-multiprocessing)
   (handler-case
       (asdf:make system)
     (error (e)

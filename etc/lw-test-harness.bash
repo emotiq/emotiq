@@ -11,7 +11,7 @@
 #
 # For example the following entry (make sure that lwm is on your PATH)
 #
-# lisp=lwm systems=":cosi-bls-tests :crypto-pairings :gossip-tests :emotiq/wallet" bash lw-test-harness.bash
+# systems=":cosi-bls-tests :crypto-pairings :gossip-tests :emotiq/wallet" bash lw-test-harness.bash
 #
 # would invoke the test harness using `lwm` on the `gossip-tests`,
 # `cosi-bls`, `crypto-pairings` and `emotiq/wallet` systems.
@@ -25,9 +25,10 @@
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The command to run a Lisp test form:
-lisp=${lisp:-'ros'}
 
-# The default whitespace list of systems to tes
+lisp="/Applications/LispWorks\ 7.1\ (64-bit)/LispWorks\ (64-bit).app/Contents/MacOS/lispworks-7-1-0-amd64-darwin"
+
+# The default whitespace list of systems to test
 systems=${systems:-":gossip-tests
                     :crypto-pairings/t
                     :core-crypto
@@ -43,7 +44,6 @@ for system in ${systems}; do
     echo "==> ASDF:TEST-SYSTEM invoked on ${system}..."
     ${lisp} \
 	-init - \
-	-multiprocessin
 	-load "~/quicklisp/setup"\
         -load ${DIR}/lw-test-harness.lisp \
         -eval "(test-harness:test-system ${system})"
