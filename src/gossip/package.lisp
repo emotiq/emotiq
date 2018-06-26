@@ -34,6 +34,7 @@
    #:save-text-log
    #:deserialize-log
    #:visualize-nodes
+   #:uid
 
    ; API
    #:application-handler
@@ -43,6 +44,7 @@
    #:broadcast
    #:establish-broadcast-group
    #:dissolve-graph
+   #:memoize-node
 
    #:shutdown-gossip-server
    ))
