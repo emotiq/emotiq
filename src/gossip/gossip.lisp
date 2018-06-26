@@ -25,6 +25,7 @@
 (defparameter *max-buffer-length* 65500)
 (defvar *default-graphID* :root "Identifier of the default, root, ground, or 'physical' graph that a node is always part of")
 (defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
+(defvar *hmac-keypair-lock* (mpcompat:make-lock) "Lock for *hmac-keypair*")
 (defvar *hmac-keypair-actor* nil "Actor managing *hmac-keypair*")
 (defvar *remote-uids* nil "cons of (time . list returned by multiple-list-uids). Only reflects uids found through active pinging
         of other machines, not those that result from unsolicited incoming messages to this machine.")
@@ -1997,11 +1998,11 @@ gets sent back, and everything will be copacetic.
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
-  (log-event "Transport connection to peer established" peer-address peer-port))
+  (log-event :TRANSPORT "Transport connection to peer established" peer-address peer-port))
 
 (defun transport-peer-down (peer-address peer-port reason)
   "Callback for transport layer event."
-  (log-event "Transport connection to peer failed" peer-address peer-port reason))
+  (log-event :TRANSPORT "Transport connection to peer failed" peer-address peer-port reason))
 
 (defun shutdown-gossip-server ()
   "Stop the Gossip Transport network endpoint (if currently running)."
@@ -2026,20 +2027,27 @@ gets sent back, and everything will be copacetic.
       (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))
     (actor-send mbox *hmac-keypair*)))
 
+#+IGNORE
 (defun hmac-keypair ()
   (or *hmac-keypair*
       (let ((mbox (mpcompat:make-mailbox)))
         (actor-send *hmac-keypair-actor* :TAS mbox)
         (first (mpcompat:mailbox-read mbox)))))
 
+(defun hmac-keypair ()
+  (mpcompat:with-lock (*hmac-keypair-lock*)
+    (or *hmac-keypair*
+        (setf *hmac-keypair* (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid)))))))
+
 (defun sign-message (msg)
   "Sign and return an authenticated message packet. Packet includes
   original message."
-  (assert (pbc:check-public-key (pbc:keying-triple-pkey (hmac-keypair))
-                                (pbc:keying-triple-sig  (hmac-keypair))))
-  (pbc:sign-message msg
-                    (pbc:keying-triple-pkey (hmac-keypair))
-                    (pbc:keying-triple-skey (hmac-keypair))))
+  (let ((keypair (hmac-keypair)))
+    (assert (pbc:check-public-key (pbc:keying-triple-pkey keypair)
+                                  (pbc:keying-triple-sig  keypair)))
+    (pbc:sign-message msg
+                      (pbc:keying-triple-pkey keypair)
+                      (pbc:keying-triple-skey keypair))))
 
 ;; ------------------------------------------------------------------------------
 
