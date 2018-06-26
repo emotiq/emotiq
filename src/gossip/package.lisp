@@ -37,6 +37,7 @@
 
    ; API
    #:application-handler
+   #:*application-handler*
    #:get-live-uids
    #:singlecast
    #:broadcast
