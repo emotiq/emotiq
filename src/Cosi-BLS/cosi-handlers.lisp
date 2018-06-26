@@ -893,19 +893,19 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun ensure-cosi-gossip-neighborhood-graph (my-node)
   (or *cosi-gossip-neighborhood-graph*
       (setf *cosi-gossip-neighborhood-graph*
-            (gossip:establish-gossip-broadcast-group
-             (remove (node-pkey my-node) (get-witness-list)
-                     :test 'int=)
-             :graphID :cosi))))
+            (or :UBER ;; for now while debugging
+                (gossip:establish-gossip-broadcast-group
+                 (remove (node-pkey my-node) (get-witness-list)
+                         :test 'int=)
+                 :graphID :cosi))
+            )))
 
 (defun gossip-neighborcast (my-node &rest msg)
-  "Gossip-neighborcast - send message to all nodes. Just a stub for now."
+  "Gossip-neighborcast - send message to all witness nodes."
   (cond (*use-real-gossip*
          (gossip:broadcast msg
                            :style :neighborcast
-                           ;; :graphID (ensure-cosi-gossip-neighborhood-graph my-node)
-                           :graphID :uber ;; for now while debugging...
-                           ))
+                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
         (t
          (loop for node across *node-bit-tbl* do
