@@ -71,6 +71,8 @@
 
 (defvar *transport* nil "Network transport endpoint.")
 
+(defvar *application-handler* nil "Set to a function to be called when the API methods reach their target.")
+
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
 ;; valid deserialization, check deserialization is a
@@ -980,6 +982,11 @@ dropped on the floor.
            msg
            args)))
 
+(defmethod application-handler ((node gossip-mixin))
+  (or *application-handler*
+      (lambda (node &rest args)
+        (apply 'node-log node :APPLICATION-HANDLER args))))
+
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler methods for bootstrapping messages
@@ -1323,7 +1330,7 @@ dropped on the floor.
   Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
   Destination node is not expected to reply (at least not with gossip-style replies)."
   (if (eql (uid thisnode) (car (args msg)))
-      (apply 'actor-send (application-handler thisnode) (cdr (args msg)))
+      (apply 'actor-send (application-handler thisnode) thisnode (cdr (args msg)))
       ; thisnode becomes new source for forwarding purposes
       (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
@@ -1332,7 +1339,7 @@ dropped on the floor.
   Every intermediate node will have the message
   both delivered to it and forwarded through it.
   Recipient nodes are not expected to reply (at least not with gossip-style replies)."
-  (apply 'actor-send (application-handler thisnode) (args msg))
+  (apply 'actor-send (application-handler thisnode) thisnode (args msg))
    ; thisnode becomes new source for forwarding purposes
   (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
 
@@ -1874,7 +1881,8 @@ gets sent back, and everything will be copacetic.
                       (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
                         (if timeout-handler ; will be nil for messages that don't expect a reply
                             (funcall timeout-handler nil)
-                            (node-log thisnode :NO-TIMEOUT-HANDLER! soluid))))
+                            ; (node-log thisnode :NO-TIMEOUT-HANDLER! soluid) ; this is not an error. Quit logging it.
+                            )))
                      (t ; more repliers are expected
                       ; functionally coalesce all known data and send it upstream as another interim reply
                       (if *delay-interim-replies*

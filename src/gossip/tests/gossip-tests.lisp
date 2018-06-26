@@ -138,6 +138,47 @@
 ; (let ((*print-failures* t)) (run-tests '(partial-gossip)))
 ; (let ((*print-failures* t)) (run-tests :all))
 
+(defun random-choice (list)
+  "Returns a random element from list"
+  (nth (random (length list)) list))
+
+
+(define-test singlecast-test "Test singlecast"
+  ;;; careful with globals. Remember that they get a different value
+  ;;; in each thread if you're not careful.  So we set them here
+  ;;; rather than bind them.
+  (with-networking
+      (let ((oldnodes *nodes*)
+            (numnodes 100)
+            (old-application-handler *application-handler*))
+        (unwind-protect
+            (let ((results nil)
+                  (*log-filter* nil))
+              (declare (special *log-filter*))
+              (setf *nodes* (gossip::make-uid-mapper))
+              (setf *application-handler* (lambda (node &rest args) (setf results (cons node args))))
+              (clear-local-nodes)
+              (gossip::make-nodes numnodes)
+              (ac::kill-executives)
+              (assert-eql numnodes (length (get-live-uids)))
+              (assert-eql numnodes (run-gossip))
+              (let* ((somelocal (gossip::locate-local-node-for-graph :uber))
+                     (sometarget (random-choice (remove somelocal (gossip::local-real-uids)))))
+                (assert-true (member somelocal (get-live-uids)))
+                (singlecast '(foo message) sometarget :startnodeID somelocal :howmany t
+                            ; Note: :howmany is t because we must use neighborcast here for the :uber network.
+                            ;   That's the only way to be sure the network is connected (and in the case of the :uber network,
+                            ;   it's fully-connected.)
+                            :graphID ':uber)
+                (mpcompat:process-wait-with-timeout "answer-wait" 5 (lambda () results))
+                (assert-true results)
+               ; (print results)
+                ))
+          (setf *nodes* oldnodes
+                *application-handler* old-application-handler)))))
+
+; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-test)))
+
 (defun make-test-network ()
   "Interesting graph of 10 nodes."
   (make-node
