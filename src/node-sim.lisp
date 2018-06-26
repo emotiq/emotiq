@@ -246,8 +246,7 @@ This will spawn an actor which will asynchronously do the following:
                 :skeys (pbc:keying-triple-skey *genesis-account*)
                 :pkeys (pbc:keying-triple-pkey *genesis-account*))))
         (setq *tx-1* signed-transaction)
-        (emotiq:note "Broadcasting 1st TX.")
-        (emotiq:note "~%Tx 1 created/signed by genesis (~a), now broadcasting."
+        (emotiq:note "Broadcasting 1st TX.~%Tx 1 created/signed by genesis (~a), now broadcasting."
                 genesis-public-key-hash)
         (cosi/proofs/newtx:dump-tx signed-transaction)
         (broadcast-message :new-transaction-new :trn signed-transaction)
@@ -299,8 +298,7 @@ This will spawn an actor which will asynchronously do the following:
                    transaction-inputs transaction-outputs
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))          
-            (emotiq:note "Broadcasting 3rd TX.")
-            (emotiq:note "~%Tx 3 created/signed by user-2 (~a), now broadcasting."
+            (emotiq:note "Broadcasting 3rd TX.~%Tx 3 created/signed by user-2 (~a), now broadcasting."
                     user-2-public-key-hash)
             (cosi/proofs/newtx:dump-tx signed-transaction)
             (broadcast-message :new-transaction-new :trn signed-transaction)
@@ -312,8 +310,7 @@ This will spawn an actor which will asynchronously do the following:
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
 
-            (emotiq:note "Broadcasting 4th TX [attempt to double-spend (same TxID)].")
-            (emotiq:note "~%Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
+            (emotiq:note "Broadcasting 4th TX [attempt to double-spend (same TxID)].~%Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
@@ -328,8 +325,7 @@ This will spawn an actor which will asynchronously do the following:
                    :skeys (pbc:keying-triple-skey *user-2*)
                    :pkeys (pbc:keying-triple-pkey *user-2*)))
 
-            (emotiq:note "Broadcasting 5th TX [attempt to double-spend (diff TxID)].")
-            (emotiq:note "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
+            (emotiq:note "Broadcasting 5th TX [attempt to double-spend (diff TxID)].~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
                     user-2-public-key-hash)
             (broadcast-message :new-transaction-new :trn signed-transaction)
 
