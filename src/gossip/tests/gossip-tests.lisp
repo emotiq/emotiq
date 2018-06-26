@@ -150,13 +150,14 @@
   (with-networking
       (let ((oldnodes *nodes*)
             (numnodes 100)
-            (old-application-handler *application-handler*))
+            (old-application-handler *ll-application-handler*))
         (unwind-protect
             (let ((results nil)
-                  (*log-filter* nil))
+                  (*log-filter* nil)
+                  (msg '(foo message)))
               (declare (special *log-filter*))
               (setf *nodes* (gossip::make-uid-mapper))
-              (setf *application-handler* (lambda (node &rest args) (setf results (cons node args))))
+              (setf *ll-application-handler* (lambda (node full-msg) (setf results (list (gossip::hopcount full-msg) node full-msg))))
               (clear-local-nodes)
               (gossip::make-nodes numnodes)
               (ac::kill-executives)
@@ -165,17 +166,17 @@
               (let* ((somelocal (gossip::locate-local-node-for-graph :uber))
                      (sometarget (random-choice (remove somelocal (gossip::local-real-uids)))))
                 (assert-true (member somelocal (get-live-uids)))
-                (singlecast '(foo message) sometarget :startnodeID somelocal :howmany t
+                (singlecast msg sometarget :startnodeID somelocal :howmany t
                             ; Note: :howmany is t because we must use neighborcast here for the :uber network.
                             ;   That's the only way to be sure the network is connected (and in the case of the :uber network,
                             ;   it's fully-connected.)
                             :graphID ':uber)
                 (mpcompat:process-wait-with-timeout "answer-wait" 5 (lambda () results))
-                (assert-true results)
-               ; (print results)
+                (assert-equal msg (cdr (gossip::args (third results))))
+               ; (print results) contains hopcount, node, and full message
                 ))
           (setf *nodes* oldnodes
-                *application-handler* old-application-handler)))))
+                *ll-application-handler* old-application-handler)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-test)))
 
