@@ -553,6 +553,13 @@ are in place between nodes.
       (edebug 5 "Gossip Actor" (ac::current-actor) "received" msg)
       (apply 'gossip-dispatcher node msg))))
 
+(defun memoize-node (node &optional (invalidate-cache t))
+  "Ensure this node is memoized on *nodes*"
+  (kvs:relate-unique! *nodes* (uid node) node)
+  (when invalidate-cache
+    (setf *uber-set-cache* nil))
+  node)
+
 (defun make-node (&rest args)
   "Makes a new [real, non-proxy] node"
   (let ((neighborhood (getf args :neighborhood))) ; allow to specify :neighborhood as list, for *default-graphID*
@@ -564,9 +571,7 @@ are in place between nodes.
                     (pushnew uid (neighborhood node)))
                   neighborhood))
     (setf (actor node) actor)
-    (kvs:relate-unique! *nodes* (uid node) node)
-        (setf *uber-set-cache* nil) ; invalidate cache
-        node))))
+    (memoize-node node)))))
 
 (defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -583,8 +588,7 @@ are in place between nodes.
         (when oldnode
           (log-event :WARN oldnode "being replaced by proxy" node)))
       (setf (slot-value node 'uid) (real-uid node)))
-    (kvs:relate-unique! *nodes* (uid node) node)
-    ; proxies are not part of uber-set, therefore no cache invalidation needed
+    (memoize-node node nil) ; proxies are not part of uber-set, therefore no cache invalidation needed
     (memoize-proxy node proxy-subtable)))
 
 ;;;; Graph making routines
@@ -1321,7 +1325,7 @@ dropped on the floor.
   (:documentation "Returns something that actor-send can send to, which is associated with node.
     This is used by gossip to forward an application message to its application destination
     once it reaches its destination node.
-    Function should accept node and &rest application-message."))
+    Function should accept &rest application-message."))
 
 (defmethod lowlevel-application-handler ((node gossip-mixin))
   "Default method"
@@ -1331,7 +1335,7 @@ dropped on the floor.
 
 (defmethod application-handler ((node gossip-mixin))
   "Default method"
-  (lambda (node &rest args)
+  (lambda (&rest args)
     (apply 'node-log node :APPLICATION-HANDLER args)))
 
 (defun handoff-to-application-handlers (node msg highlevel-message-extractor)
@@ -1340,7 +1344,7 @@ dropped on the floor.
     (when lowlevel-application-handler ; mostly for gossip's use, not the application programmer's
       (actor-send lowlevel-application-handler node msg))
     (when application-handler
-      (apply 'actor-send application-handler node (funcall highlevel-message-extractor msg)))))
+      (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))))
 
 (defmethod k-singlecast ((msg solicitation) thisnode srcuid)
   "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
