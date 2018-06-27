@@ -59,7 +59,7 @@
 
 (defpackage :gossip/transport
   (:use :cl)
-  (:IMPORT-FROM :gossip :edebug)
+  (:IMPORT-FROM :gossip :edebug :eripa)
   (:export
    #:start-transport
    #:stop-transport
