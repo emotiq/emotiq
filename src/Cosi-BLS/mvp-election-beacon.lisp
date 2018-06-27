@@ -143,10 +143,17 @@ based on their relative stake"
 
 (defun get-election-seed ()
   (unless *election-seed*
-    (setf *election-seed* (hash/256 (uuid:make-v1-uuid))))
-  (float (/ (int (setf *election-seed* (hash/256 (get-universal-time) *election-seed*)))
+    (setf *election-seed* (round (get-universal-time) 3600)))
+  (float (/ (int (setf *election-seed* (hash/256 *election-seed*)))
             #.(ash 1 256))
          1d0))
+
+#|
+(progn
+  (setf *election-seed* nil)
+  (let* ((arr (loop repeat 1000000 collect (get-election-seed))))
+    (plt:histogram 'histo arr :clear t)))
+ |#
 
 (defun make-election-message (pkey seed)
   `(:hold-an-election
@@ -174,46 +181,57 @@ based on their relative stake"
       (emotiq:note "Election held-off")
     ;; else
     (let ((node      (current-node))
-          (witnesses (get-witness-list))
           (msg       (make-election-message beacon n)))
       
-      (with-accessors ((current-beacon  node-current-beacon)
-                       (current-leader  node-current-leader)
-                       (stake           node-stake)
-                       (pkey            node-pkey)) node
+      (with-accessors ((current-beacon  node-current-beacon)) (current-node)
         
         (when (and (pbc:check-hash (hash/256 msg) sig beacon)
                    (or (and (null current-beacon)
-                            (member beacon witnesses
+                            (member beacon (get-witness-list)
                                     :key  'first
-                                    :test 'int=)))
-                   (int= beacon current-beacon))
-                       
-          (let* ((winner     (hold-election n))
-                 (new-beacon (hold-election n (remove winner witnesses
-                                                      :key 'first
-                                                      :test 'int=))))
-            (setf current-leader winner
-                  current-beacon new-beacon)
-            
-            (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
-            (emotiq:note "election results ~A (stake = ~A)"
-                         (if (int= pkey winner) " *ME* " " not me ")
-                         stake)
-            (emotiq:note "winner ~A me=~A"
-                         (short-id winner)
-                         (short-id pkey))
-            
-            (when (int= pkey new-beacon)
-              (ac:spawn (lambda ()
-                          (recv
-                            :TIMEOUT    *mvp-election-period*
-                            :ON-TIMEOUT (send-hold-election-from-node node)))))
-            
-            (ac:self-call (if (int= pkey winner)
-                              :become-leader
-                            :become-witness))
-            ))
+                                    :test 'int=))
+                       (int= beacon current-beacon)))
+          
+          (run-election n))))
+    ))
+
+(defun run-special-election ()
+  (setf *election-seed* nil)
+  (run-election (get-election-seed)))
+   
+(defun run-election (n)
+  (let ((node      (current-node))
+        (witnesses (get-witness-list)))
+    
+    (with-accessors ((stake node-stake)
+                     (pkey  node-pkey)) node
+      
+      (let* ((winner     (hold-election n))
+             (new-beacon (hold-election n (remove winner witnesses
+                                                  :key 'first
+                                                  :test 'int=))))
+        (setf *leader*          winner
+              *beacon*          new-beacon
+              *election-calls*  0)
+        
+        (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
+        (emotiq:note "election results ~A (stake = ~A)"
+                     (if (int= pkey winner) " *ME* " " not me ")
+                     stake)
+        (emotiq:note "winner ~A me=~A"
+                     (short-id winner)
+                     (short-id pkey))
+
+        (set-holdoff)
+        (when (int= pkey new-beacon)
+          (ac:spawn (lambda ()
+                      (recv
+                        :TIMEOUT    *mvp-election-period*
+                        :ON-TIMEOUT (send-hold-election-from-node node)))))
+
+        (ac:self-call (if (int= pkey winner)
+                          :become-leader
+                        :become-witness))
         ))))
 
 
