@@ -139,22 +139,60 @@ based on their relative stake"
 
 ;; --------------------------------------------------------------------------
 
-(defvar *election-seed* nil)
+(defvar *election-central*
+  ;; an actor to prevent SMP multiple mutation of seed. Could also use
+  ;; a monitor.
+  (ac:make-actor
+   (let ((seed  nil)) ;; actually okay if never reset
+     (lambda (&rest msg)
+       (um:dcase msg
+
+         (:next-after-reset (&optional reply-to)
+          ;; use a coarse (1 hour) value that we would all likely
+          ;; agree upon
+          (setf seed (round (get-universal-time) 3600))
+          (ac:self-call :next reply-to))
+         
+         (:next (&optional reply-to)
+          (setf seed (hash/256 seed))
+          (let ((ans (float (/ (int seed) #.(ash 1 256)) 1d0)))
+            (when reply-to
+              (send reply-to ans))
+            ans))
+         
+         )))))
+
+;; -----------------------------------------
+;; REPL interface...
 
 (defun get-election-seed ()
-  (unless *election-seed*
-    (setf *election-seed* (round (get-universal-time) 3600)))
-  (float (/ (int (setf *election-seed* (hash/256 *election-seed*)))
-            #.(ash 1 256))
-         1d0))
+  (ac:ask *election-central* :next))
+
+(defun reset-and-get-election-seed ()
+  (ac:ask *election-central :next-after-reset))
 
 #|
 (progn
   (setf *election-seed* nil)
-  (let* ((arr (loop repeat 1000000 collect (get-election-seed))))
+  (let* ((arr (loop repeat 10000 collect (get-election-seed))))
     (plt:histogram 'histo arr :clear t)))
+
+(=bind (seed)
+    (send *election-central* :next (lambda (val)
+                                     (=values val)))
+  (pr seed))
  |#
 
+;; ---------------------------------------------
+
+(defun broadcast+me (msg)
+  ;; make sure our own Node gets the message too
+  (gossip:singlecast msg
+                     :graphID nil) ;; force send to ourselves
+  ;; this really should go to everyone
+  (gossip:broadcast msg
+                    :graphID :UBER))
+  
 (defun make-election-message (pkey seed)
   `(:hold-an-election
        :n      ,seed
@@ -162,17 +200,16 @@ based on their relative stake"
        :sig))
 
 (defun send-hold-election-from-node (node)
-  (with-accessors ((pkey  node-pkey)
-                   (skey  node-skey)) node
-    (let* ((msg        (make-election-message pkey (get-election-seed)))
-           (signed-msg (um:conc1 msg (pbc:sign-hash (hash/256 msg) skey))))
-      ;; make sure our own Node gets the message too
-      (gossip:singlecast signed-msg
-                         :graphID nil) ;; force send to ourselves
-      ;; this really should go to everyone
-      (gossip:broadcast signed-msg
-                        :graphID :UBER))))
-
+  (=bind (seed)
+      (send *election-central* :next (lambda (val)
+                                       (=values val)))
+    (with-accessors ((pkey  node-pkey)
+                     (skey  node-skey)) node
+      (let* ((msg        (make-election-message pkey seed))
+             (signed-msg (um:conc1 msg (pbc:sign-hash (hash/256 msg) skey))))
+        (broadcast+me signed-msg)))
+    ))
+  
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
@@ -180,12 +217,10 @@ based on their relative stake"
   (if *holdoff*
       (emotiq:note "Election held-off")
     ;; else
-    (let ((node      (current-node))
-          (msg       (make-election-message beacon n)))
-      
-      (with-accessors ((current-beacon  node-current-beacon)) (current-node)
+    (with-accessors ((current-beacon  node-current-beacon)) (current-node)
+      (let ((chk-msg (make-election-message beacon n)))
         
-        (when (and (pbc:check-hash (hash/256 msg) sig beacon) ;; not a forged call?
+        (when (and (pbc:check-hash (hash/256 chk-msg) sig beacon) ;; not a forged call?
                    (or (and (null current-beacon)             ;; null at start
                             (member beacon (get-witness-list) ;;   then must be member of known witness pool
                                     :key  'first
@@ -197,10 +232,22 @@ based on their relative stake"
 
 (defun run-special-election ()
   ;; try to resync on stalled system
-  (setf *election-seed* nil)
-  (run-election (get-election-seed)))
+  (let ((node (current-node)))
+    (=bind (seed)
+        (send *election-central* :next-after-reset (lambda (val)
+                                                     (=values val)))
+      (with-current-node node
+        (run-election seed)))))
    
 (defun run-election (n)
+  ;; use the election value n (0 < n < 1) to decide on staked winner
+  ;; to become new leader node. Second runner up becomes responsible
+  ;; for spawning an election beacon (one-shot).
+  ;;
+  ;; So election beacon becomes a roving responsibility. If it gets
+  ;; knocked out, then we fall back to early elections with BFT
+  ;; consensus on decision to resync.
+  
   (let ((node      (current-node))
         (witnesses (get-witness-list)))
     

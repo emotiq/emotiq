@@ -45,13 +45,17 @@ THE SOFTWARE.
 (defun current-node ()
   *current-node*)
 
-(define-symbol-macro *blockchain*     (node-blockchain *current-node*))
+(defmacro with-current-node (node &body body)
+  `(let ((*current-node* ,node))
+     ,@body))
+
+(define-symbol-macro *blockchain*     (node-blockchain     *current-node*))
 (define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
-(define-symbol-macro *mempool*        (node-mempool *current-node*))
-(define-symbol-macro *utxo-table*     (node-utxo-table *current-node*))
+(define-symbol-macro *mempool*        (node-mempool        *current-node*))
+(define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
 (define-symbol-macro *leader*         (node-current-leader *current-node*))
-(define-symbol-macro *holdoff*        (node-hold-off *current-node*))
-(define-symbol-macro *tx-changes*     (node-tx-changes *current-node*))
+(define-symbol-macro *holdoff*        (node-hold-off       *current-node*))
+(define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
 (define-symbol-macro *election-calls* (node-election-calls *current-node*))
 (define-symbol-macro *beacon*         (node-current-beacon *current-node*))
 
@@ -66,15 +70,15 @@ THE SOFTWARE.
 (defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
 
 (defmethod node-dispatcher (msg-sym &key)
-  (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id *current-node*)))
+  (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id (current-node))))
 
 (defun end-holdoff ()
-  (ac::unschedule-timer (node-hold-off-timer *current-node*))
+  (ac::unschedule-timer (node-hold-off-timer (current-node)))
   (setf *holdoff* nil))
 
 (defun set-holdoff ()
   (setf *holdoff* t)
-  (ac::schedule-timer-relative (node-hold-off-timer *current-node*)
+  (ac::schedule-timer-relative (node-hold-off-timer (current-node))
                                (+ *cosi-prepare-timeout*
                                   *cosi-commit-timeout*
                                   10)))
@@ -84,11 +88,11 @@ THE SOFTWARE.
   (end-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
-  (emotiq/tracker:track :new-leader *current-node*)
+  (emotiq/tracker:track :new-leader (current-node))
   (setf *tx-changes* (make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
-  (emotiq/tracker:track :new-witness *current-node*)
+  (emotiq/tracker:track :new-witness (current-node))
   (setf *tx-changes* (make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
@@ -137,7 +141,7 @@ THE SOFTWARE.
   (node-check-transaction trn))
 
 (defmethod node-dispatcher ((msg-sym (eql :public-key)) &key reply-to)
-  (reply reply-to :pkey+zkp (node-pkeyzkp *current-node*)))
+  (reply reply-to :pkey+zkp (node-pkeyzkp (current-node))))
 
 (defmethod node-dispatcher ((msg-sym (eql :election)) &key new-leader-pkey)
   (emotiq/tracker:track :election)
@@ -163,7 +167,7 @@ THE SOFTWARE.
 (defun make-node-dispatcher (node)
   (let ((beh  (make-actor
                (lambda (&rest msg)
-                 (let ((*current-node* node))
+                 (with-current-node node
                    (apply 'node-dispatcher msg)))
                )))
     (make-actor
@@ -269,7 +273,7 @@ THE SOFTWARE.
 (defun node-insert-node (new-node-info)
   (destructuring-bind (ipstr port pkeyzkp) new-node-info
     (declare (ignore port)) ;; for now...
-    (let* ((node *current-node*)
+    (let* ((node (current-node))
            (new-node (gethash ipstr *ip-node-tbl*)))
       (if new-node ;; already present in tree?
           ;; maybe caller just wants to change keying
@@ -292,7 +296,7 @@ THE SOFTWARE.
     (remhash pcmpr *pkey-skey-tbl*)))
 
 (defun node-remove-node (gone-node-pkey)
-  (let* ((node *current-node*)
+  (let* ((node (current-node))
          (gone-node (gethash (int gone-node-pkey) *pkey-node-tbl*)))
     (when gone-node
       (node-model-remove-node gone-node)
@@ -563,7 +567,7 @@ Return nil if transaction is invalid."
                (validate-transaction tx))
       (ac:pr (format nil "Transaction: ~A checks: ~A"
                      (short-id key)
-                     (short-id *current-node*)))
+                     (short-id (current-node))))
       t)))
 
 ;; --------------------------------------------------------------------
@@ -923,17 +927,33 @@ check that each TXIN and TXOUT is mathematically sound."
     :sig))
 
 (defun call-for-new-election ()
-  (let* ((my-node  *current-node*)
+  (let* ((my-node  (current-node))
          (pkey     (node-pkey my-node))
          (msg      (make-call-for-election-message pkey *leader*))
          (sig      (pbc:sign-hash (hash/256 msg) (node-skey my-node))))
     (gossip:broadcast (nconc msg (list sig))
                       :graphID :UBER)))
 
+;; if we don't hold a new election before this timeout, established at
+;; the end of commit phase, then call for a new election
+(defvar *emergency-timeout*  60)
+
+(defun setup-emergency-call-for-new-election ()
+  (let ((node   (current-node))
+        (leader *leader*))
+    (ac:spawn (lambda ()
+                (recv
+                  :TIMEOUT     *emergency-timeout*
+                  :ON-TIMEOUT  (with-current-node node
+                                 (when (int= leader *leader*)
+                                   (call-for-new-election)))
+                  ))
+              )))
+
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
-  (let ((msg       (make-call-election-message pkey epoch))
+  (let ((chk-msg   (make-call-election-message pkey epoch))
         (witnesses (get-witness-nodes)))
-    (when (and (pbc:check-hash (hash/256 msg) sig pkey)
+    (when (and (pbc:check-hash (hash/256 chk-msg) sig pkey)
                (int= epoch *leader*)
                (member pkey witnesses
                        :key  'first
@@ -959,7 +979,7 @@ check that each TXIN and TXOUT is mathematically sound."
   (* 2/3 (length (block-witnesses blk))))
 
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
-  (let ((*current-node* my-node))
+  (with-current-node my-node
     (cond ((and *use-gossip*
                 (int= (node-pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
@@ -1107,7 +1127,7 @@ check that each TXIN and TXOUT is mathematically sound."
            t) ;; return true to validate
        ;; unwind
        (end-holdoff)
-       (call-for-new-election)
+       (setup-emergency-call-for-new-election)
        ))
     ))
 
@@ -1116,14 +1136,14 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun node-cosi-signing (reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
-  (let* ((node     *current-node*)
+  (let* ((node     (current-node))
          (blk-hash (hash/256 (signature-hash-message blk)))
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
     (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
     (=bind (ans)
         (par
-          (let ((*current-node* node))
+          (with-current-node node
             (=values 
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
@@ -1151,7 +1171,7 @@ check that each TXIN and TXOUT is mathematically sound."
                           seq-id
                           timeout))
       
-      (let ((*current-node* node))
+      (with-current-node node
         (pr ans)
         (destructuring-bind ((sig bits) r-lst g-ans) ans
           (labels ((fold-answer (sub resp)
@@ -1222,7 +1242,7 @@ check that each TXIN and TXOUT is mathematically sound."
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
-  (let* ((node      *current-node*)
+  (let* ((node      (current-node))
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
                                               *election-proof* *leader*
@@ -1235,7 +1255,7 @@ check that each TXIN and TXOUT is mathematically sound."
     (pr "Waiting for Cosi prepare")
     (recv
       ((list :answer (list :signature sig bits))
-       (let ((*current-node* node))
+       (with-current-node node
          (update-block-signature new-block sig bits)
          ;; we now have a fully assembled block with
          ;; multisignature.
