@@ -1430,7 +1430,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                 tx                   ; (ignored, just to gag compiler)
                 (incf count-so-far))
               count-so-far)
-        as time-through
+        as time-through from 0
         initially
            (format t "~%~a~d" message n)
         when (>= count n)
