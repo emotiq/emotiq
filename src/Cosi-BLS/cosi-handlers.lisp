@@ -99,8 +99,15 @@ THE SOFTWARE.
   (ac:pr args))
 
 (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
+  ;; A Genesis UTXO comes only once, being broadcast to the witness
+  ;; group by a distinguished member who creates it.
+  ;;
+  ;; We can use the receipt of the genesis UTXO to also start up our
+  ;; internal election beacon in loose synchrony with other witnesses.
+  ;;
   (pr (format nil "~A got genesis utxo" (short-id (current-node))))
-  (really-record-new-utxo utxo))
+  (really-record-new-utxo utxo)
+  (start-mvp-election-beacon))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
