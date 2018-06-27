@@ -21,8 +21,7 @@
     ("/tracker"
      :method :get
      :content-type "text/plain")
-  (format nil "~a"
-          (emotiq/tracker:query-current-state)))
+  (emotiq/tracker:get-all-notes))
 
 (restas:define-route %node
     ("/:node/"

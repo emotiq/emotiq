@@ -92,4 +92,14 @@
   (system-all-nodes *state*))
 
 (defun get-notes (n)
+  "return a string of notes from given node n (once-only)"
   (get-output-stream-string (cosi-simgen::node-notestream n)))
+
+(defun get-all-notes ()
+  "return a string of notes from each of the nodes in the system"
+  (with-output-to-string (out)
+    (mapc #'(lambda (n)
+              (format out "~&~&~a:~&~a~&"
+                      (stringify-node n)
+                      (get-notes n)))
+          (query-raw-nodes))))

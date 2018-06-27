@@ -126,10 +126,13 @@
 (defpackage emotiq/tracker
   (:use #:cl)
   (:export
+   #:*state*
+   #:*tracking-actor*
    #:start-tracker
    #:query-current-state
    #:query-raw-nodes
    #:get-notes
+   #:get-all-notes
    #:track))
 
 (defpackage emotiq/ate
