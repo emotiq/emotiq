@@ -154,6 +154,7 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------------------------
 
 (defun make-node-dispatcher (node)
+  (emotiq/tracker:track :node node)
   (let ((beh  (make-actor
                (lambda (&rest msg)
                  (let ((*current-node* node))

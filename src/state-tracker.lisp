@@ -2,7 +2,8 @@
 
 (defclass system-state ()
   ((leader :accessor system-leader :initform nil)
-   (witnesses :accessor system-witness-list :initform nil)))
+   (witnesses :accessor system-witness-list :initform nil)
+   (all-nodes :accessor system-all-nodes :initform nil)))  ;; contains leader, witnesses and any other nodes (in early testing, no others)
    
 ;(let (state
 ;      tracking-actor)
@@ -29,6 +30,11 @@
     (:reset
      (emotiq:note "Tracker: :reset - state cleared")
      (start-tracker))
+
+    (:node
+     (let ((node (second msg)))
+       (assert (not (member node (system-all-nodes *state*))))
+       (push node (system-all-nodes *state*))))
 
     (:election
      (emotiq:note "Tracker: :election - state cleared")
@@ -59,6 +65,7 @@
         (push (stringify-node w) witnesses))
       (push (cons :witnesses witnesses) result)
       (push (cons :leader (stringify-node (system-leader *state*))) result)
+      (push (cons :all-nodes (mapcar #'stringify-node (system-all-nodes *state*))) result)
       result)))
 
 (defun stringify-node (n)
