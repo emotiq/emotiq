@@ -185,17 +185,18 @@ based on their relative stake"
       
       (with-accessors ((current-beacon  node-current-beacon)) (current-node)
         
-        (when (and (pbc:check-hash (hash/256 msg) sig beacon)
-                   (or (and (null current-beacon)
-                            (member beacon (get-witness-list)
+        (when (and (pbc:check-hash (hash/256 msg) sig beacon) ;; not a forged call?
+                   (or (and (null current-beacon)             ;; null at start
+                            (member beacon (get-witness-list) ;;   then must be member of known witness pool
                                     :key  'first
                                     :test 'int=))
-                       (int= beacon current-beacon)))
+                       (int= beacon current-beacon)))         ;; otherwise, from beacon as we know it?
           
           (run-election n))))
     ))
 
 (defun run-special-election ()
+  ;; try to resync on stalled system
   (setf *election-seed* nil)
   (run-election (get-election-seed)))
    
