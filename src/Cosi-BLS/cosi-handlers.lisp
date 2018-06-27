@@ -949,7 +949,7 @@ check that each TXIN and TXOUT is mathematically sound."
                        :test 'int=))
       (when (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
                 (* 2/3 (length witnesses)))
-        (setf *leader*  (hold-election))
+        (setf *leader*  (hold-election (get-election-seed)))
         (ac:self-call (if (int= *leader* *current-node*)
                           :become-leader
                         :become-witness))
