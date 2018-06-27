@@ -892,7 +892,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; ------------------------------
 
-(defun end-all-holdoffs ()
+(defun end-all-holdoffs+ ()
   (loop for node across *node-bit-tbl* do
         (send (node-pkey node) :end-holdoff+)))
 
@@ -1273,7 +1273,7 @@ check that each TXIN and TXOUT is mathematically sound."
       
       ((list :answer (list :corrupt-cosi-network))
        (pr "Corrupt Cosi network in PREPARE phase")
-       (end-all-holdoffs))
+       (end-all-holdoffs+))
       
       #|
       ((list :answer (list :timeout-cosi-network))
@@ -1287,7 +1287,7 @@ check that each TXIN and TXOUT is mathematically sound."
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else
-      (end-all-holdoffs))))
+      (end-all-holdoffs+))))
 
 ;; -----------------------------------------------------------------------------------
 ;; Test block assembly and verification...
