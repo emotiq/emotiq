@@ -143,16 +143,8 @@ based on their relative stake"
   (pr seed))
  |#
 
-;; ---------------------------------------------
+;; ---------------------------------------------------------------------------
 
-(defun broadcast+me (msg)
-  ;; make sure our own Node gets the message too
-  (gossip:singlecast msg
-                     :graphID nil) ;; force send to ourselves
-  ;; this really should go to everyone
-  (gossip:broadcast msg
-                    :graphID :UBER))
-  
 (defun make-election-message (pkey seed)
   `(:hold-an-election
        :n      ,seed
@@ -262,7 +254,7 @@ based on their relative stake"
 
 ;; -----------------------------------------------------------
 
-(defun make-call-election-message (pkey epoch)
+(defun make-call-for-election-message (pkey epoch)
   `(:call-for-new-election
     :pkey  ,pkey
     :epoch ,epoch
@@ -278,7 +270,7 @@ based on their relative stake"
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (let ((chk-msg   (make-call-election-message pkey epoch))
-        (witnesses (get-witness-nodes)))
+        (witnesses (get-witness-list)))
     (when (and (pbc:check-hash (hash/256 chk-msg) sig pkey)
                (= epoch *local-epoch*)
                (member pkey witnesses
