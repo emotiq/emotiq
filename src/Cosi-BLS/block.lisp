@@ -137,7 +137,7 @@ added to the blockchain."
 ;;; block is created and cannot be changed. The order is somewhat flexible
 ;;; except for the following partial ordering constraints:
 ;;;
-;;;   (1) a coinbase transaction must come first; and
+;;;   (1) a collect transaction must come first; and
 ;;;
 ;;;   (2) for any two transactions Tx1, Tx2, if the input of Tx2 spends the
 ;;;   output of Tx1, Tx1 must come before Tx2.
