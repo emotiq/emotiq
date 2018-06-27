@@ -159,6 +159,11 @@ based on their relative stake"
             (when reply-to
               (send reply-to ans))
             ans))
+
+         (:update-seed (pkey)
+          ;; perturb our seed so we don't mindlessly repeat the same
+          ;; seed sequence as some other node after a major reset
+          (setf seed (hash/256 (uuid:make-v1-uuid) pkey seed)))
          
          )))))
 
@@ -170,6 +175,9 @@ based on their relative stake"
 
 (defun reset-and-get-election-seed ()
   (ac:ask *election-central :next-after-reset))
+
+(defun update-election-seed (pkey)
+  (send *election-central* :update-seed pkey))
 
 #|
 (progn
@@ -253,7 +261,9 @@ based on their relative stake"
     
     (with-accessors ((stake node-stake)
                      (pkey  node-pkey)) node
-      
+
+      (update-election-seed pkey)
+
       (let* ((winner     (hold-election n))
              (new-beacon (hold-election n (remove winner witnesses
                                                   :key 'first

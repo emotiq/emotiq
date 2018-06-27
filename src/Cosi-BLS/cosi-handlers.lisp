@@ -87,6 +87,12 @@ THE SOFTWARE.
   (emotiq/tracker:track :end-holdoff)
   (end-holdoff))
 
+(defmethod node-dispatcher ((msg-sym (eql :end-holdoff+)) &key)
+  ;; terminate the holdoff timer, and establish an emergency broadcast
+  ;; if elections aren't held after some time.
+  (ac:self-call :end-holdoff)
+  (setup-emergency-call-for-new-election))
+
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader (current-node))
   (setf *tx-changes* (make-tx-changes)))
@@ -888,7 +894,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun end-all-holdoffs ()
   (loop for node across *node-bit-tbl* do
-        (send (node-pkey node) :end-holdoff)))
+        (send (node-pkey node) :end-holdoff+)))
 
 ;; -----------------------------------------------------------
 
@@ -1126,8 +1132,7 @@ check that each TXIN and TXOUT is mathematically sound."
               (sync-database)))
            t) ;; return true to validate
        ;; unwind
-       (end-holdoff)
-       (setup-emergency-call-for-new-election)
+       (end-holdoff+)
        ))
     ))
 
