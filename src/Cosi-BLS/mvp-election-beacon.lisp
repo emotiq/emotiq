@@ -133,6 +133,16 @@ based on their relative stake"
           (first tree)))))) ;; return pkey of winner
 
 ;; --------------------------------------------------------------------------
+
+(defvar *election-seed* nil)
+
+(defun init-election-seed ()
+  (setf *election-seed* (lw:make-mt-random-state (round (get-universal-time) 3600))))
+
+(defun get-election-seed ()
+  (lw:mt-random 1.0 *election-seed*))
+
+;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
 (defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
