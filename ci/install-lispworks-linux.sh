@@ -20,7 +20,7 @@ chmod 600 $FILE
 PREFIX=~/LispWorks
 VERBOSE=0
 FILELIST=
-LWTAR=lw71-amd64-linux-patched.tar.gz
+LWTAR=lw711-amd64-linux.tar.gz
 DOCTAR=lwdoc71-x86-linux.tar.gz
 LWLICFILE=lib/7-1-0-0/config/lwlicense
 
