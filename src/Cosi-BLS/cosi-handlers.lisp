@@ -52,6 +52,7 @@ THE SOFTWARE.
 (define-symbol-macro *leader*         (node-current-leader *current-node*))
 (define-symbol-macro *holdoff*        (node-hold-off *current-node*))
 (define-symbol-macro *tx-changes*     (node-tx-changes *current-node*))
+(define-symbol-macro *election-calls* (node-election-calls *current-node*))
 
 (defstruct tx-changes
   ;; all lists contain key vectors
@@ -84,11 +85,13 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader *current-node*)
   (setf *tx-changes* (make-tx-changes))
+  (setf *election-calls* 0)
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
   (emotiq/tracker:track :new-witness *current-node*)
   (setf *tx-changes* (make-tx-changes))
+  (setf *election-calls* 0)
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
@@ -922,6 +925,38 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; -----------------------------------------------------------
 
+(defun make-call-election-message (pkey epoch)
+  `(:call-for-new-election
+    :pkey  ,pkey
+    :epoch ,epoch
+    :sig))
+
+(defun call-for-new-election ()
+  (let* ((my-node  *current-node*)
+         (pkey     (node-pkey my-node))
+         (msg      (make-call-for-election-message pkey *leader*))
+         (sig      (pbc:sign-hash (hash/256 msg) (node-skey my-node))))
+    (gossip:broadcast (nconc msg (list sig))
+                      :graphID :UBER)))
+
+(defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
+  (let ((msg       (make-call-election-message pkey epoch))
+        (witnesses (get-witness-nodes)))
+    (when (and (pbc:check-hash (hash/256 msg) sig pkey)
+               (int= epoch *leader*)
+               (member pkey (get-witness-nodes)
+                       :key  'first
+                       :test 'int=))
+      (when (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
+                (* 2/3 (length witnesses)))
+        (setf *leader*  (hold-election))
+        (ac:self-call (if (int= *leader* *current-node*)
+                          :become-leader
+                        :become-witness))
+        ))))
+
+;; -----------------------------------------------------------
+
 (defmethod add-sigs ((sig1 null) sig2)
   sig2)
 
@@ -1083,7 +1118,9 @@ check that each TXIN and TXOUT is mathematically sound."
               (sync-database)))
            t) ;; return true to validate
        ;; unwind
-       (end-holdoff)))
+       (end-holdoff)
+       (call-for-new-election)
+       ))
     ))
 
 ;; ----------------------------------------------------------------------------
