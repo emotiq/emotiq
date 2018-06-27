@@ -925,6 +925,10 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; -----------------------------------------------------------
 
+(defun get-witness-nodes ()
+  ;; should return a list of (pkey stake) pairs
+  *all-nodes*)
+
 (defun make-call-election-message (pkey epoch)
   `(:call-for-new-election
     :pkey  ,pkey
