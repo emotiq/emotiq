@@ -971,7 +971,7 @@ check that each TXIN and TXOUT is mathematically sound."
                              sig
                              (zerop (logand g-bits bits)) ;; check for no intersection
                              (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                    (emotiq:note (hex bits))
+                    (emotiq:note "~a" (hex bits))
                     (setf g-bits (logior g-bits bits)
                           g-sig  (add-sigs sig g-sig)))
                   (if (> (logcount g-bits) bft-thrsh)
