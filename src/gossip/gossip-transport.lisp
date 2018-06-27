@@ -201,7 +201,7 @@
   (with-slots (lock message-queues peer-down-hook sockets) transport
     (handler-case
         ;; Establish new connection.
-        (let ((socket (connect-to address port)))
+        (let ((socket (connect-to address port (eripa))))
           (edebug 5 :transport "Ready to write to" address :PORT port)
           (mpcompat:with-lock (lock) (push socket sockets))
           ;; Loop transferring messages from mailbox to socket.
@@ -224,7 +224,7 @@
         (when peer-down-hook
           (funcall peer-down-hook address port (princ-to-string err)))))))
 
-(defun connect-to (address port)
+(defun connect-to (address port &optional local-host)
   "Return a new socket conneted to ADDRESS:PORT.
   Retries automatically during *CONNECT-TIMEOUT*."
   (edebug 5 :transport "Connecting to" address :PORT port)
@@ -232,7 +232,8 @@
                           :protocol :stream
                           :nodelay :if-supported
                           :timeout 10
-                          :element-type '(unsigned-byte 8)))
+                          :element-type '(unsigned-byte 8)
+                          :local-host local-host))
 
 (defmethod transmit-message ((transport tcp-threads-transport) address port message)
   (mpcompat:mailbox-send (get-message-queue transport address port) message))
