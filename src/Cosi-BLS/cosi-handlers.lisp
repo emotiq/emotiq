@@ -96,7 +96,7 @@ THE SOFTWARE.
   (reset-nodes))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
-  (ac:pr args))
+  (emotiq:note "~a" args))
 
 (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
   (emotiq:note "~A got genesis utxo" (short-id (current-node)))
@@ -556,9 +556,9 @@ Return nil if transaction is invalid."
                        (txin-keys tx))
                ;; now do the math
                (validate-transaction tx))
-      (ac:pr (format nil "Transaction: ~A checks: ~A"
-                     (short-id key)
-                     (short-id *current-node*)))
+      (emotiq:note "Transaction: ~A checks: ~A"
+                   (short-id key)
+                   (short-id *current-node*))
       t)))
 
 ;; --------------------------------------------------------------------
@@ -1105,7 +1105,7 @@ check that each TXIN and TXOUT is mathematically sound."
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
                                           :test 'int=))))
                (progn
-                 (ac:pr (format nil "Block not validated ~A" (short-id node)))
+                 (emotiq:note "Block not validated ~A" (short-id node))
                  (list nil 0)))))
 
           ;; ... and here is where we have all the subnodes in our
