@@ -117,6 +117,9 @@ THE SOFTWARE.
                    :initform nil)
    (election-calls :accessor node-election-calls
                    :initform 0)
+   ;; local-epoch records the last election seed
+   (local-epoch    :accessor node-local-epoch
+                   :initform 0)
    (tx-changes     :accessor node-tx-changes
                    :initform nil)
    ;; -------------------------------------
