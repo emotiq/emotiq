@@ -52,7 +52,7 @@
      (start-tracker))
 
     (:block-finished
-     (emotiq:note "Tracker: :block-finished, state = ~A" (query-current-state)))
+     (emotiq:note "Tracker: :block-finished, ~%state = ~A" (query-current-state)))
 
     ((:make-block :commit :prepare)
      ;; tbd
@@ -82,7 +82,7 @@
 (defun stringify-node (n)
   "return some string representation for given node"
   (or
-   ;; whatever is most appropriate - is node-ip is useful, then export it
+   ;; whatever is most appropriate - if node-ip is useful, then export it
    (ignore-errors (cosi-simgen::node-ip n))
    (ignore-errors (format nil "~s" n))
    "Failed to stringify node"))

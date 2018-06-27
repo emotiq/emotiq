@@ -1533,7 +1533,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
         count (remove-transaction-from-mempool transaction mempool)
           into n-removed
         finally
-           (emotiq:note "~%Removed ~d transaction~p from mempool.~%"
+           (emotiq:note "Removed ~d transaction~p from mempool."
                    n-removed n-removed)
            (cosi/proofs/newtx:dump-txs :mempool t)))
 
