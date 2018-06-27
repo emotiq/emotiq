@@ -940,22 +940,6 @@ check that each TXIN and TXOUT is mathematically sound."
     (gossip:broadcast (nconc msg (list sig))
                       :graphID :UBER)))
 
-;; if we don't hold a new election before this timeout, established at
-;; the end of commit phase, then call for a new election
-(defvar *emergency-timeout*  60)
-
-(defun setup-emergency-call-for-new-election ()
-  (let ((node   (current-node))
-        (leader *leader*))
-    (ac:spawn (lambda ()
-                (recv
-                  :TIMEOUT     *emergency-timeout*
-                  :ON-TIMEOUT  (with-current-node node
-                                 (when (int= leader *leader*)
-                                   (call-for-new-election)))
-                  ))
-              )))
-
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (let ((chk-msg   (make-call-election-message pkey epoch))
         (witnesses (get-witness-nodes)))
