@@ -20,7 +20,7 @@ chmod 600 $FILE
 PREFIX=$HOME
 VERBOSE=0
 FILELIST=
-LWTAR=lw71-amd64-macos-patched.tar.gz
+LWTAR=lw711-amd64-macos.tar.gz
 LWLICFILE=lib/7-1-0-0/config/lwlicense
 
 while test $# -gt 0; do
