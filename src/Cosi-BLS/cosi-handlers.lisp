@@ -58,6 +58,7 @@ THE SOFTWARE.
 (define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
 (define-symbol-macro *election-calls* (node-election-calls *current-node*))
 (define-symbol-macro *beacon*         (node-current-beacon *current-node*))
+(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
 
 (defstruct tx-changes
   ;; all lists contain key vectors
@@ -923,35 +924,6 @@ check that each TXIN and TXOUT is mathematically sound."
                (unless (eql node my-node)
                  (apply 'send (node-pkey node) msg))))
         ))
-
-;; -----------------------------------------------------------
-
-(defun make-call-election-message (pkey epoch)
-  `(:call-for-new-election
-    :pkey  ,pkey
-    :epoch ,epoch
-    :sig))
-
-(defun call-for-new-election ()
-  (let* ((my-node  (current-node))
-         (pkey     (node-pkey my-node))
-         (msg      (make-call-for-election-message pkey (node-local-epoch my-node)))
-         (sig      (pbc:sign-hash (hash/256 msg) (node-skey my-node))))
-    (gossip:broadcast (nconc msg (list sig))
-                      :graphID :UBER)))
-
-(defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
-  (let ((chk-msg   (make-call-election-message pkey epoch))
-        (witnesses (get-witness-nodes)))
-    (when (and (pbc:check-hash (hash/256 chk-msg) sig pkey)
-               (= epoch (node-local-epoch (current-node)))
-               (member pkey witnesses
-                       :key  'first
-                       :test 'int=)
-               (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
-                   (* 2/3 (length witnesses))))
-      (run-special-election))
-    ))
 
 ;; -----------------------------------------------------------
 
