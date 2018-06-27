@@ -117,8 +117,7 @@ THE SOFTWARE.
   ;; internal election beacon in loose synchrony with other witnesses.
   ;;
   (pr (format nil "~A got genesis utxo" (short-id (current-node))))
-  (really-record-new-utxo utxo)
-  (start-mvp-election-beacon))
+  (really-record-new-utxo utxo))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
@@ -891,12 +890,6 @@ check that each TXIN and TXOUT is mathematically sound."
             (=return nil))
           )))))
 
-;; ------------------------------
-
-(defun end-all-holdoffs+ ()
-  (loop for node across *node-bit-tbl* do
-        (send (node-pkey node) :end-holdoff+)))
-
 ;; -----------------------------------------------------------
 
 (defvar *use-gossip* t)
@@ -925,6 +918,24 @@ check that each TXIN and TXOUT is mathematically sound."
                  (apply 'send (node-pkey node) msg))))
         ))
 
+(defun broadcast+me (msg)
+  ;; make sure our own Node gets the message too
+  (gossip:singlecast msg
+                     :graphID nil) ;; force send to ourselves
+  ;; this really should go to everyone
+  (gossip:broadcast msg
+                    :graphID :UBER))
+
+;; ------------------------------
+
+(defun end-all-holdoffs+ ()
+  (cond (*use-real-gossip*
+         (broadcast+me :end-holdoff+))
+
+        (t
+         (loop for node across *node-bit-tbl* do
+               (send (node-pkey node) :end-holdoff+)))))
+        
 ;; -----------------------------------------------------------
 
 (defmethod add-sigs ((sig1 null) sig2)
@@ -1088,7 +1099,7 @@ check that each TXIN and TXOUT is mathematically sound."
               (sync-database)))
            t) ;; return true to validate
        ;; unwind
-       (end-holdoff+)
+       (ac:self-call :end-holdoff+)
        ))
     ))
 
