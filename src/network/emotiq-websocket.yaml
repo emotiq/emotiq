@@ -1,0 +1,111 @@
+rpc-json: 2.0
+$id: "http://api.emotiq.ch/wallet/emotiq-wallet-websocket.yaml"
+$comment: Description of the RPC JSON 2.0 messages used over the websocket
+paths:
+  /wallet:
+    methods:
+      'recovery-phrase':
+        description:
+          The recovery phrase of the wallet
+        result:
+          result:
+            schema:
+              $ref: 'messages.yaml#/schemas/recovery-phrase/response'
+      'wallet':
+        description:
+          Return information about the default wallet
+        result:
+          schema:
+            $ref: 'messages.yaml#/schemas/wallet/default/response'
+      'transactions':
+        description:
+          Return the transactions contained in the default wallet
+        result:
+          schema:
+            $ref: 'messages.yaml#/schemas/transactions/response'
+      'ping':
+        description:
+          A simple request/response to determine liveness of the connection
+        result:
+          schema:
+            type: string
+            enum:
+              - pong
+      'subscribe':
+        description:
+          Subscribe to notifications for a category.  The only category available is "consensus"
+        request:
+          params:
+            type: array
+            items:
+              type: string
+              enum:
+                - consensus
+      'unsubscribe':
+        description:
+          Unsubscribe to notifications for a pub/sub category
+        request:
+          params:
+            type: array
+            items:
+              type: string
+      'consensus':
+        description:
+          Notifications for the "consensus" subscription
+        result:
+          schema:
+            $ref: 'messages.yaml#/schemas/consensus/'
+schemas:
+  # JSON-RPC 2.0 request object
+  request:
+    type: object
+    properties:
+      jsonrpc:
+        type: string
+      id:
+        type: integer
+      method:
+        type: string
+      params:
+        type:
+          - null
+          - object
+  # JSON-RPC response object
+  response:
+    type: object
+    properties:
+      jsonrpc:
+        type: string
+      id:
+        type: integer
+      result:
+        type:
+          - null
+          - object
+      error:
+        type:
+          - null
+          - object
+
+      
+        
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+          
