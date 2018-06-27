@@ -53,6 +53,7 @@ THE SOFTWARE.
 (define-symbol-macro *holdoff*        (node-hold-off *current-node*))
 (define-symbol-macro *tx-changes*     (node-tx-changes *current-node*))
 (define-symbol-macro *election-calls* (node-election-calls *current-node*))
+(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
 
 (defstruct tx-changes
   ;; all lists contain key vectors
@@ -84,15 +85,11 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader *current-node*)
-  (setf *tx-changes* (make-tx-changes))
-  (setf *election-calls* 0)
-  (set-holdoff))
+  (setf *tx-changes* (make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
   (emotiq/tracker:track :new-witness *current-node*)
-  (setf *tx-changes* (make-tx-changes))
-  (setf *election-calls* 0)
-  (set-holdoff))
+  (setf *tx-changes* (make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (emotiq/tracker:track :reset)
@@ -940,14 +937,11 @@ check that each TXIN and TXOUT is mathematically sound."
                (int= epoch *leader*)
                (member pkey witnesses
                        :key  'first
-                       :test 'int=))
-      (when (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
-                (* 2/3 (length witnesses)))
-        (setf *leader*  (hold-election (get-election-seed)))
-        (ac:self-call (if (int= *leader* *current-node*)
-                          :become-leader
-                        :become-witness))
-        ))))
+                       :test 'int=)
+               (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
+                   (* 2/3 (length witnesses))))
+      (run-special-election))
+    ))
 
 ;; -----------------------------------------------------------
 
