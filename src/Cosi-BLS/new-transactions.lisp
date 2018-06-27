@@ -1482,7 +1482,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                      do (decf tx-count))
                (setq transactions (nreverse rev-txs))))
            #+development (assert (= (length transactions) tx-count))
-           (ac:pr (format nil "~D Transactions" tx-count))
+           (emotiq:note "~D Transactions" tx-count)
            (return transactions)))  
 
 ;; Note: new transactions currently do not use UTXO database, only
