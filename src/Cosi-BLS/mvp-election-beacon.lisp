@@ -15,68 +15,6 @@
 (defun get-witness-list ()
   *all-nodes*)
 
-;; ---------------------------------------------------------------------------
-;; Election Beacon - every node runs an election beacon.
-
-(defvar *mvp-election-period*  20) ;; seconds between election rounds
-
-#|
-(defvar *mvp-election-beacon*
-  (ac:make-actor
-   (let ((prng  nil))
-     (lambda (&rest msg)
-       (labels ((hold-election ()
-                  (let* ((election-result (lw:mt-random 1.0 prng))
-                         (msg `(:hold-an-election :n ,election-result)))
-                    ;; make sure our own Node gets the message too
-                    (gossip:singlecast msg
-                                       :graphID nil) ;; force send to ourselves
-                    ;; this really should go to everyone
-                    (gossip:broadcast msg
-                                      :graphID :UBER))))
-         (um:dcase msg
-
-           (:kill ()
-            (ac:pr "Election beacon wasn't running when kill received"))
-
-           (:start ()
-            ;; We start by seeding Mersenne Twister PRNG with
-            ;; universal time rounded to nearest hour.
-            (setf prng (lw:make-mt-random-state (round (get-universal-time) 3600)))
-            (ac:recv
-
-              ((list :kill)
-               (ac:pr "Election beacon killed"))
-
-              ((list :start)
-               (ac:pr "Election beacon already running. Start message ignored.")
-               (ac:retry-recv))
-
-              ((list :hold-election)
-               (hold-election)
-               (ac:retry-recv))
-              
-              :TIMEOUT *mvp-election-period*
-              :ON-TIMEOUT (progn
-                            (hold-election)
-                            (ac:retry-recv))
-              ))
-
-           (:hold-election ()
-            (hold-election))
-           )))
-     )))
-
-(defun fire-election ()
-  (ac:send *mvp-election-beacon* :hold-election))
-
-(defun start-mvp-election-beacon ()
-  (ac:send *mvp-election-beacon* :start))
-
-(defun kill-election-beacon ()
-  (ac:send *mvp-election-beacon* :kill))
-|#
-
 ;; ---------------------------------------------------------------------------------------
 ;; Stake-weighted elections
 
@@ -178,6 +116,9 @@ based on their relative stake"
                                        (=values val)))
      ,@body))
 
+(defun update-election-seed (pkey)
+  (send *election-central* :update-seed pkey))
+
 ;; -----------------------------------------
 ;; REPL interface...
 
@@ -187,8 +128,8 @@ based on their relative stake"
 (defun reset-and-get-election-seed ()
   (ac:ask *election-central :next-after-reset))
 
-(defun update-election-seed (pkey)
-  (send *election-central* :update-seed pkey))
+(defun fire-election () ;; for REPL playing...
+  (send-hold-election-from-node *my-node*))
 
 #|
 (progn
@@ -226,7 +167,7 @@ based on their relative stake"
              (signed-msg (um:conc1 msg (pbc:sign-hash (hash/256 msg) skey))))
         (broadcast+me signed-msg)))
     ))
-  
+
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
@@ -254,6 +195,8 @@ based on their relative stake"
       (with-current-node node
         (run-election seed)))))
    
+(defvar *mvp-election-period*  20) ;; seconds between election rounds
+
 (defun run-election (n)
   ;; use the election value n (0 < n < 1) to decide on staked winner
   ;; to become new leader node. Second runner up becomes responsible
@@ -277,7 +220,7 @@ based on their relative stake"
                                                   :test 'int=))))
         (setf *leader*          winner
               *beacon*          new-beacon
-              local-epoch       n  ;; unlikely to repeat from election to election
+              *local-epoch*     n  ;; unlikely to repeat from election to election
               *election-calls*  0)
         
         (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
@@ -306,16 +249,44 @@ based on their relative stake"
 (defvar *emergency-timeout*  60)
 
 (defun setup-emergency-call-for-new-election ()
-  (let ((node (current-node)))
-    (with-election-reply (old-state) :get-seed
-      (ac:spawn (lambda ()
-                  (recv
-                    :TIMEOUT     *emergency-timeout*
-                    :ON-TIMEOUT  (with-election-reply (new-state) :get-seed
-                                   (when (int= new-state old-state) ;; anything changed?
-                                     (with-current-node node  ;; guess not...
-                                       (call-for-new-election))))
-                    ))
-                ))))
+  (let* ((node      (current-node))
+         (old-epoch *local-epoch*))
+    (ac:spawn (lambda ()
+                (recv
+                  :TIMEOUT     *emergency-timeout*
+                  :ON-TIMEOUT  (when (= *local-epoch* old-epoch) ;; anything changed?
+                                 (with-current-node node  ;; guess not...
+                                   (call-for-new-election)))
+                  ))
+              )))
+
+;; -----------------------------------------------------------
+
+(defun make-call-election-message (pkey epoch)
+  `(:call-for-new-election
+    :pkey  ,pkey
+    :epoch ,epoch
+    :sig))
+
+(defun call-for-new-election ()
+  (let* ((my-node  (current-node))
+         (pkey     (node-pkey my-node))
+         (msg      (make-call-for-election-message pkey *local-epoch*))
+         (sig      (pbc:sign-hash (hash/256 msg) (node-skey my-node))))
+    (gossip:broadcast (nconc msg (list sig))
+                      :graphID :UBER)))
+
+(defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
+  (let ((chk-msg   (make-call-election-message pkey epoch))
+        (witnesses (get-witness-nodes)))
+    (when (and (pbc:check-hash (hash/256 chk-msg) sig pkey)
+               (= epoch *local-epoch*)
+               (member pkey witnesses
+                       :key  'first
+                       :test 'int=)
+               (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
+                   (* 2/3 (length witnesses))))
+      (run-special-election))
+    ))
 
 
