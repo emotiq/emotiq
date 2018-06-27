@@ -164,8 +164,19 @@ based on their relative stake"
           ;; perturb our seed so we don't mindlessly repeat the same
           ;; seed sequence as some other node after a major reset
           (setf seed (hash/256 (uuid:make-v1-uuid) pkey seed)))
+
+         (:get-seed (&optional reply-to)
+          (when reply-to
+            (send reply-to seed))
+          seed)
          
          )))))
+
+(defmacro with-election-reply (reply-args msg &body body)
+  `(=bind ,reply-args
+       (send *election-central* ,msg (lambda (val)
+                                       (=values val)))
+     ,@body))
 
 ;; -----------------------------------------
 ;; REPL interface...
@@ -208,9 +219,7 @@ based on their relative stake"
        :sig))
 
 (defun send-hold-election-from-node (node)
-  (=bind (seed)
-      (send *election-central* :next (lambda (val)
-                                       (=values val)))
+  (with-election-reply (seed) :next
     (with-accessors ((pkey  node-pkey)
                      (skey  node-skey)) node
       (let* ((msg        (make-election-message pkey seed))
@@ -241,9 +250,7 @@ based on their relative stake"
 (defun run-special-election ()
   ;; try to resync on stalled system
   (let ((node (current-node)))
-    (=bind (seed)
-        (send *election-central* :next-after-reset (lambda (val)
-                                                     (=values val)))
+    (with-election-reply (seed) :next-after-reset
       (with-current-node node
         (run-election seed)))))
    
@@ -255,7 +262,6 @@ based on their relative stake"
   ;; So election beacon becomes a roving responsibility. If it gets
   ;; knocked out, then we fall back to early elections with BFT
   ;; consensus on decision to resync.
-  
   (let ((node      (current-node))
         (witnesses (get-witness-list)))
     
@@ -291,5 +297,23 @@ based on their relative stake"
                           :become-leader
                         :become-witness))
         ))))
+
+;; ---------------------------------------------------------------
+;; if we don't hold a new election before this timeout, established at
+;; the end of commit phase, then call for a new election
+(defvar *emergency-timeout*  60)
+
+(defun setup-emergency-call-for-new-election ()
+  (let ((node (current-node)))
+    (with-election-reply (old-state) :get-seed
+      (ac:spawn (lambda ()
+                  (recv
+                    :TIMEOUT     *emergency-timeout*
+                    :ON-TIMEOUT  (with-election-reply (new-state) :get-seed
+                                   (when (int= new-state old-state) ;; anything changed?
+                                     (with-current-node node  ;; guess not...
+                                       (call-for-new-election))))
+                    ))
+                ))))
 
 
