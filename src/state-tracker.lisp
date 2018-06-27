@@ -99,7 +99,7 @@
   "return a string of notes from each of the nodes in the system"
   (with-output-to-string (out)
     (mapc #'(lambda (n)
-              (format out "~&~&~a:~&~a~&"
+              (format out "~%~%~a:~%~a~%"
                       (stringify-node n)
                       (get-notes n)))
           (query-raw-nodes))))
