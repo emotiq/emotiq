@@ -24,13 +24,12 @@
        (labels ((hold-election ()
                   (let* ((election-result (lw:mt-random 1.0 prng))
                          (msg `(:hold-an-election :n ,election-result)))
-                    (unless *holdoff*
-                      ;; make sure our own Node gets the message too
-                      (gossip:singlecast msg
-                                         :graphID nil) ;; force send to ourselves
-                      ;; this really should go to everyone
-                      (gossip:broadcast msg
-                                        :graphID :UBER)))))
+                    ;; make sure our own Node gets the message too
+                    (gossip:singlecast msg
+                                       :graphID nil) ;; force send to ourselves
+                    ;; this really should go to everyone
+                    (gossip:broadcast msg
+                                      :graphID :UBER))))
          (um:dcase msg
 
            (:kill ()
@@ -50,7 +49,6 @@
                (ac:retry-recv))
 
               ((list :hold-election)
-               (end-holdoff) ;; to force an election broadcast
                (hold-election)
                (ac:retry-recv))
               
@@ -61,7 +59,6 @@
               ))
 
            (:hold-election ()
-            (end-holdoff) ;; to force an election broadcast
             (hold-election))
            )))
      )))
