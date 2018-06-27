@@ -49,8 +49,11 @@
   (setf *simulator-output* (make-string-output-stream))
   (let ((*error-output* *simulator-output*)
         (*standard-output* *simulator-output*))
-    (emotiq/sim:initialize)
-    (emotiq/sim:run-new-tx)))
+    (multiple-value-bind (state tracking-actor)
+        (emotiq/sim:initialize)
+      (let ((*state* state)
+            (*tracking-actor* tracking-actor))
+        (emotiq/sim:run-new-tx)))))
 
 (defvar *simulator-results* "") 
 

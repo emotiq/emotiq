@@ -54,9 +54,11 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   ;; should this following code be executed every time or only when a new configuration is created?
   (phony-up-nodes)
   (emotiq/elections:set-nodes (keys-and-stakes))
-  (emotiq/tracker:start-tracker)
-  (when run-cli-p
-    (emotiq/cli:main)))
+  (multiple-value-bind (state tracking-actor)
+      (emotiq/tracker:start-tracker)
+    (when run-cli-p
+      (emotiq/cli:main))
+    (values state tracking-actor)))
 
 (defvar *genesis-account*
   nil
@@ -345,9 +347,9 @@ This will spawn an actor which will asynchronously do the following:
                   "Continue regardless."
                   "Timed out, waited 60 sec for 4 transactions on blockchain."))))
             
-            (emotiq:note"~3%Here's a dump of the whole blockchain currently:~%")
+            (emotiq:note"Here's a dump of the whole blockchain currently:")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (emotiq:note "~2%Good-bye and good luck!~%")
+            (emotiq:note "Good-bye and good luck!")
             (format *error-output* "Done."))))))
   (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
   (emotiq:note "number of blocks ~A" (length (blocks)))

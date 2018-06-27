@@ -21,20 +21,31 @@
 
 (defun start-tracker ()
   "returns an actor that can be sent messages about changes to the system state"
-  (setf *state* (make-instance 'system-state)
-        *tracking-actor* (actors:make-actor #'do-tracking))
-  (emotiq:note "running start-tracker ~A ~A" *state* *tracking-actor*))
+  ;; started in more than one place - emotiq:main starts it
+  ;; and, because the REST server is running the simulator, it starts it again (by calling initialize)
+  ;; start it only once
+  (unless (and *state* *tracking-actor*)  
+    (let ((state (make-instance 'system-state))
+          (tracking-actor (actors:make-actor #'do-tracking)))
+      (emotiq:note "running start-tracker ~A ~A" state tracking-actor)
+      (setf *state* state
+            *tracking-actor* tracking-actor)))
+  (assert (eq 'actors:actor (type-of *tracking-actor*)))
+  (assert (eq 'system-state (type-of *state*)))
+  (values *state* *tracking-actor*))
 
 (defun do-tracking (msg)
   (case (first msg) 
     (:reset
      (emotiq:note "Tracker: :reset - state cleared")
-     (start-tracker))
+     (setf (system-leader *state*) nil
+           (system-witness-list *state*) nil))
 
     (:node
      (let ((node (second msg)))
        (assert (not (member node (system-all-nodes *state*))))
-       (push node (system-all-nodes *state*))))
+       (unless (member node (system-all-nodes *state*))
+         (push node (system-all-nodes *state*)))))
 
     (:election
      (emotiq:note "Tracker: :election - state cleared")
