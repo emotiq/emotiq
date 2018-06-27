@@ -350,7 +350,8 @@ This will spawn an actor which will asynchronously do the following:
             
             (emotiq:note"~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (emotiq:note "~2%Good-bye and good luck!~%"))))))
+            (emotiq:note "~2%Good-bye and good luck!~%")
+            (format *error-output* "Done.")))))
   (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
   (emotiq:note "number of blocks ~A" (length (blocks)) )
   (values (length (blocks))))
