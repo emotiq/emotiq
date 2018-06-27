@@ -128,6 +128,8 @@
   (:export
    #:start-tracker
    #:query-current-state
+   #:query-raw-nodes
+   #:get-notes
    #:track))
 
 (defpackage emotiq/ate

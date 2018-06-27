@@ -157,7 +157,8 @@ THE SOFTWARE.
   (emotiq/tracker:track :node node)
   (let ((beh  (make-actor
                (lambda (&rest msg)
-                 (let ((*current-node* node))
+                 (let ((*current-node* node)
+                       (emotiq:*notestream* (node-notestream node)))
                    (apply 'node-dispatcher msg)))
                )))
     (make-actor

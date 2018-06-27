@@ -87,3 +87,9 @@
    (ignore-errors (format nil "~s" n))
    "Failed to stringify node"))
 
+(defun query-raw-nodes ()
+  "return a list of nodes as lisp data, which can be further nspected"
+  (system-all-nodes *state*))
+
+(defun get-notes (n)
+  (get-output-stream-string (cosi-simgen::node-notestream n)))
