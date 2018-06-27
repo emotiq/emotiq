@@ -894,19 +894,13 @@ check that each TXIN and TXOUT is mathematically sound."
 (defvar *use-gossip* t)
 (defvar *use-real-gossip* nil)                ;; set to T for real Gossip mode, NIL = simulation mode
 (defvar *cosi-gossip-neighborhood-graph* nil) ;; T if neighborhood graph has been established
-(defvar *cosi-witnesses*  nil)                ;; list of witness pkeys in network
-
-(defun get-witness-list ()
-  ;; where, when, does this information get filled in?
-  *cosi-witnesses*)
 
 (defun ensure-cosi-gossip-neighborhood-graph (my-node)
   (or *cosi-gossip-neighborhood-graph*
       (setf *cosi-gossip-neighborhood-graph*
             (or :UBER ;; for now while debugging
                 (gossip:establish-broadcast-group
-                 (remove (node-pkey my-node) (get-witness-list)
-                         :test 'int=)
+                 (mapcar 'first (get-witness-list))
                  :graphID :cosi)))
       ))
 
@@ -924,10 +918,6 @@ check that each TXIN and TXOUT is mathematically sound."
         ))
 
 ;; -----------------------------------------------------------
-
-(defun get-witness-nodes ()
-  ;; should return a list of (pkey stake) pairs
-  *all-nodes*)
 
 (defun make-call-election-message (pkey epoch)
   `(:call-for-new-election
@@ -948,7 +938,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (witnesses (get-witness-nodes)))
     (when (and (pbc:check-hash (hash/256 msg) sig pkey)
                (int= epoch *leader*)
-               (member pkey (get-witness-nodes)
+               (member pkey witnesses
                        :key  'first
                        :test 'int=))
       (when (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3

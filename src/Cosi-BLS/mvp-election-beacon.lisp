@@ -12,11 +12,15 @@
   (assert node-list)
   (setf *all-nodes* node-list))
 
+(defun get-witness-list ()
+  *all-nodes*)
+
 ;; ---------------------------------------------------------------------------
 ;; Election Beacon - every node runs an election beacon.
 
 (defvar *mvp-election-period*  20) ;; seconds between election rounds
 
+#|
 (defvar *mvp-election-beacon*
   (ac:make-actor
    (let ((prng  nil))
@@ -71,7 +75,8 @@
 
 (defun kill-election-beacon ()
   (ac:send *mvp-election-beacon* :kill))
-                          
+|#
+
 ;; ---------------------------------------------------------------------------------------
 ;; Stake-weighted elections
 
@@ -111,11 +116,11 @@
       ;; else
       l)))
 
-(defun hold-election (nfrac)
+(defun hold-election (nfrac &optional (nodes (get-witness-list)))
   "Given a fraction (0 < nfrac < 1) arrange all stakeholders into a
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
-  (let* ((tree    (car (um:nlet-tail iter ((nodes *all-nodes*))  ;; tail recursive, scheme-like, named let
+  (let* ((tree    (car (um:nlet-tail iter ((nodes nodes)) ;; tail recursive, scheme-like, named let
                     (if (= 1 (length nodes))
                         nodes
                       (iter (mapcar 'make-tree-node (um:group nodes 2))))))))
@@ -136,36 +141,79 @@ based on their relative stake"
 
 (defvar *election-seed* nil)
 
-(defun init-election-seed ()
-  (setf *election-seed* (lw:make-mt-random-state (round (get-universal-time) 3600))))
-
 (defun get-election-seed ()
-  (lw:mt-random 1.0 *election-seed*))
+  (unless *election-seed*
+    (setf *election-seed* (hash/256 (uuid:make-v1-uuid))))
+  (float (/ (int (setf *election-seed* (hash/256 (get-universal-time) *election-seed*)))
+            #.(ash 1 256))
+         1d0))
+
+(defun make-election-message (pkey seed)
+  `(:hold-an-election
+       :n      ,seed
+       :beacon ,pkey
+       :sig))
+
+(defun send-hold-election-from-node (node)
+  (with-accessors ((pkey  node-pkey)
+                   (skey  node-skey)) node
+    (let* ((msg        (make-election-message pkey (get-election-seed)))
+           (signed-msg (um:conc1 msg (pbc:sign-hash (hash/256 msg) skey))))
+      ;; make sure our own Node gets the message too
+      (gossip:singlecast signed-msg
+                         :graphID nil) ;; force send to ourselves
+      ;; this really should go to everyone
+      (gossip:broadcast signed-msg
+                        :graphID :UBER))))
 
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
-(defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
-  (cond (*holdoff*
-         (emotiq:note "Election held-off"))
-        (t
-         (set-holdoff)
-         (let* ((node   (current-node))
-                (me     (node-pkey node))
-                (winner (hold-election n)))
-           (setf (node-current-leader node) winner)
-           (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
-           (let ((iwon (int= winner me)))
-             (emotiq:note "election results ~A (stake = ~A)"
-                          (if iwon " *ME* " " not me ")
-                          (node-stake node))
-             (emotiq:note "winner ~A me=~A"
-                     (short-id winner)
-                     (short-id me))
-             (if iwon
-                 (progn
-                   (cosi-simgen:send me :become-leader)
-                   (cosi-simgen:send me :make-block))
-               (cosi-simgen:send me :become-witness)))
-           ))
-        ))
+(defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n beacon sig)
+  (if *holdoff*
+      (emotiq:note "Election held-off")
+    ;; else
+    (let ((node      (current-node))
+          (witnesses (get-witness-list))
+          (msg       (make-election-message beacon n)))
+      
+      (with-accessors ((current-beacon  node-current-beacon)
+                       (current-leader  node-current-leader)
+                       (stake           node-stake)
+                       (pkey            node-pkey)) node
+        
+        (when (and (pbc:check-hash (hash/256 msg) sig beacon)
+                   (or (int= beacon current-beacon)
+                       (and (null current-beacon)
+                            (member beacon witnesses
+                                    :key  'first
+                                    :test 'int=))))
+          
+          (let* ((winner     (hold-election n))
+                 (new-beacon (hold-election n (remove winner witnesses
+                                                      :key 'first
+                                                      :test 'int=))))
+            (setf current-leader winner
+                  current-beacon new-beacon)
+            
+            (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
+            (emotiq:note "election results ~A (stake = ~A)"
+                         (if (int= pkey winner) " *ME* " " not me ")
+                         stake)
+            (emotiq:note "winner ~A me=~A"
+                         (short-id winner)
+                         (short-id pkey))
+            
+            (when (int= pkey new-beacon)
+              (ac:spawn (lambda ()
+                          (recv
+                            :TIMEOUT    *mvp-election-period*
+                            :ON-TIMEOUT (send-hold-election-from-node node)))))
+            
+            (ac:self-call (if (int= pkey winner)
+                              :become-leader
+                            :become-witness))
+            ))
+        ))))
+
+
