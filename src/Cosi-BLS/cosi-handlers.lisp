@@ -935,7 +935,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun call-for-new-election ()
   (let* ((my-node  (current-node))
          (pkey     (node-pkey my-node))
-         (msg      (make-call-for-election-message pkey *leader*))
+         (msg      (make-call-for-election-message pkey (node-local-epoch my-node)))
          (sig      (pbc:sign-hash (hash/256 msg) (node-skey my-node))))
     (gossip:broadcast (nconc msg (list sig))
                       :graphID :UBER)))
@@ -944,7 +944,7 @@ check that each TXIN and TXOUT is mathematically sound."
   (let ((chk-msg   (make-call-election-message pkey epoch))
         (witnesses (get-witness-nodes)))
     (when (and (pbc:check-hash (hash/256 chk-msg) sig pkey)
-               (int= epoch *leader*)
+               (= epoch (node-local-epoch (current-node)))
                (member pkey witnesses
                        :key  'first
                        :test 'int=)

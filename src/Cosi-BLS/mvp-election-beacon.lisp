@@ -265,8 +265,9 @@ based on their relative stake"
   (let ((node      (current-node))
         (witnesses (get-witness-list)))
     
-    (with-accessors ((stake node-stake)
-                     (pkey  node-pkey)) node
+    (with-accessors ((stake       node-stake)
+                     (pkey        node-pkey)
+                     (local-epoch node-local-epoch)) node
 
       (update-election-seed pkey)
 
@@ -276,6 +277,7 @@ based on their relative stake"
                                                   :test 'int=))))
         (setf *leader*          winner
               *beacon*          new-beacon
+              local-epoch       n  ;; unlikely to repeat from election to election
               *election-calls*  0)
         
         (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
