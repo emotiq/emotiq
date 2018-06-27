@@ -113,6 +113,8 @@ THE SOFTWARE.
 
    (current-leader :accessor node-current-leader
                    :initform nil) ;; holds pkey of current leader node
+   (election-calls :accessor node-election-calls
+                   :initform 0)
    (tx-changes     :accessor node-tx-changes
                    :initform nil)
    ;; -------------------------------------
