@@ -183,12 +183,12 @@ based on their relative stake"
                        (pkey            node-pkey)) node
         
         (when (and (pbc:check-hash (hash/256 msg) sig beacon)
-                   (or (int= beacon current-beacon)
-                       (and (null current-beacon)
+                   (or (and (null current-beacon)
                             (member beacon witnesses
                                     :key  'first
-                                    :test 'int=))))
-          
+                                    :test 'int=)))
+                   (int= beacon current-beacon))
+                       
           (let* ((winner     (hold-election n))
                  (new-beacon (hold-election n (remove winner witnesses
                                                       :key 'first
