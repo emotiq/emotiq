@@ -99,12 +99,12 @@ THE SOFTWARE.
   (ac:pr args))
 
 (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
-  (pr (format nil "~A got genesis utxo" (short-id (current-node))))
+  (emotiq:note "~A got genesis utxo" (short-id (current-node)))
   (really-record-new-utxo utxo))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
-  (pr (format nil "~A got genesis block" (short-id (current-node))))
+  (emotiq:note "~A got genesis block" (short-id (current-node)))
   (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
   (push blk *blockchain*)
@@ -575,7 +575,7 @@ to precede TXIN consumers.
 TLST is a list of pairs (k v) with k being the hash of the
 transaction, and v being the transaction itself."
   ;; first, compute lists of keys just once
-  (pr "Topological sorting")
+  (emotiq:note "Topological sorting")
   (let ((txrecs (mapcar (lambda (tx)
                           (make-txrec
                            :tx     tx
@@ -686,14 +686,14 @@ topo-sorted partial order"
       (cosi/proofs/newtx:get-transactions-for-new-block
        :max *max-transactions*)))
   (let ((tx-pairs (get-candidate-transactions)))
-    (pr "Trimming transactions")
+    (emotiq:note "Trimming transactions")
     (multiple-value-bind (hd tl)
         (um:split *max-transactions* tx-pairs)
       (dolist (tx tl)
         ;; put these back in the pond for next round
         (back-out-transaction tx))
       ;; now hd represents the actual transactions going into the next block
-      (pr (format nil "~D Transactions" (length hd)))
+      (emotiq:note "~D Transactions" (length hd))
       hd)))
       
 ;; ----------------------------------------------------------------------
@@ -870,8 +870,8 @@ check that each TXIN and TXOUT is mathematically sound."
           :TIMEOUT timeout
           :ON-TIMEOUT
           (progn
-            (pr (format nil "SubSigning timeout waiting for ~A"
-                        (short-id node)))
+            (emotiq:note "SubSigning timeout waiting for ~A"
+                        (short-id node))
             (=return nil))
           )))))
 
@@ -940,7 +940,7 @@ check that each TXIN and TXOUT is mathematically sound."
                  (g-bits    0)
                  (g-sig     nil))
              
-             (pr "Running Gossip Signing")
+             (emotiq:note "Running Gossip Signing")
 
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
@@ -952,7 +952,7 @@ check that each TXIN and TXOUT is mathematically sound."
              
              (labels
                  ((=return (val)
-                    (pr "Return from Gossip Signing")
+                    (emotiq:note "Return from Gossip Signing")
                     (become 'do-nothing) ;; stop responding to messages
                     (=values val))
                   
@@ -971,7 +971,7 @@ check that each TXIN and TXOUT is mathematically sound."
                              sig
                              (zerop (logand g-bits bits)) ;; check for no intersection
                              (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                    (pr (hex bits))
+                    (emotiq:note (hex bits))
                     (setf g-bits (logior g-bits bits)
                           g-sig  (add-sigs sig g-sig)))
                   (if (> (logcount g-bits) bft-thrsh)
@@ -982,7 +982,7 @@ check that each TXIN and TXOUT is mathematically sound."
                       (retry-recv))))
                  
                  (msg
-                  (pr (format nil "Gossip-wait got unknown message: ~A" msg))
+                  (emotiq:note "Gossip-wait got unknown message: ~A" msg)
                   (adj-timeout)
                   (retry-recv))
                  
@@ -1090,7 +1090,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (blk-hash (hash/256 (signature-hash-message blk)))
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
-    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
+    (emotiq:note "Node: ~A :Stage ~A" (short-id node) consensus-stage)
     (=bind (ans)
         (par
           (let ((*current-node* node))
@@ -1122,14 +1122,14 @@ check that each TXIN and TXOUT is mathematically sound."
                           timeout))
       
       (let ((*current-node* node))
-        (pr ans)
+        (emotiq:note "~a" ans)
         (destructuring-bind ((sig bits) r-lst g-ans) ans
           (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
-                       (pr (format nil "No signing: ~A"
-                                   (short-id sub)))
+                       (emotiq:note "No signing: ~A"
+                                   (short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -1177,7 +1177,7 @@ check that each TXIN and TXOUT is mathematically sound."
         ;; ------------------------------------
         (t ;; seq mismatch
            ;; must have been a late arrival
-           (pr :late-arrival)
+           (emotiq:note ":late-arrival")
            (retry-recv))
         )) ;; end of message pattern
       ;; ---------------------------------
@@ -1191,7 +1191,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun leader-assemble-block (trns prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
-  (pr "Assemble new block")
+  (emotiq:note "Assemble new block")
   (let* ((node      *current-node*)
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
@@ -1202,7 +1202,7 @@ check that each TXIN and TXOUT is mathematically sound."
                   :reply-to  self
                   :blk       new-block
                   :timeout   prepare-timeout)
-    (pr "Waiting for Cosi prepare")
+    (emotiq:note "Waiting for Cosi prepare")
     (recv
       ((list :answer (list :signature sig bits))
        (let ((*current-node* node))
@@ -1217,14 +1217,14 @@ check that each TXIN and TXOUT is mathematically sound."
                        :reply-to  self
                        :blk       new-block
                        :timeout   commit-timeout)
-         (pr "Waiting for Cosi commit")
+         (emotiq:note "Waiting for Cosi commit")
          (recv
            ((list :answer (list* :signature _))
             (send *dly-instr* :plt)
             (send (node-pkey node) :block-finished))
            
            ((list :answer (list :corrupt-cosi-network))
-            (pr "Corrupt Cosi network in COMMIT phase"))
+            (emotiq:note "Corrupt Cosi network in COMMIT phase"))
            
            #|
            ((list :answer (list :timeout-cosi-network))
@@ -1233,7 +1233,7 @@ check that each TXIN and TXOUT is mathematically sound."
            )))
       
       ((list :answer (list :corrupt-cosi-network))
-       (pr "Corrupt Cosi network in PREPARE phase")
+       (emotiq:note "Corrupt Cosi network in PREPARE phase")
        (end-all-holdoffs))
       
       #|
@@ -1290,7 +1290,7 @@ check that each TXIN and TXOUT is mathematically sound."
                 (pkeym (pbc:keying-triple-pkey km))
                 (skeym (pbc:keying-triple-skey km)))
            
-           (pr "Construct Genesis transaction")
+           (emotiq:note "Construct Genesis transaction")
            (multiple-value-bind (utxog secrg)
                (make-cloaked-txout 1000 pkey)
              (declare (ignore secrg))
@@ -1313,11 +1313,11 @@ check that each TXIN and TXOUT is mathematically sound."
                ;; send TX to all nodes
                (send-tx-to-all (setf *trans1* trans))
                
-               (pr "Find UTX for Mary")
+               (emotiq:note "Find UTX for Mary")
                (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
                       (minfo  (decrypt-txout-info utxm skeym)))
                  
-                 (pr "Construct 2nd transaction")
+                 (emotiq:note "Construct 2nd transaction")
                  (let ((trans (make-transaction :ins `((:kind :cloaked
                                                         :amount ,(txout-secr-amt minfo)
                                                         :gamma  ,(txout-secr-gamma minfo)
@@ -1374,7 +1374,7 @@ check that each TXIN and TXOUT is mathematically sound."
               (pkeym (pbc:keying-triple-pkey km))
               (skeym (pbc:keying-triple-skey km)))
          
-         (pr "Construct Genesis transaction")
+         (emotiq:note "Construct Genesis transaction")
          (multiple-value-bind (utxog secrg)
              (make-uncloaked-txout 1000 pkey)
            (declare (ignore secrg))
@@ -1398,12 +1398,12 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; send TX to all nodes
              (send-tx-to-all trans)
              
-             (pr "Find UTX for Mary")
+             (emotiq:note "Find UTX for Mary")
              (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
                     (amt    (uncloaked-txout-amt utxm))
                     (gamma  (uncloaked-txout-gamma utxm)))
                
-               (pr "Construct 2nd transaction")
+               (emotiq:note "Construct 2nd transaction")
                (let ((trans (make-transaction :ins `((:kind :uncloaked
                                                       :amount ,amt
                                                       :gamma  ,gamma
