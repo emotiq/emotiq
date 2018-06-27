@@ -57,15 +57,6 @@ THE SOFTWARE.
   (declare (ignore env))
   (make-load-form-saving-slots point))
 
-#|
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (fboundp 'make-ecc-pt)
-    (defstruct ecc-pt
-      x y))
-  (defstruct ed-proj-pt
-    x y z))
-|#
-
 ;; ------------------------------------------------------------------------------
 ;; Curve parameters from SafeCurves
 ;; https://safecurves.cr.yp.to
@@ -289,31 +280,6 @@ THE SOFTWARE.
          ))
       )))
 
-#|
-(defun ed-pt= (pt1 pt2)
-  (optima:ematch pt1
-    ((ecc-pt- :x x1 :y y1)
-       (optima:ematch pt2
-         ((ecc-pt- :x x2 :y y2)
-            (and (= x1 x2)
-                 (= y1 y2)))
-         ((ed-proj-pt-)
-            (ed-pt= (ed-projective pt1) pt2))
-         ))
-    ((ed-proj-pt- :x x1 :y y1 :z z1)
-       (optima:ematch pt2
-         ((ecc-pt-)
-            (ed-pt= pt1 (ed-projective pt2)))
-         ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (with-mod *ed-q*
-            (and (= (m* x1 z2)
-                    (m* x2 z1))
-                 (= (m* y1 z2)
-                    (m* y2 z1)))))
-         ))
-    ))
-|#
-
 (defun ed-satisfies-curve (pt)
   (with-mod *ed-q*
     (optima:ematch pt
@@ -384,24 +350,6 @@ THE SOFTWARE.
           (t               (ed-projective-add upt1 upt2))
           )))
 
-#|
-(defun ed-add (pt1 pt2)
-  ;; contageon to randomized projective coords for added security
-  (reset-blinders)
-  (optima:ematch pt1
-    ((ecc-pt-)
-       (optima:ematch pt2
-         ((ecc-pt-)     (ed-affine-add pt1 pt2))
-         ((ed-proj-pt-) (ed-projective-add (ed-projective pt1) pt2))
-         ))
-    ((ed-proj-pt-)
-       (optima:ematch pt2
-         ((ecc-pt-)     (ed-projective-add pt1 (ed-projective pt2)))
-         ((ed-proj-pt-) (ed-projective-add pt1 pt2))
-         ))
-    ))
-|#
-
 (defun ed-negate (pt)
   (with-mod *ed-q*
     (optima:ematch pt
@@ -453,28 +401,6 @@ THE SOFTWARE.
                       ))
               v))
         ))
-
-#|
-(defun ed-basic-mul (pt n)
-  ;; left-to-right algorithm
-  ;; input pt is in affine or projective coords, result is in projective coords
-  (cond ((zerop n)  (ed-projective
-                     (ed-neutral-point)))
-        
-        ((or (= n 1)
-             (ed-neutral-point-p pt)) pt)
-        
-        (t  (let* ((r0  (ed-random-projective pt)) ;; randomize point
-                   (l   (1- (integer-length n)))
-                   (v   (vector r0
-                                r0)))
-              (loop repeat l do
-                    (decf l)
-                    (setf (aref v 1)                  (ed-add (aref v 1) (aref v 1))
-                          (aref v (ldb (byte 1 l) n)) (ed-add (aref v 1) r0)))
-              (aref v 1)))
-        ))
-|#
 
 (defun ed-mul (pt n)
   #|
@@ -570,17 +496,6 @@ THE SOFTWARE.
        (ed-satisfies-curve pt)
        (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*)))
        pt))
-
-#|
-(defun ed-validate-point (pt)
-  ;; guard against neutral point
-  (assert (not (ed-neutral-point-p pt)))
-  ;; guard against invalid curve attack
-  (assert (ed-satisfies-curve pt))
-  ;; guard against small subgroup attack
-  (assert (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*))))
-  pt)
-|#
 
 (defun ed-validate-point (pt)
   (assert (ed-valid-point-p pt))
@@ -781,16 +696,6 @@ we are done. Else re-probe with (X^2 + 1)."
                           :elligator-nbytes *edcurve*
                           (lambda ()
                             (ceiling (elligator-nbits) 8))))
-
-#| ;; unused here
-(defun elligator-padding ()
-  ;; generate random padding bits for the initial byte
-  ;; of a big-endian octet Elligator encoding
-  (let* ((nbits (mod (elligator-nbits) 8)))
-    (if (zerop nbits)
-        0
-      (ash (ctr-drbg-int (- 8 nbits)) nbits))))
-|#
 
 (defun elligator-int-padding ()
   ;; generate random padding bits for an elligator int

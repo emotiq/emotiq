@@ -110,36 +110,12 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------
 
-(defun get-hash-nbytes (nb seed)
+(defun get-hash-nbytes (nb &rest seeds)
   ;; returns a vector of nb raw-bytes
-  (cond
-   ((> nb 64)
-    (let ((bytes (make-ub8-vector nb)))
-      (um:nlet-tail iter ((start 0))
-        (if (< start nb)
-            (let ((end  (min (+ start 64) nb)))
-              (replace bytes (hash-bytes (hash/512 start seed))
-                       :start1 start
-                       :end1   end)
-              (iter end))
-          bytes))
-      ))
-   ((= nb 64)
-    (hash-bytes (hash/512 seed)))
-   ((> nb 48)
-    (let ((bytes (hash-bytes (hash/512 seed))))
-      (subseq bytes 0 nb)))
-   ((= nb 48)
-    (hash-bytes (hash/384 seed)))
-   ((> nb 32)
-    (let ((bytes (hash-bytes (hash/384 seed))))
-      (subseq bytes 0 nb)))
-   ((= nb 32)
-    (hash-bytes (hash/256 seed)))
-   (t
-    (let ((bytes (hash-bytes (hash/256 seed))))
-      (subseq bytes 0 nb)))
-   ))
+  (let ((dig (ironclad:make-digest :shake256 :output-length nb)))
+    (dolist (seed seeds)
+      (ironclad:update-digest dig (hashable seed)))
+    (ironclad:produce-digest dig)))
 
 ;; -----------------------------------------------------
 

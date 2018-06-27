@@ -879,13 +879,41 @@ check that each TXIN and TXOUT is mathematically sound."
   (loop for node across *node-bit-tbl* do
         (send (node-pkey node) :end-holdoff)))
 
+;; -----------------------------------------------------------
+
 (defvar *use-gossip* t)
+(defvar *use-real-gossip* nil)                ;; set to T for real Gossip mode, NIL = simulation mode
+(defvar *cosi-gossip-neighborhood-graph* nil) ;; T if neighborhood graph has been established
+(defvar *cosi-witnesses*  nil)                ;; list of witness pkeys in network
+
+(defun get-witness-list ()
+  ;; where, when, does this information get filled in?
+  *cosi-witnesses*)
+
+(defun ensure-cosi-gossip-neighborhood-graph (my-node)
+  (or *cosi-gossip-neighborhood-graph*
+      (setf *cosi-gossip-neighborhood-graph*
+            (or :UBER ;; for now while debugging
+                (gossip:establish-broadcast-group
+                 (remove (node-pkey my-node) (get-witness-list)
+                         :test 'int=)
+                 :graphID :cosi)))
+      ))
 
 (defun gossip-neighborcast (my-node &rest msg)
-  "Gossip-neighborcast - send message to all nodes. Just a stub for now."
-  (loop for node across *node-bit-tbl* do
-        (unless (eql node my-node)
-          (apply 'send (node-pkey node) msg))))
+  "Gossip-neighborcast - send message to all witness nodes."
+  (cond (*use-real-gossip*
+         (gossip:broadcast msg
+                           :style :neighborcast
+                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
+
+        (t
+         (loop for node across *node-bit-tbl* do
+               (unless (eql node my-node)
+                 (apply 'send (node-pkey node) msg))))
+        ))
+
+;; -----------------------------------------------------------
 
 (defmethod add-sigs ((sig1 null) sig2)
   sig2)
@@ -911,6 +939,7 @@ check that each TXIN and TXOUT is mathematically sound."
                  (g-sig     nil))
              
              (pr "Running Gossip Signing")
+
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
                                   :consensus-stage consensus-stage

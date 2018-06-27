@@ -422,7 +422,7 @@ alpha1 9476715580407735251767803811432601203461520366585714647829339610866164227
   "Curve parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^449, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
-square roots.  This curve will wrap 1 in 5.5e27 hash/256.
+square roots.
 Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
 Barreto and Naehrig.
 Size of q^12 is 5388 bits.
@@ -824,22 +824,35 @@ library."
                            :pt (get-element *g2-size* '_get-g2))
             )))
 
+(defun parse-order-from-init-text ()
+  (let ((txt (curve-params-pairing-text *curve*)))
+    (multiple-value-bind (start end gstart gend)
+        ;; assumes the "r ..." line is preceded and followed by
+        ;; newline chars.  This will always be true for the prefix,
+        ;; but if the r line is last, you must ensure that a newline
+        ;; follows. This may be needed by the C lib too.
+        (#~m/\nr ([0-9]+).*\n/ txt)
+      (declare (ignore end))
+      (when start
+        (read-from-string (subseq txt (aref gstart 0) (aref gend 0)))
+        ))))
+
 (defun get-order ()
   "Return the integer value that represents the field and group orders."
   (or *curve-order*
-      (setf *curve-order*
-            (let ((txt (curve-params-pairing-text *curve*)))
-              (read-from-string txt t nil
-                                :start (+ (search "r " txt
-                                                  :test 'string-equal)
-                                          2)))
-            )))
+      (setf *curve-order* (parse-order-from-init-text))))
 
 ;; -------------------------------------------------
-;; NOTE: Mapping hash values to Elliptic curves by first mapping
-;; to the finite field, then multiplying by a curve generator is
-;; *COMPLETELY UNSAFE* for signature generation when the pairing is
-;; symmetric. Anyone could forge a signature on any message.
+;; NOTE: Mapping hash values to Elliptic curves by first mapping to
+;; the finite field, then multiplying by a curve generator is
+;; *COMPLETELY UNSAFE* for signature generation. Anyone could forge a
+;; BLS signature on any message.
+;;
+;; It is also unsfe in that the discrete log of the point would become
+;; known to anyone who can compute the hash value.
+;;
+;; In general, hash values are mapped to X coordinates with
+;; pseudo-random reprobing if needed.
 ;;
 
 (defmethod g1-from-hash ((hash hash))

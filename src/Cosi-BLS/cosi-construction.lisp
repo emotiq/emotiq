@@ -125,6 +125,7 @@ THE SOFTWARE.
    (load     :accessor node-load     ;; cpu loading of group for this node
              :initform 1)
    (self     :accessor node-self     ;; ptr to Actor handler
+             :accessor application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
    ))
 
