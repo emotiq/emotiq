@@ -528,7 +528,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       ;; a message to that effect. This corresponds to above rule
       ;; 'Reject if we have a matching transaction in the mempool or
       ;; in a block of the blockchain'
-      (warn "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
+      (emotiq:note "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
             (txid-string txid))
       (return-from validate-transaction nil))
     (loop with succeed-p
@@ -555,7 +555,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                           (error "TX ~a output [~a/~d] lost - likely programming error"
                                  input-tx id index))))
                 (when (double-spend-tx-out-p id index t)
-                  (warn "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
+                  (emotiq:note "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
                         (txid-string id) index)
                   (return nil))
                 tx-out)
