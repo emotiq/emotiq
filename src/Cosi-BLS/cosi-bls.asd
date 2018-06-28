@@ -57,7 +57,8 @@ THE SOFTWARE.
                                      (:file "transaction")
                                      (:file "cosi-handlers")
                                      (:file "new-transactions")
-                                     (:file "cosi-netw-xlat")))))
+                                     (:file "cosi-netw-xlat")
+                                     (:file "alist-dump")))))
 
 
 

@@ -1484,11 +1484,6 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                      while (> tx-count max)
                      do (decf tx-count))
                (setq transactions (nreverse rev-txs))))
-<<<<<<< HEAD
-           #+development (assert (= (length transactions) tx-count))
-           (emotiq:note "~D Transactions" tx-count)
-           (return transactions)))  
-=======
            ;; #+development (assert (= (length transactions) tx-count))
            (emotiq:note "~D Transactions for new block" tx-count)
            ;; Now, compute the fees, and add a collect transaction,
@@ -1500,7 +1495,6 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                     (make-collect-transaction total-fee)))
              (push collect-transaction transactions))
            (return transactions)))
->>>>>>> dev
 
 ;; Note: new transactions currently do not use UTXO database, only
 ;; mempool and blockchain.

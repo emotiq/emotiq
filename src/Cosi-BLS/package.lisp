@@ -222,6 +222,7 @@
    check-block-transactions
    dump-tx
    dump-txs
+   tx-as-alist
    clear-transactions-in-block-from-mempool
    txid-string
    wait-for-tx-count))

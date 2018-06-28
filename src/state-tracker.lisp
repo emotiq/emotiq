@@ -121,10 +121,52 @@
       (cosi/proofs/newtx:dump-txs :mempool t :node n))
     (get-output-stream-string emotiq:*notestream*)))
 
-(defun get-blockchain (n)
-  "returns a string dump of blockchain for node n"
+(defun get-raw-mempool (n)
+  "returns the mempool for node n"
+  (cosi-simgen:node-
+  (let ((emotiq:*notestream* (make-string-output-stream)))
+    (if (= 0 (hash-table-count (cosi-simgen::node-mempool n)))
+        (emotiq:note "EMPTY")
+      (cosi/proofs/newtx:dump-txs :mempool t :node n))
+    (get-output-stream-string emotiq:*notestream*)))
+
+(defun get-raw-blockchain (n)
+  "returns the  blockchain for node n"
   (let ((emotiq:*notestream* (make-string-output-stream)))
     (if (= 0 (length (cosi-simgen::node-blockchain n)))
         (emotiq:note "EMPTY")
       (cosi/proofs/newtx:dump-txs :blockchain t :node n))
     (get-output-stream-string emotiq:*notestream*)))
+
+;; code borrowed from emotiq/src/Cosi-BLS/new-transactions.lisp/dump-tx
+;; package.lisp seems to indcate the transaction is exported - why do I need :: ???
+(defmethod tx-as-alist ((tx cosi/proofs/newtx::transaction) &key out-only)
+  (let ((result nil))
+    (unless (or out-only
+                (member (transaction-type tx)
+                        '(:coinbase :collect))) ; no-input tx types
+      (loop for tx-in in (transaction-inputs tx)
+            do
+            (push `(:input . ((:index . ,(format nil "~A" (tx-in-index tx-in)))
+                              (:txid . ,(txid-string (tx-in-id tx-in)))))
+                  result)))
+    (loop for tx-out in (transaction-outputs tx)
+          as i from 0
+          do
+          (push `(:output . ((:amount . ,(format nil "~A" (tx-out-amount tx-out)))
+                             (:pubkey . ,(format nil "~A" (tx-out-public-key-hash tx-out)))))
+                result))
+    (push `(:txid . ,(txid-string (transaction-id tx))) result)
+    (unless (eq (transaction-type tx) ':spend)
+      (push `(:transaction-type . ,(format nil "~A" (transaction-type tx))) result))
+    result))
+
+(defun example ()
+  "example of fetching alist of tx after a run of the run-new-tx simulator"
+  (let* ((nodes (emotiq/tracker:query-raw-nodes))
+         (blockchain (cosi-simgen::node-blockchain (first nodes)))
+         (topblock (first blockchain))
+         (transactions-in-top-block (cosi/proofs:block-transactions topblock))
+         (tx2 (second transactions-in-top-block)))
+    (pprint (tx-as-alist tx2))
+    (values)))
