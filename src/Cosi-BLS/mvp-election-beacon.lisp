@@ -20,6 +20,11 @@
           :key  'first
           :test 'int=))
 
+(defun get-witnesses-sans-pkey (pkey)
+  (remove pkey (get-witness-list)
+          :key  'first
+          :test 'int=))
+
 ;; ---------------------------------------------------------------------------------------
 ;; Stake-weighted elections
 
@@ -212,9 +217,8 @@ based on their relative stake"
       (update-election-seed pkey)
 
       (let* ((winner     (hold-election n))
-             (new-beacon (hold-election n (remove winner witnesses
-                                                  :key 'first
-                                                  :test 'int=))))
+             (new-beacon (hold-election n (get-witnesses-sans-pkey winner))))
+
         (setf *leader*          winner
               *beacon*          new-beacon
               *local-epoch*     n  ;; unlikely to repeat from election to election
