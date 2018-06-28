@@ -160,8 +160,11 @@ based on their relative stake"
     (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
 
 (defun validate-election-message (n beacon sig)
-  (let ((skel (make-election-message-skeleton beacon n)))
-    (pbc:check-hash (hash/256 skel) sig beacon)))
+  (and (or (and (null *beacon*)      ;; it would be nil at startup
+                (witness-p beacon))  ;;   from someone we know?
+           (int= beacon *beacon*))   ;; or from the beacon we know?
+       (let ((skel (make-election-message-skeleton beacon n)))
+         (pbc:check-hash (hash/256 skel) sig beacon)))) ;; not a forgery
 
 (defun send-hold-election-from-node (node)
   (with-election-reply (seed) :next
@@ -177,11 +180,7 @@ based on their relative stake"
   (if *holdoff*
       (emotiq:note "Election held-off")
     ;; else
-    (when (and (validate-election-message n beacon sig)   ;; not a forged call?
-               (or (and (null *beacon*)                   ;; null at start
-                        (witness-p beacon))               ;;   then must be member of known witness pool
-                   (int= beacon *beacon*)))         ;; otherwise, from beacon as we know it?
-      
+    (when (validate-election-message n beacon sig)
       (run-election n))
     ))
 
@@ -239,7 +238,7 @@ based on their relative stake"
 
         (cond ((int= pkey winner)
                ;; why not use ac:self-call?  A: Because doing it with
-               ;; send instead, allows queued up messages to be
+               ;; send, instead, allows queued up messages to be
                ;; handled first. Might be some transactions waiting to
                ;; enter the pool.
                (send self :become-leader)
@@ -282,9 +281,11 @@ based on their relative stake"
     (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
 
 (defun validate-call-for-election-message (pkey epoch sig)
-  (let ((skel (make-call-for-election-message-skeleton pkey epoch)))
-    (pbc:check-hash (hash/256 skel) sig pkey)))
-
+  (and (= epoch *local-epoch*)        ;; talking about current epoch? or late arrival?
+       (witness-p pkey)               ;; from someone we know?
+       (let ((skel (make-call-for-election-message-skeleton pkey epoch)))
+         (pbc:check-hash (hash/256 skel) sig pkey)))) ;; not a forgery
+  
 (defun call-for-new-election ()
   (with-accessors ((pkey  node-pkey)
                    (skey  node-skey)) (current-node)
@@ -293,8 +294,6 @@ based on their relative stake"
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (= epoch *local-epoch*)     ;; discussing current epoch? or late arrival?
-             (witness-p pkey)            ;; message came from one in the group
              (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
                  (* 2/3 (length (get-witness-list)))))
     (run-special-election)))
