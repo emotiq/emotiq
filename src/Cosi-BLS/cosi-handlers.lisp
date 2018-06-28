@@ -949,11 +949,7 @@ check that each TXIN and TXOUT is mathematically sound."
                 'pbc:signature))
 
 (defun bft-threshold (blk)
-  ;; take care for corner case of 3 nodes or less
-  (let ((nel (length (block-witnesses blk))))
-    (cond ((< nel 3)   2)
-          (t           (* 2/3 nel))
-          )))
+  (* 2/3 (length (block-witnesses blk))))
 
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (with-current-node my-node
