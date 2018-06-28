@@ -284,7 +284,10 @@ based on their relative stake"
 
 (defun gather-stakes (pkeys)
   ;; return a list of stake amounts corresponding to each pkey in list
-  (mapcar (constantly 0) pkeys)) ;; FIX ME!!
+  (mapcar (lambda (pkey)
+            (declare (ignore pkey))
+            (random 1000000))
+          pkeys))
 
 ;; -----------------------------------------------------------
 
