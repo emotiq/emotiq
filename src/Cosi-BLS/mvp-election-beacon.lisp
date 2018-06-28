@@ -286,6 +286,9 @@ based on their relative stake"
                   ))
               )))
 
+;; ----------------------------------------------------------------
+;; Startup Init Stuff...
+
 (defun gather-stakes (pkeys)
   ;; return a list of stake amounts corresponding to each pkey in list
   (let ((state (make-random-state 123456))) ;; ensure same randomness in every node
@@ -299,9 +302,16 @@ based on their relative stake"
   (with-current-node my-node
     (setup-emergency-call-for-new-election)))
 
+(defun create-my-node (pkey skey)
+  ;; call this as last item in todo list during init
+  (setf *my-node* (make-instance 'node
+                                 :pkey  pkey
+                                 :skey  skey))
+  (startup-elections *my-node*))
+
 ;; -----------------------------------------------------------
 
-(defun make-call-for-election-message-skeleton (pkey epoch)
+(Defun make-call-for-election-message-skeleton (pkey epoch)
   `(:call-for-new-election
     :pkey  ,pkey
     :epoch ,epoch
@@ -331,8 +341,8 @@ based on their relative stake"
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (>= (length *election-calls*)
-                 (* 2/3 (length (get-witness-list)))))
+             (bft> (length *election-calls*)
+                   (* 2/3 (length (get-witness-list)))))
     (run-special-election)))
 
 
