@@ -272,12 +272,10 @@ based on their relative stake"
                                  ;; *local-epoch* will also not have
                                  ;; changed
                                  (unless (get-witness-list)
-                                   (let* ((pkeys  (gossip:get-live-uids))
+                                   (let* ((pkeys  (sort (gossip:get-live-uids) '<
+                                                        :key 'int))
                                           (stakes (gather-stakes pkeys)))
-                                     (set-nodes (mapcar 'list
-                                                        (sort pkeys '<
-                                                              :key 'int)
-                                                        stakes))
+                                     (set-nodes (mapcar 'list pkeys stakes))
                                      (setf (node-stake node)
                                            (second (assoc (node-pkey node) (get-witness-list)
                                                           :test 'int=)))
