@@ -42,9 +42,6 @@
    #:get-utxos-per-account #:get-balance)
 
   (:export
-   #:cosi-loaded-p)
-
-  (:export
    #:emotiq/log/)
   
   (:export

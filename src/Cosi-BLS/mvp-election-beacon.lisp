@@ -328,7 +328,7 @@ based on their relative stake"
                           :skey skey)
   *my-node*))
 
-(defun emotiq:cosi-loaded-p ()
+(defun gossip:cosi-loaded-p ()
   t)
 
 ;; -----------------------------------------------------------
