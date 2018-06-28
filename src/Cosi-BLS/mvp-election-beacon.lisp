@@ -266,11 +266,25 @@ based on their relative stake"
     (ac:spawn (lambda ()
                 (recv
                   :TIMEOUT     *emergency-timeout*
-                  :ON-TIMEOUT  (when (= *local-epoch* old-epoch) ;; anything changed?
-                                 (with-current-node node  ;; guess not...
-                                   (call-for-new-election)))
+                  :ON-TIMEOUT  (progn
+                                 ;; first time processing at startup
+                                 ;; go gather keys and stakes.
+                                 ;; *local-epoch* will also not have
+                                 ;; changed
+                                 (unless (get-witness-list)
+                                   (let* ((pkeys  (gossip:get-live-uids))
+                                          (stakes (gather-stakes pkeys)))
+                                     (set-nodes (mapcar 'list pkeys stakes))))
+                                 
+                                 (when (= *local-epoch* old-epoch) ;; anything changed?
+                                   (with-current-node node  ;; guess not...
+                                     (call-for-new-election))))
                   ))
               )))
+
+(defun gather-stakes (pkeys)
+  ;; return a list of stake amounts corresponding to each pkey in list
+  (mapcar (constantly 0) pkeys)) ;; FIX ME!!
 
 ;; -----------------------------------------------------------
 
