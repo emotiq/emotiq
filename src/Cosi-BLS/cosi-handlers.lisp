@@ -1028,7 +1028,6 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
       (bft> (logcount bits)
-          ;; test needs >= else fail with only 3 nodes
          (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
