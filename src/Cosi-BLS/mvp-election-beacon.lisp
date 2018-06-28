@@ -21,9 +21,9 @@
           :test 'int=))
 
 (defun witness-p (pkey)
-  (member pkey (get-witness-list)
-          :key  'first
-          :test 'int=))
+  (find pkey (get-witness-list)
+        :key  'first
+        :test 'int=))
 
 ;; ---------------------------------------------------------------------------------------
 ;; Stake-weighted elections
@@ -287,8 +287,8 @@ based on their relative stake"
 (defun validate-call-for-election-message (pkey epoch sig)
   (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?
        (witness-p pkey)               ;; from someone we know?
-       (not (member pkey *election-calls*  ;; not a repeat call
-                    :test 'int=))
+       (not (find pkey *election-calls*  ;; not a repeat call
+                  :test 'int=))
        (let ((skel (make-call-for-election-message-skeleton pkey epoch)))
          (pbc:check-hash (hash/256 skel) sig pkey))  ;; not a forgery
        (push pkey *election-calls*)))
@@ -296,8 +296,8 @@ based on their relative stake"
 (defun call-for-new-election ()
   (with-accessors ((pkey  node-pkey)
                    (skey  node-skey)) (current-node)
-    (unless (member pkey *election-calls*
-                    :test 'int=)
+    (unless (find pkey *election-calls*
+                  :test 'int=)
       (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
       (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
                         :graphID :UBER))))
