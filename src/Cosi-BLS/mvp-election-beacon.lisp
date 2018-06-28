@@ -276,7 +276,7 @@ based on their relative stake"
                                                         :key 'int))
                                           (stakes (gather-stakes pkeys)))
                                      (set-nodes (mapcar 'list pkeys stakes))
-                                     (setf (node-stake node)
+                                     (setf (node-stake node) ;; probably never used elsewhere...
                                            (second (assoc (node-pkey node) (get-witness-list)
                                                           :test 'int=)))
                                      ))
