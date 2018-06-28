@@ -145,19 +145,25 @@ based on their relative stake"
 
 ;; ---------------------------------------------------------------------------
 
-(defun make-election-message (pkey seed)
+(defun make-election-message-skeleton (pkey seed)
   `(:hold-an-election
        :n      ,seed
        :beacon ,pkey
        :sig))
 
+(defun make-signed-election-message (pkey seed skey)
+  (let ((skel (make-election-message-skeleton pkey seed)))
+    (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
+
+(defun validate-election-message (n beacon sig)
+  (let ((skel (make-election-message-skeleton beacon n)))
+    (pbc:check-hash (hash/256 skel) sig beacon)))
+
 (defun send-hold-election-from-node (node)
   (with-election-reply (seed) :next
     (with-accessors ((pkey  node-pkey)
                      (skey  node-skey)) node
-      (let* ((msg        (make-election-message pkey seed))
-             (signed-msg (um:conc1 msg (pbc:sign-hash (hash/256 msg) skey))))
-        (broadcast+me signed-msg)))
+      (broadcast+me (make-signed-election-message pkey seed skey)))
     ))
 
 ;; --------------------------------------------------------------------------
@@ -168,17 +174,15 @@ based on their relative stake"
       (emotiq:note "Election held-off")
     ;; else
     (with-accessors ((current-beacon  node-current-beacon)) (current-node)
-      (let ((chk-msg (make-election-message beacon n)))
+      (when (and (validate-election-message n beacon sig)   ;; not a forged call?
+                 (or (and (null current-beacon)             ;; null at start
+                          (member beacon (get-witness-list) ;;   then must be member of known witness pool
+                                  :key  'first
+                                  :test 'int=))
+                     (int= beacon current-beacon)))         ;; otherwise, from beacon as we know it?
         
-        (when (and (pbc:check-hash (hash/256 chk-msg) sig beacon) ;; not a forged call?
-                   (or (and (null current-beacon)             ;; null at start
-                            (member beacon (get-witness-list) ;;   then must be member of known witness pool
-                                    :key  'first
-                                    :test 'int=))
-                       (int= beacon current-beacon)))         ;; otherwise, from beacon as we know it?
-          
-          (run-election n))))
-    ))
+        (run-election n))
+      )))
 
 (defun run-special-election ()
   ;; try to resync on stalled system
@@ -254,24 +258,30 @@ based on their relative stake"
 
 ;; -----------------------------------------------------------
 
-(defun make-call-for-election-message (pkey epoch)
+(defun make-call-for-election-message-skeleton (pkey epoch)
   `(:call-for-new-election
     :pkey  ,pkey
     :epoch ,epoch
     :sig))
 
+(defun make-signed-call-for-election-message (pkey epoch skey)
+  (let ((skel  (make-call-for-election-message-skeleton pkey epoch)))
+    (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
+
+(defun validate-call-for-election-message (pkey epoch sig)
+  (let ((skel (make-call-for-election-message-skeleton pkey epoch)))
+    (pbc:check-hash (hash/256 skel) sig pkey)))
+
 (defun call-for-new-election ()
-  (let* ((my-node  (current-node))
-         (pkey     (node-pkey my-node))
-         (msg      (make-call-for-election-message pkey *local-epoch*))
-         (sig      (pbc:sign-hash (hash/256 msg) (node-skey my-node))))
-    (gossip:broadcast (nconc msg (list sig))
-                      :graphID :UBER)))
+  (let ((my-node  (current-node)))
+    (with-accessors ((pkey  node-pkey)
+                     (skey  node-skey)) my-node
+      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
+                        :graphID :UBER))))
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
-  (let ((chk-msg   (make-call-election-message pkey epoch))
-        (witnesses (get-witness-list)))
-    (when (and (pbc:check-hash (hash/256 chk-msg) sig pkey)
+  (let ((witnesses (get-witness-list)))
+    (when (and (validate-call-for-election-message pkey epoch sig)
                (= epoch *local-epoch*)
                (member pkey witnesses
                        :key  'first
