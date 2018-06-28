@@ -244,7 +244,8 @@ This will spawn an actor which will asynchronously do the following:
                (cosi/proofs/newtx:make-and-maybe-sign-transaction
                 transaction-inputs transaction-outputs
                 :skeys (pbc:keying-triple-skey *genesis-account*)
-                :pkeys (pbc:keying-triple-pkey *genesis-account*))))
+                :pkeys (pbc:keying-triple-pkey *genesis-account*)
+                :type :spend)))
         (setq *tx-1* signed-transaction)
         (ac:pr (format nil "Broadcasting 1st TX."))
         (format t "~%Tx 1 created/signed by genesis (~a), now broadcasting."
@@ -326,7 +327,8 @@ This will spawn an actor which will asynchronously do the following:
                   (cosi/proofs/newtx:make-and-maybe-sign-transaction
                    transaction-inputs transaction-outputs
                    :skeys (pbc:keying-triple-skey *user-2*)
-                   :pkeys (pbc:keying-triple-pkey *user-2*)))
+                   :pkeys (pbc:keying-triple-pkey *user-2*)
+                   :type ':spend))
 
             (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
@@ -339,11 +341,11 @@ This will spawn an actor which will asynchronously do the following:
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
             (multiple-value-bind (all-done-p elapsed-seconds-if-done)
-                (cosi/proofs/newtx:wait-for-tx-count 4 :timeout 60)
+               (cosi/proofs/newtx:wait-for-tx-count 3 :timeout 60)
               (cond
                 (all-done-p
-                 (format t "~%Finished ~d transactions in ~d second~p~%"
-                         4 elapsed-seconds-if-done elapsed-seconds-if-done))
+                 (format t "~%Finished ~d spend transactions in ~d second~p~%"
+                         3 elapsed-seconds-if-done elapsed-seconds-if-done))
                 (t
                  (cerror
                   "Continue regardless."
