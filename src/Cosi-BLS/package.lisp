@@ -290,6 +290,7 @@
    :node-mempool
    :node-utxo-table
    :node-current-leader
+   :*my-node*
    :*top-node*
    :*leader*
    :*blockchain*
@@ -312,7 +313,9 @@
    :reconstruct-tree
    :init-sim
    :reset-nodes
-   :forwarding))
+   :forwarding
+   :startup-elections
+   ))
 
 (defpackage :cosi-keying
   (:use

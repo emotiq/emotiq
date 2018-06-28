@@ -59,7 +59,6 @@ THE SOFTWARE.
 (define-symbol-macro *mempool*        (node-mempool        *current-node*))
 (define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
 (define-symbol-macro *leader*         (node-current-leader *current-node*))
-(define-symbol-macro *holdoff*        (node-hold-off       *current-node*))
 (define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
 (define-symbol-macro *election-calls* (node-election-calls *current-node*))
 (define-symbol-macro *beacon*         (node-current-beacon *current-node*))
@@ -77,28 +76,6 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher (msg-sym &key)
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id (current-node))))
-
-(defun end-holdoff ()
-  (ac::unschedule-timer (node-hold-off-timer (current-node)))
-  (setf *holdoff* nil))
-
-(defun set-holdoff ()
-  (setf *holdoff* t)
-  (ac::schedule-timer-relative (node-hold-off-timer (current-node))
-                               (+ *cosi-prepare-timeout*
-                                  *cosi-commit-timeout*
-                                  10)))
-
-(defmethod node-dispatcher ((msg-sym (eql :end-holdoff)) &key)
-  (emotiq/tracker:track :end-holdoff)
-  (end-holdoff))
-
-(defmethod node-dispatcher ((msg-sym (eql :end-holdoff+)) &key)
-  ;; terminate the holdoff timer, and establish an emergency broadcast
-  ;; if elections aren't held after some time.
-  (ac:self-call :end-holdoff)
-  (when *use-real-gossip*
-    (setup-emergency-call-for-new-election)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader (current-node))
@@ -817,11 +794,6 @@ check that each TXIN and TXOUT is mathematically sound."
               (node-blockchain node) nil)
 
         (setf (node-current-leader node) (node-pkey *top-node*))
-        (setf (node-hold-off node)       nil)
-        (setf (node-hold-off-timer node)  (let ((this-node node))
-                                            (ac::make-timer
-                                             (lambda ()
-                                               (send (node-pkey this-node) :end-holdoff)))))
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
@@ -930,16 +902,6 @@ check that each TXIN and TXOUT is mathematically sound."
   (gossip:broadcast msg
                     :graphID :UBER))
 
-;; ------------------------------
-
-(defun end-all-holdoffs+ ()
-  (cond (*use-real-gossip*
-         (broadcast+me :end-holdoff+))
-
-        (t
-         (loop for node across *node-bit-tbl* do
-               (send (node-pkey node) :end-holdoff+)))))
-        
 ;; -----------------------------------------------------------
 
 (defmethod add-sigs ((sig1 null) sig2)
@@ -1108,7 +1070,8 @@ check that each TXIN and TXOUT is mathematically sound."
               (sync-database)))
            t) ;; return true to validate
        ;; unwind
-       (ac:self-call :end-holdoff+)
+       (when *use-real-gossip*
+         (setup-emergency-call-for-new-election))
        ))
     ))
 
@@ -1240,10 +1203,6 @@ check that each TXIN and TXOUT is mathematically sound."
          (update-block-signature new-block sig bits)
          ;; we now have a fully assembled block with
          ;; multisignature.
-         ;;
-         ;; At the end of the following COMMIT phase, all
-         ;; witnesses will end their holdoffs, regardless of
-         ;; verification outcome
          (ac:self-call :cosi-sign-commit
                        :reply-to  self
                        :blk       new-block
@@ -1264,8 +1223,7 @@ check that each TXIN and TXOUT is mathematically sound."
            )))
       
       ((list :answer (list :corrupt-cosi-network))
-       (pr "Corrupt Cosi network in PREPARE phase")
-       (end-all-holdoffs+))
+       (pr "Corrupt Cosi network in PREPARE phase"))
       
       #|
       ((list :answer (list :timeout-cosi-network))
@@ -1279,7 +1237,9 @@ check that each TXIN and TXOUT is mathematically sound."
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else
-      (end-all-holdoffs+))))
+      (when *use-real-gossip*
+        (setup-emergency-call-for-new-election)))
+    ))
 
 ;; -----------------------------------------------------------------------------------
 ;; Test block assembly and verification...
