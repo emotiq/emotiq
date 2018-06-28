@@ -290,7 +290,6 @@
    :node-mempool
    :node-utxo-table
    :node-current-leader
-   :cosi-loaded-p
    :*my-node*
    :*top-node*
    :*leader*
