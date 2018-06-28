@@ -274,7 +274,10 @@ based on their relative stake"
                                  (unless (get-witness-list)
                                    (let* ((pkeys  (gossip:get-live-uids))
                                           (stakes (gather-stakes pkeys)))
-                                     (set-nodes (mapcar 'list pkeys stakes))
+                                     (set-nodes (mapcar 'list
+                                                        (sort pkeys '<
+                                                              :key 'int)
+                                                        stakes))
                                      (setf (node-stake node)
                                            (second (assoc (node-pkey node) (get-witness-list)
                                                           :test 'int=)))
