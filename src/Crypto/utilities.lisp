@@ -511,6 +511,9 @@ from calling the function."
             (setf (aref ans ix)
                   (fli:dereference carr :index ix)))
       ans)))
+
+#-:LISPWORKS
+(defstub fast-sha2-file)
   
 
 (defun sha2-file (fname)
@@ -535,6 +538,9 @@ from calling the function."
             (setf (aref ans ix)
                   (fli:dereference carr :index ix)))
       ans)))
+
+#-:LISPWORKS
+(defstub fast-shad2-file)
   
 (defun shad2-file (fname)
   (with-fast-impl

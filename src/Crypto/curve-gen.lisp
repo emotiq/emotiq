@@ -41,6 +41,8 @@ THE SOFTWARE.
 #+:LISPWORKS
 (editor:setup-indent "with-repl-fn" 1)
 
+(defstub ecc-affine-sub)
+
 (defun do-with-lisp-ecc (fn)
   (with-repl-fn (ecc-basic-mul #'ecc-projective-mul)
     (with-repl-fn (ecc-add #'ecc-affine-add)
