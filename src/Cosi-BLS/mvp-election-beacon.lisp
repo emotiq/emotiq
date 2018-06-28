@@ -309,7 +309,9 @@ based on their relative stake"
                                  :pkey  pkey
                                  :skey  skey))
   ;; DO WE NEED TO REGISTER WITH GOSSIP HERE???
-  (startup-elections *my-node*))
+  (startup-elections *my-node*)
+  ;; OKAY.. now you have 60 sec to do whatever remains of init
+  )
 
 ;; -----------------------------------------------------------
 
