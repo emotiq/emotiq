@@ -44,13 +44,14 @@
   Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
   some partial information is propagating in case of node failures.")
 
+(defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used.")
+
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
                                        Can be an integer to pick up to n neighbors.")
 ;;;; DEPRECATE
 (defparameter *active-ignores* t "True to reply to sender when we're ignoring a message from that sender.")
-(defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used. We may increment this *max-server-tries* times
-   in an effort to find an unused local port")
+
 (defparameter *max-server-tries* 4 "How many times we can try finding an unused local server port before we give up. 1 to only try once.")
 
 ; Actuals below can differ from nominal if you're running multiple servers on the same machine in different processes.

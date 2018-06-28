@@ -5,6 +5,7 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:*nominal-gossip-port*
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
