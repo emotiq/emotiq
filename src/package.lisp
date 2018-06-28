@@ -135,6 +135,7 @@
    #:get-all-info
    #:get-mempool
    #:get-blockchain
+   #:example
    #:track))
 
 (defpackage emotiq/ate

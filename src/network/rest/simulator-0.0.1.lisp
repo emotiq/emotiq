@@ -63,6 +63,9 @@
       (when new-output
         (setf *simulator-results*
               (concatenate 'string
+                           (format nil "~&~%current state = ~A~%~%example = ~A~%~%"
+                                   (emotiq/tracker:query-current-state)
+                                   (emotiq/tracker:example))
                            *simulator-results*
                            new-output)))
       *simulator-results*)))
@@ -79,6 +82,7 @@
   (actors:kill-executives)
   (setf *simulator-output* nil
         *simulator-results* ""))
+
 
 
 
