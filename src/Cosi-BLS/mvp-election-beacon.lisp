@@ -169,20 +169,22 @@ based on their relative stake"
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
+(defun witness-p (pkey)
+  (member pkey (get-witness-list)
+          :key  'first
+          :test 'int=))
+
 (defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n beacon sig)
   (if *holdoff*
       (emotiq:note "Election held-off")
     ;; else
-    (with-accessors ((current-beacon  node-current-beacon)) (current-node)
-      (when (and (validate-election-message n beacon sig)   ;; not a forged call?
-                 (or (and (null current-beacon)             ;; null at start
-                          (member beacon (get-witness-list) ;;   then must be member of known witness pool
-                                  :key  'first
-                                  :test 'int=))
-                     (int= beacon current-beacon)))         ;; otherwise, from beacon as we know it?
-        
-        (run-election n))
-      )))
+    (when (and (validate-election-message n beacon sig)   ;; not a forged call?
+               (or (and (null *beacon*)                   ;; null at start
+                        (witness-p beacon))               ;;   then must be member of known witness pool
+                   (int= beacon *beacon*)))         ;; otherwise, from beacon as we know it?
+      
+      (run-election n))
+    ))
 
 (defun run-special-election ()
   ;; try to resync on stalled system
@@ -281,11 +283,9 @@ based on their relative stake"
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (let ((witnesses (get-witness-list)))
-    (when (and (validate-call-for-election-message pkey epoch sig)
-               (= epoch *local-epoch*)
-               (member pkey witnesses
-                       :key  'first
-                       :test 'int=)
+    (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
+               (= epoch *local-epoch*)     ;; discussing current epoch? or late arrival?
+               (witness-p pkey)            ;; message came from one in the group
                (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
                    (* 2/3 (length witnesses))))
       (run-special-election))
