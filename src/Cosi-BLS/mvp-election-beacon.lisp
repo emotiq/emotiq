@@ -15,6 +15,11 @@
 (defun get-witness-list ()
   *all-nodes*)
 
+(defun witness-p (pkey)
+  (member pkey (get-witness-list)
+          :key  'first
+          :test 'int=))
+
 ;; ---------------------------------------------------------------------------------------
 ;; Stake-weighted elections
 
@@ -168,11 +173,6 @@ based on their relative stake"
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
-(defun witness-p (pkey)
-  (member pkey (get-witness-list)
-          :key  'first
-          :test 'int=))
-
 (defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n beacon sig)
   (if *holdoff*
       (emotiq:note "Election held-off")
@@ -246,6 +246,7 @@ based on their relative stake"
 (defvar *emergency-timeout*  60)
 
 (defun setup-emergency-call-for-new-election ()
+  ;; give the election beacon a chance to do its thing
   (let* ((node      (current-node))
          (old-epoch *local-epoch*))
     (ac:spawn (lambda ()
@@ -274,20 +275,17 @@ based on their relative stake"
     (pbc:check-hash (hash/256 skel) sig pkey)))
 
 (defun call-for-new-election ()
-  (let ((my-node  (current-node)))
-    (with-accessors ((pkey  node-pkey)
-                     (skey  node-skey)) my-node
-      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
-                        :graphID :UBER))))
+  (with-accessors ((pkey  node-pkey)
+                   (skey  node-skey)) (current-node)
+    (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
+                      :graphID :UBER)))
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
-  (let ((witnesses (get-witness-list)))
-    (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-               (= epoch *local-epoch*)     ;; discussing current epoch? or late arrival?
-               (witness-p pkey)            ;; message came from one in the group
-               (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
-                   (* 2/3 (length witnesses))))
-      (run-special-election))
-    ))
+  (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
+             (= epoch *local-epoch*)     ;; discussing current epoch? or late arrival?
+             (witness-p pkey)            ;; message came from one in the group
+             (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
+                 (* 2/3 (length (get-witness-list)))))
+    (run-special-election)))
 
 
