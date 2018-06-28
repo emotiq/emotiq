@@ -1021,7 +1021,7 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; each different type of Cosi network...
 
 (defun bft> (n thr)
-  (cond ((<= thr 2) (>= n 2))
+  (cond ((<= thr 2) (>= n 2)) ;; handle corner case of only 3 nodes (thr = 2)
         (t          (> n thr))
         ))
 
