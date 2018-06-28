@@ -911,7 +911,9 @@ check that each TXIN and TXOUT is mathematically sound."
   (change-class (pbc:add-pts sig1 sig2)
                 'pbc:signature))
 
-(defun adjusted-bft-threshold (n)
+;; -------------------------------------------------------------
+
+(defmethod bft-threshold ((n fixnum))
   ;; return threshold that must be exceeded
   (declare (fixnum n))
   (cond  ((<= n 1)  0)
@@ -919,9 +921,13 @@ check that each TXIN and TXOUT is mathematically sound."
          (t         (* 2/3 n))
          ))
 
-(defun bft-threshold (blk)
-  (let ((nel (length (block-witnesses blk))))
-    (adjusted-bft-threshold nel)))
+(defmethod bft-threshold ((witnesses sequence))
+  (bft-threshold (length witnesses)))
+
+(defmethod bft-threshold ((blk eblock))
+  (bft-threshold (block-witnesses blk)))
+
+;; -------------------------------------------------------------
 
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (with-current-node my-node

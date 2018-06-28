@@ -364,7 +364,7 @@ based on their relative stake"
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
              (> (length *election-calls*)
-                (adjusted-bft-threshold (length (get-witness-list)))))
+                (bft-threshold (get-witness-list))))
     (run-special-election)))
 
 
