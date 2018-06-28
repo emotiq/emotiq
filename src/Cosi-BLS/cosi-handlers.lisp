@@ -60,9 +60,6 @@ THE SOFTWARE.
 (define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
 (define-symbol-macro *leader*         (node-current-leader *current-node*))
 (define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
-(define-symbol-macro *election-calls* (node-election-calls *current-node*))
-(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
-(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
 
 (defstruct tx-changes
   ;; all lists contain key vectors
