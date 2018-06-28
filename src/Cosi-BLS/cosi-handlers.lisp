@@ -996,7 +996,6 @@ check that each TXIN and TXOUT is mathematically sound."
                     (setf g-bits (logior g-bits bits)
                           g-sig  (add-sigs sig g-sig)))
                   (if (>= (logcount g-bits) bft-thrsh)
-                      ;; test needs >= else fail with only 3 nodes
                       (=finish)
                     ;; else
                     (progn
@@ -1021,9 +1020,14 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
 ;; each different type of Cosi network...
 
+(defun bft> (n thr)
+  (cond ((<= thr 2) (>= n 2))
+        (t          (> n thr))
+        ))
+
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
-      (>= (logcount bits)
+      (bft> (logcount bits)
           ;; test needs >= else fail with only 3 nodes
          (bft-threshold blk))))
 
