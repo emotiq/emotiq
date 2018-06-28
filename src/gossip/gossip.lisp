@@ -74,6 +74,10 @@
 
 (defvar *ll-application-handler* nil "Set to a function to be called when the API methods reach their target.")
 
+(defun cosi-loaded-p ()
+  "Redefine to true after cosi is loaded"
+  nil)
+
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
 ;; valid deserialization, check deserialization is a
@@ -562,18 +566,32 @@ are in place between nodes.
     (setf *uber-set-cache* nil))
   node)
 
-(defun make-node (&rest args)
-  "Makes a new [real, non-proxy] node"
+(defun %make-node (&rest args)
+  "Makes a new [real, non-proxy] gossip node. Doesn't memoize it."
   (let ((neighborhood (getf args :neighborhood))) ; allow to specify :neighborhood as list, for *default-graphID*
     (with-keywords-removed (args (:neighborhood))
-  (let* ((node (apply 'make-instance 'gossip-node args))
-         (actor (make-gossip-actor node)))
+      (let ((node (apply 'make-instance 'gossip-node args)))
         (when neighborhood
           (mapcar (lambda (uid)
                     (pushnew uid (neighborhood node)))
                   neighborhood))
+        node))))
+
+(defmethod initialize-node ((node gossip-node) &key pkey skey)
+  (declare (ignore skey))
+  (let* ((actor (make-gossip-actor node)))
     (setf (actor node) actor)
-    (memoize-node node)))))
+    (when pkey ; pkey, if given, takes precedence over UID
+      (setf (slot-value node 'uid) pkey))
+    (memoize-node node)))
+
+(defmethod make-node ((kind (eql :gossip)) &rest rest &key &allow-other-keys)
+  (let ((pkey (getf rest :pkey))
+        (skey (getf rest :skey)))
+    (with-keywords-removed (rest (:pkey :skey))
+      (let ((node (apply '%make-node rest)))
+        (initialize-node node :pkey pkey :skey skey)
+        node))))
 
 (defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -596,7 +614,7 @@ are in place between nodes.
 ;;;; Graph making routines
 (defun make-nodes (numnodes)
   (dotimes (i numnodes)
-    (make-node)))
+    (make-node ':gossip)))
 
 (defun listify-nodes (&optional (nodetable *nodes*))
   (loop for node being each hash-value of nodetable collect node))
@@ -739,7 +757,7 @@ are in place between nodes.
   (let ((*package* (find-package :gossip)))
     (flet ((write-slot (initarg value) ; assumes accessors and initargs are named the same
              (format stream "~%  ~S ~A" initarg (readable-value value))))
-      (format stream "(make-node")
+      (format stream "(make-node ':gossip")
       (write-slot :uid (uid node))
       (write-slot :address (address node))
       (write-slot :neighbors (neighbors node))
@@ -922,7 +940,7 @@ dropped on the floor.
         (allnodes nil))
     (unwind-protect
         (progn
-          (setf localnode (make-node))
+          (setf localnode (make-node ':gossip))
           (pushnew (uid rnode) (neighborhood localnode))
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
@@ -948,7 +966,7 @@ dropped on the floor.
                          address-port-list))
     (unwind-protect
         (progn
-          (setf localnode (make-node))
+          (setf localnode (make-node ':gossip))
           (mapcar (lambda (rnode)
                     (pushnew (uid rnode) (neighborhood localnode)))
                   rnodes)
@@ -2190,7 +2208,7 @@ gets sent back, and everything will be copacetic.
 ; ON SERVER MACHINE
 ; (clear-local-nodes)
 #+TEST1
-(setf localnode (make-node
+(setf localnode (make-node ':gossip
   :UID 200))
 ; (run-gossip :UDP)
 
@@ -2205,7 +2223,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node
+(setf localnode (make-node ':gossip
   :UID 201))
 #+TEST1
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2232,7 +2250,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node
+(setf localnode (make-node ':gossip
   :UID 201))
 #+TEST2
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2260,7 +2278,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node
+(setf localnode (make-node ':gossip
   :UID 201))
 #+TEST3
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2317,7 +2335,7 @@ gets sent back, and everything will be copacetic.
 ; (get-kvs :foo) ; should return a list of (node . 2)
 
 #+TESTING
-(setf node (make-node
+(setf node (make-node ':gossip
   :UID 253
   :ADDRESS 'NIL
   :LOGFN 'GOSSIP::DEFAULT-LOGGING-FUNCTION

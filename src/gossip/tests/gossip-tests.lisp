@@ -230,7 +230,7 @@
 
 (defun make-test-network ()
   "Interesting graph of 10 nodes."
-  (make-node
+  (make-node ':gossip
    :UID 9
    :ADDRESS 'NIL
    :neighborhood '(2 4)
@@ -238,7 +238,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 4
    :ADDRESS 'NIL
    :neighborhood '(8 3 5 9)
@@ -246,7 +246,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 5
    :ADDRESS 'NIL
    :neighborhood '(6 8 4)
@@ -254,7 +254,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 8
    :ADDRESS 'NIL
    :neighborhood '(4 3 5)
@@ -262,7 +262,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 3
    :ADDRESS 'NIL
    :neighborhood '(4 1 8)
@@ -270,7 +270,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 1
    :ADDRESS 'NIL
    :neighborhood '(2 6 3)
@@ -278,7 +278,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 6
    :ADDRESS 'NIL
    :neighborhood '(5 2 1)
@@ -286,7 +286,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 2
    :ADDRESS 'NIL
    :neighborhood '(9 1 7 6)
@@ -294,7 +294,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 7
    :ADDRESS 'NIL
    :neighborhood '(10 2)
@@ -302,7 +302,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 10
    :ADDRESS 'NIL
    :neighborhood '(7)
