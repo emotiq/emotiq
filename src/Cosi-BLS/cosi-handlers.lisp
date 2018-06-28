@@ -29,6 +29,11 @@ THE SOFTWARE.
 (in-package :cosi-simgen)
 ;; ---------------------------------------------------------------
 
+(defvar *use-gossip*      t)     ;; use Gossip graphs instead of Cosi Trees
+(defvar *use-real-gossip* nil)   ;; set to T for real Gossip mode, NIL = simulation mode
+
+;; ---------------------------------------------------------------
+
 (defun NYI (&rest args)
   (error "Not yet implemented: ~A" args))
 
@@ -92,7 +97,8 @@ THE SOFTWARE.
   ;; terminate the holdoff timer, and establish an emergency broadcast
   ;; if elections aren't held after some time.
   (ac:self-call :end-holdoff)
-  (setup-emergency-call-for-new-election))
+  (when *use-real-gossip*
+    (setup-emergency-call-for-new-election)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader (current-node))
@@ -892,8 +898,6 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; -----------------------------------------------------------
 
-(defvar *use-gossip* t)
-(defvar *use-real-gossip* nil)                ;; set to T for real Gossip mode, NIL = simulation mode
 (defvar *cosi-gossip-neighborhood-graph* nil) ;; T if neighborhood graph has been established
 
 (defun ensure-cosi-gossip-neighborhood-graph (my-node)
