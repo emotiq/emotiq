@@ -727,7 +727,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
-         ((string= public-key-hash public-key-hash-from-public-key)
+         ((account-addresses=
+           public-key-hash
+           public-key-hash-from-public-key)
           t)
          (t
           (fail-script-op)))))))
@@ -906,34 +908,6 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
           public-key-hash 
           (initial-total-coin-amount)))
    ':coinbase))
-
-
-
-
-;;;; Transaction Contexts
-
-
-(defvar *transaction-context*)
-
-(defclass transaction-context ()
-  ((tx-in-utxo :initarg :tx-in-utxo :reader tx-in-utxo)))
-
-(defmacro with-transaction-context ((context &optional options) &body body)
-  (declare (ignore options))            ; reserved for later
-  `(let* ((*transaction-context* ,context))
-     ,@body))
-
-;; Should an attempt be made to detect reentrant usage and signal an
-;; error?
-
-
-
-(defun expect-transaction-context ()
-  "Used for development-only testing. This may NOT be relied upon at run time in
-production to stop execution if there is no transaction context. When called in
-development, this signals a continuable error if there is no transaction."
-  (when (not (boundp '*transaction-context*))
-    (cerror "continue anyhow" "not in a transaction context")))
 
 
 
@@ -1260,7 +1234,20 @@ of type TYPE."
 
 
 
+;;;; Wallet API
+
+
+
+;;; ACCOUNT-ADDRESSES=: return true if ADDRESS-1 and ADDRESS-2 are the
+;;; same. Each must be a string, representing an address, that is the
+;;; public key hash of a public key, which is normally created from a
+;;; public key via the function cosi/proofs:public-key-to-address. The
+;;; strings are compared for exact equality, with no case folding or
+;;; whitespace elimination. It is an error to pass a non-string to
+;;; this function.
+
 (defun account-addresses= (address-1 address-2)
+  (declare (type string address-1 address-2))
   (string= address-1 address-2))
 
 
@@ -1271,7 +1258,6 @@ of type TYPE."
 ;;; TRANSACTION itself or the beginning of the blockchain is reached.
 
 (defun utxo-p (transaction output-index)
-  (expect-transaction-context)
   (do-blockchain (block)
     (return
       (do-transactions (tx block)
@@ -1291,7 +1277,6 @@ of type TYPE."
   (TXO PARENT-TX ...)
 
 ADDRESS here is taken to mean the same thing as the public key hash."
-  (expect-transaction-context)
   (let ((utxos-so-far '()))
     (do-blockchain (block)
       (do-transactions (tx block)
@@ -1310,7 +1295,6 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 (defun get-balance (address)
   "Return the sum of all amounts of all UTXOs of ADDRESS."
-  (expect-transaction-context)
   (let ((utxos (get-utxos-per-account address)))
     (loop for (txo) in utxos
           as amount = (tx-out-amount txo)
