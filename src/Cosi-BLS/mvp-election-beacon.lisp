@@ -328,6 +328,9 @@ based on their relative stake"
                           :skey skey)
   *my-node*))
 
+(defun cosi-loaded-p ()
+  t)
+
 ;; -----------------------------------------------------------
 
 (Defun make-call-for-election-message-skeleton (pkey epoch)
