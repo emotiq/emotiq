@@ -202,7 +202,8 @@ based on their relative stake"
   ;; So election beacon becomes a roving responsibility. If it gets
   ;; knocked out, then we fall back to early elections with BFT
   ;; consensus on decision to resync.
-  (let ((node      (current-node))
+  (let ((self      (current-actor))
+        (node      (current-node))
         (witnesses (get-witness-list)))
     
     (with-accessors ((stake       node-stake)
@@ -230,15 +231,25 @@ based on their relative stake"
 
         (set-holdoff)
         (when (int= pkey new-beacon)
+          ;; launch a beacon
           (ac:spawn (lambda ()
                       (recv
                         :TIMEOUT    *mvp-election-period*
                         :ON-TIMEOUT (send-hold-election-from-node node)))))
 
-        (ac:self-call (if (int= pkey winner)
-                          :become-leader
-                        :become-witness))
-        ))))
+        (cond ((int= pkey winner)
+               ;; why not use ac:self-call?  A: Because doing it with
+               ;; send instead, allows queued up messages to be
+               ;; handled first. Might be some transactions waiting to
+               ;; enter the pool.
+               (send self :become-leader)
+               (send self :make-block))
+
+              (t
+               ;; ditto
+               (send self :become-witness))
+
+              )))))
 
 ;; ---------------------------------------------------------------
 ;; if we don't hold a new election before this timeout, established at
