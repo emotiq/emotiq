@@ -293,6 +293,7 @@ based on their relative stake"
           pkeys)))
 
 (defun startup-elections (my-node)
+  ;; call this from global init after all housekeeping
   (with-current-node my-node
     (setup-emergency-call-for-new-election)))
 
