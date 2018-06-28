@@ -186,13 +186,17 @@ THE SOFTWARE.
                               :parent  parent
                               :real-ip *comm-ip*
                               )))
-    (setf (node-self node) (cosi-simgen::make-node-dispatcher node) ;(make-node-dispatcher node)
-          (gethash ipstr *ip-node-tbl*)   node
+    (setf (gethash ipstr *ip-node-tbl*)   node
           (gethash pval  *pkey-node-tbl*) node)))
 
 (defun need-to-specify (&rest args)
   (declare (ignore args))
   (error "Need to specify..."))
+
+;; new for Gossip support, and conceptually cleaner...
+(defmethod initialize-instance :around ((node node) &key &allow-other-keys)
+  (setf (node-self node) (make-node-dispatcher node))
+  (call-next-method))
 
 ;; --------------------------------------------------------------
 
