@@ -60,12 +60,10 @@
     
     (:new-leader
      (let ((leader-node (second msg)))
-       (emotiq:note "Tracker: New Leader ~A" (stringify-node leader-node))
        (setf (system-leader *state*) leader-node)))
     
     (:new-witness
      (let ((witness-node (second msg)))
-       (emotiq:note "Tracker: New witness ~A" (stringify-node witness-node))
        (push witness-node (system-witness-list *state*))))))
 
 (defun query-current-state ()
