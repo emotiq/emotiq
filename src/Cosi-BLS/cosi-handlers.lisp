@@ -911,8 +911,17 @@ check that each TXIN and TXOUT is mathematically sound."
   (change-class (pbc:add-pts sig1 sig2)
                 'pbc:signature))
 
+(defun adjusted-bft-threshold (n)
+  ;; return threshold that must be exceeded
+  (declare (fixnum n))
+  (cond  ((<= n 1)  0)
+         ((= n 2)   most-positive-fixnum) ;; no consensus possible between 2 nodes
+         (t         (* 2/3 n))
+         ))
+
 (defun bft-threshold (blk)
-  (* 2/3 (length (block-witnesses blk))))
+  (let ((nel (length (block-witnesses blk))))
+    (adjusted-bft-threshold nel)))
 
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (with-current-node my-node
@@ -983,14 +992,9 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
 ;; each different type of Cosi network...
 
-(defun bft> (n thr)
-  (cond ((<= thr 2) (>= n 2)) ;; handle corner case of only 3 nodes (thr = 2)
-        (t          (> n thr))
-        ))
-
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
-      (bft> (logcount bits)
+      (> (logcount bits)
          (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
