@@ -51,9 +51,28 @@
     :documentation
     "Sequence of public keys of validators 1:1 w/signature-bitmap slot.")
 
+   (witnesses-and-stakes-table
+    :accessor block-witnesses-and-stakes-table
+    :documentation
+    "An a-list of the form
+
+  ((<witness public-key> <stake amount in EMTQ coin/integer>)
+  ...)
+
+This is to be set only in the genesis block; otherwise, it should
+remain unbound (and should not be referred to). The configuration data
+comes from a config file.")             ; ---*** TODO: to be
+                                        ; specified. -mhd, 6/28/18
+
    (merkle-root-hash
     :reader block-merkle-root-hash
     :documentation "Merkle root hash of transactions.")
+   (witness-merkle-root-hash
+    :reader block-witness-merkle-root-hash
+    :documentation "Merkle root hash of witness data.")
+   (input-script-merkle-root-hash
+    :reader block-input-script-merkle-root-hash
+    :documentation "Merkle root hash of input scripts.")
 
    ;; Transactions is generally what's considered the main contents of a block
    ;; whereas the rest of the above comprises what's known as the 'block header'
@@ -223,6 +242,18 @@ added to the blockchain."
              as tx = (elt transactions i)
              as tx-out-id = (get-transaction-id tx)
              collect tx-out-id))))
+
+(defun compute-witness-merkle-root-hash (transactions)
+  transactions
+  ;; finish!
+  )
+
+(defun compute-input-script-merkle-root-hash (transactions)
+  transactions
+  ;; finish!
+  )
+
+
 
 
 (defun get-transaction-id (transaction)
