@@ -116,7 +116,7 @@ THE SOFTWARE.
    (current-beacon :accessor node-current-beacon
                    :initform nil)
    (election-calls :accessor node-election-calls
-                   :initform 0)
+                   :initform nil) ;; list of pkeys that have called for new election
    ;; local-epoch records the last election seed
    (local-epoch    :accessor node-local-epoch
                    :initform 0)
