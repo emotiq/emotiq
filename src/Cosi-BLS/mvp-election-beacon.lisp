@@ -219,10 +219,10 @@ based on their relative stake"
       (let* ((winner     (hold-election n))
              (new-beacon (hold-election n (get-witnesses-sans-pkey winner))))
 
-        (setf *leader*          winner
-              *beacon*          new-beacon
-              *local-epoch*     n  ;; unlikely to repeat from election to election
-              *election-calls*  0)
+        (setf *leader*           winner
+              *beacon*           new-beacon
+              *local-epoch*      n  ;; unlikely to repeat from election to election
+              *election-calls*   nil)
         
         (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
         (emotiq:note "election results ~A (stake = ~A)"
@@ -285,20 +285,26 @@ based on their relative stake"
     (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
 
 (defun validate-call-for-election-message (pkey epoch sig)
-  (and (= epoch *local-epoch*)        ;; talking about current epoch? or late arrival?
+  (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?
        (witness-p pkey)               ;; from someone we know?
+       (not (member pkey *election-calls*  ;; not a repeat call
+                    :test 'int=))
        (let ((skel (make-call-for-election-message-skeleton pkey epoch)))
-         (pbc:check-hash (hash/256 skel) sig pkey)))) ;; not a forgery
+         (pbc:check-hash (hash/256 skel) sig pkey))  ;; not a forgery
+       (push pkey *election-calls*)))
   
 (defun call-for-new-election ()
   (with-accessors ((pkey  node-pkey)
                    (skey  node-skey)) (current-node)
-    (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
-                      :graphID :UBER)))
+    (unless (member pkey *election-calls*
+                    :test 'int=)
+      (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
+      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
+                        :graphID :UBER))))
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (>= (incf *election-calls*) ;; we already count as one so thresh is > 2/3
+             (>= (length *election-calls*) ;; we already count as one so thresh is > 2/3
                  (* 2/3 (length (get-witness-list)))))
     (run-special-election)))
 
