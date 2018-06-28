@@ -288,7 +288,7 @@ based on their relative stake"
 
 (defun gather-stakes (pkeys)
   ;; return a list of stake amounts corresponding to each pkey in list
-  (let ((state (make-random-state 123456)))
+  (let ((state (make-random-state 123456))) ;; ensure same randomness in every node
     (mapcar (lambda (pkey)
               (declare (ignore pkey))
               (random 1000000 state))
