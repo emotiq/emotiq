@@ -126,15 +126,20 @@
 (defpackage emotiq/tracker
   (:use #:cl)
   (:export
+   #:*state*
+   #:*tracking-actor*
    #:start-tracker
    #:query-current-state
+   #:query-raw-nodes
+   #:get-notes
+   #:get-all-info
+   #:get-mempool
+   #:get-blockchain
    #:track))
 
 (defpackage emotiq/ate
   (:use #:cl)
   (:export
-   #:begin
-   #:wind-down
    #:begin-sim
    #:wind-down-sim
    #:introspect))
