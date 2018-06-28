@@ -38,7 +38,7 @@
                        t)
                      pubkeys)
       ;; make local nodes
-      (if (cosi-loaded-p)
+      (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
           (mapc (lambda (pubkey)
                   (make-node ':cosi :pkey pubkey :skey (cdr (assoc pubkey keypairs))))
                 pubkeys)

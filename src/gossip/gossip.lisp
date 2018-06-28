@@ -74,10 +74,6 @@
 
 (defvar *ll-application-handler* nil "Set to a function to be called when the API methods reach their target.")
 
-(defun cosi-loaded-p ()
-  "Redefine to true after cosi is loaded"
-  nil)
-
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
 ;; valid deserialization, check deserialization is a
