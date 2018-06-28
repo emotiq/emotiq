@@ -314,14 +314,6 @@ based on their relative stake"
 ;; ----------------------------------------------------------------
 ;; Startup Init Stuff...
 
-(defun gather-stakes (pkeys)
-  ;; return a list of stake amounts corresponding to each pkey in list
-  (let ((state (make-random-state 123456))) ;; ensure same randomness in every node
-    (mapcar (lambda (pkey)
-              (declare (ignore pkey))
-              (random 1000000 state))
-          pkeys)))
-
 (defun startup-elections ()
   ;; call this from global init after all housekeeping
   (with-current-node *my-node*
