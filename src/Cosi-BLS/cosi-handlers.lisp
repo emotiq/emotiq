@@ -949,14 +949,18 @@ check that each TXIN and TXOUT is mathematically sound."
                 'pbc:signature))
 
 (defun bft-threshold (blk)
-  (* 2/3 (length (block-witnesses blk))))
+  ;; take care for corner case of 3 nodes or less
+  (let ((nel (length (block-witnesses blk))))
+    (cond ((< nel 3)   2)
+          (t           (* 2/3 nel))
+          )))
 
 (=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
   (with-current-node my-node
     (cond ((and *use-gossip*
                 (int= (node-pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
-           (let ((bft-thrsh (bft-threshold blk))
+           (let ((bft-thrsh (1- (bft-threshold blk))) ;; adj by 1 since leader is also witness
                  (start     nil)
                  (g-bits    0)
                  (g-sig     nil))
@@ -995,7 +999,8 @@ check that each TXIN and TXOUT is mathematically sound."
                     (pr (hex bits))
                     (setf g-bits (logior g-bits bits)
                           g-sig  (add-sigs sig g-sig)))
-                  (if (> (logcount g-bits) bft-thrsh)
+                  (if (>= (logcount g-bits) bft-thrsh)
+                      ;; test needs >= else fail with only 3 nodes
                       (=finish)
                     ;; else
                     (progn
@@ -1022,7 +1027,8 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
-      (> (logcount bits)
+      (>= (logcount bits)
+          ;; test needs >= else fail with only 3 nodes
          (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
