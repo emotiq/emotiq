@@ -210,7 +210,7 @@ based on their relative stake"
         (node      (current-node))
         (witnesses (get-witness-list)))
     
-    (with-accessors ((stake       node-stake)
+    (with-accessors ((stake       node-stake) ;; only used for diagnostic messages
                      (pkey        node-pkey)
                      (local-epoch node-local-epoch)) node
 
@@ -275,7 +275,9 @@ based on their relative stake"
                                    (let* ((pkeys  (gossip:get-live-uids))
                                           (stakes (gather-stakes pkeys)))
                                      (set-nodes (mapcar 'list pkeys stakes))
-                                     (setf (node-stake node) (second (assoc (node-pkey node) (get-witness-list))))
+                                     (setf (node-stake node)
+                                           (second (assoc (node-pkey node) (get-witness-list)
+                                                          :test 'int=)))
                                      ))
                                  
                                  (when (= *local-epoch* old-epoch) ;; anything changed?
