@@ -274,7 +274,9 @@ based on their relative stake"
                                  (unless (get-witness-list)
                                    (let* ((pkeys  (gossip:get-live-uids))
                                           (stakes (gather-stakes pkeys)))
-                                     (set-nodes (mapcar 'list pkeys stakes))))
+                                     (set-nodes (mapcar 'list pkeys stakes))
+                                     (setf (node-stake node) (second (assoc (node-pkey node) (get-witness-list))))
+                                     ))
                                  
                                  (when (= *local-epoch* old-epoch) ;; anything changed?
                                    (with-current-node node  ;; guess not...
@@ -288,7 +290,11 @@ based on their relative stake"
     (mapcar (lambda (pkey)
               (declare (ignore pkey))
               (random 1000000 state))
-          pkeys))
+          pkeys)))
+
+(defun startup-elections (my-node)
+  (with-current-node my-node
+    (setup-emergency-call-for-new-election)))
 
 ;; -----------------------------------------------------------
 
