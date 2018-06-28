@@ -107,19 +107,20 @@ THE SOFTWARE.
                    :initform  (make-hash-table
                                :test 'equalp))
 
-   (hold-off       :accessor node-hold-off
-                   :initform nil)
-   (hold-off-timer :accessor node-hold-off-timer)
-
    (current-leader :accessor node-current-leader
                    :initform nil) ;; holds pkey of current leader node
    (current-beacon :accessor node-current-beacon
-                   :initform nil)
+                   :initform nil) ;; holds pkey of 1-shot beacon assignee
+
+   ;; list of pkeys that have called for new election
    (election-calls :accessor node-election-calls
-                   :initform nil) ;; list of pkeys that have called for new election
+                   :initform nil)
+
    ;; local-epoch records the last election seed
    (local-epoch    :accessor node-local-epoch
                    :initform 0)
+
+   
    (tx-changes     :accessor node-tx-changes
                    :initform nil)
    ;; -------------------------------------

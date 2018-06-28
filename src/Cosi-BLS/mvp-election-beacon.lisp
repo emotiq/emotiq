@@ -182,12 +182,8 @@ based on their relative stake"
 ;; Augment message handlers for election process
 
 (defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n beacon sig)
-  (if *holdoff*
-      (emotiq:note "Election held-off")
-    ;; else
-    (when (validate-election-message n beacon sig)
-      (run-election n))
-    ))
+  (when (validate-election-message n beacon sig)
+    (run-election n)))
 
 (defun run-special-election ()
   ;; try to resync on stalled system
@@ -232,7 +228,6 @@ based on their relative stake"
                      (short-id winner)
                      (short-id pkey))
 
-        (set-holdoff)
         (when (int= pkey new-beacon)
           ;; launch a beacon
           (ac:spawn (lambda ()
@@ -272,6 +267,7 @@ based on their relative stake"
                                  ;; *local-epoch* will also not have
                                  ;; changed
                                  (unless (get-witness-list)
+                                   (gossip:get-stakes)
                                    (let* ((pkeys  (sort (gossip:get-live-uids) '<
                                                         :key 'int))
                                           (stakes (gather-stakes pkeys)))
@@ -298,20 +294,19 @@ based on their relative stake"
               (random 1000000 state))
           pkeys)))
 
-(defun startup-elections (my-node)
+(defun startup-elections ()
   ;; call this from global init after all housekeeping
-  (with-current-node my-node
+  (with-current-node *my-node*
     (setup-emergency-call-for-new-election)))
 
-(defun create-my-node (pkey skey)
-  ;; call this as last item in todo list during init
+(defmethod gossip:make-node ((kind (eql :cosi)) &key pkey skey)
   (setf *my-node* (make-instance 'node
                                  :pkey  pkey
-                                 :skey  skey))
-  ;; DO WE NEED TO REGISTER WITH GOSSIP HERE???
-  (startup-elections *my-node*)
-  ;; OKAY.. now you have 60 sec to do whatever remains of init
-  )
+                                 :skey  skey)
+  (gossip:initialize-node *my-node*
+                          :pkey pkey
+                          :skey skey)
+  *my-node*))
 
 ;; -----------------------------------------------------------
 

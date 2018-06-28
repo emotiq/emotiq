@@ -35,7 +35,8 @@
   ;; WebSocket implementation at <http://localhost:3140/client/>
   (emotiq-rest:start-server :port 3140)
   (emotiq/tracker:start-tracker)
-  (emotiq:start-node))
+  (emotiq:start-node)
+  (cosi-simgen:startup-elections))
 
 ;; Entry Point for binary version of the system.
 
