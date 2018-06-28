@@ -101,16 +101,15 @@ based on their relative stake"
          (:update-seed (pkey)
           ;; perturb our seed so we don't mindlessly repeat the same
           ;; seed sequence as some other node after a major reset
-          (setf seed (hash/256 (uuid:make-v1-uuid) pkey seed)))
+          (setf seed (hash/256 (uuid:make-v1-uuid) ;; varies with machine and time
+                               pkey                ;; varies with node
+                               seed)))             ;; based on last seed we generated
 
-         (:get-seed (&optional reply-to)
-          (when reply-to
-            (send reply-to seed))
-          seed)
-         
          )))))
 
 (defmacro with-election-reply (reply-args msg &body body)
+  ;; define convenient continuation interface for actors calling on
+  ;; election services for some result
   `(=bind ,reply-args
        (send *election-central* ,msg (lambda (val)
                                        (=values val)))
