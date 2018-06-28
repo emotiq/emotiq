@@ -222,7 +222,7 @@ based on their relative stake"
         (setf *leader*           winner
               *beacon*           new-beacon
               *local-epoch*      n  ;; unlikely to repeat from election to election
-              *election-calls*   nil)
+              *election-calls*   nil) ;; reset list of callers for new election
         
         (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
         (emotiq:note "election results ~A (stake = ~A)"
