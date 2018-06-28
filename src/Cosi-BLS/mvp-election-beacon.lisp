@@ -308,6 +308,7 @@ based on their relative stake"
   (setf *my-node* (make-instance 'node
                                  :pkey  pkey
                                  :skey  skey))
+  ;; DO WE NEED TO REGISTER WITH GOSSIP HERE???
   (startup-elections *my-node*))
 
 ;; -----------------------------------------------------------
