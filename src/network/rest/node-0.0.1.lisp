@@ -21,7 +21,7 @@
     ("/tracker"
      :method :get
      :content-type "text/plain")
-  (emotiq/tracker:get-all-notes))
+  (emotiq/tracker:get-all-info))
 
 (restas:define-route %node
     ("/:node/"

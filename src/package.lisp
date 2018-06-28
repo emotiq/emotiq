@@ -132,7 +132,9 @@
    #:query-current-state
    #:query-raw-nodes
    #:get-notes
-   #:get-all-notes
+   #:get-all-info
+   #:get-mempool
+   #:get-blockchain
    #:track))
 
 (defpackage emotiq/ate

@@ -1363,7 +1363,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
              (do-transactions (tx block)
                (dump-tx tx)))
            (when mempool
-             (emotiq:note "~%Dump txs in mempool:~%")
+             (emotiq:note "Dump txs in mempool:")
              (loop for tx being each hash-value of cosi-simgen:*mempool*
                    do (dump-tx tx)))
            (when blockchain
@@ -1533,8 +1533,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
         count (remove-transaction-from-mempool transaction mempool)
           into n-removed
         finally
-           (emotiq:note "Removed ~d transaction~p from mempool."
-                   n-removed n-removed)
+           (emotiq:note "Removed ~d transaction~p from mempool." n-removed n-removed)
            (cosi/proofs/newtx:dump-txs :mempool t)))
 
 ;; Modularity issue: note that this should not really "know" that

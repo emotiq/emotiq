@@ -85,6 +85,15 @@
    (ignore-errors (format nil "~s" n))
    "Failed to stringify node"))
 
+
+;;
+;; examples of how to fetch all nodes in a system (sim) and
+;; how to grab slots and create string representations
+;; - see emotiq/src/Cosi-BLS/new-transactions.lisp/dump-txs
+;; - look at the definition of "node" in emotiq/src/Cosi-BLS/cosi-construction.lisp for
+;;   what slots are available
+;;
+
 (defun query-raw-nodes ()
   "return a list of nodes as lisp data, which can be further nspected"
   (system-all-nodes *state*))
@@ -93,11 +102,29 @@
   "return a string of notes from given node n (once-only)"
   (get-output-stream-string (cosi-simgen::node-notestream n)))
 
-(defun get-all-notes ()
+(defun get-all-info ()
   "return a string of notes from each of the nodes in the system"
   (with-output-to-string (out)
     (mapc #'(lambda (n)
-              (format out "~%~%~a:~%~a~%"
+              (format out "~%~%~a:~%~a~%mempool=~%~a~%blockchain=~%~a"
                       (stringify-node n)
-                      (get-notes n)))
+                      (get-notes n)
+                      (get-mempool n)
+                      (get-blockchain n)))
           (query-raw-nodes))))
+
+(defun get-mempool (n)
+  "returns a string dump of mempool for node n"
+  (let ((emotiq:*notestream* (make-string-output-stream)))
+    (if (= 0 (hash-table-count (cosi-simgen::node-mempool n)))
+        (emotiq:note "EMPTY")
+      (cosi/proofs/newtx:dump-txs :mempool t :node n))
+    (get-output-stream-string emotiq:*notestream*)))
+
+(defun get-blockchain (n)
+  "returns a string dump of blockchain for node n"
+  (let ((emotiq:*notestream* (make-string-output-stream)))
+    (if (= 0 (length (cosi-simgen::node-blockchain n)))
+        (emotiq:note "EMPTY")
+      (cosi/proofs/newtx:dump-txs :blockchain t :node n))
+    (get-output-stream-string emotiq:*notestream*)))

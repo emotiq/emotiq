@@ -1093,11 +1093,13 @@ check that each TXIN and TXOUT is mathematically sound."
     (emotiq:note "Node: ~A :Stage ~A" (short-id node) consensus-stage)
     (=bind (ans)
         (par
-          (let ((*current-node* node))
+          (let ((*current-node* node)
+		(ns (node-notestream node)))
             (=values 
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
              ;; to decide for themselves
+(let ((*notestream* ns))
              (if (validate-cosi-message node consensus-stage blk)
                  (progn
                    (emotiq:note "Block validated ~A" (short-id node))
@@ -1107,21 +1109,27 @@ check that each TXIN and TXOUT is mathematically sound."
                (progn
                  (emotiq:note "Block not validated ~A" (short-id node))
                  (list nil 0)))))
+)
 
           ;; ... and here is where we have all the subnodes in our
           ;; group do the same, recursively down the Cosi tree.
+(let ((*notestream* ns))
           (let ((fn (sub-signing node consensus-stage blk seq-id timeout)))
             (pmapcar fn subs))
+)
 
           ;; gossip-mode group
+(let ((*notestream* ns))
           (gossip-signing node
                           consensus-stage
                           blk
                           blk-hash
                           seq-id
                           timeout))
+)
       
-      (let ((*current-node* node))
+      (let ((*current-node* node)
+            (*notestream* (node-notestream node)))
         (emotiq:note "~a" ans)
         (destructuring-bind ((sig bits) r-lst g-ans) ans
           (labels ((fold-answer (sub resp)
