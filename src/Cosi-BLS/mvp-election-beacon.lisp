@@ -15,13 +15,13 @@
 (defun get-witness-list ()
   *all-nodes*)
 
-(defun witness-p (pkey)
-  (member pkey (get-witness-list)
+(defun get-witnesses-sans-pkey (pkey)
+  (remove pkey (get-witness-list)
           :key  'first
           :test 'int=))
 
-(defun get-witnesses-sans-pkey (pkey)
-  (remove pkey (get-witness-list)
+(defun witness-p (pkey)
+  (member pkey (get-witness-list)
           :key  'first
           :test 'int=))
 
@@ -69,9 +69,9 @@
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
   (let* ((tree    (car (um:nlet-tail iter ((nodes nodes)) ;; tail recursive, scheme-like, named let
-                    (if (= 1 (length nodes))
-                        nodes
-                      (iter (mapcar 'make-tree-node (um:group nodes 2))))))))
+                         (if (= 1 (length nodes))
+                             nodes
+                           (iter (mapcar 'make-tree-node (um:group nodes 2))))))))
     (when tree
       (um:nlet-tail iter ((tree  tree))                       ;; tail recursive, scheme-like, named let
         (if (tree-node-p tree)
