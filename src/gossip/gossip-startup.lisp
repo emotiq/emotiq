@@ -5,6 +5,11 @@
 (in-package :gossip)
 
 (defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
+(defparameter *stakes* nil "Cached initial value of (pubkey stake) records")
+
+(defun get-stakes ()
+  "Returns cached initial value of (pubkey stake) records"
+  *stakes*)
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
@@ -33,9 +38,13 @@
                        t)
                      pubkeys)
       ;; make local nodes
-      (mapc (lambda (pubkey)
-              (make-node :uid pubkey))
-            pubkeys)
+      (if (cosi-loaded-p)
+          (mapc (lambda (pubkey)
+                  (make-node ':cosi :pkey pubkey :skey (cdr (assoc pubkey keypairs))))
+                pubkeys)
+          (mapc (lambda (pubkey)
+                  (make-node ':gossip :uid pubkey))
+                pubkeys))
       ;; clear log and start server
       (run-gossip)
       t)))
@@ -53,41 +62,42 @@
 
 (defun gossip-startup (&key root-path (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test
-
-ROOT-PATH specifies a specific root the configuration as opposed to
-the use of the autoconfiguration mechanism.
-
-If PING-OTHERS is true, returns list of augmented-data or exception
-monads about live public keys on other machines.
-
-If PING-OTHERS is false, just return list of hosts found in from the
-Gossip testnet configuration.  
-
-The network connectivity test can be invoked via PING-OTHER-MACHINES
-with this list if desired."
+  
+  ROOT-PATH specifies a specific root the configuration as opposed to
+  the use of the autoconfiguration mechanism.
+  
+  If PING-OTHERS is true, returns list of augmented-data or exception
+  monads about live public keys on other machines.
+  
+  If PING-OTHERS is false, just return list of hosts found in from the
+  Gossip testnet configuration.  
+  
+  The network connectivity test can be invoked via PING-OTHER-MACHINES
+  with this list if desired."
   ; if we're given a root-path, use that instead of the global one
   (emotiq:note "Starting gossip configuration for testnet…")
   (handler-bind 
       ((error (lambda (e)
                 (emotiq:note "Cannot configure local machine: ~a" e))))
     (when root-path 
-    (gossip/config:initialize :root-path root-path))
-  (gossip-init ':maybe)
-  (multiple-value-bind (keypairs hosts local-machine)
-      (gossip/config:get-values)
+      (gossip/config:initialize :root-path root-path))
+    (gossip-init ':maybe)
+    (multiple-value-bind (keypairs hosts local-machine stakes)
+                         (gossip/config:get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
       (setf *hosts* (remove (usocket::host-to-hbo (eripa)) hosts :key (lambda (host) (usocket::host-to-hbo (car host)))))
+      (setf *stakes* stakes)
       (emotiq:note "Gossip init finished.")
-    (if ping-others
+      (if ping-others
           (handler-bind 
               ((error (lambda (e)
                         (emotiq:note "Failed to run connectivity tests: ~a" e))))
-        (let ((other-machines (ping-other-machines hosts)))
-          (unless other-machines
+            (let ((other-machines (ping-other-machines hosts)))
+              (unless other-machines
                 (emotiq:note "No other hosts to check for ping others routine."))
               other-machines))
-        hosts))))
+          hosts))))
 
 (defun graceful-shutdown ()
   "Gracefully shutdown the gossip server"
