@@ -37,7 +37,12 @@ THE SOFTWARE.
   "NODE-LIST is a list of (public-key stake-amount) pairs"
   (ac:pr (format nil "election set-nodes ~A" node-list))
   (assert node-list)
-  (setf *all-nodes* node-list))
+  (setf *all-nodes* (mapcar (lambda (pair)
+                              (destructuring-bind (pkey stake) pair
+                                (list (make-instance 'pbc:public-key
+                                                     :val (bev pkey))
+                                      stake)))
+                            node-list)))
 
 (defun get-witness-list ()
   *all-nodes*)
