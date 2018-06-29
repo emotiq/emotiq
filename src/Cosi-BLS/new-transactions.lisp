@@ -99,13 +99,42 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defmethod transaction-id ((tx transaction))
-  "Get hash of this transaction, which also uniquely* identifies it, as hash:hash/256 instance."
-  (let ((message (serialize-transaction tx)))
-    (bev-vec (hash-for-transaction-id message))))
+  "Get hash of TX, a transaction, which also uniquely* identifies it,
+   as hash:hash/256 instance."
+  (bev-vec (hash-transaction-id tx)))
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
 ;; ---!!! see notes at serialize-transaction -mhd, 6/5/18
+
+
+(defmethod transaction-witness-id ((tx transaction))
+  "Get hash of the witness data of TX, a transaction, as a
+   hash:hash/256 instance."
+  (ecase (transaction-type tx)
+    ((:spend :spend-cloaked)
+     (bev-vec (hash-transaction-witness-id tx)))
+    ((:collect :coinbase)
+     (bev-vec (transaction-hash '())))))
+
+;; Note: there is no witness data in the case of
+;; :collect/:coinbase. Consider later as an optimization making the
+;; data be a load-time or even a read-time value to save a bit of
+;; space and/or cycles.
+
+
+
+(defmethod transaction-input-scripts-id ((tx transaction))
+  "Get hash of the input scripts of TX, a transaction, as a
+   hash:hash/256 instance."
+  (ecase (transaction-type tx)
+    ((:spend :spend-cloaked)
+     (bev-vec (hash-transaction-input-scripts-id tx)))
+    ((:collect :coinbase)
+     (bev-vec (transaction-hash '())))))
+
+;; Same thing as above goes for input scripts.
+    
   
 
 
@@ -694,9 +723,35 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defun hash-for-transaction-id (message)
-  "Hash MESSAGE, the serialization returned by serialize-transaction."
+(defun transaction-hash (message)
+  "Hash MESSAGE, an arbitrary Lisp object, often the serialization
+   returned by serialize-transaction, but actually an arbitrary lisp
+   suitable as input as the first arg to hash:hash/256."
   (hash:hash/256 message))
+
+
+
+(defun hash-transaction-id (tx)
+  (let ((message (serialize-transaction tx)))
+    (transaction-hash message)))
+
+(defun hash-transaction-input-scripts-id (tx)
+  (transaction-hash 
+   (loop for tx-in in (transaction-inputs tx)
+         as script = (tx-in-unlock-script tx-in)
+         collect script)))
+
+(defun hash-transaction-witness-id (tx)
+  (transaction-hash 
+   (loop for tx-in in (transaction-inputs tx)
+         as signature = (%tx-in-signature tx-in)
+         as public-key = (%tx-in-public-key tx-in)
+         ;; order: signature, public key
+         collect signature collect public-key)))
+
+;; The order of signature, public key is the same as scriptSig just to
+;; seem consistent but for no particular reason.
+
 
 
 
@@ -727,7 +782,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
-         ((string= public-key-hash public-key-hash-from-public-key)
+         ((account-addresses=
+           public-key-hash
+           public-key-hash-from-public-key)
           t)
          (t
           (fail-script-op)))))))
@@ -910,53 +967,27 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-;;;; Transaction Contexts
-
-
-(defvar *transaction-context*)
-
-(defclass transaction-context ()
-  ((tx-in-utxo :initarg :tx-in-utxo :reader tx-in-utxo)))
-
-(defmacro with-transaction-context ((context &optional options) &body body)
-  (declare (ignore options))            ; reserved for later
-  `(let* ((*transaction-context* ,context))
-     ,@body))
-
-;; Should an attempt be made to detect reentrant usage and signal an
-;; error?
-
-
-
-(defun expect-transaction-context ()
-  "Used for development-only testing. This may NOT be relied upon at run time in
-production to stop execution if there is no transaction context. When called in
-development, this signals a continuable error if there is no transaction."
-  (when (not (boundp '*transaction-context*))
-    (cerror "continue anyhow" "not in a transaction context")))
-
-
-
-
 (defun tx-ids= (tx-id-1 tx-id-2)
   "Return true if transaction IDs are equal. TX-ID-1 and TX-ID-2 must
-   transaction ID's, which are represented as hashes, i.e., as
-   instances of hash:hash."
+   transaction ID's, which are represented as instances of class BEV (a class to
+   represent a big-endian vector of (unsigned-byte 8) elements), which in turn
+   represents a sha-3/256 hash result."
   (equalp tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
-  "Iterate over the blocks of the blockchain (i.e., the value of
-  cosi-simgen:*blockchain*) beginning the most recent minted and
-  ending with the genesis block, with BLOCK-VAR bound during each
-  iteration to the block."
+  "Do blocks of the blockchain in reverse chronological order. Iterate over the
+   blocks of the blockchain (i.e., the value of cosi-simgen:*blockchain*)
+   beginning the most recent minted and ending with the genesis block, with
+   BLOCK-VAR bound during each iteration to the block."
   `(loop for ,block-var in cosi-simgen:*blockchain*
          do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
-  "Bind each transaction of block BLK to TX-VAR in order from latest
-   spent to earliest spent around the execution of BODY. It's possible
-   to return using RETURN although RETURN-FROM to a lexical tag is
-   recommended as the most reliable and clear method."
+  "Do transactions of BLK in reverse chronological order. Bind each transaction
+   of block BLK to TX-VAR in order from latest spent to earliest spent around
+   the execution of BODY. It's possible to return using RETURN although
+   RETURN-FROM to a lexical tag is recommended as the most reliable and clear
+   method."
   `(loop with reversed-transactions
            = (reverse (cosi/proofs:block-transactions ,blk))
          for ,tx-var in reversed-transactions
@@ -1260,28 +1291,55 @@ of type TYPE."
 
 
 
+;;;; Wallet API
+
+
+
+;;; ACCOUNT-ADDRESSES=: return true if ADDRESS-1 and ADDRESS-2 are the
+;;; same. Each must be a string, representing an address, that is the
+;;; public key hash of a public key, which is normally created from a
+;;; public key via the function cosi/proofs:public-key-to-address. The
+;;; strings are compared for exact equality, with no case folding or
+;;; whitespace elimination. It is an error to pass a non-string to
+;;; this function.
+
 (defun account-addresses= (address-1 address-2)
+  (declare (type string address-1 address-2))
   (string= address-1 address-2))
 
 
 
-;;; UTXO-P: search first the mempool and then blockchain exhaustively starting
-;;; with the most-recently-created transaction returning true if the output of
+;;; UTXO-P: search the blockchain exhaustively starting with the
+;;; most-recently-created transaction returning true if the output of
 ;;; TRANSACTION at OUTPUT-INDEX is found to have been spent, and false (nil) if
 ;;; TRANSACTION itself or the beginning of the blockchain is reached.
 
 (defun utxo-p (transaction output-index)
-  (expect-transaction-context)
-  (do-blockchain (block)
-    (return
+  "Return whether TRANSACTION's output at index OUTPUT-INDEX has been spent. As
+   a second value, returns whether the transaction was found at all."
+  (let ((this-transaction-id (transaction-id transaction)))
+    (do-blockchain (block)
       (do-transactions (tx block)
-        (return
-          (if (eq tx transaction)
-              nil
-              (loop for txi in (transaction-inputs tx)
-                    as index = (tx-in-index txi)
-                    when (eql index output-index)
-                      return t)))))))
+        (if (eq tx transaction)
+
+            ;; We reached all the way from the latest in time to this
+            ;; transaction, and have not found a transaction that spends this
+            ;; transaction, so return now that this is unspent/found.
+            (return-from utxo-p (values t t))
+
+            ;; We are checking every transaction T-L that's later than the arg
+            ;; transaction T-E to see if T-L spends T-E's output at index
+            ;; OUTPUT-INDEX.  Check all T-E's
+            (loop for transaction-input in (transaction-inputs tx)
+                  as index = (tx-in-index transaction-input)
+                  when (and (eql index output-index)
+                            (tx-ids=
+                             (tx-in-id transaction-input)
+                             this-transaction-id))
+                    ;; spent/found
+                    do (return-from utxo-p (values nil t))))))
+    ;; degenerate case: got to end, but transaction not even found
+    (values t nil)))
 
 
 
@@ -1291,7 +1349,6 @@ of type TYPE."
   (TXO PARENT-TX ...)
 
 ADDRESS here is taken to mean the same thing as the public key hash."
-  (expect-transaction-context)
   (let ((utxos-so-far '()))
     (do-blockchain (block)
       (do-transactions (tx block)
@@ -1309,13 +1366,17 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun get-balance (address)
-  "Return the sum of all amounts of all UTXOs of ADDRESS."
-  (expect-transaction-context)
+  "Return the sum of all amounts of all UTXOs of ADDRESS. A second
+   value returned is a non-negative integer that indicates the number
+   of UTXOs associated with the address."
   (let ((utxos (get-utxos-per-account address)))
     (loop for (txo) in utxos
           as amount = (tx-out-amount txo)
           collect amount into amounts
-          finally (return (apply #'+ amounts)))))
+          finally (return
+                    (values
+                     (apply #'+ amounts)
+                     (length amounts))))))
 
 
 
@@ -1373,6 +1434,36 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                            :direction :output :if-exists :supersede)
             (dump-loops))
           (dump-loops)))))
+
+
+
+
+
+;;;; Transaction ID Utilities
+
+;;; These functions are primarily intended as convenience functions for use in
+;;; the debugger or in the REPL, not in production.
+
+(defun to-txid (string-or-txid)
+  "Given either a hex string or txid byte vector, if it's a string, remove any
+   non-hex-digit characters, and convert the resulting hex string to a txid byte
+   vector. Otherwise, it is assumed a valid txid byte vector and returned."
+  (if (stringp string-or-txid)
+      (ironclad:hex-string-to-byte-array
+       (remove-if-not
+        #'(lambda (char) (digit-char-p char 16))
+        string-or-txid))
+      string-or-txid))
+
+
+(defun find-tx (txid-or-string &optional also-search-mempool-p)
+  "Find transaction on the blockchain whose transaction ID corresponds to
+  TXID-OR-STRING, either a hex string or a txid byte vector. If
+  also-search-mempool-p is true, this also searches the mempool."
+  (find-transaction-per-id
+   (to-txid txid-or-string) also-search-mempool-p))
+
+
 
 
 
@@ -1581,9 +1672,15 @@ ADDRESS here is taken to mean the same thing as the public key hash."
    validator. Validate by recomputing the full merkle hash on all the 
    transactions and comparing with that with that saved in the 
    merkle-root-hash slot of the block." 
-  (hash:hash=  
-   (cosi/proofs:compute-merkle-root-hash (cosi/proofs:block-transactions blk)) 
-   (cosi/proofs:block-merkle-root-hash blk)))
+  (and (hash:hash=  
+        (cosi/proofs:compute-merkle-root-hash blk) 
+        (cosi/proofs:block-merkle-root-hash blk))
+       (hash:hash=  
+        (cosi/proofs:compute-input-script-merkle-root-hash blk)
+        (cosi/proofs:block-input-script-merkle-root-hash blk))
+       (hash:hash=  
+        (cosi/proofs:compute-witness-merkle-root-hash blk)
+        (cosi/proofs:block-witness-merkle-root-hash blk))))
 
 
 
