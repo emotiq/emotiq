@@ -1021,13 +1021,18 @@ dropped on the floor.
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
     (edebug 5 "send-msg" msg destnode srcuid)
-    (handler-case
+    (if *gossip-absorb-errors*
+        (handler-case
+            (actor-send destactor
+                        :gossip ; actor-verb
+                        srcuid  ; first arg of actor-msg
+                        msg)    ; second arg of actor-msg
+          (ac:invalid-send-target () ; if target is invalid, log it and do nothing
+                                  (log-event :invalid-send-target destuid msg :from srcuid)))
         (actor-send destactor
-                 :gossip ; actor-verb
-                 srcuid  ; first arg of actor-msg
-                 msg)    ; second arg of actor-msg
-      (ac:invalid-send-target () ; if target is invalid, log it and do nothing
-                           (log-event :invalid-send-target destuid msg :from srcuid)))))
+                    :gossip ; actor-verb
+                    srcuid  ; first arg of actor-msg
+                    msg))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
