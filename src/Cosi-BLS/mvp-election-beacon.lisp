@@ -288,7 +288,7 @@ based on their relative stake"
       ;; *local-epoch* will also not have
       ;; changed
       (unless (get-witness-list)
-        (set-nodes (gossip:get-stakes))
+        (set-nodes (gossip:get-stakes))  ;; <<--- THIS NEEDS TO CHANGE TO MARK D's NOTIONS
         (setf (node-stake node) ;; probably never used elsewhere...
               (second (assoc (node-pkey node) (get-witness-list)
                              :test 'int=))))
