@@ -179,7 +179,7 @@ THE SOFTWARE.
 
 (defvar *comm-ip*  nil) ;; internal use only
 
-(defun make-node (ipstr pkeyzkp parent)
+(defun make-cosi-tree-node (ipstr pkeyzkp parent)
   (let* ((cmpr-pkey (first pkeyzkp))
          (pval      (keyval cmpr-pkey))
          (node (make-instance 'node
@@ -317,7 +317,7 @@ THE SOFTWARE.
 (defun inner-make-node-tree (ip ip-list &optional parent)
   (multiple-value-bind (ipstr pkeyzkp)
       (gen-node-id ip)
-    (let ((node (make-node ipstr pkeyzkp parent)))
+    (let ((node (make-cosi-tree-node ipstr pkeyzkp parent)))
       (when ip-list
         (let ((bins (partition node ip-list
                                :key (lambda (ip-arg)
