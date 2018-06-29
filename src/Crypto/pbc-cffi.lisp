@@ -694,9 +694,16 @@ comparison.")
 
 ;; -------------------------------------------------
 
+(defmethod public-key ((key public-key))
+  key)
+
 (defmethod public-key ((val integer))
   (make-instance 'public-key
                  :val (bevn val *g2-size*)))
+
+
+(defmethod secret-key ((key secret-key))
+  key)
 
 (defmethod secret-key ((val integer))
   (make-instance 'secret-key
