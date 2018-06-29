@@ -65,6 +65,13 @@ THE SOFTWARE.
 (define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
 (define-symbol-macro *had-work*       (node-had-work       *current-node*))
 
+;; election related items
+(define-symbol-macro *election-calls* (node-election-calls *current-node*))
+(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
+(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
+
+;; -------------------------------------------------------
+
 (defstruct tx-changes
   ;; all lists contain key vectors
   tx-dels    ;; list of pending transation removals from mempool
