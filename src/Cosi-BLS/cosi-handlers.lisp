@@ -1,4 +1,4 @@
-;; cosi-handlers.lisp -- Handlers for various Cosi operations
+; cosi-handlers.lisp -- Handlers for various Cosi operations
 ;;
 ;; DM/Emotiq  02/18
 ;; ---------------------------------------------------------------
@@ -92,7 +92,7 @@ THE SOFTWARE.
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
-  (emotiq/tracker:track :reset)
+  (emotiq/tracker:track :reset *current-node*)
   (reset-nodes))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
@@ -802,6 +802,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
+        (emotiq/tracker:track :idle node)
         ))
 
 ;; -------------------------------------------------------------------

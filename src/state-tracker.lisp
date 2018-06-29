@@ -42,7 +42,14 @@
                  (system-events *state*) nil)))
     (case (first msg) 
       (:reset
-       (emotiq:note "Tracker: :reset - state cleared"))
+       (emotiq:note "Tracker: :reset")
+       (let ((node (second msg)))
+         (push `(:idle ,(stringify-node node)) (system-events *state*))))
+
+      (:idle
+       (emotiq:note "Tracker: :reset")
+       (let ((node (second msg)))
+         (push `(:idle ,(stringify-node node)) (system-events *state*))))
 
       (:node
        (let ((node (second msg)))
