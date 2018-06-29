@@ -307,8 +307,10 @@ based on their relative stake"
 
 (defmethod gossip:make-node ((kind (eql :cosi)) &key pkey skey)
   (setf *my-node* (make-instance 'node
-                                 :pkey  pkey
-                                 :skey  skey))
+                                 :pkey  (make-instance 'pbc:public-key
+                                                       :val (bev pkey))
+                                 :skey  (make-instance 'pbc:secret-key
+                                                       :val (bev skey)))
   (gossip:initialize-node *my-node*
                           :pkey pkey
                           :skey skey)
