@@ -914,9 +914,9 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; -------------------------------------------------------------
 
 (defmethod bft-threshold ((n fixnum))
-  ;; return threshold that must be exceeded
+  ;; return threshold that must be equal or exceeded
   (declare (fixnum n))
-  (* 2/3 n))
+  (- n (floor n 3)))
 
 (defmethod bft-threshold ((witnesses sequence))
   (bft-threshold (length witnesses)))
@@ -997,8 +997,8 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun check-byz-threshold (bits blk)
   (or *in-simulatinon-always-byz-ok*
-      (> (logcount bits)
-         (bft-threshold blk))))
+      (>= (logcount bits)
+          (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
   (hash= (block-merkle-root-hash blk) ;; check transaction hash against header
