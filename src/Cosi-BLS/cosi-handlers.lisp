@@ -119,11 +119,9 @@ THE SOFTWARE.
   (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-prepare)) &key reply-to blk timeout)
-  (emotiq/tracker:track :prepare)
   (node-compute-cosi reply-to :prepare blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-commit)) &key reply-to blk timeout)
-  (emotiq/tracker:track :commit)
   (node-compute-cosi reply-to :commit blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
@@ -1164,7 +1162,13 @@ check that each TXIN and TXOUT is mathematically sound."
   ;; assume for now that leader cannot be corrupted...
   (let* ((self (current-actor))
          (hash (hash/256 (signature-hash-message blk)))
-         (sess (int hash)))
+         (sess (int hash))
+         (node *current-node*))
+
+    (if (eq :prepare consensus-stage)
+        (emotiq/tracker:track :prepare node)
+      (emotiq/tracker:track :commit node))
+
     (ac:self-call :signing
                   :reply-to        self
                   :consensus-stage consensus-stage
@@ -1177,8 +1181,12 @@ check that each TXIN and TXOUT is mathematically sound."
         ((eql seq sess)
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
-             (reply reply-to
-                    (list :signature sig bits))
+             (progn
+               (if (eq :prepare consensus-stage)
+                   (emotiq/tracker:track :prepare-signed node)
+                 (emotiq/tracker:track :commit-signed node))
+               (reply reply-to
+                      (list :signature sig bits)))
            ;; bad signature
            (reply reply-to :corrupt-cosi-network)
            ))

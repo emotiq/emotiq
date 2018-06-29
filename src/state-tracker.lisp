@@ -64,7 +64,23 @@
              (emotiq:note "wrong leader block-finished ~a <> ~a" leader-node (system-leader *state*))
              (push `(:wrong-leader-block-finished ,leader-node) (system-events *state*))))))
 
-      ((:make-block :commit :prepare)
+      (:prepare
+       (let ((node (second msg)))
+         (push `(:node-enters-prepare ,(stringify-node node)) (system-events *state*))))
+
+      (:commit
+       (let ((node (second msg)))
+         (push `(:node-enters-commit ,(stringify-node node)) (system-events *state*))))
+
+      (:prepare-signed
+       (let ((node (second msg)))
+         (push `(:node-signed-prepare ,(stringify-node node)) (system-events *state*))))
+
+      (:commit-signed
+       (let ((node (second msg)))
+         (push `(:node-signed-commit ,(stringify-node node)) (system-events *state*))))
+
+      (:make-block
        ;; tbd
        )
     
