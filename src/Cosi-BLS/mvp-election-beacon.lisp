@@ -29,12 +29,6 @@ THE SOFTWARE.
 (in-package :cosi-simgen)
 
 ;; ---------------------------------------------------------------------------
-
-(define-symbol-macro *election-calls* (node-election-calls *current-node*))
-(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
-(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
-
-;; ---------------------------------------------------------------------------
 ;; list of (pubkey stake) associations for all witness nodes
 
 (defvar *all-nodes*  nil) 
