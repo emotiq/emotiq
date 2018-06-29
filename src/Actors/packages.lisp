@@ -154,6 +154,7 @@ THE SOFTWARE.
    #:kill-executives
 
    #:schedule-timeout-action
+   #:schedule-after
    ))
 
 (defpackage #:linda
