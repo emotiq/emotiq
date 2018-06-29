@@ -800,8 +800,10 @@ dropped on the floor.
 
 (defun actor-send (&rest args)
   "Error-safe version of ac:send"
-  (handler-case (apply 'ac:send args)
-    (error (e) (log-event :ERROR e))))
+  (if *gossip-absorb-errors*
+      (handler-case (apply 'ac:send args)
+        (error (e) (log-event :ERROR e)))
+      (apply 'ac:send args)))
 
 ;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
