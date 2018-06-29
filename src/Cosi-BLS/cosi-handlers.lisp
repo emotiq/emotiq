@@ -1163,12 +1163,9 @@ check that each TXIN and TXOUT is mathematically sound."
   ;; assume for now that leader cannot be corrupted...
   (let* ((self (current-actor))
          (hash (hash/256 (signature-hash-message blk)))
-         (sess (int hash))
-         (node *current-node*))
+         (sess (int hash)))
 
-    (if (eq :prepare consensus-stage)
-        (emotiq/tracker:track :prepare node)
-      (emotiq/tracker:track :commit node))
+    (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) *current-node*)
 
     (ac:self-call :signing
                   :reply-to        self
@@ -1183,9 +1180,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
              (progn
-               (if (eq :prepare consensus-stage)
-                   (emotiq/tracker:track :prepare-signed node)
-                 (emotiq/tracker:track :commit-signed node))
+               (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) *current-node*)
                (reply reply-to
                       (list :signature sig bits)))
            ;; bad signature
