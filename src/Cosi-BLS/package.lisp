@@ -210,6 +210,8 @@
   (:export 
    transaction-id
    make-genesis-transaction
+   transaction
+   transaction-type
    transaction-outputs
    transaction-inputs
    make-transaction
@@ -222,8 +224,12 @@
    check-block-transactions
    dump-tx
    dump-txs
+   tx-as-alist
    clear-transactions-in-block-from-mempool
    txid-string
+   tx-in-index
+   tx-out-amount
+   tx-out-public-key-hash
    wait-for-tx-count))
 
 ;; from cosi-construction

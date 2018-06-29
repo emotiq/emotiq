@@ -1,4 +1,4 @@
-;; cosi-handlers.lisp -- Handlers for various Cosi operations
+; cosi-handlers.lisp -- Handlers for various Cosi operations
 ;;
 ;; DM/Emotiq  02/18
 ;; ---------------------------------------------------------------
@@ -92,19 +92,19 @@ THE SOFTWARE.
   (set-holdoff))
 
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
-  (emotiq/tracker:track :reset)
+  (emotiq/tracker:track :reset *current-node*)
   (reset-nodes))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
-  (ac:pr args))
+  (emotiq:note "~a" args))
 
 (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
-  (pr (format nil "~A got genesis utxo" (short-id (current-node))))
+  (emotiq:note "~A got genesis utxo" (short-id (current-node)))
   (really-record-new-utxo utxo))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
-  (pr (format nil "~A got genesis block" (short-id (current-node))))
+  (emotiq:note "~A got genesis block" (short-id (current-node)))
   (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
   (push blk *blockchain*)
@@ -119,11 +119,9 @@ THE SOFTWARE.
   (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-prepare)) &key reply-to blk timeout)
-  (emotiq/tracker:track :prepare)
   (node-compute-cosi reply-to :prepare blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-commit)) &key reply-to blk timeout)
-  (emotiq/tracker:track :commit)
   (node-compute-cosi reply-to :commit blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
@@ -137,6 +135,13 @@ THE SOFTWARE.
   (node-elect-new-leader new-leader-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
+
+  (emotiq/tracker:track
+   (if (eq consensus-stage :prepare)
+       :prepare
+     :commit)
+   *current-node*)
+
   (node-cosi-signing reply-to
                      consensus-stage blk seq timeout))
 
@@ -147,16 +152,18 @@ THE SOFTWARE.
   (node-remove-node node-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
-  (emotiq/tracker:track :block-finished)
+  (emotiq/tracker:track :block-finished *current-node*)
   (emotiq:note "Block committed to blockchain")
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*)))))
 
 ;; ------------------------------------------------------------------------------------
 
 (defun make-node-dispatcher (node)
+  (emotiq/tracker:track :node node)
   (let ((beh  (make-actor
                (lambda (&rest msg)
-                 (let ((*current-node* node))
+                 (let ((*current-node* node)
+                       (emotiq:*notestream* (node-notestream node)))
                    (apply 'node-dispatcher msg)))
                )))
     (make-actor
@@ -554,9 +561,9 @@ Return nil if transaction is invalid."
                        (txin-keys tx))
                ;; now do the math
                (validate-transaction tx))
-      (ac:pr (format nil "Transaction: ~A checks: ~A"
-                     (short-id key)
-                     (short-id *current-node*)))
+      (emotiq:note "Transaction: ~A checks: ~A"
+                   (short-id key)
+                   (short-id *current-node*))
       t)))
 
 ;; --------------------------------------------------------------------
@@ -573,7 +580,7 @@ to precede TXIN consumers.
 TLST is a list of pairs (k v) with k being the hash of the
 transaction, and v being the transaction itself."
   ;; first, compute lists of keys just once
-  (pr "Topological sorting")
+  (emotiq:note "Topological sorting")
   (let ((txrecs (mapcar (lambda (tx)
                           (make-txrec
                            :tx     tx
@@ -684,14 +691,14 @@ topo-sorted partial order"
       (cosi/proofs/newtx:get-transactions-for-new-block
        :max *max-transactions*)))
   (let ((tx-pairs (get-candidate-transactions)))
-    (pr "Trimming transactions")
+    (emotiq:note "Trimming transactions")
     (multiple-value-bind (hd tl)
         (um:split *max-transactions* tx-pairs)
       (dolist (tx tl)
         ;; put these back in the pond for next round
         (back-out-transaction tx))
       ;; now hd represents the actual transactions going into the next block
-      (pr (format nil "~D Transactions" (length hd)))
+      (emotiq:note "~D Transactions" (length hd))
       hd)))
       
 ;; ----------------------------------------------------------------------
@@ -802,6 +809,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (clrhash (node-blockchain-tbl node))
         (clrhash (node-mempool        node))
         (clrhash (node-utxo-table     node))
+        (emotiq/tracker:track :idle node)
         ))
 
 ;; -------------------------------------------------------------------
@@ -868,8 +876,8 @@ check that each TXIN and TXOUT is mathematically sound."
           :TIMEOUT timeout
           :ON-TIMEOUT
           (progn
-            (pr (format nil "SubSigning timeout waiting for ~A"
-                        (short-id node)))
+            (emotiq:note "SubSigning timeout waiting for ~A"
+                        (short-id node))
             (=return nil))
           )))))
 
@@ -938,7 +946,7 @@ check that each TXIN and TXOUT is mathematically sound."
                  (g-bits    0)
                  (g-sig     nil))
              
-             (pr "Running Gossip Signing")
+             (emotiq:note "Running Gossip Signing")
 
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
@@ -950,7 +958,7 @@ check that each TXIN and TXOUT is mathematically sound."
              
              (labels
                  ((=return (val)
-                    (pr "Return from Gossip Signing")
+                    (emotiq:note "Return from Gossip Signing")
                     (become 'do-nothing) ;; stop responding to messages
                     (=values val))
                   
@@ -969,7 +977,7 @@ check that each TXIN and TXOUT is mathematically sound."
                              sig
                              (zerop (logand g-bits bits)) ;; check for no intersection
                              (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                    (pr (hex bits))
+                    (emotiq:note "~a" (hex bits))
                     (setf g-bits (logior g-bits bits)
                           g-sig  (add-sigs sig g-sig)))
                   (if (> (logcount g-bits) bft-thrsh)
@@ -980,7 +988,7 @@ check that each TXIN and TXOUT is mathematically sound."
                       (retry-recv))))
                  
                  (msg
-                  (pr (format nil "Gossip-wait got unknown message: ~A" msg))
+                  (emotiq:note "Gossip-wait got unknown message: ~A" msg)
                   (adj-timeout)
                   (retry-recv))
                  
@@ -1088,46 +1096,55 @@ check that each TXIN and TXOUT is mathematically sound."
          (blk-hash (hash/256 (signature-hash-message blk)))
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
-    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
+    (emotiq:note "Node: ~A :Stage ~A" (short-id node) consensus-stage)
     (=bind (ans)
         (par
-          (let ((*current-node* node))
+          (let ((*current-node* node)
+		(ns (node-notestream node)))
             (=values 
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
              ;; to decide for themselves
+(let ((*notestream* ns))
              (if (validate-cosi-message node consensus-stage blk)
                  (progn
-                   (ac:pr (format nil "Block validated ~A" (short-id node)))
+                   (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) node)
+                   (emotiq:note "Block validated ~A" (short-id node))
                    (list (pbc:sign-hash blk-hash (node-skey node))
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
                                           :test 'int=))))
                (progn
-                 (ac:pr (format nil "Block not validated ~A" (short-id node)))
+                 (emotiq:note "Block not validated ~A" (short-id node))
                  (list nil 0)))))
+)
 
           ;; ... and here is where we have all the subnodes in our
           ;; group do the same, recursively down the Cosi tree.
+(let ((*notestream* ns))
           (let ((fn (sub-signing node consensus-stage blk seq-id timeout)))
             (pmapcar fn subs))
+)
 
           ;; gossip-mode group
+(let ((*notestream* ns))
           (gossip-signing node
                           consensus-stage
                           blk
                           blk-hash
                           seq-id
                           timeout))
+)
       
-      (let ((*current-node* node))
-        (pr ans)
+      (let ((*current-node* node)
+            (*notestream* (node-notestream node)))
+        (emotiq:note "~a" ans)
         (destructuring-bind ((sig bits) r-lst g-ans) ans
           (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
-                       (pr (format nil "No signing: ~A"
-                                   (short-id sub)))
+                       (emotiq:note "No signing: ~A"
+                                   (short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -1155,6 +1172,9 @@ check that each TXIN and TXOUT is mathematically sound."
   (let* ((self (current-actor))
          (hash (hash/256 (signature-hash-message blk)))
          (sess (int hash)))
+
+    (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) *current-node*)
+
     (ac:self-call :signing
                   :reply-to        self
                   :consensus-stage consensus-stage
@@ -1167,15 +1187,17 @@ check that each TXIN and TXOUT is mathematically sound."
         ((eql seq sess)
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
-             (reply reply-to
-                    (list :signature sig bits))
+             (progn
+               (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) *current-node*)
+               (reply reply-to
+                      (list :signature sig bits)))
            ;; bad signature
            (reply reply-to :corrupt-cosi-network)
            ))
         ;; ------------------------------------
         (t ;; seq mismatch
            ;; must have been a late arrival
-           (pr :late-arrival)
+           (emotiq:note ":late-arrival")
            (retry-recv))
         )) ;; end of message pattern
       ;; ---------------------------------
@@ -1189,7 +1211,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun leader-assemble-block (trns prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
-  (pr "Assemble new block")
+  (emotiq:note "Assemble new block")
   (let* ((node      *current-node*)
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
@@ -1200,7 +1222,8 @@ check that each TXIN and TXOUT is mathematically sound."
                   :reply-to  self
                   :blk       new-block
                   :timeout   prepare-timeout)
-    (pr "Waiting for Cosi prepare")
+    (emotiq/tracker:track :leader-sends-prepare node)
+    (emotiq:note "Waiting for Cosi prepare")
     (recv
       ((list :answer (list :signature sig bits))
        (let ((*current-node* node))
@@ -1215,14 +1238,15 @@ check that each TXIN and TXOUT is mathematically sound."
                        :reply-to  self
                        :blk       new-block
                        :timeout   commit-timeout)
-         (pr "Waiting for Cosi commit")
+         (emotiq/tracker:track :leader-sends-commit node)
+         (emotiq:note "Waiting for Cosi commit")
          (recv
            ((list :answer (list* :signature _))
             (send *dly-instr* :plt)
             (send (node-pkey node) :block-finished))
            
            ((list :answer (list :corrupt-cosi-network))
-            (pr "Corrupt Cosi network in COMMIT phase"))
+            (emotiq:note "Corrupt Cosi network in COMMIT phase"))
            
            #|
            ((list :answer (list :timeout-cosi-network))
@@ -1231,7 +1255,7 @@ check that each TXIN and TXOUT is mathematically sound."
            )))
       
       ((list :answer (list :corrupt-cosi-network))
-       (pr "Corrupt Cosi network in PREPARE phase")
+       (emotiq:note "Corrupt Cosi network in PREPARE phase")
        (end-all-holdoffs))
       
       #|
@@ -1288,7 +1312,7 @@ check that each TXIN and TXOUT is mathematically sound."
                 (pkeym (pbc:keying-triple-pkey km))
                 (skeym (pbc:keying-triple-skey km)))
            
-           (pr "Construct Genesis transaction")
+           (emotiq:note "Construct Genesis transaction")
            (multiple-value-bind (utxog secrg)
                (make-cloaked-txout 1000 pkey)
              (declare (ignore secrg))
@@ -1311,11 +1335,11 @@ check that each TXIN and TXOUT is mathematically sound."
                ;; send TX to all nodes
                (send-tx-to-all (setf *trans1* trans))
                
-               (pr "Find UTX for Mary")
+               (emotiq:note "Find UTX for Mary")
                (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
                       (minfo  (decrypt-txout-info utxm skeym)))
                  
-                 (pr "Construct 2nd transaction")
+                 (emotiq:note "Construct 2nd transaction")
                  (let ((trans (make-transaction :ins `((:kind :cloaked
                                                         :amount ,(txout-secr-amt minfo)
                                                         :gamma  ,(txout-secr-gamma minfo)
@@ -1372,7 +1396,7 @@ check that each TXIN and TXOUT is mathematically sound."
               (pkeym (pbc:keying-triple-pkey km))
               (skeym (pbc:keying-triple-skey km)))
          
-         (pr "Construct Genesis transaction")
+         (emotiq:note "Construct Genesis transaction")
          (multiple-value-bind (utxog secrg)
              (make-uncloaked-txout 1000 pkey)
            (declare (ignore secrg))
@@ -1396,12 +1420,12 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; send TX to all nodes
              (send-tx-to-all trans)
              
-             (pr "Find UTX for Mary")
+             (emotiq:note "Find UTX for Mary")
              (let* ((utxm   (find-txout-for-pkey-hash (hash:hash/256 pkeym) trans))
                     (amt    (uncloaked-txout-amt utxm))
                     (gamma  (uncloaked-txout-gamma utxm)))
                
-               (pr "Construct 2nd transaction")
+               (emotiq:note "Construct 2nd transaction")
                (let ((trans (make-transaction :ins `((:kind :uncloaked
                                                       :amount ,amt
                                                       :gamma  ,gamma

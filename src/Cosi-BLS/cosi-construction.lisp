@@ -127,6 +127,8 @@ THE SOFTWARE.
    (self     :accessor node-self     ;; ptr to Actor handler
              :accessor application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
+   (notestream :accessor node-notestream ;; a separate notestream for each node
+               :initform (make-string-output-stream))
    ))
 
 (defmethod node-bitmap ((node node))
