@@ -51,9 +51,28 @@
     :documentation
     "Sequence of public keys of validators 1:1 w/signature-bitmap slot.")
 
+   (witnesses-and-stakes-table
+    :accessor block-witnesses-and-stakes-table
+    :documentation
+    "An a-list of the form
+
+  ((<witness public-key> <stake amount in EMTQ coin/integer>)
+  ...)
+
+This is to be set only in the genesis block; otherwise, it should
+remain unbound (and should not be referred to). The configuration data
+comes from a config file.")             ; ---*** TODO: to be
+                                        ; specified. -mhd, 6/28/18
+
    (merkle-root-hash
     :reader block-merkle-root-hash
     :documentation "Merkle root hash of transactions.")
+   (input-script-merkle-root-hash
+    :reader block-input-script-merkle-root-hash
+    :documentation "Merkle root hash of input scripts.")
+   (witness-merkle-root-hash
+    :reader block-witness-merkle-root-hash
+    :documentation "Merkle root hash of witness data.")
 
    ;; Transactions is generally what's considered the main contents of a block
    ;; whereas the rest of the above comprises what's known as the 'block header'
@@ -149,7 +168,10 @@ added to the blockchain."
 (defun create-block (prev-block? block-election-proof block-leader-pkey
                      block-witnesses block-transactions)
   (let ((blk (make-instance 'eblock)))
-    (with-slots (merkle-root-hash timestamp election-proof 
+    (with-slots (merkle-root-hash 
+                 input-script-merkle-root-hash
+                 witness-merkle-root-hash
+                 timestamp election-proof 
                  leader-pkey witnesses transactions)
         blk
       (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
@@ -157,7 +179,9 @@ added to the blockchain."
       (setf leader-pkey block-leader-pkey)
       (setf witnesses block-witnesses)
       (setf transactions block-transactions)
-      (setf merkle-root-hash (compute-merkle-root-hash block-transactions))
+      (setf merkle-root-hash (compute-merkle-root-hash blk))
+      (setf input-script-merkle-root-hash (compute-input-script-merkle-root-hash blk))
+      (setf witness-merkle-root-hash (compute-witness-merkle-root-hash blk))
       (when prev-block? 
         (with-slots (prev-block-hash)
             blk
@@ -207,22 +231,90 @@ added to the blockchain."
 
 
 
+(defun listed-transactions-of-block (block)
+  "Return the transactions of BLOCK as a list. The caller must not
+   make any assumption as to whether the result shares list structure
+   with the block (or any other data structure) or whether it is
+   freshly consed."
+  (with-slots (transactions) 
+      block
+    ;; transactions is a sequence, i.e., list or vector
+    (if (listp transactions)
+        ;; optimized for list case: no copying needed
+        transactions
+        ;; else, copy elements of transactions, known to be a vector:
+        (loop for i from 0 below (length transactions)
+              collect (aref transactions i)))))
+
+
+
+;;;; Merkle Root Hashes on Blocks
+
+;;; We currently store three merkle root hashes on blocks that provide
+;;; an overall merkle hash of the following items on each transaction
+;;; and on the order of the transactions in the block:
+;;;
+;;;   (1) transaction ID;
+;;;   (2) witness data (if any); and
+;;;   (3) input scripts (if any)
+;;;
+;;; The most important is item (1) transaction ID.  This is a hash of
+;;; most of the data of a transaction. It is arranged that it must be
+;;; unique for every transaction.
+;;;
+;;; Items (2) and (3) are not used for coinbase and collect
+;;; transactions, since they have no inputs. They are needed to verify
+;;; input scripts and witness data, respectively, since those items
+;;; are not part of the transaction ID.  The reason they are not part
+;;; of the transaction ID is to prevent transaction malleability.
+;;; Items (2) and (3) are not required to be unique.
+;;;
+;;; These merkle root hashes are put on the block when the block is
+;;; created.  Non-leader nodes should rehash and recheck them in
+;;; cosi/proofs/newtx:check-block-transactions, q.v., in
+;;; new-transactions.lisp.
+
+
+
 ;;; COMPUTE-MERKLE-ROOT-HASH: construct a merkle root for a sequence of
 ;;; TRANSACTIONS according to bitcoin.org Bitcoin developer reference doc, here:
 ;;; https://bitcoin.org/en/developer-reference#block-versions
 
-(defun compute-merkle-root-hash (transactions)
-  (compute-merkle
-   ;; transactions is a sequence, i.e., list or vector
-   (if (consp transactions)
-       ;; (optimized for list case)
-       (loop for tx in transactions
-             as tx-out-id = (get-transaction-id tx)
-             collect tx-out-id)
-       (loop for i from 0 below (length transactions)
-             as tx = (elt transactions i)
-             as tx-out-id = (get-transaction-id tx)
-             collect tx-out-id))))
+(defun compute-merkle-root-hash (block)
+  (compute-merkle (list-transaction-ids-of-block block)))
+
+(defun list-transaction-ids-of-block (block)
+  (loop for tx in (listed-transactions-of-block block)
+        collect (get-transaction-id tx)))
+
+
+
+;;; COMPUTE-INPUT-SCRIPT-MERKLE-ROOT-HASH: construction a merkle root
+;;; for a sequence of input scripts, one for each transaction of the
+;;; block.
+
+(defun compute-input-script-merkle-root-hash (block)
+  (compute-merkle (list-transaction-input-script-ids-of-block block)))
+
+(defun list-transaction-input-script-ids-of-block (block)
+  (loop for tx in (listed-transactions-of-block block)
+        collect (cosi/proofs/newtx:hash-transaction-input-scripts-id tx)))
+
+
+
+;;; COMPUTE-WITNESS-MERKLE-ROOT-HASH: construction a merkle root for a
+;;; sequence of witness data, one for each transaction of the block,
+;;; being a sequence of pairs of the combination a signature and a
+;;; public key.
+
+(defun compute-witness-merkle-root-hash (block)
+  (compute-merkle (list-transaction-witness-ids-of-block block)))
+
+(defun list-transaction-witness-ids-of-block (block)
+  (loop for tx in (listed-transactions-of-block block)
+        collect (cosi/proofs/newtx:hash-transaction-witness-id tx)))
+
+
 
 
 (defun get-transaction-id (transaction)
