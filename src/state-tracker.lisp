@@ -85,8 +85,12 @@
        (let ((node (second msg)))
          (push `(:node-signed-commit . ,(stringify-node node)) (system-events *state*))))
 
+      (:signing
+       (let ((node (second msg)))
+         (push `(:signing . ,(stringify-node node)) (system-events *state*))))
+
       (:make-block
-       ;; tbd
+       (push :make-block (system-events *state*))
        )
     
       (:new-leader
@@ -111,7 +115,12 @@
              (push :leader-sends-commit (system-events *state*))
            (progn
              (emotiq:note "wrong leader sends commit ~a <> ~a" leader-node (system-leader *state*))
-             (push `(:wrong-leader-sends-commit . ,leader-node) (system-events *state*)))))))))
+             (push `(:wrong-leader-sends-commit . ,leader-node) (system-events *state*))))))
+
+      (otherwise
+       (push (cons :invalid-tracking-message (first msg)) (system-events *state*))))))
+
+
       
 (defun query-current-state ()
   "return current system state as an alist"
