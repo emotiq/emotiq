@@ -42,8 +42,7 @@
                  (system-events *state*) nil)))
     (case (first msg) 
       (:reset
-       (emotiq:note "Tracker: :reset - state cleared")
-       (clear-state))
+       (emotiq:note "Tracker: :reset - state cleared"))
 
       (:node
        (let ((node (second msg)))
@@ -52,8 +51,7 @@
            (push node (system-all-nodes *state*)))))
       
       (:election
-       (emotiq:note "Tracker: :election - state cleared")
-       (clear-state))
+       (emotiq:note "Tracker: :election - state cleared"))
 
       (:block-finished
        (emotiq:note "Tracker: :block-finished, ~%state = ~A" (query-current-state))
