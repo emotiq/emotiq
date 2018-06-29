@@ -43,6 +43,9 @@ THE SOFTWARE.
 (defvar *cosi-commit-timeout* 10
   "Timeout in seconds that the leader waits during commit phase for sealing a block.")
 
+(defvar *cosi-max-wait-period* 120
+  "Timeout in seconds that represents the longest witness idle period before setting up an emergency call-for-new-election.")
+  
 ;; -------------------------------------------------------
 
 (defvar *current-node*  nil)  ;; for sim = current node running
@@ -60,6 +63,7 @@ THE SOFTWARE.
 (define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
 (define-symbol-macro *leader*         (node-current-leader *current-node*))
 (define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
+(define-symbol-macro *had-work*       (node-had-work       *current-node*))
 
 (defstruct tx-changes
   ;; all lists contain key vectors
@@ -79,9 +83,26 @@ THE SOFTWARE.
   (setf *tx-changes* (make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
-  (emotiq/tracker:track :new-witness (current-node))
-  (setf *tx-changes* (make-tx-changes)))
-
+  (let ((node       (current-node))
+        (epoch      *local-epoch*))
+    (emotiq/tracker:track :new-witness node)
+    (setf *tx-changes* (make-tx-changes))
+    
+    (setf *had-work* nil)
+    (spawn (lambda ()
+             (recv
+               :TIMEOUT    *cosi-max-wait-period*
+               :ON-TIMEOUT (with-current-node node
+                             (when (= *local-epoch* epoch) ;; no intervening election
+                               (unless *had-work*
+                                 ;; if we had work during this epoch before this timeout,
+                                 ;; then a call-for-new-election has either already been sent,
+                                 ;; or else a setup-emergency-call has been performed.
+                                 (setup-emergency-call-for-new-election)
+                                 )))
+               ))
+           )))
+               
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (emotiq/tracker:track :reset)
   (reset-nodes))
@@ -134,6 +155,7 @@ THE SOFTWARE.
   (node-elect-new-leader new-leader-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
+  (setf *had-work* t)
   (node-cosi-signing reply-to
                      consensus-stage blk seq timeout))
 
@@ -870,6 +892,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defvar *cosi-gossip-neighborhood-graph* nil) ;; T if neighborhood graph has been established
 
 (defun ensure-cosi-gossip-neighborhood-graph (my-node)
+  (declare (ignore my-node))
   (or *cosi-gossip-neighborhood-graph*
       (setf *cosi-gossip-neighborhood-graph*
             (or :UBER ;; for now while debugging
@@ -1038,45 +1061,60 @@ check that each TXIN and TXOUT is mathematically sound."
          (check-block-transactions-hash blk))
     ))
 
+(defun call-for-punishment ()
+  ;; for now, just call for new election
+  (when *use-real-gossip*
+    (call-for-new-election)))
+
+(defun done-with-duties ()
+  (when *use-real-gossip*
+    (setup-emergency-call-for-new-election)))
+  
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (and (int= *leader* (block-leader-pkey blk))
-          (check-block-transactions-hash blk)
-          (let ((prevblk (first *blockchain*)))
-            (or (null prevblk)
-                (and (> (block-timestamp blk) (block-timestamp prevblk))
-                     (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
-          (or (int= (node-pkey node) *leader*)
-              (check-block-transactions blk))
-          ))
+     (or
+      (and (int= *leader* (block-leader-pkey blk))
+           (check-block-transactions-hash blk)
+           (let ((prevblk (first *blockchain*)))
+             (or (null prevblk)
+                 (and (> (block-timestamp blk) (block-timestamp prevblk))
+                      (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
+           (or (int= (node-pkey node) *leader*)
+               (check-block-transactions blk)))
+      ;; else - failure case
+      (progn
+        (call-for-punishment)
+        nil))) ;; return nil for failure
 
     (:commit
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (unwind-protect
-         (when (and (int= *leader* (block-leader-pkey blk))
-                    (check-block-multisignature blk))
-           (push blk *blockchain*)
-           (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
-           (cond
-             ;; For new tx: ultra simple for now: there's no UTXO
-             ;; database. Just remhash from the mempool all
-             ;; transactions that made it into the block.
-             (*newtx-p*
-              (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk))
-             (t
-              ;; clear out *mempool* and spent utxos
-              (replay-remove-txs-from-mempool blk)
-              (sync-database)))
-           t) ;; return true to validate
-       ;; unwind
-       (when *use-real-gossip*
-         (setup-emergency-call-for-new-election))
-       ))
+     (or
+      (and (int= *leader* (block-leader-pkey blk))
+           (check-block-multisignature blk)
+           (progn
+             (push blk *blockchain*)
+             (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
+             (cond
+              ;; For new tx: ultra simple for now: there's no UTXO
+              ;; database. Just remhash from the mempool all
+              ;; transactions that made it into the block.
+              (*newtx-p*
+               (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk))
+              (t
+               ;; clear out *mempool* and spent utxos
+               (replay-remove-txs-from-mempool blk)
+               (sync-database)))
+             (done-with-duties)
+             t)) ;; return true to validate
+      ;; else - failure case
+      (progn
+        (call-for-punishment)
+        nil))) ;; return nil for failure
     ))
 
 ;; ----------------------------------------------------------------------------
@@ -1241,8 +1279,7 @@ check that each TXIN and TXOUT is mathematically sound."
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else
-      (when *use-real-gossip*
-        (setup-emergency-call-for-new-election)))
+      (done-with-duties))
     ))
 
 ;; -----------------------------------------------------------------------------------
