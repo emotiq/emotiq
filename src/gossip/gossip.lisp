@@ -581,13 +581,11 @@ are in place between nodes.
       (setf (slot-value node 'uid) pkey))
     (memoize-node node)))
 
-(defmethod make-node ((kind (eql :gossip)) &rest rest &key &allow-other-keys)
-  (let ((pkey (getf rest :pkey))
-        (skey (getf rest :skey)))
-    (with-keywords-removed (rest (:pkey :skey))
-      (let ((node (apply '%make-node rest)))
-        (initialize-node node :pkey pkey :skey skey)
-        node))))
+(defmethod make-node ((kind (eql :gossip)) &rest rest &key pkey skey &allow-other-keys)
+  (with-keywords-removed (rest (:pkey :skey))
+    (let ((node (apply '%make-node rest)))
+      (initialize-node node :pkey pkey :skey skey)
+      node)))
 
 (defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -1319,7 +1317,7 @@ dropped on the floor.
 ;; Because these messages never involve a reply, even if the reply-to slot is non-nil in these messages,
 ;;   it will be ignored.
 
-; Not really using this for anything
+; Not really using this for anything, because it doesn't really do anything except traverse
 (defmethod announce ((msg solicitation) thisnode srcuid)
   "Announce a message to the collective. First arg of Msg is the announcement,
    which can be any Lisp object. Recipient nodes are not expected to reply.
@@ -1381,6 +1379,19 @@ dropped on the floor.
   (handoff-to-application-handlers thisnode msg 'args)
    ; thisnode becomes new source for forwarding purposes
   (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg))))
+
+(defmethod k-hello ((msg solicitation) thisnode srcuid)
+  "Announce a UID, IP address, and port to the collective.
+  (This is different from the automatic ensure-proxy-node that happens with every incoming
+   connection because that implicitly proxifies only the immediate upstream sender.
+   This explicitly proxifies a particular node.)
+  Every intermediate node will have the message
+  both delivered to it and forwarded through it.
+  Recipient nodes are not expected to reply."
+  (destructuring-bind (uid ipaddr ipport) (args msg)
+    (ensure-proxy-node :tcp ipaddr ipport uid)
+    ; thisnode becomes new source for forwarding purposes
+    (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
 
 (defmethod k-dissolve ((msg solicitation) thisnode srcuid)
   "Commands every node it passes through to dissolve connections associated with a given graphID.
@@ -2031,15 +2042,15 @@ gets sent back, and everything will be copacetic.
                                             :peer-up-hook 'transport-peer-up
                                             :peer-down-hook 'transport-peer-down))))
 
-(defun transport-message-received (message peer-address)
+(defun transport-message-received (message)
   "Callback for transport layer on incoming message from other node."
   (with-authenticated-packet (packet)
     message ; has already been deserialized at this point
     ;; Unpack envelope containing Gossip metadata.
-    (destructuring-bind (destuid srcuid rem-port msg) packet
-      (log-event "Gossip transport message received" peer-address rem-port)
+    (destructuring-bind (destuid srcuid rem-address rem-port msg) packet
+      (log-event "Gossip transport message received" rem-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-      (let ((proxy (ensure-proxy-node :tcp peer-address rem-port srcuid)))
+      (let ((proxy (ensure-proxy-node :tcp rem-address rem-port srcuid)))
         ;; Note: Use uid of proxy for during local processing.
         (incoming-message-handler msg (uid proxy) destuid)))))
 
@@ -2106,6 +2117,7 @@ gets sent back, and everything will be copacetic.
                              ;; Pack message in a signed envelope containing Gossip metadata.
                              (sign-message (list (real-uid node) ; destuid
                                                  srcuid          ; srcuid
+                                                 (eripa)
                                                  *nominal-gossip-port*
                                                  gossip-msg))))  ; message (payload)
 
