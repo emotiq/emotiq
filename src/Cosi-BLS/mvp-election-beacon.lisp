@@ -147,9 +147,9 @@ based on their relative stake"
 (defmacro with-election-reply (reply-args msg &body body)
   ;; define convenient continuation interface for actors calling on
   ;; election services for some result
-  `(=bind ,reply-args
+  `(=node-bind ,reply-args
        (send *election-central* ,msg (lambda (val)
-                                       (=values val)))
+                                           (=values val)))
      ,@body))
 
 (defun update-election-seed (pkey)
@@ -198,10 +198,10 @@ based on their relative stake"
        (let ((skel (make-election-message-skeleton beacon n)))
          (pbc:check-hash (hash/256 skel) sig beacon)))) ;; not a forgery
 
-(defun send-hold-election-from-node (node)
+(defun send-hold-election ()
   (with-election-reply (seed) :next
     (with-accessors ((pkey  node-pkey)
-                     (skey  node-skey)) node
+                     (skey  node-skey)) (current-node)
       (broadcast+me (make-signed-election-message pkey seed skey)))
     ))
 
@@ -214,10 +214,8 @@ based on their relative stake"
 
 (defun run-special-election ()
   ;; try to resync on stalled system
-  (let ((node (current-node)))
-    (with-election-reply (seed) :next-after-reset
-      (with-current-node node
-        (run-election seed)))))
+  (with-election-reply (seed) :next-after-reset
+    (run-election seed)))
    
 (defvar *mvp-election-period*  20) ;; seconds between election rounds
 
@@ -257,8 +255,8 @@ based on their relative stake"
 
         (when (int= pkey new-beacon)
           ;; launch a beacon
-          (ac:schedule-timeout-action *mvp-election-period*
-            (send-hold-election-from-node node)))
+          (node-schedule-after *mvp-election-period*
+            (send-hold-election)))
 
         (cond ((int= pkey winner)
                ;; why not use ac:self-call?  A: Because doing it with
@@ -283,7 +281,7 @@ based on their relative stake"
   ;; give the election beacon a chance to do its thing
   (let* ((node      (current-node))
          (old-epoch *local-epoch*))
-    (ac:schedule-timeout-action *emergency-timeout*
+    (node-schedule-after *emergency-timeout*
       ;; first time processing at startup
       ;; go gather keys and stakes.
       ;; *local-epoch* will also not have
@@ -294,9 +292,8 @@ based on their relative stake"
               (second (assoc (node-pkey node) (get-witness-list)
                              :test 'int=))))
       
-      (with-current-node node  ;; guess not...
-        (when (= *local-epoch* old-epoch) ;; anything changed?
-          (call-for-new-election))))
+      (when (= *local-epoch* old-epoch) ;; anything changed?
+        (call-for-new-election)))
     ))
 
 ;; ----------------------------------------------------------------

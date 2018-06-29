@@ -79,6 +79,26 @@ THE SOFTWARE.
   utxo-dels) ;; list of pending spent utxos
 
 ;; -------------------------------------------------------
+;; Support macros... ensure Node context is preserved into continuation bodies.
+
+(defmacro =node-bind (parms expr &body body)
+  ;; set up continuation that preserves Node context
+  (let ((g!node  (gensym)))
+    `(let ((,g!node  (current-node)))
+       (=bind ,parms
+           ,expr
+         (with-current-node ,g!node  ;; restore node context
+           ,@body)))
+    ))
+
+(defmacro node-schedule-after (timeout &body body)
+  ;; Actor schedule-after with Node context preservation
+  `(=node-bind ()
+       (ac:schedule-timeout-action ,timeout
+         (=values))
+     ,@body))
+
+;; -------------------------------------------------------
 
 (defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
 
@@ -96,15 +116,14 @@ THE SOFTWARE.
     (setf *tx-changes* (make-tx-changes))
     
     (setf *had-work* nil)
-    (ac:schedule-timeout-action *cosi-max-wait-period*
-      (with-current-node node
-        (when (= *local-epoch* epoch) ;; no intervening election
-          (unless *had-work*
-            ;; if we had work during this epoch before this timeout,
-            ;; then a call-for-new-election has either already been sent,
-            ;; or else a setup-emergency-call has been performed.
-            (done-with-duties)
-            ))))
+    (node-schedule-after *cosi-max-wait-period*
+      (when (= *local-epoch* epoch) ;; no intervening election
+        (unless *had-work*
+          ;; if we had work during this epoch before this timeout,
+          ;; then a call-for-new-election has either already been sent,
+          ;; or else a setup-emergency-call has been performed.
+          (done-with-duties)
+          )))
     ))
                
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
@@ -189,7 +208,7 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------------------------
 
-(defvar *election-proof*   nil)
+(defvar *election-proof*   nil) ;; NYI
 
 (defvar *max-transactions*  16)  ;; max nbr TX per block
 (defvar *in-simulatinon-always-byz-ok* nil) ;; set to nil for non-sim mode, forces consensus
@@ -922,8 +941,10 @@ check that each TXIN and TXOUT is mathematically sound."
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
     (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
-    (=bind (ans)
+    (=node-bind (ans)
+        ;; ----------------------------------
         (par
+          ;; parallel task #1
           (with-current-node node
             (=values 
              ;; Here is where we decide whether to lend our signature. But
@@ -939,11 +960,13 @@ check that each TXIN and TXOUT is mathematically sound."
                  (ac:pr (format nil "Block not validated ~A" (short-id node)))
                  (list nil 0)))))
 
+          ;; parallel task #2
           ;; ... and here is where we have all the subnodes in our
           ;; group do the same, recursively down the Cosi tree.
           (let ((fn (sub-signing node consensus-stage blk seq-id timeout)))
             (pmapcar fn subs))
 
+          ;; parallel task #3
           ;; gossip-mode group
           (gossip-signing node
                           consensus-stage
@@ -951,11 +974,11 @@ check that each TXIN and TXOUT is mathematically sound."
                           blk-hash
                           seq-id
                           timeout))
+        ;; ----------------------------------
       
-      (with-current-node node
-        (pr ans)
-        (destructuring-bind ((sig bits) r-lst g-ans) ans
-          (labels ((fold-answer (sub resp)
+      (pr ans)
+      (destructuring-bind ((sig bits) r-lst g-ans) ans
+        (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
@@ -974,11 +997,11 @@ check that each TXIN and TXOUT is mathematically sound."
                            (mark-node-corrupted node sub))
                          ))
                       )))
-            (mapc #'fold-answer subs r-lst) ;; gather results from subs
-            (when g-ans
-              (fold-answer node g-ans))
-            (send reply-to :signed seq-id sig bits))
-          )))))
+          (mapc #'fold-answer subs r-lst) ;; gather results from subs
+          (when g-ans
+            (fold-answer node g-ans))
+          (send reply-to :signed seq-id sig bits))
+        ))))
 
 ;; -----------------------------------------------------------
 
@@ -1052,20 +1075,10 @@ check that each TXIN and TXOUT is mathematically sound."
            
            ((list :answer (list :corrupt-cosi-network))
             (pr "Corrupt Cosi network in COMMIT phase"))
-           
-           #|
-           ((list :answer (list :timeout-cosi-network))
-            (pr "Timeout waiting for commitment multisignature"))
-           |#
            )))
       
       ((list :answer (list :corrupt-cosi-network))
        (pr "Corrupt Cosi network in PREPARE phase"))
-      
-      #|
-      ((list :answer (list :timeout-cosi-network))
-       (pr "Timeout waiting for prepare multisignature"))
-      |#
       )))
     
 (defun leader-exec (prepare-timeout commit-timeout)

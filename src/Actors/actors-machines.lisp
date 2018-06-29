@@ -147,6 +147,22 @@ THE SOFTWARE.
              :ON-TIMEOUT (funcall fn)))))
 
 (defmacro schedule-timeout-action (timeout &body body)
+  ;; a macro to schedule an action after timeout.
+  ;;
+  ;; Action should not bang on any local state of the Actor making
+  ;; this call, because it executes in a different Actor, and that
+  ;; would violate single-thread semantics.
   `(do-schedule-timeout-action ,timeout (lambda ()
                                           ,@body)))
 
+
+(defun do-schedule-after (timeout fn)
+  (=bind ()
+      (schedule-timeout-action timeout
+        (=values))
+    (funcall fn)))
+
+(defmacro schedule-after (timeout &body body)
+  ;; a macro to schedule Actor body code to be performed after timeout.
+  `(do-schedule-after ,timeout (lambda ()
+                                 ,@body)))
