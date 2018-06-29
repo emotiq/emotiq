@@ -90,13 +90,14 @@ THE SOFTWARE.
     
     (setf *had-work* nil)
     (ac:schedule-timeout-action *cosi-max-wait-period*
-      (when (= *local-epoch* epoch) ;; no intervening election
-        (unless *had-work*
-          ;; if we had work during this epoch before this timeout,
-          ;; then a call-for-new-election has either already been sent,
-          ;; or else a setup-emergency-call has been performed.
-          (done-with-duties)
-          )))
+      (with-current-node node
+        (when (= *local-epoch* epoch) ;; no intervening election
+          (unless *had-work*
+            ;; if we had work during this epoch before this timeout,
+            ;; then a call-for-new-election has either already been sent,
+            ;; or else a setup-emergency-call has been performed.
+            (done-with-duties)
+            ))))
     ))
                
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)

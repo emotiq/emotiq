@@ -300,8 +300,8 @@ based on their relative stake"
               (second (assoc (node-pkey node) (get-witness-list)
                              :test 'int=))))
       
-      (when (= *local-epoch* old-epoch) ;; anything changed?
-        (with-current-node node  ;; guess not...
+      (with-current-node node  ;; guess not...
+        (when (= *local-epoch* old-epoch) ;; anything changed?
           (call-for-new-election))))
     ))
 
