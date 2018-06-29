@@ -137,3 +137,16 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------------------------------
 
+;; -------------------------------------------------------
+;; SCHEDULE-TIMEOUT-ACTION -- a macro to hide the gory details...
+
+(defun do-schedule-timeout-action (timeout fn)
+  (spawn (lambda ()
+           (recv
+             :TIMEOUT    timeout
+             :ON-TIMEOUT (funcall fn)))))
+
+(defmacro schedule-timeout-action (timeout &body body)
+  `(do-schedule-timeout-action ,timeout (lambda ()
+                                          ,@body)))
+
