@@ -180,6 +180,8 @@
    :serialize-block-octets
    :serialize-block-header-octets
    :compute-merkle-root-hash
+   :compute-input-script-merkle-root-hash
+   :compute-witness-merkle-root-hash
 
    :ith-witness-signed-p
    :set-ith-witness-signed-p
@@ -195,6 +197,15 @@
    :block-signature-pkey
    :block-signature
    :block-merkle-root-hash
+   :block-input-script-merkle-root-hash
+   :block-witness-merkle-root-hash
+
+   :utxo-p
+   :get-utxos-per-account
+   :get-balance
+
+   :to-txid
+   :find-tx
 
    :*newtx-p*))                         ; for new transactions, short term temp! -mhd, 6/12/18
 
@@ -224,7 +235,10 @@
    dump-txs
    clear-transactions-in-block-from-mempool
    txid-string
-   wait-for-tx-count))
+   wait-for-tx-count
+   hash-transaction-id
+   hash-transaction-input-scripts-id
+   hash-transaction-witness-id))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
