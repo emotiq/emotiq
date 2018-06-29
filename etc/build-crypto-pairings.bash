@@ -13,6 +13,8 @@
 # debug
 set -x
 
+EXTERNAL_LIBS_VERSION=release-0.1.8
+
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE=${DIR}/..
@@ -24,6 +26,9 @@ case ${uname_s} in
         echo Building for Linux
         lib_suffix=linux
         maketarget=makefile.linux
+        if [ "x${PENTIUM4}" == "xtrue" ] ; then
+          EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
+        fi
         ;;
     Darwin*)
         echo Building for macOS
@@ -36,8 +41,6 @@ case ${uname_s} in
         exit 127
         ;;
 esac
-
-EXTERNAL_LIBS_VERSION=release-0.1.2
 
 libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTERNAL_LIBS_VERSION}/emotiq-external-libs-${lib_suffix}.tgz
 

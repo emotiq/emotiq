@@ -14,7 +14,7 @@
    the list was refreshed."
   (uber-set))
 
-(defun singlecast (message nodeID &key graphID (howmany 2))
+(defun singlecast (message nodeID &key graphID (howmany 2) startnodeID)
   "High-level API for sending message to given single nodeID. If graphID
    is supplied, message will be forwarded along the graph, starting
    with some locally-known node that's part of that graph.
@@ -24,25 +24,27 @@
    Howmany is only used if graphID is supplied."
   (let ((solicitation nil))
     (if graphID
-        ; Find a local node in that graphID to send to, with forwarding.
-        (let ((startnodeID (locate-local-node-for-graph graphID)))
+        (progn
+          (unless startnodeID
+            (setf startnodeID (locate-local-node-for-graph graphID)))
           (when startnodeID
             (setf solicitation (make-solicitation
                                 :reply-to nil
                                 :kind :k-singlecast
                                 :forward-to howmany
-                                :args message))
+                                :graphID graphID
+                                :args (cons nodeID message)))
             (send-msg solicitation
                       startnodeID                   ; destination
                       nil)))
         
-        ; otherwise ensure there's a node with the given nodeID (real or proxy) and send to it directly NOT DONE YET
+        ; otherwise ensure there's a node with the given nodeID (real or proxy) and send to it directly
         (progn
           (setf solicitation (make-solicitation
                               :reply-to nil
                               :kind :k-singlecast
                               :forward-to nil
-                              :args message))
+                              :args (cons nodeID message)))
           (send-msg solicitation
                     nodeID                   ; destination
                     nil)))))
@@ -83,7 +85,7 @@
   If no center-nodeID is given, a pseudo-node is created for that purpose.
   Returns given graphID or it makes a new one and returns that.
   If given graphID exists on these nodes, all connections on that graphID will be destroyed first."
- 
+  graphID
   )
 
 ;;; NOT DONE YET
@@ -91,6 +93,7 @@
  "Creates a connected graph (but usually not fully-connected) from list-of-nodeIDs.
   Returns given graphID or it makes a new one and returns that.
   If given graphID exists on any of these nodes, all connections on that graphID will be destroyed first."
+  graphID
   )
 
 ;;; NOT DONE YET
@@ -100,11 +103,15 @@
    gossip is better.)
    If given graphID exists on any of these nodes, all connections on that graphID will be destroyed first."
   (dissolve-graph graphID)
+  graphID
   )
 
 (defun dissolve-graph (graphID &key startnodeID)
   "Dissolves all connections associated with graphID.
   Starts at startnodeID if given; otherswise it finds one to start with."
+  ; Note that it makes no sense to dissolve the :uber graph, because the nodes
+  ;  themselves don't even know about the uber graph. Dissolving the :uber graph is a no-op.
+  ;  (Or should it mean "dissolve all graphs"?)
   (unless startnodeID
     (setf startnodeID (locate-local-node-for-graph graphID)))
   (when startnodeID

@@ -35,6 +35,7 @@ THE SOFTWARE.
   arr)
 
 
+#-:COM.RAL
 (defstub c-kdf)
 
 (defun apply-c-kdf (nbits keys)

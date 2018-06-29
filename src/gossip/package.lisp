@@ -5,20 +5,20 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:*nominal-gossip-port*
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
+   #:edebug
    #:clear-local-nodes
    #:*log-filter*
    #:*log*
-   #:*log-dots*
    #:make-graph
    #:solicit
    #:solicit-wait
    #:solicit-progress
    #:solicit-direct
-   #:stop-gossip-sim
-   #:run-gossip-sim
+   #:run-gossip
    #:as-hash-table
    #:make-node
    #:listify-nodes
@@ -35,14 +35,19 @@
    #:save-text-log
    #:deserialize-log
    #:visualize-nodes
+   #:uid
 
    ; API
    #:application-handler
+   #:*ll-application-handler*
    #:get-live-uids
    #:singlecast
    #:broadcast
    #:establish-broadcast-group
    #:dissolve-graph
+   #:memoize-node
+
+   #:shutdown-gossip-server
    ))
 
 (defpackage gossip/config
@@ -55,6 +60,7 @@
 
 (defpackage :gossip/transport
   (:use :cl)
+  (:IMPORT-FROM :gossip :edebug :eripa)
   (:export
    #:start-transport
    #:stop-transport

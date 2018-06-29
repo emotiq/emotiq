@@ -23,6 +23,38 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
+;;;; Transaction Types
+
+;;; A `transaction' in Emotiq Lisp software is implemented an instance of class
+;;; TRANSACTION. The Lisp type of an instance of this class is TRANSACTION. In
+;;; the following discussion, however, the word "type" is used in its generic
+;;; meaning, not Lisp/programming-language sense.
+
+;;; Emotiq has six types of transactions:
+;;;
+;;;   - Spend transaction to transfer tokens, with two subtypes
+;;;     - cloaked
+;;;     - uncloaked
+;;;   - Collect transaction for collecting block fees
+;;;   - Stake transaction for sending tokens into PoS escrow
+;;;   - Unstake transaction for withdrawing tokens from PoS escrow
+;;;   - Slash trasaction to request punishment for a cheating node
+;;;   - Disperse transaction to disperse tokens from a cheating node escrow between validators
+
+;;; A transaction instance indentifies its type via its transaction-type slot,
+;;; which should be set near the beginning of the life of the transaction
+;;; initialized to one of the following valid values, which in turn determine
+;;; valid values for other slots of a transaction.  A `transaction type' is
+;;; represented as a Lisp keyword. The defined types so far are:
+;;;
+;;;   :spend -- for an uncloaked spend transaction
+;;;   :spend-cloaked -- for a cloaked spend transaction
+;;;   :collect -- for a collect transaction
+;;;   :coinbase -- for the (one) transaction that creates coin (a/k/a the genesis transaction)
+
+
+
+
 ;;;; Transaction Objects
 
 
@@ -33,7 +65,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; as a so-called "change address".
 
 (defclass transaction ()
-  (;; [First put outputs, since they start out at first unspent until a
+  ((transaction-type
+    :reader transaction-type :initarg :transaction-type :initform :spend)
+
+   ;; [First put outputs, since they start out at first unspent until a
    ;; later transaction arrives with inputs authorized to redeem them.]
 
    ;; sequence of transaction-output structures (see below)
@@ -41,6 +76,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
    ;; sequence of transaction-input structions (see below)
    (transaction-inputs :reader transaction-inputs :initarg :transaction-inputs)
+
 
    (lock-time :initform 0))) ; not yet used, planned for later use ala Bitcoin
 
@@ -100,12 +136,22 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   ((tx-out-public-key-hash              ; like the Bitcoin address
     :reader tx-out-public-key-hash
     :initarg :tx-out-public-key-hash)
+   (tx-out-lock-script               ; what Bitcoin calls scriptPubKey
+    :reader tx-out-lock-script
+    :initarg :tx-out-lock-script)
+
+   ;; for uncloaked spend transaction or for collect transaction: amount
    (tx-out-amount              ; integer number of smallest coin units
     :reader tx-out-amount
     :initarg :tx-out-amount)
-   (tx-out-lock-script               ; what Bitcoin calls scriptPubKey
-    :reader tx-out-lock-script
-    :initarg :tx-out-lock-script)))
+
+   ;; for cloaked spend transaction: proof, message
+   (tx-out-proof
+    :reader tx-out-proof
+    :initarg :tx-out-proof)
+   (tx-out-message
+    :reader tx-out-message
+    :initarg :tx-out-message)))
 
 (defclass transaction-input ()
   ((tx-in-id :reader tx-in-id :initarg :tx-in-id)
@@ -540,7 +586,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil))
-                    (emotiq:note "~%Node ~a declares Successful transaction ~a~%  TxID = ~a~%"
+                    (emotiq:note "~%Node ~a declares successful transaction ~a~%  TxID = ~a~%"
                                  (cosi-simgen:current-node)
                                  transaction
                                  (txid-string (transaction-id transaction)))
@@ -696,7 +742,21 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (and (public-key-equal-verify public-key ^tx-public-key-hash)
        (check-signature public-key signature)))
 
+(def-locking-script script-pub-key-cloaked (public-key signature proof message)
+  (and (public-key-equal-verify public-key ^tx-public-key-hash)
+       (check-signature public-key signature)
+       ;; proof: a "bulletproof" (cloaked amount) giving the amount of tokens to
+       ;; transfer
 
+       ;; message: a message encrypted with recipient's public key containing
+       ;; the amount and gamma
+       ))
+
+;;; foo asdf aslk
+
+
+;;;
+;;;
 
 (def-unlocking-script script-sig ()
   (list ^public-key ^signature))
@@ -798,18 +858,6 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defparameter *coinbase-fee-in-coin-units* (/ 5 8)
-  "The default coinbase fee. This is the amount awarded to the creator of each
-  new ledger block.  This can be set to either an integer, float, or ratio. Use
-  function get-coinbase-transaction-fee-amount to scale and round this to get it
-  as a coin amount.")
-
-(defun get-coinbase-transaction-fee-amount ()
-  (coin-amount *coinbase-fee-in-coin-units*))
-
-
-
-
 ;;; The next two values to initialize the id and index of the input for a coinbase transaction
 ;;; are settings are imitative of Bitcoin, which similarly has
 ;;; all 0 bits for Tx ID, all 1 bits for Tx index. These slots do not serve
@@ -852,20 +900,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun make-genesis-transaction (public-key-hash)
-  (make-and-maybe-sign-transaction
+  (make-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
           public-key-hash 
-          (initial-total-coin-amount)))))
-
-
-
-(defun make-coinbase-transaction (public-key-hash)
-  (make-and-maybe-sign-transaction
-   (list (make-coinbase-transaction-input))
-   (list (make-coinbase-transaction-output
-          public-key-hash
-          (get-coinbase-transaction-fee-amount)))))
+          (initial-total-coin-amount)))
+   ':coinbase))
 
 
 
@@ -1096,22 +1136,57 @@ returns the block the transaction was found in as a second value."
 
 
 
-(defun make-transaction-inputs (input-specs)
-  (loop for (id index) in input-specs
+(defun make-transaction-inputs (input-specs &key transaction-type)
+  "Make transaction inputs for TRANSACTION-TYPE, which defaults to :SPEND."
+  (loop with transaction-type = (or transaction-type :spend)
+        with unlock-script 
+          = (map-transaction-type-to-unlock-script transaction-type)
+        for (id index) in input-specs
         collect (make-instance
                  'transaction-input
                  :tx-in-id id
                  :tx-in-index index
-                 :tx-in-unlock-script (get-unlocking-script 'script-sig))))
+                 :tx-in-unlock-script unlock-script)))
 
 
-(defun make-transaction-outputs (output-specs)
-  (loop for (public-key-hash amount) in output-specs
+
+;;; MAP-TRANSACTION-TYPE-TO-UNLOCK-SCRIPT: map transaction-type to its
+;;; corresponding Chainlisp function name.
+;;;
+;;; The currently supported types :spend, :spend-cloaked, and :collect all
+;;; supply the same function: SCRIPT-SIG, which supplies the public key hash
+;;; (a/k/a address) and signature for verification, needed to unlock the value
+;;; of the transaction at hand.
+
+(defun map-transaction-type-to-unlock-script (transaction-type)
+  (get-unlocking-script 
+   (ecase transaction-type
+     ((:spend :spend-cloaked :collect :coinbase)
+      'script-sig))))
+  
+
+
+(defun make-transaction-outputs (output-specs &key transaction-type)
+  (loop with transaction-type = (or transaction-type :spend)
+        with lock-script
+          = (map-transaction-type-to-lock-script transaction-type)
+        for (public-key-hash amount) in output-specs
         collect (make-instance
                  'transaction-output
                  :tx-out-public-key-hash public-key-hash
                  :tx-out-amount amount
-                 :tx-out-lock-script (get-locking-script 'script-pub-key))))
+                 :tx-out-lock-script lock-script)))
+
+
+
+(defun map-transaction-type-to-lock-script (transaction-type)
+  (get-locking-script 
+   (ecase transaction-type
+     ((:spend :collect :coinbase) 'script-pub-key)
+     (:spend-cloaked 'script-pub-key-cloaked))))
+
+;; ---*** note: per David we must ultimately make the :coinbase
+;; ---*** transaction cloaked. Review later!  -mhd, 6/26/18
 
 
 (defun check-private-keys-for-transaction-inputs (private-keys tx-inputs)
@@ -1133,14 +1208,16 @@ returns the block the transaction was found in as a second value."
      (length tx-inputs))))
 
 
-(defun make-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys)
+(defun make-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys (type :spend))
   "Create a transaction. Then, if keyword keys is provided non-nil,
 the transaction is signed. In the signing case, keys should supply one
 private key for each input, either as a single private atomic private
 key or singleton list in the case of a single input or as a list of
 keys in the case of two or more inputs. Normally, all transactions
-should be signed, and only coinbase transactions are not signed."
-  (let* ((transaction (make-transaction tx-inputs tx-outputs)))
+should be signed, and only coinbase transactions are not
+signed. Keyword TYPE, if provided, should a transaction type keyword,
+or else it defaults to :SPEND for an uncloaked spend transaction."
+  (let* ((transaction (make-transaction tx-inputs tx-outputs type)))
     ;; Got keys? Sign transaction if so:
     (when skeys
       (sign-transaction transaction skeys pkeys))
@@ -1148,10 +1225,12 @@ should be signed, and only coinbase transactions are not signed."
 
 
 
-(defun make-transaction (tx-inputs tx-outputs)
-  "Create a transaction with inputs TX-INPUTS and outpus TX-OUTPUTS."
+(defun make-transaction (tx-inputs tx-outputs type)
+  "Create a transaction with inputs TX-INPUTS, outputs TX-OUTPUTS, and
+of type TYPE."
   (make-instance
    'transaction
+   :transaction-type type
    :transaction-inputs tx-inputs
    :transaction-outputs tx-outputs))
 
@@ -1253,8 +1332,12 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun dump-tx (tx &key out-only)
+  (unless (eq (transaction-type tx) ':spend)
+    (format t "~&  ~a Transaction~%" (transaction-type tx)))
   (format t "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
-  (unless out-only
+  (unless (or out-only
+              (member (transaction-type tx)
+                      '(:coinbase :collect))) ; no-input tx types
     (loop for tx-in in (transaction-inputs tx)
           do (format t "    input outpoint: index = ~a/TxID = ~a~%"
                      (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
@@ -1293,6 +1376,81 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 
+;;;; Waiting for Transactions
+
+(defparameter *wait-for-tx-count-tick-print* ".")
+(defparameter *wait-for-tx-count-tick-every* 10)
+(defparameter *wait-for-tx-default-tx-types* '(:spend :spend-cloaked))
+
+(defun spend-tx-types-p (tx-types)
+  (equal '#.(sort (copy-list '(:spend :spend-cloaked)) #'string<)
+         (sort (copy-list tx-types) #'string<)))
+
+(defun wait-for-tx-count (n &key interval timeout node tx-types
+                                 tick-print tick-every)
+  "Alternate sleeping for a small INTERVAL while waiting for there to
+   have been a total of N spend transactions (or possibly other types
+   if TX-TYPES is specified) on the blockchain. INTERVAL defaults to
+   about 1/10th of a second, and a user-specified value is restricted
+   to a reasonable range > 0 and <= 1 second.  The blockchain is with
+   respect to NODE, which can be a specified node, and otherwise
+   defaults to the current node, if non-nil, and otherwise the top
+   node. A timeout occurs when TIMEOUT, which defaults to nil, has
+   been supplied non-nil, in which case it should ben an interval in
+   seconds. Then, when that amount of time has elapsed, a timeout has
+   been reached, and the function returns.  If the count is reached,
+   this returns true; if a timeout occurs, this returns nil;
+   otherwise, this does not return, and simply continues alternating
+   between checking the count of transactions and sleeping for brief
+   intervals. If TX-TYPES is specified, it should be a list of
+   transaction types to wait for; otherwise, it defaults to spend
+   transactions, both cloaked and uncloaked."
+  (when interval
+    (setq interval (max 1 (min 1/1000 interval))))
+  (setq tick-print
+        (or tick-print
+            *wait-for-tx-count-tick-print*))
+  (setq tick-every
+        (or tick-every
+            *wait-for-tx-count-tick-every*))
+  (setq tx-types
+        (or tx-types 
+            *wait-for-tx-default-tx-types*))
+  (loop with start-ut = (get-universal-time)
+        with interval = (or interval 1/10)
+        with cosi-simgen:*current-node*
+          = (or node 
+                cosi-simgen:*current-node*
+                cosi-simgen:*top-node*)
+        as count                        ; see note!
+          = (let ((count-so-far 0))
+              (do-all-transactions (tx)
+                (when (member (transaction-type tx) tx-types)
+                  (incf count-so-far)))
+              count-so-far)
+        as time-through from 0
+        initially
+           (format t "~%Awaiting ~d ~a txs.~%"
+                   n                   
+                   (if (spend-tx-types-p tx-types) 
+                       "spend"
+                       (format nil "[transaction types = ~s]" tx-types)))
+        when (>= count n)
+          return (values t (- (get-universal-time) start-ut))
+        when (and timeout
+                  (>= (- (get-universal-time) start-ut)
+                      timeout))
+          return nil
+        do (sleep interval)
+        when (= (mod time-through tick-every) 0)
+          do (princ tick-print)))
+
+;; The counting method is inefficient, since it counts all the way
+;; from the beginning each time. Only OK for low-transaction-count
+;; early blockchains, OK for now. Improve later! -mhd, 6/22/18
+
+
+
 
 
 ;;;; Getting Transactions for Blocks
@@ -1325,9 +1483,17 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                      while (> tx-count max)
                      do (decf tx-count))
                (setq transactions (nreverse rev-txs))))
-           #+development (assert (= (length transactions) tx-count))
-           (ac:pr (format nil "~D Transactions" tx-count))
-           (return transactions)))  
+           ;; #+development (assert (= (length transactions) tx-count))
+           (emotiq:note "~D Transactions for new block" tx-count)
+           ;; Now, compute the fees, and add a collect transaction,
+           ;; which must precede all the other transactions.
+           (let* ((total-fee
+                    (loop for tx in transactions
+                          sum (compute-transaction-fee tx)))
+                  (collect-transaction
+                    (make-collect-transaction total-fee)))
+             (push collect-transaction transactions))
+           (return transactions)))
 
 ;; Note: new transactions currently do not use UTXO database, only
 ;; mempool and blockchain.
@@ -1353,12 +1519,71 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 
+(defun make-collect-transaction (fee)
+  "Make a collect transaction with amount equal to FEE, an amount of
+   tokens to transfer. The fee is designated to be paid to the address
+   (a function of the public key) of the leader node."
+  (let* ((leader-public-key cosi-simgen:*leader*)
+         (leader-address
+           (cosi/proofs:public-key-to-address leader-public-key)))
+    (make-transaction
+     (list (make-coinbase-transaction-input))
+     (list (make-coinbase-transaction-output leader-address fee))
+     ':collect)))
+
+;; The "coinbase" terminilogy, and some early implementation
+;; approaches, spills over here for now, interfering with our
+;; "collect" terminology and approach. It's minimal, but should
+;; eventually be cleaned up! -mhd, 6/26/18
+    
+  
+
+
+
+
+
+(defun compute-transaction-fee (transaction)
+  "Compute the transaction fee on TRANSACTION, a transaction instance
+   that has been fully validated and comes from the mempool, and this
+   therefore makes all the assumptions as to validations, such as UTXO
+   exists, no double spends, valid amounts, etc. The fee is computed
+   as the sum of the inputs minus the sum of the outputs.  In our
+   blockchain system the leader node creates a so-called collect
+   transaction as the first transaction of every block, except the
+   genesis, and directs that it be sent to an address of their
+   choosing."
+  (loop for tx-in in (transaction-inputs transaction)
+        as id = (tx-in-id tx-in)
+        as index = (tx-in-index tx-in)
+        as input-tx = (find-transaction-per-id id t)
+        as input-tx-outputs 
+          = (if (null input-tx)
+                (error "no match TxID = ~a" (txid-string id)) 
+                (transaction-outputs input-tx))
+        as utxo
+          = (or (nth index input-tx-outputs)
+                (error "no match index = ~a" index))
+        as input-subamount = (tx-out-amount utxo)
+        sum input-subamount into sum-of-inputs
+        finally (let* ((sum-of-outputs
+                         (loop for tx-out in (transaction-outputs transaction)
+                               sum (tx-out-amount tx-out)))
+                       (fee (- sum-of-inputs sum-of-outputs)))
+                  ;; #+development
+                  (when (< fee 0)       ; error if it happens here
+                    (error "Negative fee: ~a! sum of inputs (~a) < sum of outputs (~a)."
+                           fee sum-of-inputs sum-of-outputs))
+                  (return fee))))
+
+
 (defun check-block-transactions (blk)
-  "Return nil if invalid block."
-  ;; It's unclear what this is supposed to do, under what
-  ;; circumstances this is called, etc. Talk to David and team.
-  (declare (ignore blk))                ; stub only for now! -mhd, 6/13/18
-  t)                                    ; tell caller everything's ok
+  "Return nil if invalid block. This is run by a CoSi block 
+   validator. Validate by recomputing the full merkle hash on all the 
+   transactions and comparing with that with that saved in the 
+   merkle-root-hash slot of the block." 
+  (hash:hash=  
+   (cosi/proofs:compute-merkle-root-hash (cosi/proofs:block-transactions blk)) 
+   (cosi/proofs:block-merkle-root-hash blk)))
 
 
 

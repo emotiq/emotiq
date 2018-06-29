@@ -54,7 +54,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   ;; should this following code be executed every time or only when a new configuration is created?
   (phony-up-nodes)
   (emotiq/elections:set-nodes (keys-and-stakes))
-
+  (emotiq/tracker:start-tracker)
   (when run-cli-p
     (emotiq/cli:main)))
 
@@ -188,7 +188,9 @@ This will spawn an actor which will asynchronously do the following:
                           (list user-2-pkey user-3-pkey)
                           fee :cloaked cloaked)))
               ;; allow leader elections to create this block
-              (publish-transaction (setf *tx-2* trans) "tx-2")))))))
+              (publish-transaction (setf *tx-2* trans) "tx-2"))))))
+  (sleep 60)
+  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state)))
 
 (defun run-new-tx ()
   "Using new tx feature, run the block chain simulation entirely within the current process.
@@ -242,7 +244,8 @@ This will spawn an actor which will asynchronously do the following:
                (cosi/proofs/newtx:make-and-maybe-sign-transaction
                 transaction-inputs transaction-outputs
                 :skeys (pbc:keying-triple-skey *genesis-account*)
-                :pkeys (pbc:keying-triple-pkey *genesis-account*))))
+                :pkeys (pbc:keying-triple-pkey *genesis-account*)
+                :type :spend)))
         (setq *tx-1* signed-transaction)
         (ac:pr (format nil "Broadcasting 1st TX."))
         (format t "~%Tx 1 created/signed by genesis (~a), now broadcasting."
@@ -324,7 +327,8 @@ This will spawn an actor which will asynchronously do the following:
                   (cosi/proofs/newtx:make-and-maybe-sign-transaction
                    transaction-inputs transaction-outputs
                    :skeys (pbc:keying-triple-skey *user-2*)
-                   :pkeys (pbc:keying-triple-pkey *user-2*)))
+                   :pkeys (pbc:keying-triple-pkey *user-2*)
+                   :type ':spend))
 
             (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
@@ -336,10 +340,25 @@ This will spawn an actor which will asynchronously do the following:
 
             ;; Dump the whole blockchain now after about a minute,
             ;; just before exiting:
-            (sleep 60)
+            (multiple-value-bind (all-done-p elapsed-seconds-if-done)
+               (cosi/proofs/newtx:wait-for-tx-count 3 :timeout 60)
+              (cond
+                (all-done-p
+                 (format t "~%Finished ~d spend transactions in ~d second~p~%"
+                         3 elapsed-seconds-if-done elapsed-seconds-if-done))
+                (t
+                 (cerror
+                  "Continue regardless."
+                  "Timed out, waited 60 sec for 4 transactions on blockchain."))))
+            ;; previous:
+            ;; (sleep 60)
+
+            
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
-            (format t "~2%Good-bye and good luck!~%")))))))
+            (format t "~2%Good-bye and good luck!~%"))))))
+  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
+  (values))
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation

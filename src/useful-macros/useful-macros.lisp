@@ -1523,6 +1523,9 @@ THE SOFTWARE.
   (apply #'where-if (curry test item) seq keys))
 
 
+(defun nthcar (n list) 
+  (car (nthcdr n list)))
+
 (defmethod subselect ((lst list) where-lst)
   ;; not very efficient on lists... use subselect-if on lists
   (mapcar (rcurry #'nthcar lst) where-lst))

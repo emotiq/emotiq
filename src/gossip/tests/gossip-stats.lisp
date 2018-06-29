@@ -9,7 +9,7 @@
   (make-graph 1000)
   (let ((results nil)
         (*log-filter* nil))
-    (run-gossip-sim)
+    (run-gossip)
     (set-protocol-style :gossip gossip-number)
     (dotimes (i n)
       (push (solicit-wait (random-node) :count-alive) results))
