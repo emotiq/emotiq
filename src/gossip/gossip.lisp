@@ -1356,9 +1356,15 @@ dropped on the floor.
   (let ((lowlevel-application-handler (lowlevel-application-handler node))
         (application-handler (application-handler node)))
     (when lowlevel-application-handler ; mostly for gossip's use, not the application programmer's
-      (actor-send lowlevel-application-handler node msg))
-    (when application-handler
-      (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))))
+      (if *gossip-absorb-errors*
+          (handler-case (actor-send lowlevel-application-handler node msg)
+            (error (c) (node-log node :ERROR msg c)))
+          (actor-send lowlevel-application-handler node msg))
+      (when application-handler
+        (if *gossip-absorb-errors*
+            (handler-case (apply 'actor-send application-handler (funcall highlevel-message-extractor msg))
+              (error (c) (node-log node :ERROR msg c)))
+            (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))))))
 
 (defmethod k-singlecast ((msg solicitation) thisnode srcuid)
   "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
