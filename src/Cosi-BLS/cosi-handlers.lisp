@@ -916,10 +916,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defmethod bft-threshold ((n fixnum))
   ;; return threshold that must be exceeded
   (declare (fixnum n))
-  (cond  ((<= n 1)  0)
-         ((= n 2)   most-positive-fixnum) ;; no consensus possible between 2 nodes
-         (t         (* 2/3 n))
-         ))
+  (* 2/3 n))
 
 (defmethod bft-threshold ((witnesses sequence))
   (bft-threshold (length witnesses)))
