@@ -99,13 +99,42 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defmethod transaction-id ((tx transaction))
-  "Get hash of this transaction, which also uniquely* identifies it, as hash:hash/256 instance."
-  (let ((message (serialize-transaction tx)))
-    (bev-vec (hash-for-transaction-id message))))
+  "Get hash of TX, a transaction, which also uniquely* identifies it,
+   as hash:hash/256 instance."
+  (bev-vec (hash-transaction-id tx)))
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
 ;; ---!!! see notes at serialize-transaction -mhd, 6/5/18
+
+
+(defmethod transaction-witness-id ((tx transaction))
+  "Get hash of the witness data of TX, a transaction, as a
+   hash:hash/256 instance."
+  (ecase (transaction-type tx)
+    ((:spend :spend-cloaked)
+     (bev-vec (hash-transaction-witness-id tx)))
+    ((:collect :coinbase)
+     (bev-vec (transaction-hash '())))))
+
+;; Note: there is no witness data in the case of
+;; :collect/:coinbase. Consider later as an optimization making the
+;; data be a load-time or even a read-time value to save a bit of
+;; space and/or cycles.
+
+
+
+(defmethod transaction-input-scripts-id ((tx transaction))
+  "Get hash of the input scripts of TX, a transaction, as a
+   hash:hash/256 instance."
+  (ecase (transaction-type tx)
+    ((:spend :spend-cloaked)
+     (bev-vec (hash-transaction-input-scripts-id tx)))
+    ((:collect :coinbase)
+     (bev-vec (transaction-hash '())))))
+
+;; Same thing as above goes for input scripts.
+    
   
 
 
@@ -694,9 +723,35 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defun hash-for-transaction-id (message)
-  "Hash MESSAGE, the serialization returned by serialize-transaction."
+(defun transaction-hash (message)
+  "Hash MESSAGE, an arbitrary Lisp object, often the serialization
+   returned by serialize-transaction, but actually an arbitrary lisp
+   suitable as input as the first arg to hash:hash/256."
   (hash:hash/256 message))
+
+
+
+(defun hash-transaction-id (tx)
+  (let ((message (serialize-transaction tx)))
+    (transaction-hash message)))
+
+(defun hash-transaction-input-scripts-id (tx)
+  (transaction-hash 
+   (loop for tx-in in (transaction-inputs tx)
+         as script = (tx-in-unlock-script tx-in)
+         collect script)))
+
+(defun hash-transaction-witness-id (tx)
+  (transaction-hash 
+   (loop for tx-in in (transaction-inputs tx)
+         as signature = (%tx-in-signature tx-in)
+         as public-key = (%tx-in-public-key tx-in)
+         ;; order: signature, public key
+         collect signature collect public-key)))
+
+;; The order of signature, public key is the same as scriptSig just to
+;; seem consistent but for no particular reason.
+
 
 
 
@@ -1565,9 +1620,15 @@ ADDRESS here is taken to mean the same thing as the public key hash."
    validator. Validate by recomputing the full merkle hash on all the 
    transactions and comparing with that with that saved in the 
    merkle-root-hash slot of the block." 
-  (hash:hash=  
-   (cosi/proofs:compute-merkle-root-hash (cosi/proofs:block-transactions blk)) 
-   (cosi/proofs:block-merkle-root-hash blk)))
+  (and (hash:hash=  
+        (cosi/proofs:compute-merkle-root-hash blk) 
+        (cosi/proofs:block-merkle-root-hash blk))
+       (hash:hash=  
+        (cosi/proofs:compute-input-script-merkle-root-hash blk)
+        (cosi/proofs:block-input-script-merkle-root-hash blk))
+       (hash:hash=  
+        (cosi/proofs:compute-witness-merkle-root-hash blk)
+        (cosi/proofs:block-witness-merkle-root-hash blk))))
 
 
 
