@@ -694,6 +694,16 @@ comparison.")
 
 ;; -------------------------------------------------
 
+(defmethod public-key ((val integer))
+  (make-instance 'public-key
+                 :val (bevn val *g2-size*)))
+
+(defun secret-key ((val integer))
+  (make-instance 'secret-key
+                 :val (bevn val *g1-size*)))
+
+;; -------------------------------------------------
+
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
 

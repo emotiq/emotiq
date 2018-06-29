@@ -39,8 +39,7 @@ THE SOFTWARE.
   (assert node-list)
   (setf *all-nodes* (mapcar (lambda (pair)
                               (destructuring-bind (pkey stake) pair
-                                (list (make-instance 'pbc:public-key
-                                                     :val (bev pkey))
+                                (list (pbc:public-key pkey)
                                       stake)))
                             node-list)))
 
@@ -312,10 +311,8 @@ based on their relative stake"
 
 (defmethod gossip:make-node ((kind (eql :cosi)) &key pkey skey)
   (setf *my-node* (make-instance 'node
-                                 :pkey  (make-instance 'pbc:public-key
-                                                       :val (bev pkey))
-                                 :skey  (make-instance 'pbc:secret-key
-                                                       :val (bev skey)))
+                                 :pkey  (pbc:public-key pkey)
+                                 :skey  (pbc:secret-key skey)))
   (gossip:initialize-node *my-node*
                           :pkey pkey
                           :skey skey)
