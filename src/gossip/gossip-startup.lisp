@@ -5,7 +5,11 @@
 (in-package :gossip)
 
 (defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
-(defparameter *stakes* nil "Cached initial value of (pubkey . stake) records")
+(defparameter *stakes* nil "Cached initial value of (pubkey stake) records")
+
+(defun get-stakes ()
+  "Returns cached initial value of (pubkey stake) records"
+  *stakes*)
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
@@ -34,9 +38,13 @@
                        t)
                      pubkeys)
       ;; make local nodes
-      (mapc (lambda (pubkey)
-              (make-node :uid pubkey))
-            pubkeys)
+      (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
+          (mapc (lambda (pubkey)
+                  (make-node ':cosi :pkey pubkey :skey (cdr (assoc pubkey keypairs))))
+                pubkeys)
+          (mapc (lambda (pubkey)
+                  (make-node ':gossip :uid pubkey))
+                pubkeys))
       ;; clear log and start server
       (run-gossip)
       t)))

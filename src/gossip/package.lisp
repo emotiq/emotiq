@@ -5,6 +5,9 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:cosi-loaded-p
+   #:initialize-node
+   #:get-stakes
    #:*nominal-gossip-port*
    #:gossip-startup
    #:ping-other-machines
