@@ -587,9 +587,8 @@ are in place between nodes.
       (initialize-node node :pkey pkey :skey skey)
       node)))
 
-(defun make-proxy-node (mode &rest args &key proxy-subtable &allow-other-keys)
+(defun make-proxy-node (mode &rest args)
   "Makes a new proxy node of given mode: :UDP or :TCP"
-  (remf args :proxy-subtable)
   (let* ((node (case mode
                  (:tcp (apply 'make-instance 'tcp-gossip-node args))
                  (:udp (apply 'make-instance 'udp-gossip-node args))))
@@ -597,13 +596,16 @@ are in place between nodes.
     (setf (actor node) actor)
     ; rule: We should never have a proxy and a real node with same uid.
     ;  Furthermore: uid of a proxy should always be forced to match its real-uid, except when its real-uid=0.
+     (when (and (not (zerop (real-uid node)))
+             (< (length (format nil "~D" (real-uid node))) 60) (break)))
     (unless (= 0 (real-uid node))
       (let ((oldnode (lookup-node (real-uid node))))
         (when oldnode
           (log-event :WARN oldnode "being replaced by proxy" node)))
       (setf (slot-value node 'uid) (real-uid node)))
     (memoize-node node nil) ; proxies are not part of uber-set, therefore no cache invalidation needed
-    (memoize-proxy node proxy-subtable)))
+    ;;;(memoize-proxy node proxy-subtable)
+    ))
 
 ;;;; Graph making routines
 (defun make-nodes (numnodes)
@@ -1983,6 +1985,7 @@ gets sent back, and everything will be copacetic.
       address ; means port is already folded into real-address
       (+ (ash (usocket::host-to-hbo address) 16) port)))
 
+#+OBSOLETE
 (defmethod memoize-proxy ((proxy proxy-gossip-node) &optional subtable)
   "Memoize given proxy for quick lookup. Returns proxy itself."
   (with-slots (real-address real-port real-uid) proxy
@@ -1995,6 +1998,7 @@ gets sent back, and everything will be copacetic.
           (unless subtable (setf subtable (setf (gethash key table) (make-hash-table))))))
       (setf (gethash real-uid subtable) proxy))))
 
+#+OBSOLETE
 (defun ensure-proxy-node (mode real-address real-port real-uid)
   "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
    Returns newly-created or old proxy-gossip-node.
@@ -2017,6 +2021,26 @@ gets sent back, and everything will be copacetic.
                                    :real-uid real-uid
                                    :proxy-subtable proxy-subtable)))
     proxy))
+
+(defun ensure-proxy-node (mode real-address real-port real-uid)
+  "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
+  Returns newly-created or old proxy-gossip-node.
+  Found or newly-created proxy will be added to *nodes* database for this process."
+  (check-type real-port integer) ; might want to support lookup of port-name to port-number eventually
+  (let* ((oldnode (lookup-node real-uid)) ; proxy uids should match their real-uids
+         (proxy nil))
+    (flet ((make-proxy ()
+             (setf proxy (make-proxy-node mode
+                                          :real-address real-address
+                                          :real-port real-port
+                                          :real-uid real-uid))))
+      (cond ((and oldnode
+                  (not (typep oldnode 'proxy-gossip-node)))
+             (edebug 1 :WARN oldnode "Expected proxy; found real node. Obliterating.")
+             (make-proxy))
+            (oldnode (setf proxy oldnode))
+            (t (make-proxy)))
+      proxy)))
 
 (defmethod incoming-message-handler ((msg solicitation) srcuid destuid)
   "Locally dispatch messages received from network"
