@@ -698,7 +698,7 @@ comparison.")
   (make-instance 'public-key
                  :val (bevn val *g2-size*)))
 
-(defun secret-key ((val integer))
+(defmethod secret-key ((val integer))
   (make-instance 'secret-key
                  :val (bevn val *g1-size*)))
 
