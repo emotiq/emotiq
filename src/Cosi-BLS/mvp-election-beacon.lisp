@@ -343,7 +343,7 @@ based on their relative stake"
 (defun call-for-new-election ()
   (with-accessors ((pkey  node-pkey)
                    (skey  node-skey)) (current-node)
-    (unless (find pkey *election-calls*
+    (unless (find pkey *election-calls* ;; prevent repeated calls
                   :test 'int=)
       (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
       (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
