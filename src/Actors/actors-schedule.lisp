@@ -1,6 +1,6 @@
-;; Actors-machines.lisp -- Erlang RECV for Actors, using OPTIMA:MATCH syntax
+;; Actors-schedule.lisp -- Scheduled actions for Actors
 ;;
-;; DM/RAL  12/17
+;; DM/RAL  06/18
 ;; -----------------------------------------------------------
 #|
 The MIT License
