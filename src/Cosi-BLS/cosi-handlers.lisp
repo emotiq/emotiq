@@ -1004,8 +1004,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun check-block-transactions-hash (blk)
   (hash= (block-merkle-root-hash blk) ;; check transaction hash against header
-         (compute-merkle-root-hash
-          (block-transactions blk))))
+         (compute-merkle-root-hash blk)))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
   pkey2)
