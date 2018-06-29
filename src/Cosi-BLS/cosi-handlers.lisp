@@ -1110,6 +1110,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (let ((*notestream* ns))
              (if (validate-cosi-message node consensus-stage blk)
                  (progn
+                   (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) node)
                    (emotiq:note "Block validated ~A" (short-id node))
                    (list (pbc:sign-hash blk-hash (node-skey node))
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
