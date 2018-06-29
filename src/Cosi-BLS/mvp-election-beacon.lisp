@@ -165,7 +165,8 @@ based on their relative stake"
   (ac:ask *election-central* :next-after-reset))
 
 (defun fire-election () ;; for REPL playing...
-  (send-hold-election-from-node *my-node*))
+  (with-current-node *my-node*
+    (send-hold-election)))
 
 #|
 (progn

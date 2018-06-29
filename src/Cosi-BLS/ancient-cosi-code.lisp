@@ -4,6 +4,10 @@
 ;; ----------------
 ;; ANCIENT -- Ancient code that needs revisiting, currently unused... DBM 06/29/18
 
+(defmethod node-dispatcher ((msg-sym (eql :election)) &key new-leader-pkey)
+  (emotiq/tracker:track :election)
+  (node-elect-new-leader new-leader-pkey))
+
 (defmethod node-dispatcher ((msg-sym (eql :public-key)) &key reply-to)
   (reply reply-to :pkey+zkp (node-pkeyzkp (current-node))))
 
