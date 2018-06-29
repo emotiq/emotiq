@@ -1062,6 +1062,7 @@ check that each TXIN and TXOUT is mathematically sound."
     ))
 
 (defun call-for-punishment ()
+  ;; a witness detected a problem with a block handed by the leader... hmmm...
   ;; for now, just call for new election
   (when *use-real-gossip*
     (call-for-new-election)))
