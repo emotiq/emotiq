@@ -969,23 +969,25 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (defun tx-ids= (tx-id-1 tx-id-2)
   "Return true if transaction IDs are equal. TX-ID-1 and TX-ID-2 must
-   transaction ID's, which are represented as hashes, i.e., as
-   instances of hash:hash."
+   transaction ID's, which are represented as instances of class BEV (a class to
+   represent a big-endian vector of (unsigned-byte 8) elements), which in turn
+   represents a sha-3/256 hash result."
   (equalp tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
-  "Iterate over the blocks of the blockchain (i.e., the value of
-  cosi-simgen:*blockchain*) beginning the most recent minted and
-  ending with the genesis block, with BLOCK-VAR bound during each
-  iteration to the block."
+  "Do blocks of the blockchain in reverse chronological order. Iterate over the
+   blocks of the blockchain (i.e., the value of cosi-simgen:*blockchain*)
+   beginning the most recent minted and ending with the genesis block, with
+   BLOCK-VAR bound during each iteration to the block."
   `(loop for ,block-var in cosi-simgen:*blockchain*
          do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
-  "Bind each transaction of block BLK to TX-VAR in order from latest
-   spent to earliest spent around the execution of BODY. It's possible
-   to return using RETURN although RETURN-FROM to a lexical tag is
-   recommended as the most reliable and clear method."
+  "Do transactions of BLK in reverse chronological order. Bind each transaction
+   of block BLK to TX-VAR in order from latest spent to earliest spent around
+   the execution of BODY. It's possible to return using RETURN although
+   RETURN-FROM to a lexical tag is recommended as the most reliable and clear
+   method."
   `(loop with reversed-transactions
            = (reverse (cosi/proofs:block-transactions ,blk))
          for ,tx-var in reversed-transactions
@@ -1307,22 +1309,37 @@ of type TYPE."
 
 
 
-;;; UTXO-P: search first the mempool and then blockchain exhaustively starting
-;;; with the most-recently-created transaction returning true if the output of
+;;; UTXO-P: search the blockchain exhaustively starting with the
+;;; most-recently-created transaction returning true if the output of
 ;;; TRANSACTION at OUTPUT-INDEX is found to have been spent, and false (nil) if
 ;;; TRANSACTION itself or the beginning of the blockchain is reached.
 
 (defun utxo-p (transaction output-index)
-  (do-blockchain (block)
-    (return
+  "Return whether TRANSACTION's output at index OUTPUT-INDEX has been spent. As
+   a second value, returns whether the transaction was found at all."
+  (let ((this-transaction-id (transaction-id transaction)))
+    (do-blockchain (block)
       (do-transactions (tx block)
-        (return
-          (if (eq tx transaction)
-              nil
-              (loop for txi in (transaction-inputs tx)
-                    as index = (tx-in-index txi)
-                    when (eql index output-index)
-                      return t)))))))
+        (if (eq tx transaction)
+
+            ;; We reached all the way from the latest in time to this
+            ;; transaction, and have not found a transaction that spends this
+            ;; transaction, so return now that this is unspent/found.
+            (return-from utxo-p (values t t))
+
+            ;; We are checking every transaction T-L that's later than the arg
+            ;; transaction T-E to see if T-L spends T-E's output at index
+            ;; OUTPUT-INDEX.  Check all T-E's
+            (loop for transaction-input in (transaction-inputs tx)
+                  as index = (tx-in-index transaction-input)
+                  when (and (eql index output-index)
+                            (tx-ids=
+                             (tx-in-id transaction-input)
+                             this-transaction-id))
+                    ;; spent/found
+                    do (return-from utxo-p (values nil t))))))
+    ;; degenerate case: got to end, but transaction not even found
+    (values t nil)))
 
 
 
@@ -1349,12 +1366,17 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 
 (defun get-balance (address)
-  "Return the sum of all amounts of all UTXOs of ADDRESS."
+  "Return the sum of all amounts of all UTXOs of ADDRESS. A second
+   value returned is a non-negative integer that indicates the number
+   of UTXOs associated with the address."
   (let ((utxos (get-utxos-per-account address)))
     (loop for (txo) in utxos
           as amount = (tx-out-amount txo)
           collect amount into amounts
-          finally (return (apply #'+ amounts)))))
+          finally (return
+                    (values
+                     (apply #'+ amounts)
+                     (length amounts))))))
 
 
 
@@ -1412,6 +1434,36 @@ ADDRESS here is taken to mean the same thing as the public key hash."
                            :direction :output :if-exists :supersede)
             (dump-loops))
           (dump-loops)))))
+
+
+
+
+
+;;;; Transaction ID Utilities
+
+;;; These functions are primarily intended as convenience functions for use in
+;;; the debugger or in the REPL, not in production.
+
+(defun to-txid (string-or-txid)
+  "Given either a hex string or txid byte vector, if it's a string, remove any
+   non-hex-digit characters, and convert the resulting hex string to a txid byte
+   vector. Otherwise, it is assumed a valid txid byte vector and returned."
+  (if (stringp string-or-txid)
+      (ironclad:hex-string-to-byte-array
+       (remove-if-not
+        #'(lambda (char) (digit-char-p char 16))
+        string-or-txid))
+      string-or-txid))
+
+
+(defun find-tx (txid-or-string &optional also-search-mempool-p)
+  "Find transaction on the blockchain whose transaction ID corresponds to
+  TXID-OR-STRING, either a hex string or a txid byte vector. If
+  also-search-mempool-p is true, this also searches the mempool."
+  (find-transaction-per-id
+   (to-txid txid-or-string) also-search-mempool-p))
+
+
 
 
 

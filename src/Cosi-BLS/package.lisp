@@ -200,6 +200,13 @@
    :block-input-script-merkle-root-hash
    :block-witness-merkle-root-hash
 
+   :utxo-p
+   :get-utxos-per-account
+   :get-balance
+
+   :to-txid
+   :find-tx
+
    :*newtx-p*))                         ; for new transactions, short term temp! -mhd, 6/12/18
 
 (defpackage :cosi/proofs/newtx          ; New Transactions
