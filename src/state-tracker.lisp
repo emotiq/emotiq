@@ -44,12 +44,12 @@
       (:reset
        (emotiq:note "Tracker: :reset")
        (let ((node (second msg)))
-         (push `(:idle ,(stringify-node node)) (system-events *state*))))
+         (push `(:idle . ,(stringify-node node)) (system-events *state*))))
 
       (:idle
        (emotiq:note "Tracker: :reset")
        (let ((node (second msg)))
-         (push `(:idle ,(stringify-node node)) (system-events *state*))))
+         (push `(:idle . ,(stringify-node node)) (system-events *state*))))
 
       (:node
        (let ((node (second msg)))
@@ -67,23 +67,23 @@
              (push :block-finished (system-events *state*))
            (progn
              (emotiq:note "wrong leader block-finished ~a <> ~a" leader-node (system-leader *state*))
-             (push `(:wrong-leader-block-finished ,leader-node) (system-events *state*))))))
+             (push `(:wrong-leader-block-finished . ,leader-node) (system-events *state*))))))
 
       (:prepare
        (let ((node (second msg)))
-         (push `(:node-enters-prepare ,(stringify-node node)) (system-events *state*))))
+         (push `(:node-enters-prepare . ,(stringify-node node)) (system-events *state*))))
 
       (:commit
        (let ((node (second msg)))
-         (push `(:node-enters-commit ,(stringify-node node)) (system-events *state*))))
+         (push `(:node-enters-commit . ,(stringify-node node)) (system-events *state*))))
 
       (:prepare-signed
        (let ((node (second msg)))
-         (push `(:node-signed-prepare ,(stringify-node node)) (system-events *state*))))
+         (push `(:node-signed-prepare . ,(stringify-node node)) (system-events *state*))))
 
       (:commit-signed
        (let ((node (second msg)))
-         (push `(:node-signed-commit ,(stringify-node node)) (system-events *state*))))
+         (push `(:node-signed-commit . ,(stringify-node node)) (system-events *state*))))
 
       (:make-block
        ;; tbd
@@ -103,7 +103,7 @@
              (push :leader-sends-prepare (system-events *state*))
            (progn
              (emotiq:note "wrong leader sends prepare ~a <> ~a" leader-node (system-leader *state*))
-             (push `(:wrong-leader-sends-prepare ,leader-node) (system-events *state*))))))
+             (push `(:wrong-leader-sends-prepare . ,leader-node) (system-events *state*))))))
 
       (:leader-sends-commit
        (let ((leader-node (second msg)))
@@ -111,7 +111,7 @@
              (push :leader-sends-commit (system-events *state*))
            (progn
              (emotiq:note "wrong leader sends commit ~a <> ~a" leader-node (system-leader *state*))
-             (push `(:wrong-leader-sends-commit ,leader-node) (system-events *state*)))))))))
+             (push `(:wrong-leader-sends-commit . ,leader-node) (system-events *state*)))))))))
       
 (defun query-current-state ()
   "return current system state as an alist"
