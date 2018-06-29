@@ -120,6 +120,9 @@ THE SOFTWARE.
    (local-epoch    :accessor node-local-epoch
                    :initform 0)
 
+   ;; had-work if we were witness and was called to perform work on a block
+   (had-work       :accessor node-had-work
+                   :initform nil)
    
    (tx-changes     :accessor node-tx-changes
                    :initform nil)
