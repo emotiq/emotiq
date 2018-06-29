@@ -98,7 +98,7 @@ THE SOFTWARE.
                                  ;; if we had work during this epoch before this timeout,
                                  ;; then a call-for-new-election has either already been sent,
                                  ;; or else a setup-emergency-call has been performed.
-                                 (setup-emergency-call-for-new-election)
+                                 (done-with-duties)
                                  )))
                ))
            )))
