@@ -1034,10 +1034,6 @@ check that each TXIN and TXOUT is mathematically sound."
            (pr :late-arrival)
            (retry-recv))
         )) ;; end of message pattern
-      ;; ---------------------------------
-      ;; ---------------------------------
-      ;; :TIMEOUT 30
-      ;; :ON-TIMEOUT (reply reply-to :timeout-cosi-network)
       )))
 
 ;; ------------------------------------------------------------------------------------------------
