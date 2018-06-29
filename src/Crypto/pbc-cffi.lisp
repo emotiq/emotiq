@@ -693,6 +693,8 @@ comparison.")
 (define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
 
 ;; -------------------------------------------------
+;; Coercion functions in case we are dealing with a client that only
+;; thinks in terms of bignums.
 
 (defmethod public-key ((key public-key))
   key)
@@ -707,6 +709,14 @@ comparison.")
 
 (defmethod secret-key ((val integer))
   (make-instance 'secret-key
+                 :val (bevn val *g1-size*)))
+
+
+(defmethod signature ((sig signature))
+  sig)
+
+(defmethod signature ((val integer))
+  (make-instance 'signature
                  :val (bevn val *g1-size*)))
 
 ;; -------------------------------------------------
