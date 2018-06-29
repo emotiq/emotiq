@@ -170,10 +170,6 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
   (node-check-transaction trn))
 
-(defmethod node-dispatcher ((msg-sym (eql :election)) &key new-leader-pkey)
-  (emotiq/tracker:track :election)
-  (node-elect-new-leader new-leader-pkey))
-
 (defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
   ;; witness nodes receive this message to participate in a multi-signing
   (setf *had-work* t)
