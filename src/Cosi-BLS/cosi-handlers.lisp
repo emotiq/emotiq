@@ -119,11 +119,9 @@ THE SOFTWARE.
   (leader-exec *cosi-prepare-timeout* *cosi-commit-timeout*))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-prepare)) &key reply-to blk timeout)
-  (emotiq/tracker:track :prepare *current-node*)
   (node-compute-cosi reply-to :prepare blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :cosi-sign-commit)) &key reply-to blk timeout)
-  (emotiq/tracker:track :commit *current-node*)
   (node-compute-cosi reply-to :commit blk timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
