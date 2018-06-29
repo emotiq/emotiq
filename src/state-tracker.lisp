@@ -3,6 +3,7 @@
 (defclass system-state ()
   ((leader :accessor system-leader :initform nil)
    (witnesses :accessor system-witness-list :initform nil)
+   (events :accessor system-events :initform nil)
    (all-nodes :accessor system-all-nodes :initform nil)))  ;; contains leader, witnesses and any other nodes (in early testing, no others)
    
 ;(let (state
@@ -35,37 +36,62 @@
   (values *state* *tracking-actor*))
 
 (defun do-tracking (msg)
-  (case (first msg) 
-    (:reset
-     (emotiq:note "Tracker: :reset - state cleared")
-     (setf (system-leader *state*) nil
-           (system-witness-list *state*) nil))
+  (flet ((clear-state ()
+           (setf (system-leader *state*) nil
+                 (system-witness-list *state*) nil
+                 (system-events *state*) nil)))
+    (case (first msg) 
+      (:reset
+       (emotiq:note "Tracker: :reset - state cleared")
+       (clear-state))
 
-    (:node
-     (let ((node (second msg)))
-       (assert (not (member node (system-all-nodes *state*))))
-       (unless (member node (system-all-nodes *state*))
-         (push node (system-all-nodes *state*)))))
+      (:node
+       (let ((node (second msg)))
+         (assert (not (member node (system-all-nodes *state*))))
+         (unless (member node (system-all-nodes *state*))
+           (push node (system-all-nodes *state*)))))
+      
+      (:election
+       (emotiq:note "Tracker: :election - state cleared")
+       (clear-state))
 
-    (:election
-     (emotiq:note "Tracker: :election - state cleared")
-     (start-tracker))
+      (:block-finished
+       (emotiq:note "Tracker: :block-finished, ~%state = ~A" (query-current-state))
+       (let ((leader-node (second msg)))
+         (if (eq leader-node (system-leader *state*))
+             (push :block-finished (system-events *state*))
+           (progn
+             (emotiq:note "wrong leader block-finished ~a <> ~a" leader-node (system-leader *state*))
+             (push `(:wrong-leader-block-finished ,leader-node) (system-events *state*))))))
 
-    (:block-finished
-     (emotiq:note "Tracker: :block-finished, ~%state = ~A" (query-current-state)))
-
-    ((:make-block :commit :prepare)
-     ;; tbd
-     )
+      ((:make-block :commit :prepare)
+       ;; tbd
+       )
     
-    (:new-leader
-     (let ((leader-node (second msg)))
-       (setf (system-leader *state*) leader-node)))
+      (:new-leader
+       (let ((leader-node (second msg)))
+         (setf (system-leader *state*) leader-node)))
     
-    (:new-witness
-     (let ((witness-node (second msg)))
-       (push witness-node (system-witness-list *state*))))))
+      (:new-witness
+       (let ((witness-node (second msg)))
+         (push witness-node (system-witness-list *state*))))
 
+      (:leader-sends-prepare
+       (let ((leader-node (second msg)))
+         (if (eq leader-node (system-leader *state*))
+             (push :leader-sends-prepare (system-events *state*))
+           (progn
+             (emotiq:note "wrong leader sends prepare ~a <> ~a" leader-node (system-leader *state*))
+             (push `(:wrong-leader-sends-prepare ,leader-node) (system-events *state*))))))
+
+      (:leader-sends-commit
+       (let ((leader-node (second msg)))
+         (if (eq leader-node (system-leader *state*))
+             (push :leader-sends-commit (system-events *state*))
+           (progn
+             (emotiq:note "wrong leader sends commit ~a <> ~a" leader-node (system-leader *state*))
+             (push `(:wrong-leader-sends-commit ,leader-node) (system-events *state*)))))))))
+      
 (defun query-current-state ()
   "return current system state as an alist"
   (let ((result nil))
@@ -75,6 +101,7 @@
       (push (cons :witnesses witnesses) result)
       (push (cons :leader (stringify-node (system-leader *state*))) result)
       (push (cons :all-nodes (mapcar #'stringify-node (system-all-nodes *state*))) result)
+      (push (cons :events `(,(reverse (system-events *state*)))) result)
       result)))
 
 (defun stringify-node (n)

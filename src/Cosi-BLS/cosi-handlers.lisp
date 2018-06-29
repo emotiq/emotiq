@@ -147,7 +147,7 @@ THE SOFTWARE.
   (node-remove-node node-pkey))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
-  (emotiq/tracker:track :block-finished)
+  (emotiq/tracker:track :block-finished *current-node*)
   (emotiq:note "Block committed to blockchain")
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*)))))
 
@@ -1210,6 +1210,7 @@ check that each TXIN and TXOUT is mathematically sound."
                   :reply-to  self
                   :blk       new-block
                   :timeout   prepare-timeout)
+    (emotiq/tracker:track :leader-sends-prepare node)
     (emotiq:note "Waiting for Cosi prepare")
     (recv
       ((list :answer (list :signature sig bits))
@@ -1225,6 +1226,7 @@ check that each TXIN and TXOUT is mathematically sound."
                        :reply-to  self
                        :blk       new-block
                        :timeout   commit-timeout)
+         (emotiq/tracker:track :leader-sends-commit node)
          (emotiq:note "Waiting for Cosi commit")
          (recv
            ((list :answer (list* :signature _))
