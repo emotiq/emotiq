@@ -1347,7 +1347,7 @@ dropped on the floor.
   "Default method"
   (or *ll-application-handler*
       (lambda (node msg)
-        (apply 'node-log node :LL-APPLICATION-HANDLER msg))))
+        (node-log node :LL-APPLICATION-HANDLER msg))))
 
 (defmethod application-handler ((node gossip-mixin))
   "Default method"
