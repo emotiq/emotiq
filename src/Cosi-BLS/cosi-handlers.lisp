@@ -72,6 +72,19 @@ THE SOFTWARE.
   utxo-dels) ;; list of pending spent utxos
 
 ;; -------------------------------------------------------
+;; SCHEDULE-TIMEOUT-ACTION -- a macro to hide the gory details...
+
+(defun do-schedule-timeout-action (timeout fn)
+  (spawn (lambda ()
+           (recv
+             :TIMEOUT    timeout
+             :ON-TIMEOUT (funcall fn)))))
+
+(defmacro schedule-timeout-action (timeout &body body)
+  `(do-schedule-timeout-action ,timeout (lambda ()
+                                          ,@body)))
+
+;; -------------------------------------------------------
 
 (defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
 
@@ -89,19 +102,15 @@ THE SOFTWARE.
     (setf *tx-changes* (make-tx-changes))
     
     (setf *had-work* nil)
-    (spawn (lambda ()
-             (recv
-               :TIMEOUT    *cosi-max-wait-period*
-               :ON-TIMEOUT (with-current-node node
-                             (when (= *local-epoch* epoch) ;; no intervening election
-                               (unless *had-work*
-                                 ;; if we had work during this epoch before this timeout,
-                                 ;; then a call-for-new-election has either already been sent,
-                                 ;; or else a setup-emergency-call has been performed.
-                                 (done-with-duties)
-                                 )))
-               ))
-           )))
+    (ac:schedule-timeout-action *cosi-max-wait-period*
+      (when (= *local-epoch* epoch) ;; no intervening election
+        (unless *had-work*
+          ;; if we had work during this epoch before this timeout,
+          ;; then a call-for-new-election has either already been sent,
+          ;; or else a setup-emergency-call has been performed.
+          (done-with-duties)
+          )))
+    ))
                
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (emotiq/tracker:track :reset)

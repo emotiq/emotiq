@@ -263,10 +263,8 @@ based on their relative stake"
 
         (when (int= pkey new-beacon)
           ;; launch a beacon
-          (ac:spawn (lambda ()
-                      (recv
-                        :TIMEOUT    *mvp-election-period*
-                        :ON-TIMEOUT (send-hold-election-from-node node)))))
+          (ac:schedule-timeout-action *mvp-election-period*
+            (send-hold-election-from-node node)))
 
         (cond ((int= pkey winner)
                ;; why not use ac:self-call?  A: Because doing it with
@@ -291,25 +289,21 @@ based on their relative stake"
   ;; give the election beacon a chance to do its thing
   (let* ((node      (current-node))
          (old-epoch *local-epoch*))
-    (ac:spawn (lambda ()
-                (recv
-                  :TIMEOUT     *emergency-timeout*
-                  :ON-TIMEOUT  (progn
-                                 ;; first time processing at startup
-                                 ;; go gather keys and stakes.
-                                 ;; *local-epoch* will also not have
-                                 ;; changed
-                                 (unless (get-witness-list)
-                                   (set-nodes (gossip:get-stakes))
-                                   (setf (node-stake node) ;; probably never used elsewhere...
-                                         (second (assoc (node-pkey node) (get-witness-list)
-                                                        :test 'int=))))
-                                 
-                                 (when (= *local-epoch* old-epoch) ;; anything changed?
-                                   (with-current-node node  ;; guess not...
-                                     (call-for-new-election))))
-                  ))
-              )))
+    (ac:schedule-timeout-action *emergency-timeout*
+      ;; first time processing at startup
+      ;; go gather keys and stakes.
+      ;; *local-epoch* will also not have
+      ;; changed
+      (unless (get-witness-list)
+        (set-nodes (gossip:get-stakes))
+        (setf (node-stake node) ;; probably never used elsewhere...
+              (second (assoc (node-pkey node) (get-witness-list)
+                             :test 'int=))))
+      
+      (when (= *local-epoch* old-epoch) ;; anything changed?
+        (with-current-node node  ;; guess not...
+          (call-for-new-election))))
+    ))
 
 ;; ----------------------------------------------------------------
 ;; Startup Init Stuff...
