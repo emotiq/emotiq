@@ -73,13 +73,17 @@
        (let ((node (second msg)))
          (push `(:node-enters-prepare . ,(stringify-node node)) (system-events *state*))))
 
-      (:prepare2
+      (:leader-prepare
        (let ((node (second msg)))
-         (push `(:node-enters-prepare2 . ,(stringify-node node)) (system-events *state*))))
+         (push `(:leader-enters-prepare . ,(stringify-node node)) (system-events *state*))))
 
       (:commit
        (let ((node (second msg)))
          (push `(:node-enters-commit . ,(stringify-node node)) (system-events *state*))))
+
+      (:leader-commit
+       (let ((node (second msg)))
+         (push `(:leader-enters-commit . ,(stringify-node node)) (system-events *state*))))
 
       (:prepare-signed
        (let ((node (second msg)))
