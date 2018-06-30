@@ -590,7 +590,7 @@ are in place between nodes.
 (defmethod set-uid ((self uid-mixin) value)
   (setf (slot-value self 'uid) value))
 
-; for debugging
+#+DEBUG
 (defmethod set-uid :around ((self proxy-gossip-node) value)
   (when (< value #.(expt 10 60))
       (break))
