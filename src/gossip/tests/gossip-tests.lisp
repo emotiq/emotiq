@@ -150,13 +150,15 @@
       (let ((oldnodes *nodes*)
             (numnodes 100)
             (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*))
+            (old-remotes gossip::*remote-uids*)
+            (old-absorb gossip::*gossip-absorb-errors*))
         (unwind-protect
             (let ((results nil)
                   (*log-filter* nil)
                   (msg '(foo message)))
               (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
+              (setf gossip::*gossip-absorb-errors* (not *debug*))
               (setf *ll-application-handler* (lambda (node full-msg) (setf results (list (gossip::hopcount full-msg) node full-msg))))
               (clear-local-nodes)
               (gossip::make-nodes numnodes)
@@ -179,7 +181,8 @@
                 ))
           (setf *nodes* oldnodes
                 *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes)))))
+                gossip::*remote-uids* old-remotes
+                gossip::*gossip-absorb-errors* old-absorb)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-local)))
 
@@ -193,7 +196,8 @@
       (let ((oldnodes *nodes*)
             (numnodes 100)
             (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*))
+            (old-remotes gossip::*remote-uids*)
+            (old-absorb gossip::*gossip-absorb-errors*))
         (unwind-protect
             (let ((results nil)
                   (resultlock (mpcompat:make-lock))
@@ -201,6 +205,7 @@
                   (msg '(foo message)))
               (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
+              (setf gossip::*gossip-absorb-errors* (not *debug*))
               ; every node that receives the message will push its id onto results
               (setf *ll-application-handler* (lambda (node full-msg)
                                                (declare (ignore full-msg))
@@ -222,7 +227,8 @@
                 (assert-true (= (length results) numnodes))))
           (setf *nodes* oldnodes
                 *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes)))))
+                gossip::*remote-uids* old-remotes
+                gossip::*gossip-absorb-errors* old-absorb)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(broadcast-local)))
 
@@ -230,7 +236,7 @@
 
 (defun make-test-network ()
   "Interesting graph of 10 nodes."
-  (make-node
+  (make-node ':gossip
    :UID 9
    :ADDRESS 'NIL
    :neighborhood '(2 4)
@@ -238,7 +244,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 4
    :ADDRESS 'NIL
    :neighborhood '(8 3 5 9)
@@ -246,7 +252,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 5
    :ADDRESS 'NIL
    :neighborhood '(6 8 4)
@@ -254,7 +260,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 8
    :ADDRESS 'NIL
    :neighborhood '(4 3 5)
@@ -262,7 +268,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 3
    :ADDRESS 'NIL
    :neighborhood '(4 1 8)
@@ -270,7 +276,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 1
    :ADDRESS 'NIL
    :neighborhood '(2 6 3)
@@ -278,7 +284,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 6
    :ADDRESS 'NIL
    :neighborhood '(5 2 1)
@@ -286,7 +292,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 2
    :ADDRESS 'NIL
    :neighborhood '(9 1 7 6)
@@ -294,7 +300,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 7
    :ADDRESS 'NIL
    :neighborhood '(10 2)
@@ -302,7 +308,7 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
    :UID 10
    :ADDRESS 'NIL
    :neighborhood '(7)

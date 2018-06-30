@@ -596,8 +596,6 @@ are in place between nodes.
     (setf (actor node) actor)
     ; rule: We should never have a proxy and a real node with same uid.
     ;  Furthermore: uid of a proxy should always be forced to match its real-uid, except when its real-uid=0.
-     (when (and (not (zerop (real-uid node)))
-             (< (length (format nil "~D" (real-uid node))) 60) (break)))
     (unless (= 0 (real-uid node))
       (let ((oldnode (lookup-node (real-uid node))))
         (when oldnode
