@@ -139,7 +139,7 @@ THE SOFTWARE.
   (emotiq/tracker:track
    (if (eq consensus-stage :prepare)
        :prepare
-     :commit)
+     :commit2)
    *current-node*)
 
   (node-cosi-signing reply-to
@@ -1173,8 +1173,6 @@ check that each TXIN and TXOUT is mathematically sound."
          (hash (hash/256 (signature-hash-message blk)))
          (sess (int hash)))
 
-    (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) *current-node*)
-
     (ac:self-call :signing
                   :reply-to        self
                   :consensus-stage consensus-stage
@@ -1188,7 +1186,6 @@ check that each TXIN and TXOUT is mathematically sound."
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
              (progn
-               (emotiq/tracker:track (if (eq :prepare consensus-stage) :prepare-signed :commit-signed) *current-node*)
                (reply reply-to
                       (list :signature sig bits)))
            ;; bad signature

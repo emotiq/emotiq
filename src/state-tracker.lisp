@@ -73,6 +73,10 @@
        (let ((node (second msg)))
          (push `(:node-enters-prepare . ,(stringify-node node)) (system-events *state*))))
 
+      (:prepare2
+       (let ((node (second msg)))
+         (push `(:node-enters-prepare2 . ,(stringify-node node)) (system-events *state*))))
+
       (:commit
        (let ((node (second msg)))
          (push `(:node-enters-commit . ,(stringify-node node)) (system-events *state*))))
