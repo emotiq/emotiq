@@ -191,12 +191,16 @@ are in place between nodes.
 (defun local-real-nodes ()
   "Returns a list of nodes that are real (non-proxy) and resident on this machine."
   (loop for node being each hash-value of *nodes*
-    when (typep node 'gossip-node) collect node))
+    when (and (typep node 'gossip-node)
+              (not (temporary-p node)))
+    collect node))
 
 (defun local-real-uids ()
   "Returns a list of UIDs representing real (non-proxy) nodes resident on this machine."
   (loop for key being each hash-key of *nodes* using (hash-value node)
-    when (typep node 'gossip-node) collect key))
+    when (and (typep node 'gossip-node)
+              (not (temporary-p node)))
+    collect key))
 
 (defun remote-real-uids ()
   "Returns a list of UIDs representing real (non-proxy) nodes resident on other machines.
@@ -473,32 +477,35 @@ are in place between nodes.
 (defclass gossip-node (gossip-mixin actor-mixin)
   ((message-cache :initarg :message-cache :initform (make-uid-mapper) :accessor message-cache
                   :documentation "Cache of seen messages. Table mapping UID of message to UID of upstream sender.
-                  Used to ensure identical messages are not acted on twice, and to determine where
-                  replies to a message should be sent in case of :UPSTREAM messages.")
+          Used to ensure identical messages are not acted on twice, and to determine where
+          replies to a message should be sent in case of :UPSTREAM messages.")
    (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
                       :accessor repliers-expected
                       :documentation "2-level Hash-table mapping a solicitation id to another hashtable of srcuids
-                     that I expect to reply to that solicitation. Values in second hashtable are either interim replies
-                     that have been received from that srcuid for the given solicitation id.
-                     Only accessed from this node's actor thread. No locking needed.
-                     See Note B below for more info.")
+          that I expect to reply to that solicitation. Values in second hashtable are either interim replies
+          that have been received from that srcuid for the given solicitation id.
+          Only accessed from this node's actor thread. No locking needed.
+          See Note B below for more info.")
    (reply-cache :initarg :reply-cache :initform (kvs:make-store ':hashtable :test 'equal)
-               :accessor reply-cache
-               :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
-                  for that solicitation. Only accessed from this node's actor
-                  thread. No locking needed. Only used for duration of a solicitation/reply cycle.")
+                :accessor reply-cache
+                :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
+          for that solicitation. Only accessed from this node's actor
+          thread. No locking needed. Only used for duration of a solicitation/reply cycle.")
    (local-kvs :initarg :local-kvs :initform (kvs:make-store ':hashtable :test 'equal) :accessor local-kvs
-        :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
+              :documentation "Local persistent key/value store for this node. Put long-lived global state data here.")
    (neighbors :initarg :neighbors :initform (kvs:make-store ':hashtable :test 'equal) :accessor neighbors
               :documentation "Table of lists of UIDs of direct neighbors of this node. This is the mechanism that establishes
               the connectivity of the node graph. Table is indexed by graphID.")
    (timers :initarg :timers :initform nil :accessor timers
-            :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
+           :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
    (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
                      :documentation "Table of functions of 1 arg: timed-out-p that should be
-          called to clean up after waiting operations are done. Keyed on solicitation id.
-          Timed-out-p is true if a timeout happened. If nil, it means operations completed without
-          timing out.")))
+           called to clean up after waiting operations are done. Keyed on solicitation id.
+           Timed-out-p is true if a timeout happened. If nil, it means operations completed without
+           timing out.")
+   (temporary-p :initarg :temporary-p :initform nil :accessor temporary-p
+                :documentation "True if this node should be considered temporary, i.e. should not be
+           found by local-real-xxx functions.")))
 
 (defmethod clear-caches ((node gossip-node))
   "Caches should be cleared in the normal course of events, but this can be used to make sure."
@@ -944,7 +951,7 @@ dropped on the floor.
         (allnodes nil))
     (unwind-protect
         (progn
-          (setf localnode (make-node ':gossip))
+          (setf localnode (make-node ':gossip :temporary-p t))
           (pushnew (uid rnode) (neighborhood localnode))
           ;(format t "~%Localnode UID = ~D" (uid localnode))
           (setf allnodes (solicit-direct localnode :list-alive))
@@ -970,7 +977,7 @@ dropped on the floor.
                          address-port-list))
     (unwind-protect
         (progn
-          (setf localnode (make-node ':gossip))
+          (setf localnode (make-node ':gossip :temporary-p t))
           (mapcar (lambda (rnode)
                     (pushnew (uid rnode) (neighborhood localnode)))
                   rnodes)
@@ -2252,7 +2259,7 @@ gets sent back, and everything will be copacetic.
 ; ON SERVER MACHINE
 ; (clear-local-nodes)
 #+TEST1
-(setf localnode (make-node ':gossip
+(setf localnode (make-node ':gossip :temporary-p t
   :UID 200))
 ; (run-gossip :UDP)
 
@@ -2267,7 +2274,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node ':gossip
+(setf localnode (make-node ':gossip :temporary-p t
   :UID 201))
 #+TEST1
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2294,7 +2301,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node ':gossip
+(setf localnode (make-node ':gossip :temporary-p t
   :UID 201))
 #+TEST2
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2322,7 +2329,7 @@ gets sent back, and everything will be copacetic.
 
 #+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
-(setf localnode (make-node ':gossip
+(setf localnode (make-node ':gossip :temporary-p t
   :UID 201))
 #+TEST3
 (pushnew (uid rnode) (neighborhood localnode))
@@ -2379,7 +2386,7 @@ gets sent back, and everything will be copacetic.
 ; (get-kvs :foo) ; should return a list of (node . 2)
 
 #+TESTING
-(setf node (make-node ':gossip
+(setf node (make-node ':gossip :temporary-p t
   :UID 253
   :ADDRESS 'NIL
   :LOGFN 'GOSSIP::DEFAULT-LOGGING-FUNCTION
