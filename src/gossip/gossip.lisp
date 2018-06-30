@@ -578,7 +578,7 @@ are in place between nodes.
   (let* ((actor (make-gossip-actor node)))
     (setf (actor node) actor)
     (when pkey ; pkey, if given, takes precedence over UID
-      (setf (slot-value node 'uid) pkey))
+      (set-uid node pkey))
     (memoize-node node)))
 
 (defmethod make-node ((kind (eql :gossip)) &rest rest &key pkey skey &allow-other-keys)
@@ -586,6 +586,15 @@ are in place between nodes.
     (let ((node (apply '%make-node rest)))
       (initialize-node node :pkey pkey :skey skey)
       node)))
+
+(defmethod set-uid ((self uid-mixin) value)
+  (setf (slot-value self 'uid) value))
+
+; for debugging
+(defmethod set-uid :around ((self proxy-gossip-node) value)
+  (when (< value #.(expt 10 60))
+      (break))
+  (call-next-method))
 
 (defun make-proxy-node (mode &rest args)
   "Makes a new proxy node of given mode: :UDP or :TCP"
@@ -600,7 +609,7 @@ are in place between nodes.
       (let ((oldnode (lookup-node (real-uid node))))
         (when oldnode
           (log-event :WARN oldnode "being replaced by proxy" node)))
-      (setf (slot-value node 'uid) (real-uid node)))
+      (set-uid node (real-uid node)))
     (memoize-node node nil) ; proxies are not part of uber-set, therefore no cache invalidation needed
     ;;;(memoize-proxy node proxy-subtable)
     ))
