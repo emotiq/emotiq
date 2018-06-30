@@ -214,7 +214,8 @@ This will spawn an actor which will asynchronously do the following:
                ;; Establish current-node binding of genesis node
                ;; around call to create genesis block.
                (cosi/proofs:create-genesis-block
-                (pbc:keying-triple-pkey *genesis-account*))))
+                (pbc:keying-triple-pkey *genesis-account*)
+                (keys-and-stakes))))
            (genesis-transaction         ; kludgey handling here
              (first (cosi/proofs:block-transactions genesis-block)))
            (genesis-public-key-hash
