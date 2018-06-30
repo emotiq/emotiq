@@ -141,7 +141,8 @@
   "Returns a random element from list"
   (nth (random (length list)) list))
 
-
+; It's normal to see invalid-send-target errors in the log after this test, because we're destroying
+;   *nodes* while extant messages are still being sent. This doesn't hurt anything.
 (define-test singlecast-local "Test singlecast"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
@@ -150,15 +151,13 @@
       (let ((oldnodes *nodes*)
             (numnodes 100)
             (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*)
-            (old-absorb gossip::*gossip-absorb-errors*))
+            (old-remotes gossip::*remote-uids*))
         (unwind-protect
             (let ((results nil)
                   (*log-filter* nil)
                   (msg '(foo message)))
               (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
-              (setf gossip::*gossip-absorb-errors* (not *debug*))
               (setf *ll-application-handler* (lambda (node full-msg) (setf results (list (gossip::hopcount full-msg) node full-msg))))
               (clear-local-nodes)
               (gossip::make-nodes numnodes)
@@ -177,17 +176,18 @@
                 (assert-true results)
                 (when results (assert-equal msg (cdr (gossip::args (third results)))))
                 (when *debug* (format t "~%SINGLECAST-LOCAL Hopcount=~D" (first results)))
-               ; (print results) contains hopcount, node, and full message
+                ; (print results) contains hopcount, node, and full message
                 ))
           (setf *nodes* oldnodes
                 *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes
-                gossip::*gossip-absorb-errors* old-absorb)))))
+                gossip::*remote-uids* old-remotes)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-local)))
 
 ; Also need tests on singlecast-remote and singlecast-direct [no graphID]
 
+; It's normal to see invalid-send-target errors in the log after this test, because we're destroying
+;   *nodes* while extant messages are still being sent. This doesn't hurt anything.
 (define-test broadcast-local "Test broadcast"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
@@ -196,8 +196,7 @@
       (let ((oldnodes *nodes*)
             (numnodes 100)
             (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*)
-            (old-absorb gossip::*gossip-absorb-errors*))
+            (old-remotes gossip::*remote-uids*))
         (unwind-protect
             (let ((results nil)
                   (resultlock (mpcompat:make-lock))
@@ -205,7 +204,6 @@
                   (msg '(foo message)))
               (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
-              (setf gossip::*gossip-absorb-errors* (not *debug*))
               ; every node that receives the message will push its id onto results
               (setf *ll-application-handler* (lambda (node full-msg)
                                                (declare (ignore full-msg))
@@ -227,8 +225,7 @@
                 (assert-true (= (length results) numnodes))))
           (setf *nodes* oldnodes
                 *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes
-                gossip::*gossip-absorb-errors* old-absorb)))))
+                gossip::*remote-uids* old-remotes)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(broadcast-local)))
 

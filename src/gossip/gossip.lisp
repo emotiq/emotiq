@@ -799,11 +799,10 @@ dropped on the floor.
 |#
 
 (defun actor-send (&rest args)
-  "Error-safe version of ac:send"
-  (if *gossip-absorb-errors*
-      (handler-case (apply 'ac:send args)
-        (error (e) (log-event :ERROR e)))
-      (apply 'ac:send args)))
+  "Error-safe version of ac:send. Returns nil if successful; otherwise returns error object"
+      (handler-case (progn (apply 'ac:send args)
+                      nil)
+        (error (e) e)))
 
 ;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
@@ -1021,18 +1020,11 @@ dropped on the floor.
           (error "Cannot find node for ~D" destuid)
           (error "Cannot find actor for node ~S" destnode)))
     (edebug 5 "send-msg" msg destnode srcuid)
-    (if *gossip-absorb-errors*
-        (handler-case
-            (actor-send destactor
-                        :gossip ; actor-verb
-                        srcuid  ; first arg of actor-msg
-                        msg)    ; second arg of actor-msg
-          (ac:invalid-send-target () ; if target is invalid, log it and do nothing
-                                  (log-event :invalid-send-target destuid msg :from srcuid)))
-        (actor-send destactor
-                    :gossip ; actor-verb
-                    srcuid  ; first arg of actor-msg
-                    msg))))
+    (uiop:if-let (error (actor-send destactor
+                                    :gossip ; actor-verb
+                                    srcuid  ; first arg of actor-msg
+                                    msg))
+      (log-event :error error destuid msg :from srcuid))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -1363,15 +1355,15 @@ dropped on the floor.
   (let ((lowlevel-application-handler (lowlevel-application-handler node))
         (application-handler (application-handler node)))
     (when lowlevel-application-handler ; mostly for gossip's use, not the application programmer's
-      (if *gossip-absorb-errors*
-          (handler-case (actor-send lowlevel-application-handler node msg)
-            (error (c) (node-log node :ERROR msg c)))
-          (actor-send lowlevel-application-handler node msg))
-      (when application-handler
+      (uiop:if-let (error (actor-send lowlevel-application-handler node msg))
         (if *gossip-absorb-errors*
-            (handler-case (apply 'actor-send application-handler (funcall highlevel-message-extractor msg))
-              (error (c) (node-log node :ERROR msg c)))
-            (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))))))
+            (node-log node :ERROR error msg)
+            (error error)))
+      (when application-handler
+        (uiop:if-let (error (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))
+          (if *gossip-absorb-errors*
+              (node-log node :ERROR error msg)
+              (error error)))))))
 
 (defmethod k-singlecast ((msg solicitation) thisnode srcuid)
   "Send a message to one and only one node. Application message is expected to be in (cdr args) of the solicitation.
