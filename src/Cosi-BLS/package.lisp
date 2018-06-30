@@ -199,6 +199,7 @@
    :block-merkle-root-hash
    :block-input-script-merkle-root-hash
    :block-witness-merkle-root-hash
+   :block-witnesses-and-stakes
 
    :*newtx-p*))                         ; for new transactions, short term temp! -mhd, 6/12/18
 
