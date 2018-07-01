@@ -1,0 +1,491 @@
+#
+# The REST API contract of request and response messages
+#
+openapi:  3.0.1
+$id:   "http://api.emotiq.ch/rest/emotiq-openapi.yaml"
+info:
+  title: Emotiq Node interface
+  version: 0.1.0
+tags:
+  - name: consensus
+  - name: wallet
+  - name: transaction
+  - name: dictionary
+  - name: support
+paths:
+# MUST implement  
+  /consensus/:
+    get:
+      summary: >-
+        Returns information about current chain consensus with the connected
+        node
+      tags:
+        - consensus
+      responses:
+        '200':
+          description: The consensus information for the connected node
+          content:
+            application/json:
+              schema:
+                $ref: 'responses.yaml#/schemas/consensus/'
+# MUST implement:  default wallet is 'My Wallet', but it may be changed
+  /wallet/:
+    get:
+      summary: Enumerate the names of existing wallets
+      tags:
+        - wallet
+      responses:
+        '200':
+          description: The enumeration of the names of existing wallets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /wallet/{name}/create:
+    post:
+      tags:
+        - wallet
+      summary: Create wallet
+      parameters:
+        - name: name
+          in: path
+          description: |-
+            Name of wallet to create
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Wallet created 
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address:
+                    description: |-
+                      Public address of the newly created wallet
+                    type: string
+        '409':
+          description: Wallet already exists
+  /wallet/{name}:
+    tags:
+      - wallet
+    get:
+      description: Summarize information about a wallet
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Information about the wallet
+          content:
+            application/json:
+              schema:
+                $ref: 'messages.yaml#/schemas/wallet/default/response'
+    delete:
+      summary: Delete wallet
+      parameters:
+        - name: name
+          in: path
+          description: The name of the wallet to delete
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 
+            The named wallet was successfully deleted
+        '404':
+          description: 
+            The named wallet does not exist
+# MUST implement            
+  /wallet/{name}/rename:
+    post:
+      summary: Change the wallet name
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  description: New wallet name
+                  type: string
+      response:
+        200:
+          description: Wallet successfully renamed
+        400:
+          description: Invalid wallet name
+# MUST implement          
+  /wallet/{name}/password:
+    get:
+      summary: Get the wallet password; empty string if no passphase set
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+      response:
+        content:
+          application/json:
+            type: object
+            properties:
+              password:
+                type: string
+    put:
+      summary: Set the wallet password
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+# MUST implement          
+  /wallet/{name}/phrase:
+    get:
+      summary: Get the wallet recovery passphrase
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+# MUST implement          
+  '/wallet/{name}/address/{address}/transaction/':
+    get:
+      tags:
+        - wallet
+      summary: Enumerate wallet transactions
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+        - name: address
+          in: path
+          required: true
+          type: integer
+      responses:
+        '200':
+          description: An enumeration of all transaction ids for wallet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalTransactions:
+                    type: integer
+                  transactionIds:
+                    type: array
+                    items:
+                      type: string  
+  '/wallet/{name}/address/{address}/transaction/{id}':
+    get:
+      tags:
+        - wallet
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+        - name: address
+          in: path
+          required: true
+          type: integer
+        - name: id
+          in: id
+          required: true
+          type: integer
+      responses:
+        '200':
+          description: Information about a given transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/transaction'
+        '404':
+          description: No such transaction
+  '/wallet/{name}/transaction/':
+      get:
+        tags:
+          - wallet
+        parameters:
+          - name: name
+            in: path
+            required: true
+            type: string
+        responses:
+          '200':
+            description: Information about all transactions for wallet
+            content:
+              application/json:
+                schema:
+                  type: array
+                    items:
+                      $ref: '#/components/schemas/transaction'
+  '/wallet/{name}/address':
+    post:
+      tags:
+        - wallet
+      summary: generate new address
+      operationId: generateAddress
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+      responses:
+        '201':
+          description: A new address has been created
+          schema:
+            type: object
+            properties:
+              address:
+                type: string
+# MUST implement
+  '/wallet/{name}/address/':
+    get:
+      tags:
+        - wallet
+      summary: Get all addresses associated with a wallet
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Array of addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  '/wallet/{name}/address/{address}':
+    get:
+      tags:
+        - wallet
+      summary: Get information about an address within a wallet
+      operationId: getAddressStatus
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          description: Name of wallet 
+          in: path
+          required: true
+          type: string
+        - name: address
+          description: Address for information in wallet
+          in: path
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Success
+          schema:
+            type: object
+            properties:
+              status:
+                description: Whether this address has ever been used in the blockchain
+                type: string
+                enum:
+                  - USED
+                  - UNUSED
+              amount:
+                type: integer
+  '/wallet/{name}/address/all':
+      get:
+        tags:
+          - wallet
+        summary: Get information about all addresses associated with a wallet
+        parameters:
+          - name: name
+            description: Name of wallet
+            in: path
+            required: true
+            type: string
+        responses:
+          '200':
+            description: Array of addreses with information
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  status:
+                    description: Whether this address has ever been used in the blockchain
+                    type: string
+                    enum:
+                      - USED
+                      - UNUSED
+                  amount:
+                    type: number
+                    format: double
+  '/wallet/{name}/address/{address}/transaction':
+    post:
+      tags:
+        - transaction
+      summary: Submit transaction to blockchain
+      operationId: createTransaction
+      requestBody:
+        description: Parameters for transaction
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              properties:
+                schema:
+                  type: object
+                  properties:
+                    address:
+                      description: Address to pay amount
+                      type: string
+                    amount:
+                      description: Amountto pay this address
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+        - in: address
+          name: body
+          required: true
+          type: string
+      responses:
+        '201':
+          description: The transaction has been succesfully submitted
+          schema:
+            items:
+              $ref: '#/components/schema/transaction'
+  /wallet/{name}/restore:
+    post:
+      summary: Restore wallet from recovery phrase
+      tags:
+        - wallet
+      requestBody:
+        description: Phrase to be used to restore wallet
+        required: true
+        content:
+            application/json:
+              schema:
+                type: array 
+                items:
+                  word:
+                    type: string
+      responses:
+        '200':
+          content:
+            description: Success
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address:
+                    type: string
+        '409':
+          description: Wallet already exists
+  /dictionary/:
+    get:
+      tags:
+        - dictionary
+      summary: Return available recovery phrase dictionaries by language
+      produces:
+        - application/json
+      responses:
+        '200':
+          schema:
+            type: array
+            items:
+              type: string
+  '/dictionary/{language}':
+    get:
+      tags:
+        - dictionary
+      operationId: getDictionary
+      parameters:
+        - name: language
+          in: path
+          required: true
+          type: string
+      responses:
+        '200':
+          content:
+            description: Return the 2048 word dictionary
+            application/json:
+              type: array
+              items:
+                type: string
+# Is this still necessary?                
+  '/support':
+    post:
+      summary: Support request
+      tags:
+        - support
+      requestBody:
+        description: Request content
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+                properties:
+                  email:
+                    type: string
+                  subject:
+                    type: string
+                  problem:
+                    type: string
+                  logs:
+                    type: boolean
+                    description: does the user want to attach logs
+      responses:
+        '204':
+          description: Success
+  '/simulator/':
+    post:
+      summary: Run a new instance of the simulator
+      # For now an empty POST request. TODO simulator can be configured via parameters
+      responses:
+        '201':
+          description: URI that may be queried for simulator results
+          content:
+            text/plain:
+              schema:
+                type: string
+        '409':
+          description: An instance of the simulator has already been created
+  '/simulator/{id}':
+    get:
+      summary: Get the textual status of the current simulator
+      responses:
+        '200':
+          description: Textual output of simulator (may be empty)
+          content:
+            text/plain:
+              schema:
+                type: string
+    delete:
+      summary: Delete all traces of the simulator (NOT COMPLETELY WORKING)
+      responses:
+        '204':
+          description: Simulator wind down routines invoked
+  '/node/tracker':
+    get:
+      summary: Get the current state of the node according to the tracker
+          
