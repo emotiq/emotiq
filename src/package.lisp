@@ -120,6 +120,7 @@
   (:nicknames #:emotiq/fs #:emotiq/path)
   (:export
    #:emotiq/user/root/
+   #:emotiq/wallet/
    #:etc/
    #:var/log/))
 

@@ -17,7 +17,7 @@
 (let* ((seed (ironclad:make-random-salt 32))
        (wallet-1 (emotiq/wallet::make-wallet-from-seed seed))
        (wallet-2 (emotiq/wallet::make-wallet-from-seed seed)))
-  (prove:is (hash:hash=
+  (prove:ok (hash:hash=
              (hash:hash/256
               (pbc:keying-triple-pkey (emotiq/wallet:keying-triple wallet-1)))
              (hash:hash/256

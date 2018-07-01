@@ -31,3 +31,10 @@
   (merge-pathnames "Emotiq/"
                    (merge-pathnames "Library/Application Support/"
                                     (user-homedir-pathname))))
+
+(defun emotiq/wallet/ ()
+  "The pathname for the directory containing wallets"
+  (merge-pathnames (make-pathname :directory '(:relative "wallet"))
+                   (emotiq/user/root/)))
+
+
