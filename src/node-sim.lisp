@@ -40,6 +40,7 @@ witnesses.
 
 N.B. :nodes has no effect unless a new configuration has been triggered (see above)."
 
+  (setf cosi-simgen::*use-real-gossip* nil)
   (setf actors::*maximum-age* 120)
   (when executive-threads
     (actors:set-executive-pool executive-threads))

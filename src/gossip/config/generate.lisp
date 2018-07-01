@@ -101,21 +101,16 @@ The ROOT defaults to '/var/tmp/conf'."
       (format o "~s~%" stake))))
 
 ;;; FIXME: should be moved as part of the crypto API
-;;; FIXME: should not reference internal symbols in VEC-REPR
 (defun make-key-integers ()
   "Makes a public/private keypair and returns a list of two integers thereof"
   (let ((keypair (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid)))))
     (list
      ; public is first
-     (vec-repr::convert-vec-to-int
-      (vec-repr::bev-vec
-       (pbc::public-key-val
-        (pbc::keying-triple-pkey keypair))))
+     (vec-repr:int
+      (pbc:keying-triple-pkey keypair))
      ; private is second
-     (vec-repr::convert-vec-to-int
-      (vec-repr::bev-vec
-       (pbc::secret-key-val
-        (pbc::keying-triple-skey keypair)))))))
+     (vec-repr:int
+      (pbc:keying-triple-skey keypair)))))
 
 
 

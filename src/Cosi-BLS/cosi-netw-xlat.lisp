@@ -83,7 +83,7 @@ THE SOFTWARE.
 (defmethod gossip-send (pkey aid msg)
   ;; stub code to do direct UDP until we plug in actual Gossip code...
   (cond (*use-real-gossip*
-         (gossip:singlecast msg pkey
+         (gossip:singlecast msg (int pkey)
                             :graphID :uber))
 
         (t
