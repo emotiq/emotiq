@@ -18,10 +18,16 @@
     d))
 
 (defun etc/ ()
+  "All configuration files for a node"
   (let ((d (asdf:system-relative-pathname :emotiq "../var/etc/")))
     (ensure-directories-exist d)
     d))
 
+(defun tmp/ ()
+  "Writable filesystem for temporary output"
+  (ensure-directories-exist
+   #p"/var/tmp/emotiq/"))
+  
 (defun emotiq/user/root/ ()
   #+:windows
   (error "Not implemented on Windows")

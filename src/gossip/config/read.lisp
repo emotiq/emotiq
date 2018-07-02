@@ -3,23 +3,18 @@
 (defparameter *keypairs-filename* "keypairs.conf")
 (defparameter *hosts-filename*    "hosts.conf")
 (defparameter *machine-filename*  "local-machine.conf")
-(defparameter *stakes-filename*   "stakes.conf")
 
 ;;; XXX No need for these to be parameters?
 (defparameter *keypair-db-path* nil "Full path to keypairs config file")
 (defparameter *hosts-db-path*   nil "Full path to hosts config file")
 (defparameter *machine-db-path* nil "Full path to local-machine config file")
-(defparameter *stakes-db-path*  nil "Full path to stakes config file")
 
-(defun find-root-path ()
-  (merge-pathnames "gossip-config/" (emotiq/fs:etc/)))
 
-(defun initialize (&key (root-path (find-root-path)))
+(defun initialize (&key (root-path (emotiq/fs:etc/)))
   (when root-path
     (setf *keypair-db-path* (merge-pathnames *keypairs-filename* root-path))
     (setf *hosts-db-path*   (merge-pathnames *hosts-filename*    root-path))
-    (setf *machine-db-path* (merge-pathnames *machine-filename*  root-path))
-    (setf *stakes-db-path*  (merge-pathnames *stakes-filename*   root-path))))
+    (setf *machine-db-path* (merge-pathnames *machine-filename*  root-path))))
 
 (defun get-values ()
   "Return the values for the current network configuration.
