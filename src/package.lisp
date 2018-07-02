@@ -118,9 +118,11 @@
 
 (defpackage emotiq/filesystem
   (:use #:cl)
-  (:nicknames #:emotiq/fs #:emotiq/path)
+  (:nicknames #:emotiq/fs
+              #:emotiq/path)
   (:export
    #:emotiq/user/root/
+   #:tmp/
    #:etc/
    #:var/log/))
 
@@ -139,4 +141,16 @@
    #:begin-sim
    #:wind-down-sim
    #:introspect))
+
+(defpackage emotiq/config
+  (:use #:cl)
+  (:export
+   #:*nodes-dns-ip*
+   #:network/generate
+   #:node/generate
+
+   #:*dns-ip-zt.emotiq.ch*
+   #:settings/read))
+
+
 

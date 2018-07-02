@@ -5,7 +5,7 @@ variables:
   LWPRO_MACOS_64: lwpro
   lisp: lisp-wrapper.sh
 # Add ASDF systems here to test them
-  systems: ":cosi-bls-tests :crypto-pairings :gossip-tests :emotiq/wallet :gossip-config-tests"
+  systems: ":cosi-bls-tests :crypto-pairings :gossip-tests :emotiq/wallet :gossip-config-tests :emotiq/config"
 
 stages:
   - test
