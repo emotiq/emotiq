@@ -11,7 +11,8 @@
                 (probe-file genesis-block-path))
       (let ((genesis-block
              (cosi/proofs:create-genesis-block
-              (alexandria:assoc-value configuration :public))))
+              (alexandria:assoc-value configuration :public)
+              (alexandria:assoc-value configuration :witnesses-and-stakes))))
         (with-open-file (o genesis-block-path
                            :direction :output
                            :if-exists :supersede)

@@ -3,11 +3,16 @@
 (defun keys/generate (records)
   "Generate keys for a list of alist RECORDS, destructively"
   (loop
+     :with key-integers = (make-key-integers)
      :for record :in records
-     :doing (push `(:public-private . ,(make-key-integers))
+     :doing (push `(:public
+                    . ,(format nil "~a" (first key-integers)))
                   record)
-     :collecting record
-     :finally (return records)))
+     :doing (push `(:private
+                    . ,(format nil "~a" (second key-integers)))
+                  record)
+     :collecting record))
+
 
 (defun make-key-integers ()
   "Makes a public/private keypair seeded via UUID:MAKE-V1-UUID

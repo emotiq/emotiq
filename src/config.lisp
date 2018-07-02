@@ -34,7 +34,7 @@
        . "emotiq-genesis-block.json")))
 
 (defun generated-directory (configuration)
-  (let ((host (alexandria:assoc-value configuration :host))
+  (let ((host (alexandria:assoc-value configuration :hostname))
         (ip (alexandria:assoc-value configuration :ip))
         (gossip-server-port (alexandria:assoc-value configuration :gossip-server-port))
         (rest-server-port (alexandria:assoc-value configuration :rest-server-port))
@@ -65,18 +65,24 @@
               configuration)
         (push (cons :ip ip)
               configuration)
-        (when settings-key-value-alist
-          (loop :for (key . value)
-             :in settings-key-value-alist
-             :doing (push `(,key . ,value) configuration)))
         (push `(:public
                 . ,(random 100)) ;; FIXME
               configuration)
         (push `(:private
                 . ,(random 100)) ;; FIXME
               configuration)
+        (push `(:witnesses-and-stakes
+                . ,stakes)
+              configuration)
+        ;;; Override by pushing ahead in alist
+        (when settings-key-value-alist
+          (loop :for (key . value)
+             :in settings-key-value-alist
+             :doing (push `(,key . ,value) configuration)))
+
         (let ((relative-path (generated-directory configuration)))
-          (let ((path (merge-pathnames relative-path root)))
+          (let ((path (merge-pathnames relative-path root))
+                (configuration (copy-alist configuration)))
             (push 
              (node/generate path
                             configuration
