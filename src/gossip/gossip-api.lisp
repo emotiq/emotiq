@@ -50,12 +50,12 @@
                     nil)))))
 
 ; Normally you wouldn't call this as a high-level application programmer. Call broadcast instead.
-(defun gossipcast (message &key (graphID *default-graphID*) startnodeID (howmany 2))
+(defun gossipcast (message &key (graphID *default-graphID*) startnodeID (howmany 2) (kind ':k-multicast))
   "Sends message via traditional gossip.
   Howmany determines whether traditional gossip or neighborcast is used."
   (let ((solicitation (make-solicitation
                        :reply-to nil
-                       :kind :k-multicast
+                       :kind kind
                        :forward-to howmany ; traditional gossip
                        :graphID graphID
                        :args message)))
@@ -63,21 +63,29 @@
               startnodeID                   ; destination
               nil)))
 
-(defun broadcast (message &key (style ':neighborcast) (graphID *default-graphID*) startnodeID)
+(defun broadcast (message &key (style ':neighborcast) (graphID *default-graphID*) startnodeID (kind ':k-multicast))
   "High-level API for broadcasting a message along a graph.
    If startnodeID is provided, it will be used as the starting node.
    If startnodeID is not provided, we'll start at some locally-known node that's part of given graphID.
    Use style = :neighborcast for most reliable transport.
    Use style = :gossip or some small integer (like 2 or 3) for better scalability on large graphs, at expense of some reliability.
    (An integer--if supplied--represents the maximum number of a node's neighbors to forward the message to.
-    :neighborcast means 'use all the neighbors'. :gossip means 'use up to 2 neighbors'.)"
+    :neighborcast means 'use all the neighbors'. :gossip means 'use up to 2 neighbors'.)
+   Normally an API programmer should let :kind default."
   (unless startnodeID
       (setf startnodeID (locate-local-node-for-graph graphID)))
   (cond
-    ((eql ':neighborcast style) (gossipcast message :graphID graphID :startnodeID startnodeID :howmany t))
-    ((eql ':gossip style)       (gossipcast message :graphID graphID :startnodeID startnodeID :howmany 2))
-    ((integerp style)           (gossipcast message :graphID graphID :startnodeID startnodeID :howmany style))
+    ((eql ':neighborcast style) (gossipcast message :graphID graphID :startnodeID startnodeID :howmany t :kind kind))
+    ((eql ':gossip style)       (gossipcast message :graphID graphID :startnodeID startnodeID :howmany 2 :kind kind))
+    ((integerp style)           (gossipcast message :graphID graphID :startnodeID startnodeID :howmany style :kind kind))
     (t (error "Invalid style ~S" style))))
+
+(defun hello (pkey ipaddr ipport &key (style ':neighborcast) (graphID *default-graphID*) startnodeID)
+  "Announce the presence of pkey (node UID) at ipaddr and ipport to a graph. Nodes traversed will
+   add the pkey/ipaddr pair to their knowledge of the :uber graph.
+   graphID here is merely the graph traversed by this message; this does not connect nodes to any given
+   graph except for the :uber graph."
+  (broadcast (list pkey ipaddr ipport) :style style :graphID graphID :startnodeID startnodeID :kind ':k-hello))
 
 ;;; NOT DONE YET
 (defun establish-star-broadcast-group (list-of-nodeIDs &key graphID center-nodeID)

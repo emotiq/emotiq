@@ -152,6 +152,9 @@ THE SOFTWARE.
    #:*heartbeat-interval*
 
    #:kill-executives
+
+   #:schedule-timeout-action
+   #:schedule-after
    ))
 
 (defpackage #:linda

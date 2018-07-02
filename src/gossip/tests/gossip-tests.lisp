@@ -141,7 +141,8 @@
   "Returns a random element from list"
   (nth (random (length list)) list))
 
-
+; It's normal to see invalid-send-target errors in the log after this test, because we're destroying
+;   *nodes* while extant messages are still being sent. This doesn't hurt anything.
 (define-test singlecast-local "Test singlecast"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
@@ -175,7 +176,7 @@
                 (assert-true results)
                 (when results (assert-equal msg (cdr (gossip::args (third results)))))
                 (when *debug* (format t "~%SINGLECAST-LOCAL Hopcount=~D" (first results)))
-               ; (print results) contains hopcount, node, and full message
+                ; (print results) contains hopcount, node, and full message
                 ))
           (setf *nodes* oldnodes
                 *ll-application-handler* old-application-handler
@@ -185,6 +186,8 @@
 
 ; Also need tests on singlecast-remote and singlecast-direct [no graphID]
 
+; It's normal to see invalid-send-target errors in the log after this test, because we're destroying
+;   *nodes* while extant messages are still being sent. This doesn't hurt anything.
 (define-test broadcast-local "Test broadcast"
   ;;; careful with globals. Remember that they get a different value
   ;;; in each thread if you're not careful.  So we set them here
@@ -230,7 +233,8 @@
 
 (defun make-test-network ()
   "Interesting graph of 10 nodes."
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 9
    :ADDRESS 'NIL
    :neighborhood '(2 4)
@@ -238,7 +242,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 4
    :ADDRESS 'NIL
    :neighborhood '(8 3 5 9)
@@ -246,7 +251,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 5
    :ADDRESS 'NIL
    :neighborhood '(6 8 4)
@@ -254,7 +260,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 8
    :ADDRESS 'NIL
    :neighborhood '(4 3 5)
@@ -262,7 +269,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 3
    :ADDRESS 'NIL
    :neighborhood '(4 1 8)
@@ -270,7 +278,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 1
    :ADDRESS 'NIL
    :neighborhood '(2 6 3)
@@ -278,7 +287,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 6
    :ADDRESS 'NIL
    :neighborhood '(5 2 1)
@@ -286,7 +296,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 2
    :ADDRESS 'NIL
    :neighborhood '(9 1 7 6)
@@ -294,7 +305,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 7
    :ADDRESS 'NIL
    :neighborhood '(10 2)
@@ -302,7 +314,8 @@
                'EQUAL
                'NIL)
    )
-  (make-node
+  (make-node ':gossip
+   :temporary-p t
    :UID 10
    :ADDRESS 'NIL
    :neighborhood '(7)

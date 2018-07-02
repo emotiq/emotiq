@@ -107,12 +107,23 @@ THE SOFTWARE.
                    :initform  (make-hash-table
                                :test 'equalp))
 
-   (hold-off       :accessor node-hold-off
-                   :initform nil)
-   (hold-off-timer :accessor node-hold-off-timer)
-
    (current-leader :accessor node-current-leader
                    :initform nil) ;; holds pkey of current leader node
+   (current-beacon :accessor node-current-beacon
+                   :initform nil) ;; holds pkey of 1-shot beacon assignee
+
+   ;; list of pkeys that have called for new election
+   (election-calls :accessor node-election-calls
+                   :initform nil)
+
+   ;; local-epoch records the last election seed
+   (local-epoch    :accessor node-local-epoch
+                   :initform 0)
+
+   ;; had-work if we were witness and was called to perform work on a block
+   (had-work       :accessor node-had-work
+                   :initform nil)
+   
    (tx-changes     :accessor node-tx-changes
                    :initform nil)
    ;; -------------------------------------
@@ -168,7 +179,7 @@ THE SOFTWARE.
 
 (defvar *comm-ip*  nil) ;; internal use only
 
-(defun make-node (ipstr pkeyzkp parent)
+(defun make-cosi-tree-node (ipstr pkeyzkp parent)
   (let* ((cmpr-pkey (first pkeyzkp))
          (pval      (keyval cmpr-pkey))
          (node (make-instance 'node
@@ -179,13 +190,17 @@ THE SOFTWARE.
                               :parent  parent
                               :real-ip *comm-ip*
                               )))
-    (setf (node-self node) (cosi-simgen::make-node-dispatcher node) ;(make-node-dispatcher node)
-          (gethash ipstr *ip-node-tbl*)   node
+    (setf (gethash ipstr *ip-node-tbl*)   node
           (gethash pval  *pkey-node-tbl*) node)))
 
 (defun need-to-specify (&rest args)
   (declare (ignore args))
   (error "Need to specify..."))
+
+;; new for Gossip support, and conceptually cleaner...
+(defmethod initialize-instance :around ((node node) &key &allow-other-keys)
+  (setf (node-self node) (make-node-dispatcher node))
+  (call-next-method))
 
 ;; --------------------------------------------------------------
 
@@ -302,7 +317,7 @@ THE SOFTWARE.
 (defun inner-make-node-tree (ip ip-list &optional parent)
   (multiple-value-bind (ipstr pkeyzkp)
       (gen-node-id ip)
-    (let ((node (make-node ipstr pkeyzkp parent)))
+    (let ((node (make-cosi-tree-node ipstr pkeyzkp parent)))
       (when ip-list
         (let ((bins (partition node ip-list
                                :key (lambda (ip-arg)

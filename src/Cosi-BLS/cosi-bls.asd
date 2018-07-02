@@ -56,6 +56,7 @@ THE SOFTWARE.
                                      (:file "range-proofs")
                                      (:file "transaction")
                                      (:file "cosi-handlers")
+                                     (:file "mvp-election-beacon")
                                      (:file "new-transactions")
                                      (:file "cosi-netw-xlat")))))
 
