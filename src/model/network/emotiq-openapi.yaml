@@ -340,7 +340,7 @@ paths:
     post:
       tags:
         - transaction
-      summary: Submit transaction to blockchain
+      summary: Submit payments to batch into transactions in blockchain
       operationId: createTransaction
       requestBody:
         description: Parameters for transaction
@@ -348,16 +348,7 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              properties:
-                schema:
-                  type: object
-                  properties:
-                    address:
-                      description: Address to pay amount
-                      type: string
-                    amount:
-                      description: Amountto pay this address
+              $ref: 'messages.yaml#/schemas/transactions/submit'
       parameters:
         - name: name
           in: path

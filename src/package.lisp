@@ -62,6 +62,9 @@
 (defpackage emotiq/wallet
   (:use #:cl)
   (:export
+   #:submit-transaction
+   #:get-transaction)
+  (:export
    #:get-wallet-named
 
    #:create-wallet

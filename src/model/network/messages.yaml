@@ -58,48 +58,62 @@ schemas:
             type: string
           amount:
             type: integer
+  transaction:
+    type: object
+    properties:
+      id:
+        type: string
+        timestamp:
+          type: integer
+          format: int64
+      type:
+        description: 
+          type: string
+          enum:
+            - spend
+            - stake
+      epoch:
+        description: The epoch which this transaction is part of 
+        type: integer
+      fee:
+        type: integer
+      inputs:
+        type: array
+        items:
+          type: object
+          properties:
+            cloaked:
+              type: boolean
+            address:
+              type: string
+            amount:
+              type: integer
+      outputs:
+        type: array
+        items:
+          type: object
+          properties:
+            cloaked:
+              type: boolean
+            address:
+              type: string
+            amount:
+              type: integer
   transactions:
-    response:
+    submit:
       type: array
       items:
         type: object
         properties:
-          id:
+          address:
+            description: The ADDRESS to pay 
             type: string
-          timestamp:
-            type: integer
-            format: int64
-          type:
-            description: 
-            type: string
-            enum:
-              - spend
-              - stake
-          epoch:
-            description: The epoch which this transaction is part of 
-            type: integer
-          fee:
-            type: integer
-          inputs:
-            type: array
-            items:
-              type: object
-              properties:
-                cloaked:
-                  type: boolean
-                address:
-                  type: string
-                amount:
-                  type: integer
-          outputs:
-            type: array
-            items:
-              type: object
-              properties:
-                cloaked:
-                  type: boolean
-                address:
-                  type: string
-                amount:
-                  type: integer
+          amount:
+            description: The AMOUNT to pay
+            type: float # TODO FIXME
+    response:
+      type: array
+      items:
+        $ref: "/schemas/transaction
+            
   

@@ -73,6 +73,7 @@
                 :serial t
                 :components ((:file "name")
                              (:file "file")
+                             (:file "transaction")
                              (:file "wallet")))))
 
 (defsystem "emotiq/cli"

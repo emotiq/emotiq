@@ -26,6 +26,21 @@ paths:
         result:
           schema:
             $ref: 'messages.yaml#/schemas/transactions/response'
+      'submit-transaction':
+        description:
+          Instruct the node wallet to sign and submit a transaction to the chain
+        result:
+          schema:
+            $ref: 'messages.yaml#/schemas/transactions/submit'
+      'get-transaction':
+        description:
+          Instruct the node wallet to sign and submit a transaction to the chain
+        request:
+          schema:
+            $ref: 'messages.yaml#/schemas/transaction'
+        result:
+          schema:
+            $ref: 'messages.yaml#/schemas/transactions/submit'
       'ping':
         description:
           A simple request/response to determine liveness of the connection
