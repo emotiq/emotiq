@@ -138,6 +138,8 @@ THE SOFTWARE.
    (self     :accessor node-self     ;; ptr to Actor handler
              :accessor application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
+   (rh-state :accessor node-rh-state
+             :initform nil)          ;; ptr to Randhound state info
    ))
 
 (defmethod node-bitmap ((node node))

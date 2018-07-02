@@ -48,7 +48,7 @@ THE SOFTWARE.
   
 ;; -------------------------------------------------------
 
-(defvar *current-node*  nil)  ;; for sim = current node running
+(defvar *current-node*     nil)  ;; for sim = current node running
 
 (defun current-node ()
   *current-node*)
@@ -69,6 +69,8 @@ THE SOFTWARE.
 (define-symbol-macro *election-calls* (node-election-calls *current-node*))
 (define-symbol-macro *beacon*         (node-current-beacon *current-node*))
 (define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
+
+(define-symbol-macro *rh-state*       (node-rh-state       *current-node*))
 
 ;; -------------------------------------------------------
 
@@ -183,22 +185,54 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------------------------------------
 
+(defgeneric rh-dispatcher (msg-sym &key &allow-other-keys))
+
+;; ------------------------------------------------------------------------------------
+
 (defun make-node-dispatcher (node)
+  ;; We define two separate Actors for this node, plus one super Actor
+  ;; for quick dispatching of incoming messages. The dispatcher
+  ;; determines which sub-actor should handle the response. It also
+  ;; handles direct replies to ephemeral Actors, indicated by
+  ;; :ACTOR-CALLBACK.
+  ;;
+  ;; We use separate sub-Actors for Cosi blockchain-related messaging,
+  ;; and another for Randhound election processing. That allows for
+  ;; concurrent processing of both kinds of messages, where Randhound
+  ;; activities don't mess with blockchain info, and vice versa.
+  ;;
+  ;; NOTE: Separate Actors = separate SMP threads
+  ;;
   (let ((beh  (make-actor
+               ;; Cosi blockchain messages
                (lambda (&rest msg)
                  (with-current-node node
                    (apply 'node-dispatcher msg)))
-               )))
+               ))
+        (rh-beh (make-actor
+                 ;; Randhound election messages
+                 (lambda (&rest msg)
+                   (with-current-node node
+                     (apply 'rh-dispatcher msg)))
+                 )))
     (make-actor
+     ;; Dispatching Actor, remains lightly loaded for fast handling
      (lambda (&rest msg)
        (um:dcase msg
          (:actor-callback (aid &rest ans)
+          ;; Replies to ephemeral Actors are prefixed with :ACTOR-CALLBACK.
+          ;; Lookup Actor from AID and dispatch directly.
           (let ((actor (lookup-actor-for-aid aid)))
             (when actor
               (apply 'send actor ans))
             ))
+
+         (:randhound (&rest msg)
+          ;; Randhound messages are prefixed with :RANDHOUND
+          (apply 'send rh-beh msg))
          
           (t (&rest msg)
+             ;; All other messages dispatch to Cosi blockchain handlers
              (apply 'send beh msg))
           )))))
 
