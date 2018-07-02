@@ -9,5 +9,12 @@
    :as-html :reify
    :mime-type))
 
+(defpackage emotiq-rest/config
+  (:use :cl)
+  (:export
+   #:server-configuration
+   #:port))
+
+
    
 

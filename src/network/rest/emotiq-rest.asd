@@ -28,6 +28,9 @@
                                        (:file "wallet-0.0.1")
                                        (:file "emotiq-0.0.1")))))
 
-
+(defsystem "emotiq-rest/config"
+  :depends-on (cl-json)
+  :components ((:file "package")
+               (:file "config" :depends-on (package))))
 
 
