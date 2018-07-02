@@ -1,7 +1,7 @@
 (defsystem model
   :components 
   ((:module package :pathname "./"
-            :components ((:file package)))))
+            :components ((:file "package")))))
 
 (defsystem model/wallet
   :depends-on (model

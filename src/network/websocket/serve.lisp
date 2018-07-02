@@ -66,16 +66,14 @@
              (setf result (model/wallet:recovery-phrase)))
             ((string= method "submit-transaction")
              (let* ((parameters (alexandria:assoc-value request :params))
-                    (transaction (alexandria:assoc-value parameters :name))
+                    (transaction (alexandria:assoc-value parameters :transaction))
                     (name (alexandria:assoc-value parameters :name))
                     (address (alexandria:assoc-value parameters :address)))
                (setf result
                      (emotiq/wallet:submit-transaction
                       transaction
                       :name name
-                      :address address))))))
-        
-                   (emotiq:recovery-phrase)))
+                      :address address))))
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")

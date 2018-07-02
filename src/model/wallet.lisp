@@ -22,9 +22,3 @@
   (let ((wallet (emotiq/wallet:get-wallet-named name)))
     `(:array
       ,(emotiq/wallet:primary-address wallet))))
-
-
-
-
-
-
