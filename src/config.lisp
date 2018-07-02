@@ -57,17 +57,17 @@
       (let ((configuration
              (copy-alist +default-configuration+))
             (hostname
-             (alexandria:assoc-value :hostname node))
+             (alexandria:assoc-value node :hostname))
             (ip
-             (alexandria:assoc-value :ip node)))
+             (alexandria:assoc-value node :ip)))
         (push (cons :hostname hostname)
               configuration)
         (push (cons :ip ip)
               configuration)
         (when settings-key-value-alist
-          (loop :for (key . value) :in settings-key-value-alist
-             :doing (setf (assoc key configuration)
-                          value)))
+          (loop :for (key . value)
+             :in settings-key-value-alist
+             :doing (push `(,key . ,value) configuration)))
         (let ((relative-path (generated-directory configuration)))
           (let ((path (merge-pathnames relative-path root)))
             (push 
