@@ -72,6 +72,7 @@
                 :pathname "wallet/"
                 :serial t
                 :components ((:file "name")
+                             (:file "transaction")
                              (:file "file")
                              (:file "wallet")))))
 
