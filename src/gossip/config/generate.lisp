@@ -3,6 +3,7 @@
 (defparameter *nominal-gossip-port* 65002 "Duplicate of same symbol in gossip package
     to avoid package interdependencies")
 
+#+(or)
 (defun generate-network (records &key (root (emotiq/fs:etc/)))
   "Generate configuration directories for gossip network for RECORDS at directory ROOT
 
@@ -24,20 +25,21 @@ Returns a list of directions created with valid configurations.
            directories))))
     directories))
 
-(defun generate-node (&key path host eripa gossip-port key-records)
-  (ensure-directories-exist path)
-  (emotiq:note "~&Writing configuration to '~a'.~&" path)
+(defun generate-node (&key root host eripa gossip-port public private key-records)
+  (declare (ignore host)) ;; Hmm?
+  (ensure-directories-exist root)
+  (emotiq:note "~&Writing configuration to '~a'.~&" root)
 
   (write-local-machine-conf
-   (merge-pathnames *machine-filename* path)
-   eripa port public)
+   (merge-pathnames *machine-filename* root)
+   eripa gossip-port public)
   (write-hosts-conf
-   (merge-pathnames *hosts-filename* path)
-           key-records)
-  (write-keypairs-conf
-   (merge-pathnames *keypairs-filename* path)
+   (merge-pathnames *hosts-filename* root)
    key-records)
-  path)
+  (write-keypairs-conf
+   (merge-pathnames *keypairs-filename* root)
+   key-records)
+  root)
 
 (defun write-local-machine-conf (path eripa port public)
   (with-open-file (o path
@@ -51,11 +53,9 @@ Returns a list of directions created with valid configurations.
   (with-open-file (o path
                      :direction :output
                      :if-exists :supersede)
-    (dolist (key-record records)
-      (destructuring-bind (host eripa port (public private))
-          key-record
-        (declare (ignore eripa public private))
-        (format o "~s~&" `(,host ,port))))))
+    (dolist (record records)
+      (format o "~s~&" `(,(getf record :hostname)
+                         ,(getf record :gossip-server-port))))))
 
 (defun write-keypairs-conf (path records)
   (with-open-file (o path
@@ -63,11 +63,10 @@ Returns a list of directions created with valid configurations.
                      :if-exists :supersede)
     (format o ";;; ~A~%" *keypairs-filename*)
     (format o ";;; THIS FILE IS FOR TESTING ONLY~%")
-    (dolist (key-record records)
-      (destructuring-bind (host eripa port (public private))
-          key-record
-        (declare (ignore host eripa port))
-        (format o "~s~&" `(,public ,private))))))
+    (dolist (record records)
+      (format o "~s~&" `(,(getf record :public)
+                         ,(getf record :private))))))
+
 
 
 

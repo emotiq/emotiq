@@ -5,6 +5,6 @@
                alexandria)
   :perform (test-op (o s)
               (symbol-call :prove :run s))
-  :components ((:test-file "generate-network")))
+  :components ((:test-file "generate-node")))
 
   

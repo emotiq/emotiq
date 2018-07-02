@@ -10,7 +10,7 @@
             (list pubkey (random max-stake)))
           pubkeys))
 
-(defun stakes/write (path records)
+(defun stakes/write (records &key path)
   (with-open-file (o path
                      :direction :output
                      :if-exists :supersede)

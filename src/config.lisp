@@ -51,15 +51,16 @@
                            (force nil)
                            (settings-key-value-alist nil))
   "Generate a test network configuration"
-  (let ((nodes (keys/generate nodes-dns-ip))
-        directories)
+  (let* ((nodes (keys/generate nodes-dns-ip))
+         (stakes (stakes/generate nodes))
+         directories)
     (dolist (node nodes)
       (let ((configuration
              (copy-alist +default-configuration+))
             (hostname
-             (alexandria:assoc-value node :hostname))
+             (getf node :hostname))
             (ip
-             (alexandria:assoc-value node :ip)))
+             (getf node :ip)))
         (push (cons :hostname hostname)
               configuration)
         (push (cons :ip ip)
@@ -68,6 +69,12 @@
           (loop :for (key . value)
              :in settings-key-value-alist
              :doing (push `(,key . ,value) configuration)))
+        (push `(:public
+                . ,(random 100)) ;; FIXME
+              configuration)
+        (push `(:private
+                . ,(random 100)) ;; FIXME
+              configuration)
         (let ((relative-path (generated-directory configuration)))
           (let ((path (merge-pathnames relative-path root)))
             (push 
@@ -81,30 +88,29 @@
 (defun node/generate (directory
                       configuration
                       &key
+                        witnesses-and-stakes
                         key-records
                         (force nil))
   "Generate a compete Emotiq node description within DIRECTORY for CONFIGURATION"
   (gossip/config:generate-node
-   :path directory
+   :root directory
    :host (alexandria:assoc-value configuration :host)
    :eripa (alexandria:assoc-value configuration :ip)
-   :port (alexandria:assoc-value configuration :gossip-server-port)
+   :gossip-port (alexandria:assoc-value configuration :gossip-server-port)
+   :public (alexandria:assoc-value configuration :public)
+   :private (alexandria:assoc-value configuration :private)
    :key-records key-records)
-  (with-open-file (o path
+  (with-open-file (o (make-pathname :defaults directory
+                                    :name "emotiq-config"
+                                    :type "json")
+                     :if-exists :supersede
                      :direction :output)
     (cl-json:encode-json configuration o))
-  (let ((genesis-block-path (merge-pathnames
-                             (assoc :genesis-block configuration)
-                             (emotiq/fs:etc/))))
-    (unless (or force
-                (probe-file genesis-block-path))
-      (let ((genesis-block
-             (cosi/proofs:create-genesis-block (public-key witnesses-and-stakes))))
-        (with-open-file (o genesis-block-path
-                           :direction :ouput
-                           :if-exists :supersede)
-          (with-open-file 
-              (cl-json:encode-json genesis-block-path o)))))))
+  (stakes/write key-records
+                :path (make-pathname :defaults directory
+                                     :name "stakes"
+                                     :type "conf"))
+  (genesis/create configuration :root directory))
   
 (defun settings/read () 
   (unless (probe-file *emotiq-conf*)

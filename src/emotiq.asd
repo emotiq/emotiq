@@ -127,6 +127,8 @@
                 :serial t
                 :components ((:file "keys")
                              (:file "stakes")
+                             (:file "genesis")
                              (:file "config")))))
+
 
 
