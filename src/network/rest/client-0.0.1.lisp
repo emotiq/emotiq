@@ -40,6 +40,9 @@ gives the toplevel definitions of the following functions:")
     %client.js
     ("/client.js"
      :content-type "application/javascript")
+
+  ;;; Originally a separate file.  Restore as such when we implement the
+  ;;; filesystem development/production interface
   (ps:ps
 
     (defvar *ws* nil)

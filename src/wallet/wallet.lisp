@@ -1,7 +1,11 @@
 (in-package emotiq/wallet)
 
 (defclass wallet ()
-  ((salt
+  ((seed
+    :documentation "32 byte for seed of wallet"
+    :initarg :seed :accessor seed)
+   (salt
+    :documentation "16 bytes of salt for the passphrase"
     :initarg :salt :accessor salt)
    (keying-triple
     :initarg :keying-triple :accessor keying-triple)
@@ -12,9 +16,14 @@
     :initarg :encrypted-private-key-p :accessor encrypted-private-key-p)))
 
 (defun make-wallet ()
+  (let ((seed (ironclad:make-random-salt 32)))
+    (make-wallet-from-seed seed)))
+
+(defun make-wallet-from-seed (seed)
   (make-instance 'wallet
+                 :seed seed
                  :salt (ironclad:make-random-salt 16)
-                 :keying-triple (cosi-keying:make-random-keypair)
+                 :keying-triple (cosi-keying:make-deterministic-keypair seed)
                  :encrypted-private-key-p nil))
 
 (defun copy-wallet (wallet)

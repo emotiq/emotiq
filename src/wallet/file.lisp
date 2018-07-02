@@ -3,10 +3,10 @@
 (defun emotiq-wallet-path (&key (name *default-wallet-name*))
   "Return pathname of wallet with NAME"
   (merge-pathnames
-   (format nil "wallet/~a/~a"
-           (wallet-name-to-pathname-name name)
-           "emotiq.wallet")
-   (emotiq/filesystem:emotiq/user/root/)))
+   (make-pathname :directory `(:relative ,(wallet-name-to-pathname-name name))
+                  :name "emotiq"
+                  :type "wallet")
+   (emotiq/filesystem:emotiq/wallet/)))
 
 
 ;;; We want to allow "human readable" wallet names that have a
@@ -44,16 +44,27 @@ Returns nil if unsuccessful."
                       :defaults from)))))
 
 (defun enumerate-wallets ()
-  "Return a list of wallet names persisted on the local node"
-  (let ((directories
-         (directory 
-          (merge-pathnames (make-pathname :directory '(:relative :up :wild))
-                           (make-pathname :name nil :type nil
-                                          :defaults (emotiq-wallet-path))))))
-    (loop
-       :for directory :in directories
-       :collecting (pathname-name-to-wallet-name
-                    (first (last (pathname-directory directory)))))))
+  "Return an enumeration of local wallet names as the primary value
+
+As a second value, return a mapping of wallet names to their local
+pathname resolution."
+  (let ((mapping
+         (flet ((parent-directory (d)
+                  (nreverse (rest (nreverse (pathname-directory d))))))
+           (let ((directories-wild
+                  (make-pathname
+                   :directory `(,@(parent-directory (emotiq-wallet-path))
+                                  :wild)
+                   :name nil :type nil 
+                   :defaults (emotiq-wallet-path))))
+             (loop
+                :for d :in (directory directories-wild)
+                :collecting (cons (pathname-name-to-wallet-name
+                                   (pathname-name d))
+                                  d))))))
+    (values
+     (mapcar #'car mapping)
+     mapping)))
 
 ;;;; TODO: ensure we encrypt when putting to disk
 ;;;; TODO: return the encrypted form of the wallet

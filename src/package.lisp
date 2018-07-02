@@ -63,6 +63,9 @@
 (defpackage emotiq/wallet
   (:use #:cl)
   (:export
+   #:submit-transaction
+   #:get-transaction)
+  (:export
    #:get-wallet-named
 
    #:create-wallet
@@ -121,6 +124,7 @@
   (:nicknames #:emotiq/fs #:emotiq/path)
   (:export
    #:emotiq/user/root/
+   #:emotiq/wallet/
    #:etc/
    #:var/log/))
 
