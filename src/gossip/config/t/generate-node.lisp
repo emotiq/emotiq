@@ -9,7 +9,7 @@
          :key-records nil))) ;; FIXME
   (ensure-directories-exist root)
   (let ((p (gossip/config:generate-node
-            :path root
+            :root root
             :host "emq-01.aws.emotiq.ch"
             :eripa "34.239.111.18"
             :gossip-port 65002
