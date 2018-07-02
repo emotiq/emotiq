@@ -239,16 +239,18 @@
                                         writers)
                                   mailbox))))))
 
-(defun test ()
-  (let ((transport (start-transport :address "localhost")))
+(defun test (&key (backend :tcp) port)
+  (let ((transport (start-transport :backend backend :address "localhost" :port port
+                                    :message-received-hook (lambda (&rest msg) (format t "~&Msg: ~A~%" msg)))))
     (sleep 0.1)
     (unwind-protect
-        (transmit transport
-                  "localhost"
-                  (getf (status transport) :listen-port)
-                  #(0 1 2 3 4)))
-    (sleep 1)
-    (stop-transport transport)))
+         (dotimes (i 10)
+           (transmit transport
+                     "localhost"
+                     port
+                     (vector 0 1 2 3 4 (mod i 256))))
+      (sleep 1)
+      (stop-transport transport))))
 
 (defun test-2 ()
   (let* ((n 0)
