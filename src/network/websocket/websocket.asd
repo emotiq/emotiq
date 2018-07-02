@@ -1,21 +1,17 @@
 (defsystem websocket)
 
-(defsystem websocket/demo/websocket-driver
+(defsystem websocket/research/websocket-driver
   :depends-on (websocket-driver
                clack)
   :components ((:file "websocket-driver-demo")))
 
-(defsystem websocket/demo/hunchensocket
+(defsystem websocket/research/hunchensocket
   :depends-on (hunchensocket)
-  :components ((:file "hunchensocket-demo")))
-
-(defsystem websocket/wallet/hunchensocket
-  :depends-on (hunchensocket
-               simple-date-time)
-  :components ((:file "hunchensocket-serve")))             
-
+  :components ((:module source  :pathname "research/"
+                        :components ((:file "hunchensocket-demo")
+                                     (:file "hunchensocket-serve")))))
 (defsystem websocket/wallet
-  :depends-on (emotiq/wallet
+  :depends-on (model/wallet
                emotiq/logging
                cl-who
                parenscript
@@ -25,13 +21,13 @@
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
-               (:module mock
+               (:module async
                         :pathname "./"
                         :depends-on (package)
-                        :components ((:file "mock")))
+                        :components ((:file "async")))
                (:module source
                         :pathname "./"
-                        :depends-on (mock)
+                        :depends-on (async)
                         :components ((:file "serve")))))
 
 

@@ -63,6 +63,9 @@
 (defpackage emotiq/wallet
   (:use #:cl)
   (:export
+   #:submit-transaction
+   #:get-transaction)
+  (:export
    #:get-wallet-named
 
    #:create-wallet
@@ -122,6 +125,7 @@
               #:emotiq/path)
   (:export
    #:emotiq/user/root/
+   #:emotiq/wallet/
    #:tmp/
    #:etc/
    #:var/log/))
@@ -151,6 +155,3 @@
 
    #:*dns-ip-zt.emotiq.ch*
    #:settings/read))
-
-
-

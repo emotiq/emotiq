@@ -15,6 +15,15 @@
      (:h1 "Wallet API")
      (:ul
       (:li
+       (:form
+        :uri (restas:genurl '%submit-transaction/post
+                            :name "My Wallet"
+                            :address "0xdeadbeef")
+        :type :post
+        (:input :type :text :name :body)
+        (:input :type :submit :value "Post a new tranaction")))
+
+      (:li
        (:a :href (restas:genurl '%enumerate-wallets)
            "[/] enumerate wallets")))
      (:ul
@@ -28,35 +37,52 @@
 
 (restas:define-route
  %enumerate-wallets
- ("/"
-  :content-type "application/json")
- (cl-json:encode-json-to-string  (emotiq/wallet:enumerate-wallets)))
+    ("/"
+     :content-type "application/json")
+  (as-json
+   (model/wallet:enumerate-wallets)))
 
 (restas:define-route
  %get-wallet
- ("/:name"
-  :content-type "application/json")
- (let ((wallet (emotiq/wallet:get-wallet-named (hunchentoot:url-decode name))))
-   (cl-json:encode-json-to-string wallet)))
+    ("/:name"
+     :content-type "application/json")
+  (as-json
+   (model/wallet:get-wallet (hunchentoot:url-decode name))))
 
 (restas:define-route
  %get-wallet-addresses
- ("/:name/address/"
-  :content-type "application/json")
- (let ((wallet (emotiq/wallet:get-wallet-named (hunchentoot:url-decode name))))
-   (cl-json:encode-json-to-string
-    (list (emotiq/wallet:primary-address wallet)))))
+    ("/:name/address/"
+     :content-type "application/json")
+  (as-json
+   (model/wallet:get-wallet-addresses (hunchentoot:url-decode name))))
 
-
-
-
-   
-
- 
-
-
-
+(restas:define-route
+    %submit-transaction/post
+    ("/wallet/:name/address/:address/transaction/"
+     :method :post
+     :content-type "application/json")
+  (let ((raw-or-string (hunchentoot:raw-post-data))
+        uri)
+    (let ((message
+           (if (subtypep (type-of raw-or-string) 'string)
+               (flexi-streams:octets-to-string raw-or-string
+                                               :external-format :utf-8)
+               raw-or-string)))
+    (let ((transaction (cl-json:decode-json-from-string message)))
+      (with-wallet-named (name)
+        (emotiq/wallet:submit-transaction
+         transaction
+         :name name
+         :address address))))))
   
+(restas:define-route
+    %get-transaction
+    ("/wallet/:name/address/:address/transaction/:id")
+  (with-wallet-named (name)
+    (emotiq/wallet:get-transaction id
+                                  :wallet-name name
+                                  :address address)))
+     
   
 
 

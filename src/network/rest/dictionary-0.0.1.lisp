@@ -21,10 +21,12 @@
 
 (restas:define-route %index ("/"
                              :content-type "application/javascript")
-  (cl-json:encode-json-to-string '("en")))
+  (cl-json:encode-json-to-string
+   (model/wallet:enumerate-dictionaries)))
 
 (restas:define-route %en ("/en"
                                         :content-type "application/javascript")
-  (cl-json:encode-json-to-string  `(:|dictionary| ,(cosi-keying::import-wordlist "english.txt"))))
+  (cl-json:encode-json-to-string
+   (model/wallet:get-dictionary "en")))
 
 

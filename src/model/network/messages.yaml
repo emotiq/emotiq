@@ -1,0 +1,119 @@
+#
+# A common schema for messages
+#
+# Add syntax here when it gets too long locally, or you find yourself
+# repeating references.
+# 
+$id:   "http://api.emotiq.ch/wallet/messages.yaml"
+schemas:
+  consensus:
+    type: object
+    properties:
+      epoch:
+        description: The number of the last sealed block (aka the current chain height)
+        type: integer
+      latestLocalEpoch:
+        description: The highest number of locally synchronized contiguous blocks
+        type: integer
+      synced:
+        description: Whether the connected node is synced with the chain
+        type: boolean
+  status:
+    type: object
+    properties:
+      peers:
+        description: The number of nodes directly connected to the peer
+        type: integer
+      blocks:
+        description: The total number of blocks in the chain
+        type: integer
+      transactions:
+        description: Total number of confirmed transactions
+        type: integer
+      transactions-per-second:
+        description: The number of transactions per second over the last two blocks
+        type: integer
+      last-timestamp:
+        description: The timestamp from last sealed block
+        type: integer
+      total-stake:
+        description: The total amount of coins staked in the current epoch
+        type: integer
+  wallet-stake:
+    description: The total amount staked by a given wallet
+    response:
+      type: integer
+    
+  recovery-phrase:
+    response:
+      type: array
+      items:
+        type: string
+  wallet:
+    default:
+      response:
+        type: object
+        properties:
+          address:
+            type: string
+          amount:
+            type: integer
+  transaction:
+    type: object
+    properties:
+      id:
+        type: string
+        timestamp:
+          type: integer
+          format: int64
+      type:
+        description: 
+          type: string
+          enum:
+            - spend
+            - stake
+      epoch:
+        description: The epoch which this transaction is part of 
+        type: integer
+      fee:
+        type: integer
+      inputs:
+        type: array
+        items:
+          type: object
+          properties:
+            cloaked:
+              type: boolean
+            address:
+              type: string
+            amount:
+              type: integer
+      outputs:
+        type: array
+        items:
+          type: object
+          properties:
+            cloaked:
+              type: boolean
+            address:
+              type: string
+            amount:
+              type: integer
+  transactions:
+    submit:
+      type: array
+      items:
+        type: object
+        properties:
+          address:
+            description: The ADDRESS to pay 
+            type: string
+          amount:
+            description: The AMOUNT to pay
+            type: float # TODO FIXME
+    response:
+      type: array
+      items:
+        $ref: "/schemas/transaction
+            
+  

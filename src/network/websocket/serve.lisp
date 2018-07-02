@@ -1,18 +1,5 @@
 (in-package :websocket/wallet)
 
-(defun note (message-or-format &rest args)
-  "Emit a note of progress to the appropiate logging system."
-  (let ((formats '(simple-date-time:|yyyymmddThhmmssZ|
-                   simple-date-time:|yyyy-mm-dd hh:mm:ss|)))
-    (format *error-output* 
-            "~&~a ~a~&"
-            (apply (second formats)
-                   (list (simple-date-time:now)))
-            (apply 'format 
-                 nil
-                 message-or-format
-                 (if args args nil)))))
-
 (defclass wallet-server (hunchensocket:websocket-resource)
   ((path :initarg :path :reader path))
   (:default-initargs :client-class 'wallet-client))
@@ -46,7 +33,8 @@
         (return-from hunchensocket:text-message-received nil))
       (let ((response
              (make-instance 'response
-                            :result `(:true)
+                            :result nil
+                            :error nil
                             :id (alexandria:assoc-value request :id))))
         (with-slots (result error)
             response
@@ -54,13 +42,7 @@
             ((string= method "subscribe")
            ;;; FIXME: locking under load
              (if (find "consensus" (alexandria:assoc-value request :params) :test 'string=)
-                 (progn 
-                   (pushnew client *consensus-clients*)
-                   (unless *consensus-thread*
-                     (emotiq:note "Spawning thread to mock consensus replies.")
-                     (bt:make-thread (lambda () (consensus)))
-                     (setf *consensus-thread* t))
-                   (setf result '(:true)))
+                   (add-client client response)
                  ;; error
                  (setf result nil
                        error `(:object (:code . -32602)
@@ -79,18 +61,23 @@
             ((string= method "ping")
                (setf result "pong"))
             ((string= method "wallet")
-             (setf result `(:object
-                            (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
-                            (:amount . 0))))
+             (setf result (model/wallet:get-wallet "My Wallet")))
             ((string= method "recovery-phrase")
-             (setf result 
-                   `(:object
-                     (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
-                     (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize)))))))
+             (setf result (model/wallet:recovery-phrase)))
+            ((string= method "submit-transaction")
+             (let* ((parameters (alexandria:assoc-value request :params))
+                    (transaction (alexandria:assoc-value parameters :transaction))
+                    (name (alexandria:assoc-value parameters :name))
+                    (address (alexandria:assoc-value parameters :address)))
+               (setf result
+                     (emotiq/wallet:submit-transaction
+                      transaction
+                      :name name
+                      :address address))))
             ((string= method "enumerate-wallets")
-             (setf result (emotiq/wallet:enumerate-wallets)))
+             (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")
-             (setf result (transactions)))
+             (setf result (model/wallet:transactions)))
             (t
              (setf result nil
                    error `(:object (:code . -32601)
@@ -115,7 +102,7 @@
 
 (defvar *acceptor* nil)
 
-(defun start-server (&key (port 3145))
+(defun start-server (&key (port 3145) (host "127.0.0.1"))
   (unless *acceptor*
     (setf *acceptor*
           (make-instance 'hunchensocket:websocket-acceptor
@@ -126,9 +113,11 @@
                          ;; messages without corresponding replies
                          ;; will tear down the connection.
                          :websocket-timeout 3600  
-                         :port port)))
-  (note "Starting websocket server on <ws://localhost:~a>"
-        (slot-value *acceptor* 'hunchentoot::port))
+                         :port port
+                         :address host)))
+  (emotiq:note "Starting websocket server on <ws://~a:~a>"
+               (slot-value *acceptor* 'hunchentoot::address)
+               (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
 
 (defclass json-rpc ()
