@@ -2,6 +2,8 @@
   :depends-on (emotiq/logging
                emotiq/tracker
                emotiq/sim
+               emotiq/tracker
+               emotiq/sim
                model/wallet
                restas 
                cosi-bls
