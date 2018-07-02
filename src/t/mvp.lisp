@@ -6,7 +6,8 @@
                           emotiq/config:*dns-ip-zt.emotiq.ch*)))
   (prove:ok
    (emotiq/config:network/generate :nodes-dns-ip nodes-dns-ip)
-   (format nil "Generation of zt.emotiq.ch devnet artifacts…")))
+   (format nil "Generation of zt.emotiq.ch devnet artifacts from~%~&~a…"
+           nodes-dns-ip)))
 
 (prove:finalize)
   
