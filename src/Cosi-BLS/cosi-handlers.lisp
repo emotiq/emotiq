@@ -203,14 +203,14 @@ THE SOFTWARE.
   ;;
   ;; NOTE: Separate Actors = separate SMP threads
   ;;
-  (let ((beh  (make-actor
-               ;; Cosi blockchain messages
+  (let ((cosi-beh  (make-actor
+               ;; Cosi blockchain messages - handled with NODE-DISPATCHER
                (lambda (&rest msg)
                  (with-current-node node
                    (apply 'node-dispatcher msg)))
                ))
         (rh-beh (make-actor
-                 ;; Randhound election messages
+                 ;; Randhound election messages - handled with RH-DISPATCHER
                  (lambda (&rest msg)
                    (with-current-node node
                      (apply 'rh-dispatcher msg)))
@@ -233,7 +233,7 @@ THE SOFTWARE.
          
           (t (&rest msg)
              ;; All other messages dispatch to Cosi blockchain handlers
-             (apply 'send beh msg))
+             (apply 'send cosi-beh msg))
           )))))
 
 ;; -------------------------------------------------------------------------------------
