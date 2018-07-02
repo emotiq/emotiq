@@ -336,7 +336,7 @@ paths:
                   amount:
                     type: number
                     format: double
-  '/wallet/{name}/address/{address}/transaction':
+  '/wallet/{name}/address/{address}/transaction/':
     post:
       tags:
         - transaction
