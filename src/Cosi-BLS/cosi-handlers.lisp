@@ -106,6 +106,7 @@ THE SOFTWARE.
   (error "Unknown message: ~A~%Node: ~A" msg-sym (short-id (current-node))))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
+  (ensure-node-blockchain)
   (emotiq/tracker:track :new-leader (current-node))
   (setf *tx-changes* (make-tx-changes)))
 

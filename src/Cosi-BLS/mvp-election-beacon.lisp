@@ -321,6 +321,25 @@ based on their relative stake"
 (defun gossip:cosi-loaded-p ()
   t)
 
+
+
+(defvar *genesis-account* (pbc:make-key-pair :genesis))
+
+;; ---*** The above is very temporary: it will soon be at least
+;; changed to be gotten from a config file. -mhd, 7/2/18
+
+(defun ensure-node-blockchain ()
+  (with-current-node *my-node*
+    (when (null *blockchain*)
+      (emotiq:note "```*** CREATING THE GENESIS BLOCK OF THE EMOTIQ BLOCKCHAIN NOW ***```")
+      (let ((genesis-block
+              (cosi/proofs:create-genesis-block
+               (pbc:keying-triple-pkey *genesis-account*)
+               (gossip:get-stakes))))
+        (node-dispatcher :genesis-block :blk genesis-block))
+      (when (not (null *blockchain*))
+        (cerror "Continue" "*BLOCKCHAIN* is nil. What went wrong?")))))
+
 ;; -----------------------------------------------------------
 
 (Defun make-call-for-election-message-skeleton (pkey epoch)

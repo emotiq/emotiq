@@ -330,6 +330,7 @@
    :reset-nodes
    :forwarding
    :startup-elections
+   :ensure-node-blockchain
    ))
 
 (defpackage :cosi-keying
