@@ -20,7 +20,11 @@
                  :type "json"))
 
 (um:defconstant+ +default-configuration+
-    `((:rest-server
+    `((:hostname
+       . "localhost")
+      (:ip
+       . "127.0.0.1")
+      (:rest-server
        . :true)
       (:rest-server-port
        . 3140)
@@ -50,6 +54,7 @@
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
                            (list host ip gossip-server-port rest-server-port websocket-server-port))))))
+    
 
 (defun network/generate (&key
                            (root (emotiq/fs:tmp/))
@@ -132,3 +137,41 @@
   (cl-json:decode-json-from-source *emotiq-conf*))
 
 
+(defun ensure-defaults (&key
+                          (c (copy-alist +default-configuration+))
+                          force 
+                          (nodes-dns-ip *dns-ip-zt.emotiq.ch* nodes-dns-ip-p))
+  "Ensure that configuration will start up, even in the absence of explicit configuration"
+  (let ((root (merge-pathnames (make-pathname
+                                :directory '(:relative "var"))
+                               (emotiq/fs:tmp/)))
+        (local (generated-directory c))
+        (destination (emotiq/fs:etc/)))
+    #+(or) ;; FIXME not working
+    (when (or (not force)
+              (>
+               (length (directory
+                        (make-pathname :name :wild :type :wild
+                                       :defaults destination)))
+               0))
+      (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
+      (return-from ensure-defaults (settings/read)))
+    (unless nodes-dns-ip-p
+      (push
+       `(:hostname "localhost" ;; FIXME: introspect local hostname
+                   :ip "127.0.0.1")
+       nodes-dns-ip))
+    (ensure-directories-exist root)
+    (network/generate :root root
+                      :nodes-dns-ip nodes-dns-ip)
+    (uiop:run-program
+     (format nil "rsync -avzP ~a ~a"
+             (merge-pathnames local root)
+             destination))
+    (settings/read)))
+
+  
+
+
+
+    
