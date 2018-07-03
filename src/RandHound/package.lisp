@@ -30,12 +30,31 @@ THE SOFTWARE.
   (:use :common-lisp
    :core-crypto
    :pbc
-   :vec-repr)
+   :vec-repr
+   :actors)
   (:import-from :cosi-keying
    :need-integer-form
    :published-form
    :make-random-keypair
    :validate-pkey)
+  
+  (:import-from :cosi-simgen
+   :node
+   :current-node
+   :node-pkey
+   :node-skey
+   :node-rh-state
+   :get-witness-list
+   :broadcast+me
+   :broadcast-to-others
+   :*leader*
+   :*beacon*
+   :*rh-state*
+   :rh-dispatcher
+   :get-witness-list
+   :*use-real-gossip*
+   :*local-epoch*)
+
   (:export
    :*max-bft*
    :node-assoc
@@ -52,6 +71,8 @@ THE SOFTWARE.
    :record-to-log
    :broadcast-message
    :send-message
+   :broadcast-grp
+   :broadcast-grp+me
    :get-timestamp
    :NYI
    :session-config

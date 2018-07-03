@@ -204,11 +204,11 @@ THE SOFTWARE.
   ;; NOTE: Separate Actors = separate SMP threads
   ;;
   (let ((cosi-beh  (make-actor
-               ;; Cosi blockchain messages - handled with NODE-DISPATCHER
-               (lambda (&rest msg)
-                 (with-current-node node
-                   (apply 'node-dispatcher msg)))
-               ))
+                    ;; Cosi blockchain messages - handled with NODE-DISPATCHER
+                    (lambda (&rest msg)
+                      (with-current-node node
+                        (apply 'node-dispatcher msg)))
+                    ))
         (rh-beh (make-actor
                  ;; Randhound election messages - handled with RH-DISPATCHER
                  (lambda (&rest msg)
@@ -752,18 +752,46 @@ check that each TXIN and TXOUT is mathematically sound."
                            :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
         (t
-         (loop for node across *node-bit-tbl* do
-               (unless (eql node my-node)
-                 (apply 'send (node-pkey node) msg))))
+         (let ((me (node-pkey (current-node))))
+           (mapc (lambda (pair)
+                   (destructuring-bind (pkey _) pair
+                     (declare (ignore _))
+                     (unless (int= pkey me)
+                       (apply 'send pkey msg))))
+                 (get-witness-list))))
         ))
 
 (defun broadcast+me (msg)
-  ;; make sure our own Node gets the message too
-  (gossip:singlecast msg
-                     :graphID nil) ;; force send to ourselves
-  ;; this really should go to everyone
-  (gossip:broadcast msg
-                    :graphID :UBER))
+  (cond (*use-real-gossip*
+         ;; make sure our own Node gets the message too
+         (gossip:singlecast msg
+                            :graphID nil) ;; force send to ourselves
+         ;; this really should go to everyone
+         (gossip:broadcast msg
+                           :graphID :UBER))
+
+        (t
+         (mapc (lambda (pair)
+                 (destructuring-bind (pkey _) pair
+                   (declare (ignore _))
+                   (apply 'send pkey msg)))
+               (get-witness-list)))
+        ))
+
+(defun broadcast-to-others (msg)
+  (cond (*use-real-gossip*
+         (gossip:broadcast msg
+                           :graphID :UBER))
+
+        (t
+         (let ((me (node-pkey (current-node))))
+           (mapc (lambda (pair)
+                   (destructuring-bind (pkey _) pair
+                     (declare (ignore _))
+                     (unless (int= pkey me)
+                       (apply 'send pkey msg))))
+                 (get-witness-list))))
+        ))
 
 ;; -----------------------------------------------------------
 

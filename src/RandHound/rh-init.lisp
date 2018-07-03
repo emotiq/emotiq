@@ -31,6 +31,24 @@ THE SOFTWARE.
 ;; -------------------------------------------------------
 ;; For non-sim world
 
+(defun init ()
+  (let* ((witnesses (mapcar 'first (get-witness-list)))
+         (max-bft   (floor (length witnesses) 3)))
+    (setf (node-rh-state (current-node))
+          (make-randhound-state
+           :config (make-session-config
+                    :pkeys   witnesses
+                    :max-bft max-bft
+                    :purpose :election
+                    :tstamp  (uuid:make-v1-uuid))
+           :commit (make-subgroup-commit
+                    :thresh      0
+                    :encr-shares nil
+                    :proofs      nil)))
+    ))
+
+;; ---------------------------------------------------------------------------------
+#|
 (defvar *keys-file* (asdf:system-relative-pathname :randhound "config/keys.lisp"))
 
 (defun load-nodes ()
@@ -38,7 +56,6 @@ THE SOFTWARE.
   (let ((lst (with-open-file (f *keys-file*
                                 :direction :input)
                (read f))))
-    (init-nodes)
     (let* ((nnodes  (length lst))
            (max-bft (floor (1- nnodes) 3)))
       (setf *max-bft* max-bft)
@@ -56,3 +73,4 @@ THE SOFTWARE.
                                              :port  port))
           )))))
 
+|#

@@ -29,71 +29,65 @@ THE SOFTWARE.
 (in-package :randhound/common)
 
 ;; ---------------------------------------------------------------
-;; Nodes Directory
-
-(defvar *max-bft*  0) ;; max number of Byzantine nodes
-
-(defstruct node-assoc
-  pkey ip port)
-
-;; NODE-TABLE -- assoc between public key and IPv4 addr/port
-;; Keys are int form of pkey, data contains original key struct
-(defvar *node-table*  (make-hash-table))
-
-(defun init-nodes ()
-  (clrhash *node-table*))
-
-(defun add-node (pkey ip port)
-  (setf (gethash (int pkey) *node-table*)
-        (make-node-assoc
-         :pkey  pkey
-         :ip    ip
-         :port  port)))
-
-(defun remove-node (pkey)
-  (remhash (int pkey) *node-table*))
-
-(defun find-node (pkey)
-  (gethash (int pkey) *node-table*))
-
-;; NODES-VECTOR - cached ordered node asssoc in pkey order
-(defparameter *nodes-vector*  nil)
-
-(defun get-nodes-vector ()
-  (or *nodes-vector*
-      (setf *nodes-vector*
-            (let ((nodes (sort (coerce
-                                (um:accum acc
-                                  (maphash (lambda (k v)
-                                             ;; accumulate nodes with the
-                                             ;; numeric value of the public key
-                                             ;; for use in sort
-                                             (acc (cons k v)))
-                                           *node-table*))
-                                'vector)
-                               '<
-                               :key 'first)))
-              ;; discard the numeric pkeys used by sort
-              (map-into nodes 'cdr nodes)))
-      ))
-
-;; -------------------------------------------------------------
 
 (defun NYI (&rest args)
   (error "Not yet implemented: ~A" args))
 
-(defun broadcast-message (msg nodes)
-  ;; think about reply-to etc
-  (loop for node across nodes do
-        (send-message msg (node-assoc-ip node) (node-assoc-port node))))
+;; ---------------------------------------------------------------
+;; Nodes Directory
 
-(defun send-message (msg ip port)
-  ;; need to think about message format - reply to, etc. Also an Actor
-  ;; service
-  (declare (ignore msg ip port))
-  (NYI :send-message))
+(defvar *max-bft*  0) ;; max number of Byzantine nodes
+
+(defun get-nodes-vector ()
+  (mapcar 'first (get-witness-list)))
+
+;; -------------------------------------------------------------
+
+(defun make-randhound-msg (msg)
+  `(:randhound ,@msg))
+
+(defun broadcast-message (msg pkeys)
+  (let ((me   (node-pkey (current-node)))
+        (rmsg (make-randhound-msg msg)))
+    (if (find me pkeys
+              :test 'int=)
+        (cosi-simgen:broadcast+me rmsg)
+      (cosi-simgen:broadcast-to-others rmsg))))
+
+(defun send-message (msg pkey)
+  (apply 'send pkey (make-randhound-msg msg)))
+
+(defun broadcast-grp+me (msg &key graphID)
+  (let ((rmsg (make-randhound-msg msg)))
+    (cond (*use-real-gossip*
+           (gossip:singlecast rmsg :graphID nil)
+           (gossip:broadcast  rmsg :graphID graphID))
+
+          (t
+           (let ((me (node-pkey (current-node))))
+             (apply 'send me rmsg)
+             (mapc (lambda (pkey)
+                     (apply 'send pkey rmsg))
+                   (remove me graphID :test 'int=))))
+          )))
+
+(defun broadcast-grp (msg &key graphID)
+  (let ((rmsg (make-randhound-msg msg)))
+    (cond (*use-real-gossip*
+           (gossip:broadcast rmsg :graphID graphID))
+
+          (t
+           (let ((me (node-pkey (current-node))))
+             (mapc (lambda (pkey)
+                     (apply 'send pkey rmsg))
+                   (remove me graphID :test 'int=))))
+          )))
+                          
 
 ;; ------------------------------------------------------------------
+
+(defstruct randhound-state
+  config commit)
 
 (defstruct session-config
   pkeys tgrps max-bft purpose tstamp)

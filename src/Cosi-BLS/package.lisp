@@ -315,6 +315,8 @@
    :*pkey-node-tbl*
    :*pkey-skey-tbl*
    :*node-bit-tbl*
+   :*rh-state*
+   :*local-epoch*
    :send
    :reply
    :node-dispatcher
@@ -329,6 +331,11 @@
    :reset-nodes
    :forwarding
    :startup-elections
+
+   :broadcast+me
+   :broadcast-to-others
+   :get-witness-list
+   :*use-real-gossip*
    ))
 
 (defpackage :cosi-keying

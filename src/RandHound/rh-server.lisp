@@ -72,33 +72,166 @@ THE SOFTWARE.
   entropy
   grp-entropy)
 
-(defparameter *rh-state*  nil)
+(defstruct rh-group-info
+  epoch grp leader super graph
+  commits     
+  decr-shares 
+  entropy
+  grp-entropy)
 
-(defun rh-serve-init (node reply-to config)
-  (setf *rh-state* nil)
-  (let ((grp  (find-my-group node (session-config-tgrps config))))
-    (when grp
-      (let* ((ngrp       (length grp))
-             (xvals      (um:range 1 (1+ ngrp)))
-             (byz-frac   (floor (1- ngrp) 3))
-             (kcoffs     (1+ byz-frac))
-             (q          (get-order))
-             (coffs      (loop repeat kcoffs collect (random-between 1 q)))
-             (shares     (mapcar (um:curry 'poly q coffs) xvals))
-             (proofs     (mapcar (um:curry 'mul-pt-zr (get-g1)) shares))
-             (enc-shares (mapcar 'mul-pt-zr (coerce grp 'list) shares))
-             (msg  (list :subgroup-commit
-                         (node-assoc-pkey node)
-                         (make-subgroup-commit
-                          :thresh      kcoffs
-                          :encr-shares enc-shares
-                          :proofs      proofs))))
-        (broadcast-message msg grp)
-        (setf *rh-state* (make-rh-server-state
-                          :byz-frac    byz-frac
-                          :grp         grp
-                          :config      config
-                          :reply-to    reply-to))
+(defun establish-broadcast-group (pkeys &key graphID)
+  (cond (*use-real-gossip*
+         (or :UBER ;; for now...
+             (gossip:establish-broadcast-group pkeys
+                                               :graphID graphID)))
+
+        (t  pkeys)))
+
+(defmethod rh-dispatcher ((msg-sym (eql :init)) &key reply-to config)
+  ;; take the list of witness nodes, and partition into a 2-level
+  ;; graph with *BEACON* at the top
+  (let* ((witnesses (get-witness-list))
+         (seed      (hash/256 *local-epoch* *beacon*))
+         (grpids    (mapcar (lambda (wit)
+                              (list (first wit) (int (hash/256 seed wit))))
+                            witnesses))
+         (sorted    (mapcar 'first
+                            (sort grpids <
+                                  :key 'second)))
+         (twit      (min 1600 (length sorted)))
+         (tsqrt     (min   40 (isqrt twit)))
+         (swits     (subseq sorted twit))
+         (ngrp      (if (< tsqrt 6)
+                        twit
+                      tsqrt))
+         (grps      (nreverse (um:group swits ngrp)))
+         (me        (node-pkey (current-node))))
+
+    (when (> (length grps) 1)
+      ;; absorb short group into last group if fewer than 6 members
+      (let ((short-grp (first grps)))
+        (when (< (length short-grp) 6)
+          (setf grps (nconc short-grp (second grps) (cdddr grps))))))
+    
+    (loop for grp in grps
+          for ix from 0
+          do
+          (when (find me grp
+                      :test 'int=)
+            (let* ((group-leader (first grp))
+                   (leader-p     (int= me group-leader))
+                   (graph        (establish-broadcast-group grp
+                                                            :graphID (format nil "beacon-~A" ix))))
+              (setf *rh-state* (make-rh-group-info
+                                :epoch  *local-epoch*
+                                :grp    grp
+                                :leader group-leader
+                                :super  (when leader-p
+                                          *beacon*)
+                                :graph  graph))
+              (when leader-p
+                (let* ((ngrp       (length grp))
+                       (xvals      (um:range 1 (1+ ngrp)))
+                       (byz-frac   (floor (1- ngrp) 3))
+                       (kcoffs     (1+ byz-frac))
+                       (q          (pbc:get-order))
+                       (coffs      (loop repeat kcoffs collect (random-between 1 q)))
+                       (shares     (mapcar (um:curry 'poly q coffs) xvals))
+                       (proofs     (mapcar (um:curry 'mul-pt-zr (pbc:get-g1) shares)))
+                       (enc-shares (mapcar 'mul-pt-zr (coerce grp 'list) shares))
+                       (msg        (make-subgroup-commit-message-skeleton
+                                    me
+                                    (make-subgroup-commit
+                                     :epoch       *local-epoch*
+                                     :thresh      kcoffs
+                                     :encr-shares enc-shares
+                                     :proofs      proofs)))
+                       (sig        (pbc:sign-hash msg (node-skey (current-node)))))
+                  
+                  (broadcast-grp+me (um:conc msg sig) :graphID graph)
+                  )))))
+    ))
+
+(defun make-subgroup-commit-message-skeleton (pkey cmt)
+  `(:subgroup-commit
+    :pkey   ,pkey
+    :commit ,cmt
+    :sig))
+
+(defmethod rh-dispatcher ((msg-sym (eql :subgroup-commit)) &key pkey commit sig)
+    (when (and
+           (= (rh-group-info-epoch *rh-state*)
+              (subgroup-commit-epoch commit)                   ;; correct session?
+           (int= pkey (rh-group-info-leader *rh-state*))       ;; from my group leader?
+           (let ((chk  (make-subgroup-commit-message-skeleton pkey commit)))
+             (pbc:check-hash chk sig pkey))                    ;; valid message?
+           (null (rh-group-info-commits *rh-state*))           ;; not seen yet?
+           (chk-proofs (subgroup-commit-proofs commit)
+                       (subgroup-commit-encr-shares commit)
+                       (rh-group-info-grp *rh-state*)))
+      
+      (let* ((q        (pbc:get-order))
+             (ngrp     (length (rh-group-info-grp *rh-state*)))
+             (byz-frac (floor (1- ngrp) 3))
+             (kcheck   (- ngrp byz-frac 1))
+             (xvals    (um:range 1 (1+ ngrp)))
+             (coffs    (loop repeat kcheck collect (random-between 1 q)))
+             (chks     (mapcar (um:curry 'poly q coffs) xvals))
+             (invwts   (mapcar (um:curry 'invwt q ngrp) xvals))
+             (chkv     (with-mod q
+                         (mapcar 'm/ chks invwts)))
+             (chk      (dotprod-g1-zr (subgroup-commit-proofs commit)
+                                      chkv)))
+        (when (zerop (int chk))
+          (setf (rh-group-info-commits *rh-state*) commit)
+          (let* ((node      (current-node))
+                 (my-pkey   (node-pkey node))
+                 (my-grp    (rh-group-info-grp *rh-state*))
+                 (my-index  (position my-pkey my-grp
+                                      :test 'int=))
+                 (my-share   (aref (coerce (subgroup-commit-encr-shares commit) 'vector)
+                                   my-index))
+                 (decr-share (mul-pt-zr my-share
+                                        (inv-zr (node-skey node))))
+                 (msg        (make-subgroup-derypted-share-message-skeleton
+                              *local-epoch* pkey my-pkey decr-share)))
+            (broadcast-grp+me (um:conc msg
+                                       (pbc:sign-hash msg (node-skey node)))
+                              :graphID (rh-group-info-graph *rh-state*))
+            )))))
+
+(defun make-subgroup-derypted-share-message-skeleton (epoch group-leader my-pkey decr-share)
+  `(:subgroup-decrypted-share
+    :epoch        epoch
+    :group-leader group-leader
+    :from-pkey    my-pkey
+    :decr-share   decr-share
+    :sig))
+
+(defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key epoch group-leader from-pkey decr-share sig)
+  (with-accessors ((decr-shares     rh-group-info-decr-shares)
+                   (my-group-leader rh-group-info-leader)
+                   (my-group        rh-group-info-grp)
+                   (my-epoch        rh-group-info-epoch)) *rh-state*
+    (let* ((ngrp       (length my-group))
+           (bft-thresh (- ngrp (floor (1- ngrp) 3))))
+      (when (and
+             (< (length decr-shares) bft-thresh)
+             (= epoch my-epoch)                   ;; correct session?
+             (int= group-leader my-leader)          ;; correct group leader?
+             (find from-pkey my-group :test 'int=)  ;; from member of my group?
+             (let ((chk-msg (make-subgroup-derypted-share-message-skeleton
+                             epoch
+                             group-leader
+                             from-pkey
+                             decr-share)))
+               (pbc:check-hash chk-msg sig (node-pkey (current-node))))   ;; valid message?
+             (not (find from-pkey decr-shares       ;; not seen yet?
+                        :test 'int=
+                        :key  'first)))
+        (push (list from-pkey decr-shares) decr-shares)
+        (when (>= (length decr-shares) bft-thresh)
+          (send-message *beacon* :subgroup-randomness THE-ANSWER))
         ))))
 
 (defun invwt (q n xj)
