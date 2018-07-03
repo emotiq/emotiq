@@ -32,7 +32,7 @@
        . :true)
       (:gossip-server-port
        . 65002)
-      (:genesis-block
+      (:genesis-block-file
        . "emotiq-genesis-block.json")))
 
 (defun generated-directory (configuration)
@@ -50,7 +50,6 @@
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
                            (list host ip gossip-server-port rest-server-port websocket-server-port))))))
-
 
 (defun network/generate (&key
                            (root (emotiq/fs:tmp/))
@@ -78,8 +77,8 @@
         (push (cons :private
                     (getf node :private))
               configuration)
-        (push (cons :witnesses-and-stakes
-                    (rest stakes))
+        (push (cons :address-for-coins
+                    (getf (first nodes) :public))
               configuration)
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
@@ -114,7 +113,7 @@
    :private (alexandria:assoc-value configuration :private)
    :key-records key-records)
   (with-open-file (o (make-pathname :defaults directory
-                                    :name "emotiq-config"
+                                    :name (pathname-name *emotiq-conf*)
                                     :type "json")
                      :if-exists :supersede
                      :direction :output)
@@ -123,7 +122,7 @@
                 :path (make-pathname :defaults directory
                                      :name "stakes"
                                      :type "conf"))
-  (genesis/create configuration :root directory))
+  (genesis/create configuration :root directory :force t))
   
 (defun settings/read () 
   (unless (probe-file *emotiq-conf*)
