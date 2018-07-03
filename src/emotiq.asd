@@ -72,6 +72,7 @@
                 :pathname "wallet/"
                 :serial t
                 :components ((:file "name")
+                             (:file "transaction")
                              (:file "file")
                              (:file "wallet")))))
 
@@ -113,4 +114,22 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "ate")))))
-                                       
+
+(defsystem "emotiq/config"
+  :depends-on (cl-json
+               emotiq/logging
+               emotiq/filesystem
+               cosi-bls
+               useful-macros
+               gossip/config)
+  :in-order-to ((test-op (test-op "mvp-tests")))
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "keys")
+                             (:file "stakes")
+                             (:file "genesis")
+                             (:file "config")))))
+
+
+

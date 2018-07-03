@@ -51,8 +51,8 @@
     :documentation
     "Sequence of public keys of validators 1:1 w/signature-bitmap slot.")
 
-   (witnesses-and-stakes-table
-    :accessor block-witnesses-and-stakes-table
+   (witnesses-and-stakes
+    :accessor block-witnesses-and-stakes
     :documentation
     "An a-list of the form
 
@@ -196,20 +196,53 @@ added to the blockchain."
 
 
 
-(defun create-genesis-block (public-key)
-  "Create a genesis block on cosi-simgen:*BLOCKCHAIN* paying to PUBLIC-KEY. This
-   must be called on the genesis node of the blockchain, with
-   cosi-simgen:*CURRENT-NODE* appropriately bound. Note that the funds are sent
-   to a hash of the pubiic key, converted with
+(defun create-genesis-block (public-key witnesses-and-stakes)
+  "Create a genesis block paying to PUBLIC-KEY with WITNESSES-AND-STAKES
+   as given. 
+
+   WITNESSES-AND-STAKES is passed on to function
+   normalize-witnesses-and-stakes, and the return value is stored in the
+   block's block-witnesses-and-stakes slot.
+   
+   The initial transaction on the block is the coinbase type transaction that
+   creates the entire monetary supply of the emtq currency. It  funds
+   are sent to the hash of PUBLIC-KEY, i.e., as converted with
    cosi/proofs:public-key-to-address."
+  
   (when (not *newtx-p*)
     (error "Sorry, only know how to do this for new transactions (*newtx-p*)."))
   (let* ((genesis-transaction
            (cosi/proofs/newtx:make-genesis-transaction
             (cosi/proofs:public-key-to-address public-key)))
          (transactions (list genesis-transaction))
-         (block (create-block nil nil nil nil transactions)))
+         (block (create-block nil nil nil nil transactions))
+         (normalized-block-witnesses-and-stakes
+           (normalize-witnesses-and-stakes witnesses-and-stakes)))
+    (setf (block-witnesses-and-stakes block)
+          normalized-block-witnesses-and-stakes)
     block))
+
+
+
+(defun normalize-witnesses-and-stakes (witnesses-and-stakes)
+  "Given an a-list of the form
+
+     ( (general-public-key . (emtq-amount-in-subunits))* )
+
+   where a general-public-key is any form of public key that either is or can be
+   converted to a pbc:public-key instance, and emtq-amount-in-subunits is an
+   integer number of coin subunits, return an a-list of the same form except
+   that each public key is always a pbc:public-key instance."
+  (loop for (general-public-key . stake-info) in witnesses-and-stakes
+        as public-key
+          = (if (typep general-public-key 'pbc:public-key)
+                general-public-key
+                (make-instance 'pbc:public-key :val general-public-key))
+        collect `(,public-key . ,stake-info)))
+
+;; Currently, our gossip config system gives us public keys as bignums (function
+;; get-stakes in package gossip), while the simulator (function keys-and-stakes
+;; in package emotiq/sim) supplies them as instances.
     
              
 

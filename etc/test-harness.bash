@@ -31,6 +31,7 @@ lisp=${lisp:-'ros'}
 systems=${systems:-":gossip-tests
                     :crypto-pairings/t
                     :core-crypto
+                    :emotiq/config
                     :emotiq/wallet"}
 
 echo Test harness invoked using implementation: ${lisp}
