@@ -10,7 +10,9 @@
     (when (or force
               (not (probe-file genesis-block-path)))
       (let ((genesis-block
-             (cosi/proofs:create-genesis-block
+             (funcall 
+              ;; FIXME: ASDF circular dependency issues! -mhd, 7/3/18
+              (intern "CREATE-GENESIS-BLOCK" "COSI/PROOFS") ; hack
               (alexandria:assoc-value configuration :address-for-coins)
               (get-stakes))))
         (with-open-file (o genesis-block-path

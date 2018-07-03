@@ -201,12 +201,17 @@ THE SOFTWARE.
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
 
-  ;; initialize block chain with genesis block
-  (let ((blk (emotiq/config:get-genesis-block)))
-    (push blk (node-blockchain node))
-    (setf (gethash (cosi/proofs:hash-block blk) (node-blockchain-tbl node)) blk))
+  (unwind-protect 
 
-  (call-next-method))
+       ;; Finish basic initialization. Get basic slots set up.
+       (call-next-method)
+
+    ;; Now, initialize node's block chain with genesis block.
+    (let ((blk (emotiq/config:get-genesis-block)))
+      (push blk (node-blockchain node))
+      (setf (gethash (cosi/proofs:hash-block blk) 
+                     (node-blockchain-tbl node))
+            blk))))
 
 ;; --------------------------------------------------------------
 

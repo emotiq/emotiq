@@ -119,7 +119,7 @@
   :depends-on (cl-json
                emotiq/logging
                emotiq/filesystem
-               cosi-bls
+               crypto-pairings
                lisp-object-encoder
                useful-macros
                gossip/config)

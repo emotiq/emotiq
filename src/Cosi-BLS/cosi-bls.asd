@@ -29,6 +29,7 @@ THE SOFTWARE.
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
   :depends-on (emotiq/logging
+               emotiq/config
                ironclad
                actors
                core-crypto
