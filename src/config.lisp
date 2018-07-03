@@ -71,6 +71,7 @@
         (push `(:private
                 . ,(random 100)) ;; FIXME
               configuration)
+        #+(or) ;; FIXME
         (push `(:witnesses-and-stakes
                 . ,stakes)
               configuration)
