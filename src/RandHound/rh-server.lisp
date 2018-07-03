@@ -417,7 +417,7 @@ THE SOFTWARE.
 
         (push rand my-rands)
         (when (= (length my-rands) bft-thresh)
-          (let ((seed  (float (/ (hash/256 my-rands)
+          (let ((seed  (float (/ (hash/256 (reduce 'logxor my-rands))
                                  #.(ash 1 256))
                               1d0)))
             (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
