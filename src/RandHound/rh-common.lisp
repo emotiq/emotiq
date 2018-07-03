@@ -93,7 +93,7 @@ THE SOFTWARE.
   pkeys tgrps max-bft purpose tstamp)
 
 (defstruct subgroup-commit
-  thresh encr-shares proofs)
+  epoch thresh encr-shares proofs chks rval)
 
 
                 
