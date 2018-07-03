@@ -3,28 +3,6 @@
 (defparameter *nominal-gossip-port* 65002 "Duplicate of same symbol in gossip package
     to avoid package interdependencies")
 
-#+(or)
-(defun generate-network (records &key (root (emotiq/fs:etc/)))
-  "Generate configuration directories for gossip network for RECORDS at directory ROOT
-
-Returns a list of directions created with valid configurations.
-
-  The ROOT defaults to the value returned by 'EMOTIQ/FS:ETC/'."
-  (let* ((key-records (generate-keys records))
-         (pubkeys (loop :for record :in key-records :collect (car (fourth record))))
-         directories)
-    (dolist (key-record key-records)
-      (destructuring-bind (host eripa port (public private))
-          key-record
-        (declare (ignore private))
-        (let ((path (make-pathname :directory (append (pathname-directory root)
-                                                      (list (format nil "~a:~a" host gossip-port)))
-                                   :defaults root)))
-          (push 
-           (generate-node host eripa gossip-port public path)
-           directories))))
-    directories))
-
 ;;; FIXME refactor the interface for passing parameters to something
 ;;; simpler gossip/config should probably declare a CLOS object as
 ;;; containing its configuration needs rather than relying on this
