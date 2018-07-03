@@ -25,8 +25,11 @@
     (when (probe-file p)
       (with-open-file (o p
                          :direction :input)
-        (loop :with form
-           :while (setf form (read o nil nil nil)) :collecting form)))))
+        (let ((*read-supress* t))
+          (loop :with form
+             :while (setf form (read o nil nil nil)) :collecting form))))))
+
+
 
 
   
