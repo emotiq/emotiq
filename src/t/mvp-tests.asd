@@ -4,7 +4,6 @@
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
   :depends-on (prove
-               emotiq/startup
                emotiq/config)
   :defsystem-depends-on (prove-asdf) ;;; FIXME
   :perform (test-op (o s)
