@@ -120,6 +120,7 @@
                emotiq/logging
                emotiq/filesystem
                cosi-bls
+               lisp-object-encoder
                useful-macros
                gossip/config)
   :in-order-to ((test-op (test-op "mvp-tests")))
