@@ -56,7 +56,8 @@
 (defpackage gossip/config
   (:use #:cl)
   (:export
-   #:generate
+   #:generate-network
+   #:generate-node
    #:*aws-example*
    #:initialize 
    #:get-values))
