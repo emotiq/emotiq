@@ -25,6 +25,10 @@ Returns a list of directions created with valid configurations.
            directories))))
     directories))
 
+;;; FIXME refactor the interface for passing parameters to something
+;;; simpler gossip/config should probably declare a CLOS object as
+;;; containing its configuration needs rather than relying on this
+;;; mess.
 (defun generate-node (&key root host eripa gossip-port public private key-records)
   (declare (ignore host)) ;; Hmm?
   (ensure-directories-exist root)

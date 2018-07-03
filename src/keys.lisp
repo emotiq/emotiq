@@ -1,18 +1,18 @@
 (in-package :emotiq/config)
 
 (defun keys/generate (records)
-  "Generate keys for a list of alist RECORDS, destructively"
+  "Generate keys for a list of plist RECORDS
+
+The keys of the RECORDS plist are interpreted by gossip/config"
   (loop
      :with key-integers = (make-key-integers)
      :for record :in records
-     :doing (push `(:public
-                    . ,(format nil "~a" (first key-integers)))
-                  record)
-     :doing (push `(:private
-                    . ,(format nil "~a" (second key-integers)))
-                  record)
-     :collecting record))
-
+     :collecting (append record
+                         ;;; HACK adapt to gossip/config needs
+                         (unless (find :gossip-server-port record)
+                           (list :gossip-server-port 65002))
+                         (list :public (first key-integers))
+                         (list :private (second key-integers)))))
 
 (defun make-key-integers ()
   "Makes a public/private keypair seeded via UUID:MAKE-V1-UUID

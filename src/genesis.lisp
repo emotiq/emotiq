@@ -4,8 +4,8 @@
                                        root
                                        (force nil))
   (let ((genesis-block-path (merge-pathnames
-                             (alexandria:assoc-value  configuration
-                                                      :genesis-block)
+                             (alexandria:assoc-value configuration
+                                                     :genesis-block)
                              root)))
     (unless (or force
                 (probe-file genesis-block-path))

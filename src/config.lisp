@@ -1,5 +1,7 @@
 (in-package :emotiq/config)
 
+;;; We wish to interpret a list of plists, as this is what the
+;;; devops-ansible hook passes the network generation routines
 (defparameter *dns-ip-zt.emotiq.ch* 
   '((:hostname "zt-emq-01.zt.emotiq.ch"
      :ip "10.178.2.166"
@@ -34,16 +36,21 @@
        . "emotiq-genesis-block.json")))
 
 (defun generated-directory (configuration)
-  (let ((host (alexandria:assoc-value configuration :hostname))
-        (ip (alexandria:assoc-value configuration :ip))
-        (gossip-server-port (alexandria:assoc-value configuration :gossip-server-port))
-        (rest-server-port (alexandria:assoc-value configuration :rest-server-port))
-        (websocket-server-port (alexandria:assoc-value configuration :websocket-server-port)))
+  (let ((host
+         (alexandria:assoc-value configuration :hostname))
+        (ip
+         (alexandria:assoc-value configuration :ip))
+        (gossip-server-port
+         (alexandria:assoc-value configuration :gossip-server-port))
+        (rest-server-port
+         (alexandria:assoc-value configuration :rest-server-port))
+        (websocket-server-port
+         (alexandria:assoc-value configuration :websocket-server-port)))
     (make-pathname
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
-                           (list host ip gossip-server-port rest-server-port websocket-server-port)))
-     :defaults nil)))
+                           (list host ip gossip-server-port rest-server-port websocket-server-port))))))
+
 
 (defun network/generate (&key
                            (root (emotiq/fs:tmp/))
@@ -65,21 +72,20 @@
               configuration)
         (push (cons :ip ip)
               configuration)
-        (push `(:public
-                . ,(random 100)) ;; FIXME
+        (push (cons :public
+                    (getf node :public))
               configuration)
-        (push `(:private
-                . ,(random 100)) ;; FIXME
+        (push (cons :private
+                    (getf node :private))
               configuration)
-        #+(or) ;; FIXME
-        (push `(:witnesses-and-stakes
-                . ,stakes)
+        (push (cons :witnesses-and-stakes
+                    (rest stakes))
               configuration)
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
-          (loop :for (key . value)
+          (loop :for setting
              :in settings-key-value-alist
-             :doing (push `(,key . ,value) configuration)))
+             :doing (push setting configuration)))
 
         (let ((relative-path (generated-directory configuration)))
           (let ((path (merge-pathnames relative-path root))
@@ -95,13 +101,13 @@
 (defun node/generate (directory
                       configuration
                       &key
-                        witnesses-and-stakes
                         key-records
                         (force nil))
   "Generate a compete Emotiq node description within DIRECTORY for CONFIGURATION"
-  (gossip/config:generate-node
+  (declare (ignore force)) ;; FIXME code explicit re-generation
+  (gossip/config:generate-node 
    :root directory
-   :host (alexandria:assoc-value configuration :host)
+   :host (alexandria:assoc-value configuration :hostname)
    :eripa (alexandria:assoc-value configuration :ip)
    :gossip-port (alexandria:assoc-value configuration :gossip-server-port)
    :public (alexandria:assoc-value configuration :public)
