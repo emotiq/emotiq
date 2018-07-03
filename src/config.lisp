@@ -147,11 +147,11 @@
                                (emotiq/fs:tmp/)))
         (local (generated-directory c))
         (destination (emotiq/fs:etc/)))
-    (when (or (not force)
-              (not (zerop
-                    (length (directory
-                             (make-pathname :name :wild :type :wild
-                                            :defaults destination))))))
+    (unless force 
+      (when (not (zerop
+                  (length (directory
+                           (make-pathname :name :wild :type :wild
+                                           :defaults destination))))))
 
       (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
       (return-from ensure-defaults (settings/read)))

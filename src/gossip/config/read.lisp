@@ -45,16 +45,19 @@ The third value contains the configuration of this node."
   (when (and pathname (probe-file pathname))
     (let ((pair nil)
           (pairs nil))
-      (with-open-file (s pathname)
-        (setf pairs
-              (loop while (setf pair (read s nil nil nil)) collect pair)))
+      (let ((*read-supress* t))
+        (with-open-file (s pathname)
+          (setf pairs
+                (loop while (setf pair (read s nil nil nil)) collect pair))))
       pairs)))
-
+  
 (defun read-local-machine-configuration (&optional (pathname *machine-db-path*))
   (when (probe-file pathname)
-    (with-open-file (s pathname :direction :input :if-does-not-exist :error)
-      (let ((form (read s nil nil nil)))
-        form))))
+    (let ((*read-supress* t))
+      (with-open-file (s pathname :direction :input :if-does-not-exist :error)
+        (let ((form (read s nil nil nil)))
+          form)))))
+
 
 
 
