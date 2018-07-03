@@ -153,6 +153,8 @@
    #:network/generate
    #:node/generate
 
+   #:ensure-defaults
+
    #:get-stakes
 
    #:*dns-ip-zt.emotiq.ch*
