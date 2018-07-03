@@ -147,13 +147,12 @@
                                (emotiq/fs:tmp/)))
         (local (generated-directory c))
         (destination (emotiq/fs:etc/)))
-    #+(or) ;; FIXME not working
     (when (or (not force)
-              (>
-               (length (directory
-                        (make-pathname :name :wild :type :wild
-                                       :defaults destination)))
-               0))
+              (not (zerop
+                    (length (directory
+                             (make-pathname :name :wild :type :wild
+                                            :defaults destination))))))
+
       (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
       (return-from ensure-defaults (settings/read)))
     (unless nodes-dns-ip-p
