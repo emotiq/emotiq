@@ -424,7 +424,7 @@ THE SOFTWARE.
             ))))))
 
 ;; ------------------------------------------------------------------
-
+#|
 (defstruct rh-server-state
   byz-frac grp reply-to config
   (commits      (make-hash-table))
@@ -540,7 +540,7 @@ THE SOFTWARE.
                       (gossip-entropy total-entropy))
                     )))
               )))))))
-                              
+|#
 
 ;; --------------------------------------
 
