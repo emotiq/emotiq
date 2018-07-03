@@ -213,7 +213,7 @@ THE SOFTWARE.
              (int= p1 p2)))
          proofs chks pkeys))
 
-(defmethod rh-dispatcher ((msg-sym (eql :subgroup-commit)) &key session from commit sig)
+(defmethod rh-dispatcher ((msg-sym (eql :subgroup-commit)) &key session from commit)
   (with-accessors ((my-session  rh-group-info-session)
                    (my-group    rh-group-info-group)
                    (my-commits  rh-group-info-commits)
@@ -331,7 +331,8 @@ THE SOFTWARE.
                             (setf rand (if rand
                                            (pbc:mult-pairings rand yvexpt)
                                          yvexpt))))))
-                (apply 'send my-group-leader (make-signed-subgroup-randomness-message session for from rand))
+                (apply 'send my-group-leader
+                       (make-signed-subgroup-randomness-message session for from rand))
                 )))
           )))))
 

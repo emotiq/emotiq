@@ -77,11 +77,14 @@ THE SOFTWARE.
    :compute-pairing
    :mul-pts  ;; bent nomenclature for ECC
    :add-zrs
+   :mul-zrs
    :inv-zr
+   :div-zrs
    :expt-pt-zr
    :add-pts  ;; non-bent nomenclature for ECC
    :mul-pt-zr
-   
+   :mul-gts
+   :expt-gt-zr
    :keying-triple
    :keying-triple-pkey
    :keying-triple-sig
@@ -264,6 +267,10 @@ THE SOFTWARE.
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
+(cffi:defcfun ("mul_Zr_vals" _mul-zr-vals) :void
+  (z1    :pointer :unsigned-char)
+  (z2    :pointer :unsigned-char))
+
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
   (z     :pointer :unsigned-char))
 
@@ -279,6 +286,14 @@ THE SOFTWARE.
   (gtbuf :pointer :unsigned-char)  ;; result returned here
   (hbuf  :pointer :unsigned-char)
   (gbuf  :pointer :unsigned-char))
+
+(cffi:defcfun ("mul_GT_vals" _mul-GT-vals) :void
+  (z1    :pointer :unsigned-char)
+  (z2    :pointer :unsigned-char))
+
+(cffi:defcfun ("exp_GTz" _exp-GTz) :void
+  (g     :pointer :unsigned-char)
+  (z     :pointer :unsigned-char))
 
 ;; ----------------------------------------------------
 
@@ -1189,6 +1204,10 @@ Certification includes a BLS Signature on the public key."
   (make-instance 'zr
                  :val ans))
 
+(defun make-gT-ans (ans)
+  (make-instance 'gt
+                 :val ans))
+
 ;; -------------------------------
 
 (defmethod mul-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
@@ -1218,6 +1237,7 @@ Certification includes a BLS Signature on the public key."
                 *g2-size* *g2-size* 'make-g2-ans))
         ))
         
+
 (defmethod add-zrs ((z1 zr) (z2 zr))
   ;; add two elements from Zr ring
   (binop '_add-zr-vals z1 z2
@@ -1226,6 +1246,17 @@ Certification includes a BLS Signature on the public key."
 (defmethod add-zrs ((z1 integer) z2)
   (add-zrs z2 (make-instance 'zr
                              :val (mod z1 (get-order)))))
+
+
+(defmethod mul-zrs ((z1 zr) (z2 zr))
+  ;; mult two elements from Zr ring
+  (binop '_mul-zr-vals z1 z2
+         *zr-size* *zr-size* 'make-zr-ans))
+
+(defmethod mul-zrs ((z2 integer) z2)
+  (mul-zrs z2 (make-instance 'zr
+                             :val (mod z1 (get-order)))))
+
 
 (defmethod inv-zr ((z zr))
   ;; compute inverse of z in ring Zr
@@ -1240,6 +1271,11 @@ Certification includes a BLS Signature on the public key."
   (inv-zr (make-instance 'zr
                          :val (mod z (get-order)))))
 
+(defmethod div-zrs ((z1 zr) z2)
+  ;; divide z1 by z2 in ring Zr
+  (mul-zrs z1 (inv-zr z2)))
+
+
 (defvar *g1-zero*
   (make-instance 'g1-cmpr
                  :pt (bev 0)))
@@ -1247,6 +1283,10 @@ Certification includes a BLS Signature on the public key."
 (defvar *g2-zero*
   (make-instance 'g2-cmpr
                  :pt (bev 0)))
+
+(defvar *gT-zero*
+  (make-instance 'gT
+                 :val (bev 0)))
 
 (defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
@@ -1272,6 +1312,22 @@ Certification includes a BLS Signature on the public key."
   ;; for non-bent nomenclature
   (expt-pt-zr pt z))
 
+(defmethod expt-GT-zr ((gT gT) (z zr))
+  ;; exponentiate an element of G1 by element z of ring Zr
+  (cond ((zerop (int z)) *gT-zero*)
+        (t
+         (binop '_exp-GTz gT z
+                *gT-size* *zr-size* 'make-gT-ans))
+        ))
+
+(defmethod expt-GT-zr ((gT gT) (z integer))
+  (expt-GT-zr gT (make-instance 'zr
+                                :val (mod z (get-order)))))
+
+(defmethod mul-gts ((gt1 gt) (gt2 gt))
+  (binop '_mul-gt-vals gt1 gt2
+         *gt-size* *gt-size* 'make-gt-ans))
+  
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
 

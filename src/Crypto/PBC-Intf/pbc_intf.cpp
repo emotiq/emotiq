@@ -388,6 +388,20 @@ void add_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 }
   
 extern "C"
+void mul_Zr_vals(unsigned char* zr1, unsigned char* zr2)
+{
+  element_t z1, z2;
+  element_init_Zr(z1, gPairing);
+  element_init_Zr(z2, gPairing);
+  element_from_bytes(z1, zr1);
+  element_from_bytes(z2, zr2);
+  element_mul(z1, z1, z2);
+  element_to_bytes(zr1, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+  
+extern "C"
 void inv_Zr_val(unsigned char* zr)
 {
   element_t z;
@@ -429,6 +443,34 @@ void exp_G2z(unsigned char* g2, unsigned char* zr)
   element_clear(g);
 }
 
+extern "C"
+void mul_GT_vals(unsigned char* gt1, unsigned char* gt2)
+{
+  element_t z1, z2;
+  element_init_GT(z1, gPairing);
+  element_init_GT(z2, gPairing);
+  element_from_bytes(z1, gt1);
+  element_from_bytes(z2, gt2);
+  element_mul(z1, z1, z2);
+  element_to_bytes(gt1, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+  
+extern "C"
+void exp_GTz(unsigned char* gt, unsigned char* zr)
+{
+  element_t z1, z2;
+  element_init_GT(z1, gPairing);
+  element_init_Zr(z2, gPairing);
+  element_from_bytes(z1, gt);
+  element_from_bytes(z2, zr);
+  element_pow_zn(z1, z1, z2);
+  element_to_bytes(gt, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+  
 extern "C"
 void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash)
 {
