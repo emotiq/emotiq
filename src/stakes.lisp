@@ -20,11 +20,13 @@
       (format o "~s~%" stake))))
 
 (defun get-stakes ()
-  (with-open-file (o (make-pathname :name "stakes" :type "conf"
-                                    :defaults (emotiq/fs:etc/))
-                     :direction :input)
-    (loop :with form
-       :while (setf form (read o nil nil nil)) :collecting form)))
+  (let ((p (make-pathname :name "stakes" :type "conf"
+                          :defaults (emotiq/fs:etc/))))
+    (when (probe-file p)
+      (with-open-file (o p
+                         :direction :input)
+        (loop :with form
+           :while (setf form (read o nil nil nil)) :collecting form)))))
 
   
 
