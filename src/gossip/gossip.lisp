@@ -1760,7 +1760,8 @@ dropped on the floor.
           ; if no place left to reply to, just log the result.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
-          ((null where-to-send-reply)
+          ((or (null where-to-send-reply)
+               (eq t where-to-send-reply))
            (node-log srcnode :NO-REPLY-DESTINATION! soluid data))
           (t
            (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
@@ -2097,19 +2098,10 @@ gets sent back, and everything will be copacetic.
             (t (make-proxy)))
       proxy)))
 
-(defmethod incoming-message-handler ((msg solicitation) srcuid destuid)
+(defmethod incoming-message-handler ((msg gossip-message-mixin) srcuid destuid)
   "Locally dispatch messages received from network"
-  ;; srcuid will be that of a proxy-gossip-node on receiver (this) machine
-  ;; destuid will be that of a true gossip-node on receiver (this) machine
-  (when (uid? (reply-to msg)) ; deal with direct replies properly
-          (setf (reply-to msg) srcuid))
-  (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
-  (send-msg msg destuid srcuid)
-  t)
-
-(defmethod incoming-message-handler ((msg reply) srcuid destuid)
-  "Locally dispatch messages received from network"
-  ;; proxy will be a proxy-gossip-node on receiver (this) machine
+  ;; srcuid will be that of a proxy-gossip-node on receiver (this) machine, and also that of the (remote) 
+  ;;   real node the proxy points to
   ;; destuid will be that of a true gossip-node on receiver (this) machine
   (incf (hopcount msg)) ; no need to copy message here since we just created it from scratch
   (send-msg msg destuid srcuid)
@@ -2142,9 +2134,12 @@ gets sent back, and everything will be copacetic.
     (destructuring-bind (destuid srcuid rem-address rem-port msg) packet
       (log-event "Gossip transport message received" rem-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-      (let ((proxy (ensure-proxy-node :tcp rem-address rem-port srcuid)))
-        ;; Note: Use uid of proxy for during local processing.
-        (incoming-message-handler msg (uid proxy) destuid)))))
+      (let ((reply-to (reply-to message)))
+        (when (or (uid? reply-to) ; if reply-to is nil or not one of these, we don't need a proxy to reply to
+                  (eq :UPSTREAM reply-to))
+          (unless (lookup-node srcuid) ; never automatically replace a real node with a proxy here
+            (ensure-proxy-node :tcp rem-address rem-port srcuid)))
+        (incoming-message-handler msg srcuid destuid)))))
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
@@ -2515,11 +2510,11 @@ soluid twice.
 NOTE D: About :ANONYMOUS nodes
 
 #'prepare-repliers is solely for use by a given node X when it is passing along a message whose reply-to slot
-is :UPSTREAM. It should never be used for any other kind of reply-to, and in some cases it should not use even
+is :UPSTREAM. It should never be used for any other kind of reply-to, and in some cases it should not be used even
 in the :UPSTREAM case. Read on.
 
 An :ANONYMOUS node is a proxy-node whose real-uid slot contains 0. It stands in for "every node" on some remote
-machine. A regular proxy-node on machine A masquerades as the source of messages to local nodes on machine A, where
+machine. A regular (non-anonymous) proxy-node on machine A masquerades as the source of messages to local nodes on machine A, where
 the actual source is actually on machine B. #'ensure-proxy-node is what makes this happen. But it NEVER happens
 for :ANONYMOUS nodes. When a remote node on B responds to A, its message always comes in through a regular proxy-node
 (which has a nonzero real-uid). Said proxy-node will be automatically created if it doesn't already exist.
