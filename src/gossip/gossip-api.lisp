@@ -134,3 +134,6 @@
                 startnodeID                   ; destination
                 nil)
       t)))
+
+; (setf localnode (car (gossip::local-real-uids)))
+; (hello localnode (eripa) 65002 :graphid ':uber :startnodeid (car (remote-real-uids)))
