@@ -43,45 +43,39 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------
 
-(defun make-randhound-msg (msg)
-  `(:randhound ,@msg))
-
 (defun broadcast-message (msg pkeys)
-  (let ((me   (node-pkey (current-node)))
-        (rmsg (make-randhound-msg msg)))
+  (let ((me  (node-pkey (current-node))))
     (if (find me pkeys
               :test 'int=)
-        (cosi-simgen:broadcast+me rmsg)
-      (cosi-simgen:broadcast-to-others rmsg))))
+        (cosi-simgen:broadcast+me msg)
+      (cosi-simgen:broadcast-to-others msg))))
 
 (defun send-message (msg pkey)
-  (apply 'send pkey (make-randhound-msg msg)))
+  (apply 'send pkey msg))
 
 (defun broadcast-grp+me (msg &key graphID)
-  (let ((rmsg (make-randhound-msg msg)))
-    (cond (*use-real-gossip*
-           (gossip:singlecast rmsg :graphID nil)
-           (gossip:broadcast  rmsg :graphID graphID))
-
-          (t
-           (let ((me (node-pkey (current-node))))
-             (apply 'send me rmsg)
-             (mapc (lambda (pkey)
-                     (apply 'send pkey rmsg))
-                   (remove me graphID :test 'int=))))
-          )))
+  (cond (*use-real-gossip*
+         (gossip:singlecast msg :graphID nil)
+         (gossip:broadcast  msg :graphID graphID))
+        
+        (t
+         (let ((me (node-pkey (current-node))))
+           (apply 'send me msg)
+           (mapc (lambda (pkey)
+                   (apply 'send pkey msg))
+                 (remove me graphID :test 'int=))))
+        ))
 
 (defun broadcast-grp (msg &key graphID)
-  (let ((rmsg (make-randhound-msg msg)))
-    (cond (*use-real-gossip*
-           (gossip:broadcast rmsg :graphID graphID))
-
-          (t
-           (let ((me (node-pkey (current-node))))
-             (mapc (lambda (pkey)
-                     (apply 'send pkey rmsg))
-                   (remove me graphID :test 'int=))))
-          )))
+  (cond (*use-real-gossip*
+         (gossip:broadcast msg :graphID graphID))
+        
+        (t
+         (let ((me (node-pkey (current-node))))
+           (mapc (lambda (pkey)
+                   (apply 'send pkey msg))
+                 (remove me graphID :test 'int=))))
+        ))
                           
 
 ;; ------------------------------------------------------------------
