@@ -38,9 +38,6 @@ THE SOFTWARE.
 
 (defvar *max-bft*  0) ;; max number of Byzantine nodes
 
-(defun get-nodes-vector ()
-  (mapcar 'first (get-witness-list)))
-
 ;; -------------------------------------------------------------
 
 (defun broadcast-message (msg pkeys)
@@ -77,7 +74,6 @@ THE SOFTWARE.
                  (remove me graphID :test 'int=))))
         ))
                           
-
 ;; ------------------------------------------------------------------
 
 (defstruct randhound-state

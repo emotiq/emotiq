@@ -29,31 +29,6 @@ THE SOFTWARE.
 (in-package :randhound/server)
 ;; ---------------------------------------------------------------
 
-(defun rh-dispatch-message (node)
-  (ac:make-actor
-   (um:dlambda
-     (:randhound-init (reply-to config)
-      (rh-serve-init node reply-to config))
-
-     (:subgroup-commit (reply-to commit)
-      (rh-serve-validate-commit node reply-to commit))
-
-     (:subgroup-decrypted-share (owner-pkey pkey share)
-      (rh-serve-record-decypted-share node owner-pkey pkey share))
-     
-     )))
-
-(defun find-my-group (node grps)
-  (let ((limit (length grps))
-        (pkey  (int (node-assoc-pkey node))))
-    (um:nlet-tail iter ((ix   0))
-      (unless (>= ix limit)
-        (if (find pkey (aref grps ix)
-                  :key 'int)
-            (aref grps ix)
-          (iter (1+ ix))))
-      )))
-
 (defun poly (q coffs x)
   (with-mod q
     (um:nlet-tail iter ((cs  coffs)
@@ -65,12 +40,32 @@ THE SOFTWARE.
                   (m* x ans)))))
     ))
 
-(defstruct rh-server-state
-  byz-frac grp reply-to config
-  (commits      (make-hash-table))
-  (decr-shares  (make-hash-table))
-  entropy
-  grp-entropy)
+(defun invwt (q n xj)
+  (with-mod q
+    (um:nlet-tail iter ((ix   1)
+                        (prod 1))
+      (if (> ix n)
+          prod
+        (iter (1+ ix)
+              (if (= xj ix)
+                  prod
+                (m* prod (m- xj ix))))
+        ))))
+
+(defun dotprod-g1-zr (pts zrs)
+  (um:nlet-tail iter ((pts  pts)
+                      (zrs  zrs)
+                      (ans  nil))
+    (if (endp pts)
+        ans
+      (iter (cdr pts) (cdr zrs)
+            (let ((p*z  (mul-pt-zr (car pts) (car zrs))))
+              (if ans
+                  (add-pts ans p*z)
+                p*z)))
+      )))
+
+;; ------------------------------------------------------------------
 
 (defstruct rh-group-info
   session group leader super graph
@@ -430,30 +425,12 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------------------
 
-(defun invwt (q n xj)
-  (with-mod q
-    (um:nlet-tail iter ((ix   1)
-                        (prod 1))
-      (if (> ix n)
-          prod
-        (iter (1+ ix)
-              (if (= xj ix)
-                  prod
-                (m* prod (m- xj ix))))
-        ))))
-
-(defun dotprod-g1-zr (pts zrs)
-  (um:nlet-tail iter ((pts  pts)
-                      (zrs  zrs)
-                      (ans  nil))
-    (if (endp pts)
-        ans
-      (iter (cdr pts) (cdr zrs)
-            (let ((p*z  (mul-pt-zr (car pts) (car zrs))))
-              (if ans
-                  (add-pts ans p*z)
-                p*z)))
-      )))
+(defstruct rh-server-state
+  byz-frac grp reply-to config
+  (commits      (make-hash-table))
+  (decr-shares  (make-hash-table))
+  entropy
+  grp-entropy)
 
 (defun rh-serve-validate-commit (node reply-to commit)
   (when (and *rh-state*
