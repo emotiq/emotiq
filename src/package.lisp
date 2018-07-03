@@ -153,5 +153,7 @@
    #:network/generate
    #:node/generate
 
+   #:get-stakes
+
    #:*dns-ip-zt.emotiq.ch*
    #:settings/read))

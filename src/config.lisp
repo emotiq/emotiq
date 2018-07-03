@@ -102,7 +102,7 @@
                       &key
                         key-records
                         (force nil))
-  "Generate a compete Emotiq node description within DIRECTORY for CONFIGURATION"
+  "Generate a complete Emotiq node description within DIRECTORY for CONFIGURATION"
   (declare (ignore force)) ;; FIXME code explicit re-generation
   (gossip/config:generate-node 
    :root directory
