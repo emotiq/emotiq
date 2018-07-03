@@ -27,7 +27,6 @@ The third value contains the configuration of this node."
     (initialize))
   (handler-case
   (let ((keypairs (read-pairs-database *keypair-db-path*))
-        (stakes   (read-pairs-database *stakes-db-path*))
         (hosts nil)
         (local-machine nil))
     (flet ((badfile (filename)
@@ -37,7 +36,7 @@ The third value contains the configuration of this node."
           (unless hosts (gossip::log-event :WARN (format nil "'~A' invalid or empty" *hosts-filename*)))
       (setf local-machine (read-local-machine-configuration *machine-db-path*))
       (unless local-machine (badfile *machine-filename*))
-          (values keypairs hosts local-machine stakes)))
+          (values keypairs hosts local-machine)))
     (error (e)
            (emotiq:note "Configuration strategy failed because ~a" e)
            nil)))
