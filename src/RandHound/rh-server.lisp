@@ -122,8 +122,8 @@ THE SOFTWARE.
             (when (< (length short-grp) 6)
               (setf grps (nconc short-grp (second grps) (cdddr grps))))))
         
-        (let ((msg (make-start-message-skeleton session *local-epoch* me grps)))
-          (broadcast+me (um:conc msg (pbc:sign-hash msg (node-skey node)))))
+        (broadcast+me (make-signed-start-message session epoch pkey groups
+                                                 (node-skey node)))
         ))))
 
 ;; ----------------------------------------------------------------------------------
@@ -136,11 +136,20 @@ THE SOFTWARE.
     :groups  groups
     :sig))
 
+(defun make-signed-start-message (session epoch pkey skey)
+  (let ((skel (make-start-message-skeleton session epoch pkey groups)))
+    (um:conc1 skel (pbc:sign-hash skel skey))))
+
+(defun validate-signed-start-message (session epoch pkey sig)
+  (let ((skel (make-start-message-skeleton session epoch pkey groups)))
+    (pbc:check-hash skel sig pkey)))
+
+
 (defmethod rh-dispatcher ((msg-sym (eql :start)) &key session epoch from groups sig)
   (when (and (= epoch *local-epoch*)
              (int= from *beacon*)
-             (let ((chk (make-start-message-skeleton session epoch from groups)))
-               (pbc:check-hash chk sig from)))
+             (validate-signed-start-message session epoch from groups sig))
+
     (let* ((node        (current-node))
            (me          (node-pkey node))
            (my-group    (find-if (lambda (grp)
@@ -264,6 +273,8 @@ THE SOFTWARE.
                                 :graphID my-graph))
             )))))))
 
+;; ----------------------------------------------------------------------------
+
 (defun make-decr-share-message-skeleton (session from for decr-share)
   `(:randhound :subgroup-decrypted-share
     :from       ,from
@@ -329,6 +340,8 @@ THE SOFTWARE.
                 )))
           )))))
 
+;; ----------------------------------------------------------------------------
+
 (defun make-subgroup-randomness-message-skeleton (session for from rand)
   `(:randhound :subgroup-randomness
     :session ,session
@@ -373,6 +386,8 @@ THE SOFTWARE.
             (apply 'send my-super (make-signed-group-randomness-message session me group-rand))
             ))))))
 
+;; ------------------------------------------------------------------
+
 (defun make-group-randomness-message-skeleton (session from rand)
   `(:randhound :group-randomness
     :session ,session
@@ -387,8 +402,6 @@ THE SOFTWARE.
 (defun validate-signed-group-randomness-message (session from rand sig)
   (let ((skel (make-group-randomness-message-skeleton session from rand)))
     (pbc:check-hash skel sig from)))
-
-;; ------------------------------------------------------------------
 
 (defmethod rh-dispatcher ((msg-sym (eql :group-randomness)) &key session from rand sig)
   ;; this message should only arrive at *BEACON*, as group leaders
