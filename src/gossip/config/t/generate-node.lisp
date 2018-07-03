@@ -17,7 +17,7 @@
     (prove:plan 2)
     (prove:ok p
               (format nil 
-                      "Generated test network configuration in~&~t~a~& for ~&~s~&…"
+                      "Generated test network configuration in~&~t~a~&…"
                       root))
     (prove:ok (probe-file p)
               (format nil
