@@ -7,16 +7,6 @@
 
 (in-package :gossip)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-(defconstant wsp #.(let ((str (make-string 6  :element-type 'base-char)))
-                      (setf (schar str 0) #\Space)
-                      (setf (schar str 1) #\^I)
-                      (setf (schar str 2) #\^L)
-                      (setf (schar str 3) #\^@)
-                      (setf (schar str 4) #\^J)
-                      (setf (schar str 5) (code-char #xa0))
-                      str)))
-
 (defparameter *maximum-redirects* 10)
 
 #|
