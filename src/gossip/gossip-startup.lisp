@@ -14,7 +14,7 @@
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
                     (eripa)
-                    (usocket::host-to-vector-quad ev))))
+                    (host-to-vector-quad ev))))
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
@@ -86,7 +86,13 @@
                          (gossip/config:get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
-      (setf *hosts* (remove (usocket::host-to-hbo (eripa)) hosts :key (lambda (host) (usocket::host-to-hbo (car host)))))
+      (setq *hosts*
+            ;; set up *hosts* with the eripa host removed:
+            (loop with eripa-host-hbo = (host-to-hbo (eripa))
+                  for host-pair in hosts
+                  as host-hbo = (host-to-hbo (first host-pair))
+                  when (not (= eripa-host-hbo host-hbo))
+                    collect host-pair))
       (setf *stakes* stakes)
       (emotiq:note "Gossip init finished.")
       (if ping-others
