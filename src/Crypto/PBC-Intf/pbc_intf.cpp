@@ -782,12 +782,12 @@ void mul_G1z(unsigned char* g1, unsigned char* zr)
   element_t z, g;
   long nelg, nelz;
   
-  element_init_Zr(z, gPairing);
   element_init_G1(g, gPairing);
   nelg = element_length_in_bytes_compressed(g);
-  nelz = element_length_in_bytes(z);
   if(tst_nonzero(g1, nelg))
     {
+      element_init_Zr(z, gPairing);
+      nelz = element_length_in_bytes(z);
       if(tst_nonzero(zr, nelz))
 	{
 	  element_from_bytes(z, zr);
@@ -800,8 +800,8 @@ void mul_G1z(unsigned char* g1, unsigned char* zr)
 	}
       else
 	memset(g1, 0, nelg);
+      element_clear(z);
     }
-  element_clear(z);
   element_clear(g);
 }
   
@@ -811,12 +811,12 @@ void exp_G1z(unsigned char* g1, unsigned char* zr)
   element_t z, g;
   long nelg, nelz;
   
-  element_init_Zr(z, gPairing);
   element_init_G1(g, gPairing);
   nelg = element_length_in_bytes_compressed(g);
-  nelz = element_length_in_bytes(z);
   if(tst_nonzero(g1, nelg))
     {
+      element_init_Zr(z, gPairing);
+      nelz = element_length_in_bytes(z);
       if(tst_nonzero(zr, nelz))
 	{
 	  element_from_bytes(z, zr);
@@ -829,8 +829,8 @@ void exp_G1z(unsigned char* g1, unsigned char* zr)
 	}
       else
 	memset(g1, 0, nelg);
+      element_clear(z);
     }
-  element_clear(z);
   element_clear(g);
 }
   
@@ -842,12 +842,12 @@ void mul_G2z(unsigned char* g1, unsigned char* zr)
   element_t z, g;
   long nelg, nelz;
   
-  element_init_Zr(z, gPairing);
   element_init_G2(g, gPairing);
   nelg = element_length_in_bytes_compressed(g);
-  nelz = element_length_in_bytes(z);
   if(tst_nonzero(g1, nelg))
     {
+      element_init_Zr(z, gPairing);
+      nelz = element_length_in_bytes(z);
       if(tst_nonzero(zr, nelz))
 	{
 	  element_from_bytes(z, zr);
@@ -860,8 +860,8 @@ void mul_G2z(unsigned char* g1, unsigned char* zr)
 	}
       else
 	memset(g1, 0, nelg);
+      element_clear(z);
     }
-  element_clear(z);
   element_clear(g);
 }
   
@@ -871,12 +871,12 @@ void exp_G2z(unsigned char* g1, unsigned char* zr)
   element_t z, g;
   long nelg, nelz;
   
-  element_init_Zr(z, gPairing);
   element_init_G2(g, gPairing);
   nelg = element_length_in_bytes_compressed(g);
-  nelz = element_length_in_bytes(z);
   if(tst_nonzero(g1, nelg))
     {
+      element_init_Zr(z, gPairing);
+      nelz = element_length_in_bytes(z);
       if(tst_nonzero(zr, nelz))
 	{
 	  element_from_bytes(z, zr);
@@ -889,8 +889,8 @@ void exp_G2z(unsigned char* g1, unsigned char* zr)
 	}
       else
 	memset(g1, 0, nelg);
+      element_clear(z);
     }
-  element_clear(z);
   element_clear(g);
 }
   
