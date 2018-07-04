@@ -1252,6 +1252,10 @@ Certification includes a BLS Signature on the public key."
 
 (defmethod zr ((val integer))
   ;; for ring Zr, any integer value (0 <= z < order) is valid
+  ;;
+  ;; Zr is the only group for which arbitrary integer values are
+  ;; valid. All others must be derived from extant group (subgroup)
+  ;; members.
   (%zr (bev (mod val (get-order)))))
 
 (defmethod add-zrs (z1 z2)
