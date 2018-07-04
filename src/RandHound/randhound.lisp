@@ -52,6 +52,11 @@ THE SOFTWARE.
                 (m* prod (m- xj ix))))
         ))))
 
+(defun lagrange-wt (q n xj)
+  (with-mod q
+    (m/ xj
+        (invwt q n xj))))
+
 (defun dotprod-g1-zr (pts zrs)
   (um:nlet-tail iter ((pts  pts)
                       (zrs  zrs)
@@ -335,23 +340,12 @@ THE SOFTWARE.
             (setf (aref my-shares for-index from-index) decr-share)
             (when (= (1+ for-count) share-thresh)
               (let* ((ngrp  (length my-group))
-                     (lwt   (lambda (ix)
-                              (with-mod (pbc:get-order)
-                                (m/ ix
-                                    (let ((ans 1))
-                                      (um:nlet-tail iter ((jx 1))
-                                        (if (> jx ngrp)
-                                            ans
-                                          (progn
-                                            (unless (= ix jx)
-                                              (setf ans (m* ans (- ix jx))))
-                                            (iter (1+ jx))))))
-                                    ))))
-                     (rand   nil))
+                     (q     (pbc:get-order))
+                     (rand  nil))
                 (loop for ix from 0 below ngrp do
                       (let ((yval (aref my-commits for-index ix)))
                         (when yval
-                          (let ((yvexpt  (pbc:expt-gt-zr yval (funcall lwt ix))))
+                          (let ((yvexpt  (pbc:expt-gt-zr yval (lagrange-wt q ngrp ix))))
                             (setf rand (if rand
                                            (pbc:mul-gts rand yvexpt)
                                          yvexpt))))))
