@@ -333,6 +333,48 @@ long check_signature(unsigned char* psig,
   return tf;
 }
 
+// ----------------------------------------------
+
+extern "C"
+void add_G1_pts(unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
+  element_init_G1(p1, gPairing);
+  element_init_G1(p2, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_add(p1, p1, p2);
+  if(element_is0(p1))
+    memset(pt1,0,nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
+  element_clear(p1);
+  element_clear(p2);
+}
+  
+extern "C"
+void sub_G1_pts(unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
+  element_init_G1(p1, gPairing);
+  element_init_G1(p2, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_sub(p1, p1, p2);
+  if(element_is0(p1))
+    memset(pt1,0,nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
+  element_clear(p1);
+  element_clear(p2);
+}
+  
 extern "C"
 void mul_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
@@ -347,6 +389,68 @@ void mul_G1_pts(unsigned char* pt1, unsigned char* pt2)
   element_mul(p1, p1, p2);
   if(element_is0(p1))
     memset(pt1,0,nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
+  element_clear(p1);
+  element_clear(p2);
+}
+  
+extern "C"
+void div_G1_pts(unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
+  element_init_G1(p1, gPairing);
+  element_init_G1(p2, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_div(p1, p1, p2);
+  if(element_is0(p1))
+    memset(pt1,0,nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
+  element_clear(p1);
+  element_clear(p2);
+}
+  
+// ----------------------------------------------
+
+extern "C"
+void add_G2_pts(unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
+  element_init_G2(p1, gPairing);
+  element_init_G2(p2, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_add(p1, p1, p2);
+  if(element_is0(p1))
+    memset(pt1, 0, nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
+  element_clear(p1);
+  element_clear(p2);
+}
+  
+extern "C"
+void sub_G2_pts(unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
+  element_init_G2(p1, gPairing);
+  element_init_G2(p2, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_sub(p1, p1, p2);
+  if(element_is0(p1))
+    memset(pt1, 0, nel);
   else
     element_to_bytes_compressed(pt1, p1);
   element_clear(p1);
@@ -374,6 +478,28 @@ void mul_G2_pts(unsigned char* pt1, unsigned char* pt2)
 }
   
 extern "C"
+void div_G2_pts(unsigned char* pt1, unsigned char* pt2)
+{
+  element_t p1, p2;
+  long      nel;
+  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
+  element_init_G2(p1, gPairing);
+  element_init_G2(p2, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  element_from_bytes_compressed(p1, pt1);
+  element_from_bytes_compressed(p2, pt2);
+  element_div(p1, p1, p2);
+  if(element_is0(p1))
+    memset(pt1, 0, nel);
+  else
+    element_to_bytes_compressed(pt1, p1);
+  element_clear(p1);
+  element_clear(p2);
+}
+  
+// ----------------------------------------------
+
+extern "C"
 void add_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 {
   element_t z1, z2;
@@ -382,6 +508,20 @@ void add_Zr_vals(unsigned char* zr1, unsigned char* zr2)
   element_from_bytes(z1, zr1);
   element_from_bytes(z2, zr2);
   element_add(z1, z1, z2);
+  element_to_bytes(zr1, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+  
+extern "C"
+void sub_Zr_vals(unsigned char* zr1, unsigned char* zr2)
+{
+  element_t z1, z2;
+  element_init_Zr(z1, gPairing);
+  element_init_Zr(z2, gPairing);
+  element_from_bytes(z1, zr1);
+  element_from_bytes(z2, zr2);
+  element_sub(z1, z1, z2);
   element_to_bytes(zr1, z1);
   element_clear(z1);
   element_clear(z2);
@@ -401,6 +541,22 @@ void mul_Zr_vals(unsigned char* zr1, unsigned char* zr2)
   element_clear(z2);
 }
   
+extern "C"
+void div_Zr_vals(unsigned char* zr1, unsigned char* zr2)
+{
+  element_t z1, z2;
+  element_init_Zr(z1, gPairing);
+  element_init_Zr(z2, gPairing);
+  element_from_bytes(z1, zr1);
+  element_from_bytes(z2, zr2);
+  element_div(z1, z1, z2);
+  element_to_bytes(zr1, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+
+// ----------------------------------------------
+
 extern "C"
 void exp_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 {
@@ -466,6 +622,20 @@ void mul_GT_vals(unsigned char* gt1, unsigned char* gt2)
   element_from_bytes(z1, gt1);
   element_from_bytes(z2, gt2);
   element_mul(z1, z1, z2);
+  element_to_bytes(gt1, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+  
+extern "C"
+void div_GT_vals(unsigned char* gt1, unsigned char* gt2)
+{
+  element_t z1, z2;
+  element_init_GT(z1, gPairing);
+  element_init_GT(z2, gPairing);
+  element_from_bytes(z1, gt1);
+  element_from_bytes(z2, gt2);
+  element_div(z1, z1, z2);
   element_to_bytes(gt1, z1);
   element_clear(z1);
   element_clear(z2);

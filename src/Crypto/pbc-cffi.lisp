@@ -75,17 +75,26 @@ THE SOFTWARE.
    :combine-signatures ;; for BLS MultiSigs
 
    :compute-pairing
-   :mul-pts  ;; bent nomenclature for ECC
+
    :add-zrs
+   :sub-zrs
    :mul-zrs
+   :div-zrs
    :exp-zrs
    :inv-zr
-   :div-zrs
-   :expt-pt-zr
+
    :add-pts  ;; non-bent nomenclature for ECC
+   :sub-pts
+   :mul-pts  ;; bent nomenclature for ECC
+   :div-pts
+   
    :mul-pt-zr
+   :expt-pt-zr  ;; bent nom
+
    :mul-gts
+   :div-gts
    :expt-gt-zr
+
    :keying-triple
    :keying-triple-pkey
    :keying-triple-sig
@@ -256,7 +265,27 @@ THE SOFTWARE.
 ;; -------------------------------------------------
 ;; Curve math ops
 
+(cffi:defcfun ("add_G1_pts" _add-g1-pts) :void
+  (p1    :pointer :unsigned-char)
+  (p2    :pointer :unsigned-char))
+
+(cffi:defcfun ("sub_G1_pts" _sub-g1-pts) :void
+  (p1    :pointer :unsigned-char)
+  (p2    :pointer :unsigned-char))
+
 (cffi:defcfun ("mul_G1_pts" _mul-g1-pts) :void
+  (p1    :pointer :unsigned-char)
+  (p2    :pointer :unsigned-char))
+
+(cffi:defcfun ("div_G1_pts" _div-g1-pts) :void
+  (p1    :pointer :unsigned-char)
+  (p2    :pointer :unsigned-char))
+
+(cffi:defcfun ("add_G2_pts" _add-g2-pts) :void
+  (p1    :pointer :unsigned-char)
+  (p2    :pointer :unsigned-char))
+
+(cffi:defcfun ("sub_G2_pts" _sub-g2-pts) :void
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
@@ -264,11 +293,23 @@ THE SOFTWARE.
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
+(cffi:defcfun ("div_G2_pts" _div-g2-pts) :void
+  (p1    :pointer :unsigned-char)
+  (p2    :pointer :unsigned-char))
+
 (cffi:defcfun ("add_Zr_vals" _add-zr-vals) :void
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
+(cffi:defcfun ("sub_Zr_vals" _sub-zr-vals) :void
+  (z1    :pointer :unsigned-char)
+  (z2    :pointer :unsigned-char))
+
 (cffi:defcfun ("mul_Zr_vals" _mul-zr-vals) :void
+  (z1    :pointer :unsigned-char)
+  (z2    :pointer :unsigned-char))
+
+(cffi:defcfun ("div_Zr_vals" _div-zr-vals) :void
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
@@ -293,6 +334,10 @@ THE SOFTWARE.
   (gbuf  :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_GT_vals" _mul-GT-vals) :void
+  (z1    :pointer :unsigned-char)
+  (z2    :pointer :unsigned-char))
+
+(cffi:defcfun ("div_GT_vals" _div-GT-vals) :void
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
@@ -1219,33 +1264,57 @@ Certification includes a BLS Signature on the public key."
 
 ;; -------------------------------
 
-(defmethod mul-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
-  ;; multiply two elements from G1 field (always the shorter field
+(defmethod add-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; add two elements from G1 field (always the shorter field
   ;; rep)
   ;;
   ;; (should be obvious, but you can't mix G1 with G2, except by
   ;; pairing operations)
   ;;
-  (cond ((zerop (int pt1)) pt2)
-        ((zerop (int pt2)) pt1)
-        (t 
-         (binop '_mul-g1-pts pt1 pt2
-                *g1-size* *g1-size* 'make-g1-ans))
-        ))
+  (binop '_add-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
 
-(defun add-pts (pt1 pt2)
-  ;; for non-bent nomenclature
-  (mul-pts pt1 pt2))
+(defmethod sub-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; subtract two elements from G1 field (always the shorter field
+  ;; rep)
+  (binop '_sub-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
 
-(defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
-  ;; multiply two elements from G2 field
-  (cond ((zerop (int pt1)) pt2)
-        ((zerop (int pt2)) pt1)
-        (t 
-         (binop '_mul-g2-pts pt1 pt2
-                *g2-size* *g2-size* 'make-g2-ans))
-        ))
+(defmethod mul-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; multiply two elements from G1 field (always the shorter field
+  ;; rep)
+  (binop '_mul-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
+
+(defmethod div-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; divide (bent nom) two elements from G1 field (always the shorter field
+  ;; rep)
+  (binop '_div-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
+
+;; ---------------------------
+
+(defmethod add-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; add two elements from G2 field
+  (binop '_add-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
         
+(defmethod sub-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; subtract two elements from G2 field
+  (binop '_sub-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+        
+(defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; multiply (bent nom) two elements from G2 field
+  (binop '_mul-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+        
+(defmethod div-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; divide (bent nom) two elements from G2 field
+  (binop '_div-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+        
+;; ---------------------------
 
 (defmethod zr ((val zr))
   val)
@@ -1263,10 +1332,22 @@ Certification includes a BLS Signature on the public key."
   (binop '_add-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
+(defmethod sub-zrs (z1 z2)
+  ;; add two elements from Zr ring
+  (binop '_sub-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
+
 (defmethod mul-zrs (z1 z2)
   ;; mult two elements from Zr ring
   (binop '_mul-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
+
+(defmethod DIV-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  (binop '_DIV-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
+
+;; ---------------------------------------------
 
 (defmethod exp-zrs (z1 z2)
   ;; mult two elements from Zr ring
@@ -1285,6 +1366,9 @@ Certification includes a BLS Signature on the public key."
     (%zr (xfer-foreign-to-lisp z-buf *zr-size*))))
 
 (defmethod inv-zr ((z integer))
+  ;; ... interesting contradiction here:
+  ;; Can't invert 0, but can raise 0^(-1) = 0^(q-1) = 0
+  ;; But zero is not a member of the multiplicative group.
   (inv-zr (zr z)))
 
 (defmethod div-zrs (z1 z2)
@@ -1317,6 +1401,10 @@ Certification includes a BLS Signature on the public key."
 
 (defmethod mul-gts ((gt1 gt) (gt2 gt))
   (binop '_mul-gt-vals gt1 gt2
+         *gt-size* *gt-size* 'make-gt-ans))
+  
+(defmethod div-gts ((gt1 gt) (gt2 gt))
+  (binop '_div-gt-vals gt1 gt2
          *gt-size* *gt-size* 'make-gt-ans))
   
 ;; --------------------------------------------------------
