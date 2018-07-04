@@ -5,7 +5,7 @@
 
 The keys of the RECORDS plist are interpreted by gossip/config"
   (loop
-     :with key-integers = (make-key-integers)
+     :for key-integers = (make-key-integers) 
      :for record :in records
      :collecting (append record
                          ;;; HACK adapt to gossip/config needs

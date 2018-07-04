@@ -119,11 +119,10 @@
   :depends-on (cl-json
                emotiq/logging
                emotiq/filesystem
-               cosi-bls
                lisp-object-encoder
                useful-macros
                gossip/config)
-  :in-order-to ((test-op (test-op "mvp-tests")))
+  :in-order-to ((test-op (test-op "emotiq-config-tests")))
   :components ((:module source
                 :pathname "./"
                 :serial t
