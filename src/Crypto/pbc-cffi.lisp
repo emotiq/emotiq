@@ -320,7 +320,15 @@ THE SOFTWARE.
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
   (z     :pointer :unsigned-char))
 
+(cffi:defcfun ("mul_G1z" _mul-G1z) :void
+  (g     :pointer :unsigned-char)
+  (z     :pointer :unsigned-char))
+
 (cffi:defcfun ("exp_G1z" _exp-G1z) :void
+  (g     :pointer :unsigned-char)
+  (z     :pointer :unsigned-char))
+
+(cffi:defcfun ("mul_G2z" _mul-G2z) :void
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
@@ -1375,20 +1383,30 @@ Certification includes a BLS Signature on the public key."
   ;; divide z1 by z2 in ring Zr
   (mul-zrs z1 (inv-zr z2)))
 
+;; --------------------------------------------------
+
+(defmethod mul-pt-zr ((g1 g1-cmpr) z)
+  ;; exponentiate an element of G1 by element z of ring Zr
+  (binop '_mul-G1z g1 (zr z)
+         *g1-size* *zr-size* 'make-g1-ans))
 
 (defmethod expt-pt-zr ((g1 g1-cmpr) z)
   ;; exponentiate an element of G1 by element z of ring Zr
   (binop '_exp-G1z g1 (zr z)
          *g1-size* *zr-size* 'make-g1-ans))
 
+
+(defmethod mul-pt-zr ((g2 g2-cmpr) z)
+  ;; exponentiate an element of G2 by element z of ring Zr
+  (binop '_mul-G2z g2 (zr z)
+         *g2-size* *zr-size* 'make-g2-ans))
+
 (defmethod expt-pt-zr ((g2 g2-cmpr) z)
   ;; exponentiate an element of G2 by element z of ring Zr
   (binop '_exp-G2z g2 (zr z)
          *g2-size* *zr-size* 'make-g2-ans))
 
-(defun mul-pt-zr (pt z)
-  ;; for non-bent nomenclature
-  (expt-pt-zr pt z))
+;; --------------------------------------------------
 
 (defmethod expt-GT-zr ((gT gT) z)
   ;; exponentiate an element of subgroup GT by element z of ring Zr

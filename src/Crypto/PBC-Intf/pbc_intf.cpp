@@ -335,24 +335,42 @@ long check_signature(unsigned char* psig,
 
 // ----------------------------------------------
 
+int tst_nonzero (unsigned char* ptr, long nel)
+{
+  long ans = 0;
+  for(long ix = nel; --ix >= 0;)
+    if((ans |= ptr[ix]))
+      break;
+  return ans;
+}
+
+// ----------------------------------------------
+
 extern "C"
 void add_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G1(p1, gPairing);
-  element_init_G1(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_add(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1,0,nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G1(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_add(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    memcpy(pt1, pt2, nel);
   element_clear(p1);
-  element_clear(p2);
 }
   
 extern "C"
@@ -360,19 +378,30 @@ void sub_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G1(p1, gPairing);
-  element_init_G1(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_sub(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1,0,nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G1(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_sub(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    {
+      element_from_bytes_compressed(p1, pt2);
+      element_neg(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
   element_clear(p1);
-  element_clear(p2);
 }
   
 extern "C"
@@ -380,19 +409,26 @@ void mul_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G1(p1, gPairing);
-  element_init_G1(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_mul(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1,0,nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G1(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_mul(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    memcpy(pt1, pt2, nel);
   element_clear(p1);
-  element_clear(p2);
 }
   
 extern "C"
@@ -400,19 +436,30 @@ void div_G1_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G1(p1, gPairing);
-  element_init_G1(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_div(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1,0,nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G1(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_div(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    {
+      element_from_bytes_compressed(p1, pt2);
+      element_invert(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
   element_clear(p1);
-  element_clear(p2);
 }
   
 // ----------------------------------------------
@@ -422,19 +469,26 @@ void add_G2_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G2(p1, gPairing);
-  element_init_G2(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_add(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1, 0, nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G2(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_add(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    memcpy(pt1, pt2, nel);
   element_clear(p1);
-  element_clear(p2);
 }
   
 extern "C"
@@ -442,19 +496,30 @@ void sub_G2_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G2(p1, gPairing);
-  element_init_G2(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_sub(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1, 0, nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G2(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_sub(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    {
+      element_from_bytes_compressed(p1, pt2);
+      element_neg(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
   element_clear(p1);
-  element_clear(p2);
 }
   
 extern "C"
@@ -462,19 +527,26 @@ void mul_G2_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G2(p1, gPairing);
-  element_init_G2(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_mul(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1, 0, nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G2(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_mul(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    memcpy(pt1, pt2, nel);
   element_clear(p1);
-  element_clear(p2);
 }
   
 extern "C"
@@ -482,19 +554,30 @@ void div_G2_pts(unsigned char* pt1, unsigned char* pt2)
 {
   element_t p1, p2;
   long      nel;
-  // DO NOT ALLOW pt1 OR pt2 TO BE ZERO ON ENTRY!
   element_init_G2(p1, gPairing);
-  element_init_G2(p2, gPairing);
   nel = element_length_in_bytes_compressed(p1);
-  element_from_bytes_compressed(p1, pt1);
-  element_from_bytes_compressed(p2, pt2);
-  element_div(p1, p1, p2);
-  if(element_is0(p1))
-    memset(pt1, 0, nel);
-  else
-    element_to_bytes_compressed(pt1, p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      if(tst_nonzero(pt2, nel))
+	{
+	  element_init_G2(p2, gPairing);
+	  element_from_bytes_compressed(p1, pt1);
+	  element_from_bytes_compressed(p2, pt2);
+	  element_div(p1, p1, p2);
+	  element_clear(p2);
+	  if(element_is0(p1))
+	    memset(pt1,0,nel);
+	  else
+	    element_to_bytes_compressed(pt1, p1);
+	}
+    }
+  else if(tst_nonzero(pt2, nel))
+    {
+      element_from_bytes_compressed(p1, pt2);
+      element_invert(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
   element_clear(p1);
-  element_clear(p2);
 }
   
 // ----------------------------------------------
@@ -555,8 +638,6 @@ void div_Zr_vals(unsigned char* zr1, unsigned char* zr2)
   element_clear(z2);
 }
 
-// ----------------------------------------------
-
 extern "C"
 void exp_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 {
@@ -583,78 +664,214 @@ void inv_Zr_val(unsigned char* zr)
   element_clear(z);
 }
 
+// ----------------------------------------------
+
 extern "C"
-void exp_G1z(unsigned char* g1, unsigned char* zr)
+void mul_G1z(unsigned char* g1, unsigned char* zr)
 {
   element_t z, g;
-  // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
+  long nelg, nelz;
+  
   element_init_Zr(z, gPairing);
   element_init_G1(g, gPairing);
-  element_from_bytes(z, zr);
-  element_from_bytes_compressed(g, g1);
-  element_pow_zn(g, g, z);
-  element_to_bytes_compressed(g1, g);
+  nelg = element_length_in_bytes_compressed(g);
+  nelz = element_length_in_bytes(z);
+  if(tst_nonzero(g1, nelg))
+    {
+      if(tst_nonzero(zr, nelz))
+	{
+	  element_from_bytes(z, zr);
+	  element_from_bytes_compressed(g, g1);
+	  element_mul_zn(g, g, z);
+	  if(element_is0(g))
+	    memset(g1, 0, nelg);
+	  else
+	    element_to_bytes_compressed(g1, g);
+	}
+      else
+	memset(g1, 0, nelg);
+    }
   element_clear(z);
   element_clear(g);
 }
   
 extern "C"
-void exp_G2z(unsigned char* g2, unsigned char* zr)
+void exp_G1z(unsigned char* g1, unsigned char* zr)
 {
   element_t z, g;
-  // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
+  long nelg, nelz;
+  
   element_init_Zr(z, gPairing);
-  element_init_G2(g, gPairing);
-  element_from_bytes(z, zr);
-  element_from_bytes_compressed(g, g2);
-  element_pow_zn(g, g, z);
-  element_to_bytes_compressed(g2, g);
+  element_init_G1(g, gPairing);
+  nelg = element_length_in_bytes_compressed(g);
+  nelz = element_length_in_bytes(z);
+  if(tst_nonzero(g1, nelg))
+    {
+      if(tst_nonzero(zr, nelz))
+	{
+	  element_from_bytes(z, zr);
+	  element_from_bytes_compressed(g, g1);
+	  element_pow_zn(g, g, z);
+	  if(element_is0(g))
+	    memset(g1, 0, nelg);
+	  else
+	    element_to_bytes_compressed(g1, g);
+	}
+      else
+	memset(g1, 0, nelg);
+    }
   element_clear(z);
   element_clear(g);
 }
+  
+// ----------------------------------------------
+
+extern "C"
+void mul_G2z(unsigned char* g1, unsigned char* zr)
+{
+  element_t z, g;
+  long nelg, nelz;
+  
+  element_init_Zr(z, gPairing);
+  element_init_G2(g, gPairing);
+  nelg = element_length_in_bytes_compressed(g);
+  nelz = element_length_in_bytes(z);
+  if(tst_nonzero(g1, nelg))
+    {
+      if(tst_nonzero(zr, nelz))
+	{
+	  element_from_bytes(z, zr);
+	  element_from_bytes_compressed(g, g1);
+	  element_mul_zn(g, g, z);
+	  if(element_is0(g))
+	    memset(g1, 0, nelg);
+	  else
+	    element_to_bytes_compressed(g1, g);
+	}
+      else
+	memset(g1, 0, nelg);
+    }
+  element_clear(z);
+  element_clear(g);
+}
+  
+extern "C"
+void exp_G2z(unsigned char* g1, unsigned char* zr)
+{
+  element_t z, g;
+  long nelg, nelz;
+  
+  element_init_Zr(z, gPairing);
+  element_init_G2(g, gPairing);
+  nelg = element_length_in_bytes_compressed(g);
+  nelz = element_length_in_bytes(z);
+  if(tst_nonzero(g1, nelg))
+    {
+      if(tst_nonzero(zr, nelz))
+	{
+	  element_from_bytes(z, zr);
+	  element_from_bytes_compressed(g, g1);
+	  element_pow_zn(g, g, z);
+	  if(element_is0(g))
+	    memset(g1, 0, nelg);
+	  else
+	    element_to_bytes_compressed(g1, g);
+	}
+      else
+	memset(g1, 0, nelg);
+    }
+  element_clear(z);
+  element_clear(g);
+}
+  
+// ----------------------------------------------
 
 extern "C"
 void mul_GT_vals(unsigned char* gt1, unsigned char* gt2)
 {
   element_t z1, z2;
+  long nel;
   element_init_GT(z1, gPairing);
-  element_init_GT(z2, gPairing);
-  element_from_bytes(z1, gt1);
-  element_from_bytes(z2, gt2);
-  element_mul(z1, z1, z2);
-  element_to_bytes(gt1, z1);
+  nel = element_length_in_bytes(z1);
+  if(tst_nonzero(gt1, nel))
+    {
+      if(tst_nonzero(gt2, nel))
+	{
+	  element_init_GT(z2, gPairing);
+	  element_from_bytes(z1, gt1);
+	  element_from_bytes(z2, gt2);
+	  element_mul(z1, z1, z2);
+	  element_clear(z2);
+	  if(element_is0(z1))
+	    memset(gt1, 0, nel);
+	  else
+	    element_to_bytes(gt1, z1);
+	}
+      else
+	memset(gt1, 0, nel);
+    }
   element_clear(z1);
-  element_clear(z2);
 }
   
 extern "C"
 void div_GT_vals(unsigned char* gt1, unsigned char* gt2)
 {
   element_t z1, z2;
+  long nel;
+  
   element_init_GT(z1, gPairing);
-  element_init_GT(z2, gPairing);
-  element_from_bytes(z1, gt1);
-  element_from_bytes(z2, gt2);
-  element_div(z1, z1, z2);
-  element_to_bytes(gt1, z1);
+  nel = element_length_in_bytes(z1);
+  if(tst_nonzero(gt1, nel))
+    {
+      if(tst_nonzero(gt2, nel))
+	{
+	  element_init_GT(z2, gPairing);
+	  element_from_bytes(z1, gt1);
+	  element_from_bytes(z2, gt2);
+	  element_div(z1, z1, z2);
+	  element_clear(z2);
+	  if(element_is0(z1))
+	    memset(gt1, 0, nel);
+	  else
+	    element_to_bytes(gt1, z1);
+	}
+      else
+	memset(gt1, 0, nel);
+    }
   element_clear(z1);
-  element_clear(z2);
 }
   
 extern "C"
 void exp_GTz(unsigned char* gt, unsigned char* zr)
 {
   element_t z1, z2;
+  long nelg, nelz;
+  
   element_init_GT(z1, gPairing);
   element_init_Zr(z2, gPairing);
-  element_from_bytes(z1, gt);
-  element_from_bytes(z2, zr);
-  element_pow_zn(z1, z1, z2);
-  element_to_bytes(gt, z1);
+  nelg = element_length_in_bytes(z1);
+  nelz = element_length_in_bytes(z2);
+  if(tst_nonzero(gt, nelg))
+    {
+      if(tst_nonzero(zr, nelz))
+	{
+	  element_from_bytes(z1, gt);
+	  element_from_bytes(z2, zr);
+	  element_pow_zn(z1, z1, z2);
+	  if(element_is0(z1))
+	    memset(gt, 0, nelg);
+	  else
+	    element_to_bytes(gt, z1);
+	}
+      else
+	memset(gt, 0, nelg);
+    }
   element_clear(z1);
   element_clear(z2);
 }
   
+// ----------------------------------------------
+
 extern "C"
 void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash)
 {
