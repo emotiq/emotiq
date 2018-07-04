@@ -292,7 +292,7 @@ based on their relative stake"
       ;; *local-epoch* will also not have
       ;; changed
       (unless (get-witness-list)
-        (set-nodes (gossip:get-stakes))  ;; <<--- THIS NEEDS TO CHANGE TO MARK D's NOTIONS
+        (set-nodes (emotiq/config:get-stakes))
         (setf (node-stake node) ;; probably never used elsewhere...
               (second (assoc (node-pkey node) (get-witness-list)
                              :test 'int=))))
@@ -331,7 +331,7 @@ based on their relative stake"
 
 (defun make-signed-call-for-election-message (pkey epoch skey)
   (let ((skel  (make-call-for-election-message-skeleton pkey epoch)))
-    (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
+    (um:append1 skel (pbc:sign-hash (hash/256 skel) skey))))
 
 (defun validate-call-for-election-message (pkey epoch sig)
   (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?
