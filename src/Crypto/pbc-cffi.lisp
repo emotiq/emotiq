@@ -1284,10 +1284,6 @@ Certification includes a BLS Signature on the public key."
   (make-instance 'g2-cmpr
                  :pt (bev 0)))
 
-(defvar *gT-one*
-  (make-instance 'gT
-                 :val (bev 1)))
-
 (defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
   (cond ((zerop (int z)) *g1-zero*)
@@ -1313,12 +1309,9 @@ Certification includes a BLS Signature on the public key."
   (expt-pt-zr pt z))
 
 (defmethod expt-GT-zr ((gT gT) (z zr))
-  ;; exponentiate an element of G1 by element z of ring Zr
-  (cond ((zerop (int z)) *gT-one*)
-        (t
-         (binop '_exp-GTz gT z
-                *gT-size* *zr-size* 'make-gT-ans))
-        ))
+  ;; exponentiate an element of subgroup GT by element z of ring Zr
+  (binop '_exp-GTz gT z
+         *gT-size* *zr-size* 'make-gT-ans))
 
 (defmethod expt-GT-zr ((gT gT) (z integer))
   (expt-GT-zr gT (make-instance 'zr
