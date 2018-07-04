@@ -26,12 +26,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :randhound
+(defpackage :randhound/common
   (:use :common-lisp
    :core-crypto
    :pbc
    :vec-repr
    :actors)
+  (:import-from :cosi-keying
+   :need-integer-form
+   :published-form
+   :make-random-keypair
+   :validate-pkey)
+  
   (:import-from :cosi-simgen
    :node
    :current-node
@@ -81,5 +87,24 @@ THE SOFTWARE.
    :subgroup-commit-encr-shares
    :subgroup-commit-proofs
    :make-subgroup-commit
+   ))
+
+(defpackage :randhound/client
+  (:use :common-lisp
+        :core-crypto
+        :randhound/common
+        :pbc
+        :vec-repr)
+  (:export
+   ))
+
+(defpackage :randhound/server
+  (:use :common-lisp
+        :core-crypto
+        :randhound/common
+        :vec-repr
+        :pbc
+        :actors)
+  (:export
    ))
 
