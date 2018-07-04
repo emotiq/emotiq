@@ -140,7 +140,7 @@
 
 
 (defsystem "emotiq/config/genesis"
-  :depends-on (emotiq
+  :depends-on (cosi/proofs/newtx
                alexandria
                lisp-object-encoder)
   :components ((:module source
