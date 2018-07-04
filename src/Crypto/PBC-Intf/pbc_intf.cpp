@@ -659,11 +659,15 @@ extern "C"
 void inv_Zr_val(unsigned char* zr)
 {
   element_t z;
-  // DO NOT ALLOW zr TO BE ZERO ON ENTRY!!
+  long nel;
   element_init_Zr(z, gPairing);
-  element_from_bytes(z, zr);
-  element_invert(z, z);
-  element_to_bytes(zr, z);
+  nel = element_length_in_bytes(z);
+  if(tst_nonzero(zr, nel))
+    {
+      element_from_bytes(z, zr);
+      element_invert(z, z);
+      element_to_bytes(zr, z);
+    }
   element_clear(z);
 }
 

@@ -1350,9 +1350,9 @@ Certification includes a BLS Signature on the public key."
   (binop '_mul-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod DIV-zrs (z1 z2)
+(defmethod div-zrs (z1 z2)
   ;; mult two elements from Zr ring
-  (binop '_DIV-zr-vals (zr z1) (zr z2)
+  (binop '_div-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
 ;; ---------------------------------------------
@@ -1365,23 +1365,11 @@ Certification includes a BLS Signature on the public key."
          (%zr (bev (mod (int z2) (1- (get-order)))))
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod inv-zr ((z zr))
+(defmethod inv-zr (z)
   ;; compute inverse of z in ring Zr
-  (when (zerop (int z))
-    (error "Can't invert zero"))
   (with-fli-buffers ((z-buf  *zr-size* z))
     (_inv-zr-val z-buf)
     (%zr (xfer-foreign-to-lisp z-buf *zr-size*))))
-
-(defmethod inv-zr ((z integer))
-  ;; ... interesting contradiction here:
-  ;; Can't invert 0, but can raise 0^(-1) = 0^(q-1) = 0
-  ;; But zero is not a member of the multiplicative group.
-  (inv-zr (zr z)))
-
-(defmethod div-zrs (z1 z2)
-  ;; divide z1 by z2 in ring Zr
-  (mul-zrs z1 (inv-zr z2)))
 
 ;; --------------------------------------------------
 
