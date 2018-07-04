@@ -402,6 +402,20 @@ void mul_Zr_vals(unsigned char* zr1, unsigned char* zr2)
 }
   
 extern "C"
+void exp_Zr_vals(unsigned char* zr1, unsigned char* zr2)
+{
+  element_t z1, z2;
+  element_init_Zr(z1, gPairing);
+  element_init_Zr(z2, gPairing);
+  element_from_bytes(z1, zr1);
+  element_from_bytes(z2, zr2);
+  element_pow_zn(z1, z1, z2);
+  element_to_bytes(zr1, z1);
+  element_clear(z1);
+  element_clear(z2);
+}
+  
+extern "C"
 void inv_Zr_val(unsigned char* zr)
 {
   element_t z;

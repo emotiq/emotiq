@@ -68,6 +68,7 @@ extern "C" {
   void mul_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void add_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void mul_Zr_vals(unsigned char* zr1, unsigned char* zr2);
+  void exp_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void inv_Zr_val(unsigned char* zr);
   void exp_G1z(unsigned char* g1, unsigned char* zr);
   void exp_G2z(unsigned char* g2, unsigned char* zr);

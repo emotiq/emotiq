@@ -78,6 +78,7 @@ THE SOFTWARE.
    :mul-pts  ;; bent nomenclature for ECC
    :add-zrs
    :mul-zrs
+   :exp-zrs
    :inv-zr
    :div-zrs
    :expt-pt-zr
@@ -268,6 +269,10 @@ THE SOFTWARE.
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_Zr_vals" _mul-zr-vals) :void
+  (z1    :pointer :unsigned-char)
+  (z2    :pointer :unsigned-char))
+
+(cffi:defcfun ("exp_Zr_vals" _exp-zr-vals) :void
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
@@ -1253,9 +1258,24 @@ Certification includes a BLS Signature on the public key."
   (binop '_mul-zr-vals z1 z2
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod mul-zrs ((z2 integer) z2)
+(defmethod mul-zrs ((z1 integer) z2)
   (mul-zrs z2 (make-instance 'zr
                              :val (mod z1 (get-order)))))
+
+
+(defmethod exp-zrs ((z1 zr) (z2 zr))
+  ;; mult two elements from Zr ring
+  (binop '_exp-zr-vals z1 z2
+         *zr-size* *zr-size* 'make-zr-ans))
+
+(defmethod exp-zrs ((z1 integer) z2)
+  (exp-zrs (make-instance 'zr
+                          :val (mod z1 (get-order)))
+           z2))
+
+(defmethod exp-zrs ((z1 zr) (z2 integer))
+  (exp-zrs z1 (make-instance 'zr
+                             :val (mod z2 (get-order)))))
 
 
 (defmethod inv-zr ((z zr))
