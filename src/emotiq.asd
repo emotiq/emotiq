@@ -119,7 +119,8 @@
   :depends-on (cl-json
                emotiq/logging
                emotiq/filesystem
-               cosi-bls
+               emotiq/config/genesis
+               emotiq/config/stakes
                lisp-object-encoder
                useful-macros
                gossip/config)
@@ -128,9 +129,21 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "keys")
-                             (:file "stakes")
-                             (:file "genesis")
                              (:file "config")))))
 
+(defsystem "emotiq/config/stakes"
+  :depends-on (emotiq)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "stakes")))))
+
+
+(defsystem "emotiq/config/genesis"
+  :depends-on (cosi/proofs/newtx
+               alexandria
+               lisp-object-encoder)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "genesis")))))
 
 
