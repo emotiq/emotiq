@@ -89,6 +89,19 @@ THE SOFTWARE.
 
         (t  pkeys)))
 
+(defun broadcast-grp+me (msg &key graphID)
+  (cond (*use-real-gossip*
+         (gossip:singlecast msg :graphID nil)
+         (gossip:broadcast  msg :graphID graphID))
+        
+        (t
+         (let ((me (node-pkey (current-node))))
+           (apply 'send me msg)
+           (mapc (lambda (pkey)
+                   (apply 'send pkey msg))
+                 (remove me graphID :test 'int=))))
+        ))
+
 ;; ------------------------------------------------------------------
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
@@ -272,7 +285,7 @@ THE SOFTWARE.
                                 (mul-pt-zr rval (with-mod (get-order)
                                                   (m/ skey)))
                                 my-share))
-                 (decr-chkr    (compute-pairing (get-g1) (elt-chks my-index))))
+                 (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
             (when (int= decr-chkl decr-chkr)
               (broadcast-grp+me (make-signed-decr-share-message
                                  session me from decr-share skey)
@@ -300,7 +313,7 @@ THE SOFTWARE.
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-group-leader rh-group-info-leader)
-                   (my-group        rh-group-info-grp)
+                   (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
                    (my-commits      rh-group-info-commits)) *rh-state*
     (let* ((me  (node-pkey (current-node))))
@@ -368,7 +381,7 @@ THE SOFTWARE.
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session for from rand sig)
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-super        rh-group-info-super)
-                   (my-group        rh-group-info-grp)
+                   (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
                    (my-commits      rh-group-info-commits)
                    (my-rands        rh-group-info-rands)

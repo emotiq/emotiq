@@ -31,6 +31,7 @@ THE SOFTWARE.
    :core-crypto
    :pbc
    :vec-repr
+   :hash
    :actors)
   (:import-from :cosi-simgen
    :node
@@ -47,7 +48,9 @@ THE SOFTWARE.
    :rh-dispatcher
    :get-witness-list
    :*use-real-gossip*
-   :*local-epoch*)
+   :*local-epoch*
+   :make-signed-election-message
+   )
 
   (:export
    :*max-bft*

@@ -337,6 +337,7 @@
    :broadcast-to-others
    :get-witness-list
    :*use-real-gossip*
+   :make-signed-election-message
    ))
 
 (defpackage :cosi-keying
