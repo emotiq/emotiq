@@ -1,8 +1,10 @@
 (in-package :emotiq/config)
 
 (defparameter *stakes-filename*
-  "stakes.conf")
-(defparameter *max-stake* (truncate 1E6))
+  (make-pathname :name "stakes" :type "conf"))
+(defparameter *max-stake*
+  (truncate (/ 1E9 1E3))  ;; ratio of total coins to stakers
+  "Maximum amount to award a staked entity")
 
 (defun stakes/generate (pubkeys &key (max-stake *max-stake*))
   "Given a list of PUBKEYS, generate a random stake for each"
@@ -20,8 +22,8 @@
       (format o "~s~%" stake))))
 
 (defun get-stakes ()
-  (let ((p (make-pathname :name "stakes" :type "conf"
-                          :defaults (emotiq/fs:etc/))))
+  (let ((p (merge-pathnames *stakes-filename*
+                            (emotiq/fs:etc/))))
     (when (probe-file p)
       (with-open-file (o p
                          :direction :input)

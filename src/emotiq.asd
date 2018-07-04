@@ -119,6 +119,8 @@
   :depends-on (cl-json
                emotiq/logging
                emotiq/filesystem
+               emotiq/config/stakes
+               emotiq/config/genesis
                crypto-pairings
                lisp-object-encoder
                useful-macros
@@ -128,9 +130,21 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "keys")
-                             (:file "stakes")
-                             (:file "genesis")
                              (:file "config")))))
 
+(defsystem "emotiq/config/stakes"
+  :depends-on (emotiq)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "stakes")))))
+
+
+(defsystem "emotiq/config/genesis"
+  :depends-on (emotiq
+               alexandria
+               lisp-object-encoder)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "genesis")))))
 
 
