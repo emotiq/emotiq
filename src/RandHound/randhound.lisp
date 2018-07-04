@@ -436,15 +436,12 @@ THE SOFTWARE.
 
         (push rand my-rands)
         (when (= (length my-rands) bft-thresh)
-          (let ((trand nil))
-            (dolist (rand my-rands)
-              (setf trand (if trand
-                              (mul-gts trand rand)
-                            rand)))
-            (let ((seed  (float (/ (hash/256 trand)
-                                   #.(ash 1 256))
-                                1d0)))
-              (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
-              )))))))
+          (let* ((trand (reduce 'mul-gts (cdr my-rands)
+                               :initial-value (car my-rands)))
+                 (seed  (float (/ (hash/256 trand)
+                                  #.(ash 1 256))
+                               1d0)))
+            (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+            ))))))
 
 ;; ------------------------------------------------------------------
