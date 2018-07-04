@@ -337,14 +337,14 @@ long check_signature(unsigned char* psig,
 // ----------------------------------------------
 // PBC Library does not handle incoming zero (identity) values very
 // well, often returning total garbage in such cases. Instead, we must
-// take precautions ourselfves.
+// take precautions ourselves.
 
 bool tst_nonzero (unsigned char* ptr, long nel)
 {
   // search operand for a non-zero byte
   // this version assumes at least 8 bytes of memory in buffer
-  return ((((uint64_t*)ptr)[0] != 0) ||
-	  memcmp(ptr, ptr+8, nel-8));
+  return ((0 != ((uint64_t*)ptr)[0]) ||
+	  (0 != memcmp(ptr, ptr+8, nel-8)));
   
   /*
   uint64_t *p64 = (uint64_t*)ptr;
