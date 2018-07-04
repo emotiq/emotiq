@@ -234,6 +234,55 @@ are in place between nodes.
                 (> (length line) 3)
                 (equalp "ec2" (subseq line 0 3)))))))
 
+
+
+;;; HOST-TO-HBO: map HOST to an HBO (host integer in network byte order) if
+;;; posible, otherwise nil.  This differs from usocket:host-to-hbo in that it
+;;; returns nil when it cannot resolve HOST rather than signal an error. Also,
+;;; it tries to bypass hosts that happen to have ipv6 representations, whereas
+;;; usocket would signal an error, at least on LispWorks. (There's current a bug
+;;; report for that problem.)
+
+;;; HOST-TO-VECTOR-QUAD: map HOST to a vector quad if possible, otherwise
+;;; nil. This differs from usocket:host-to-vector in that it does not choose a
+;;; random host to map from its name to the quad in the case of multiple quads
+;;; per names; instead it always chooses the first. It also differs from the
+;;; LispWorks implementation in always choosing a non-ipv6 quad, whereas on
+;;; LispWorks it could choose an ipv6 "quad", by virtue of its choosing a
+;;; "random" host, which did not really make any sense.
+
+(defun host-to-hbo (host)
+  (let ((vector-quad?
+          (host-to-vector-quad host)))
+    (and vector-quad?
+         (usocket::host-to-hbo vector-quad?))))
+
+(defun host-to-vector-quad (host)
+  (cond
+    ((stringp host)
+     ;; usocket ipv6 bug workaround starts here:
+     (let ((ip (and (usocket::ip-address-string-p host)
+                    (usocket:dotted-quad-to-vector-quad host))))
+       (if (and ip (= 4 (length ip)))
+           ;; valid IP dotted quad?
+           ip
+           (loop for host 
+                   in (usocket::get-hosts-by-name host)
+                 ;; return first non-ipv6 (16-long vector) host
+                 when (not (and (typep host 'array)
+                                (= (length host) 16)
+
+                                ;; If it's possible to get a string here, don't
+                                ;; get confused by that.
+                                (not (stringp host))))
+                   return host))))
+    (t (usocket::host-to-vector-quad host))))
+
+;; Host-to-vector-quad and host-to-hbo are not quite plug replacements for their
+;; usocket replacements, which did weird things and sometimes signaled an
+;; error. They are not really exported either. Kind of a mess. -mhd, 7/4/18
+
+
 (defun eripa-via-network-lookup ()
   "Returns ERIPA for current process via http lookup at external site"
   (let ((dq (with-output-to-string (s)
@@ -242,7 +291,7 @@ are in place between nodes.
                     (t (http-fetch "http://api.ipify.org/" s))))))
     (when (and (stringp dq)
                (> (length dq) 0))
-      (values (usocket::host-to-vector-quad dq)
+      (values (host-to-vector-quad dq)
               dq))))
 
 (defun externally-routable-ip-address ()
@@ -275,7 +324,7 @@ are in place between nodes.
 ;   two processes on the same machine because it uses PID as part of the ID. Should still work
 ;   fine even in real (not simulated) systems.
 (defun short-uid ()
-  (encode-uid (logand #xFFFFFFFF (usocket::host-to-hbo (eripa))) ; 32 bits
+  (encode-uid (logand #xFFFFFFFF (host-to-hbo (eripa))) ; 32 bits
               (logand #xFFFF #+OPENMCL (ccl::getpid) #+LISPWORKS (getpid)) ; 16 bits
               (logand #xFFFFFFFF (generate-new-monotonic-id)))) ; 32 bits
 
@@ -1984,12 +2033,12 @@ gets sent back, and everything will be copacetic.
 
 (defun make-ip-key (address port)
   (declare (ignore port))
-  (usocket::host-to-hbo address) ; ignore port for now. Incoming ports will not in general be from *nominal-gossip-port*.
+  (host-to-hbo address) ; ignore port for now. Incoming ports will not in general be from *nominal-gossip-port*.
   #+IGNORE
   (if (and (integerp address)
            (null port))
       address ; means port is already folded into real-address
-      (+ (ash (usocket::host-to-hbo address) 16) port)))
+      (+ (ash (host-to-hbo address) 16) port)))
 
 #+OBSOLETE
 (defmethod memoize-proxy ((proxy proxy-gossip-node) &optional subtable)
