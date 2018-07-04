@@ -81,12 +81,15 @@ THE SOFTWARE.
    :mul-zrs
    :div-zrs
    :exp-zrs
+   :neg-zr
    :inv-zr
 
    :add-pts  ;; non-bent nomenclature for ECC
    :sub-pts
    :mul-pts  ;; bent nomenclature for ECC
    :div-pts
+   :neg-pt
+   :inv-pt
    
    :mul-pt-zr
    :expt-pt-zr  ;; bent nom
@@ -94,7 +97,8 @@ THE SOFTWARE.
    :mul-gts
    :div-gts
    :expt-gt-zr
-
+   :inv-gt
+   
    :keying-triple
    :keying-triple-pkey
    :keying-triple-sig
@@ -281,6 +285,12 @@ THE SOFTWARE.
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
+(cffi:defcfun ("neg_G1_pt" _neg-g1-pt) :void
+  (p1    :pointer :unsigned-char))
+
+(cffi:defcfun ("inv_G1_pt" _inv-g1-pt) :void
+  (p1    :pointer :unsigned-char))
+
 (cffi:defcfun ("add_G2_pts" _add-g2-pts) :void
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
@@ -296,6 +306,12 @@ THE SOFTWARE.
 (cffi:defcfun ("div_G2_pts" _div-g2-pts) :void
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
+
+(cffi:defcfun ("neg_G2_pt" _neg-g2-pt) :void
+  (p1    :pointer :unsigned-char))
+
+(cffi:defcfun ("inv_G2_pt" _inv-g2-pt) :void
+  (p1    :pointer :unsigned-char))
 
 (cffi:defcfun ("add_Zr_vals" _add-zr-vals) :void
   (z1    :pointer :unsigned-char)
@@ -316,6 +332,9 @@ THE SOFTWARE.
 (cffi:defcfun ("exp_Zr_vals" _exp-zr-vals) :void
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
+
+(cffi:defcfun ("neg_Zr_val" _neg-zr-val) :void
+  (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
   (z     :pointer :unsigned-char))
@@ -352,6 +371,9 @@ THE SOFTWARE.
 (cffi:defcfun ("exp_GTz" _exp-GTz) :void
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
+
+(cffi:defcfun ("inv_GT_val" _inv-GT-val) :void
+  (g     :pointer :unsigned-char))
 
 ;; ----------------------------------------------------
 
@@ -1247,6 +1269,13 @@ Certification includes a BLS Signature on the public key."
 ;; multiplication, curve point scalar multiplication is denoted as
 ;; group exponentiation.
 
+(defun unop (op x x-siz final)
+  ;; operate on operands a, b, returning in the buffer for a
+  ;; it is assumed that the a-siz is also the size of result.
+  (with-fli-buffers ((x-buf  x-siz  x))
+    (funcall op x-buf) ;; result returned in first arg buffer
+    (funcall final (xfer-foreign-to-lisp x-buf x-siz))))
+
 (defun binop (op a b a-siz b-siz final)
   ;; operate on operands a, b, returning in the buffer for a
   ;; it is assumed that the a-siz is also the size of result.
@@ -1300,6 +1329,14 @@ Certification includes a BLS Signature on the public key."
   (binop '_div-g1-pts pt1 pt2
          *g1-size* *g1-size* 'make-g1-ans))
 
+(defmethod neg-pt ((pt g1-cmpr))
+  ;; compute negation of pt in group G1
+  (unop '_neg-G1-pt pt *g1-size* 'make-g1-ans))
+
+(defmethod inv-pt ((pt g1-cmpr))
+  ;; compute inverse of pt in group G1
+  (unop '_inv-G1-pt pt *g1-size* 'make-g1-ans))
+
 ;; ---------------------------
 
 (defmethod add-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
@@ -1321,7 +1358,15 @@ Certification includes a BLS Signature on the public key."
   ;; divide (bent nom) two elements from G2 field
   (binop '_div-g2-pts pt1 pt2
          *g2-size* *g2-size* 'make-g2-ans))
-        
+
+(defmethod neg-pt ((pt g2-cmpr))
+  ;; compute negation of pt in group G2
+  (unop '_neg-G2-pt pt *g2-size* 'make-g2-ans))
+
+(defmethod inv-pt ((pt g2-cmpr))
+  ;; compute inverse of pt in group G2
+  (unop '_inv-G2-pt pt *g2-size* 'make-g2-ans))
+
 ;; ---------------------------
 
 (defmethod zr ((val zr))
@@ -1355,8 +1400,6 @@ Certification includes a BLS Signature on the public key."
   (binop '_div-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
-;; ---------------------------------------------
-
 (defmethod exp-zrs (z1 z2)
   ;; mult two elements from Zr ring
   ;; Careful here... z^(q-1) = 1, z^q = z
@@ -1365,11 +1408,13 @@ Certification includes a BLS Signature on the public key."
          (%zr (bev (mod (int z2) (1- (get-order)))))
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod inv-zr (z)
-  ;; compute inverse of z in ring Zr
-  (with-fli-buffers ((z-buf  *zr-size* z))
-    (_inv-zr-val z-buf)
-    (%zr (xfer-foreign-to-lisp z-buf *zr-size*))))
+(defmethod neg-zr (zr)
+  ;; compute negation of pt in group Zr
+  (unop '_neg-Zr-val zr *zr-size* 'make-zr-ans))
+
+(defmethod inv-zr (zr)
+  ;; compute inverse of pt in group Zr
+  (unop '_inv-Zr-val zr *zr-size* 'make-zr-ans))
 
 ;; --------------------------------------------------
 
@@ -1412,7 +1457,12 @@ Certification includes a BLS Signature on the public key."
 (defmethod div-gts ((gt1 gt) (gt2 gt))
   (binop '_div-gt-vals gt1 gt2
          *gt-size* *gt-size* 'make-gt-ans))
-  
+
+(defmethod inv-GT ((gt gt))
+  ;; compute inverse of gt in group GT
+  (unop '_inv-GT-val gt *gt-size* 'make-gt-ans))
+
+
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
 

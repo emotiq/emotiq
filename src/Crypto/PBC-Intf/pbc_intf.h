@@ -77,24 +77,30 @@ extern "C" {
   void mul_G1_pts(unsigned char* pt1, unsigned char* pt2);
   void div_G1_pts(unsigned char* pt1, unsigned char* pt2);
   void exp_G1z(unsigned char* g1, unsigned char* zr);
+  void neg_G1_pt(unsigned char* pt);
+  void inv_G1_pt(unsigned char* pt);
 
   void add_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void sub_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void mul_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void div_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void exp_G2z(unsigned char* g2, unsigned char* zr);
-
+  void neg_G2_pt(unsigned char* pt);
+  void inv_G2_pt(unsigned char* pt);
+  
   void add_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void sub_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void mul_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void div_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void exp_Zr_vals(unsigned char* zr1, unsigned char* zr2);
+  void neg_Zr_val(unsigned char* zr);
   void inv_Zr_val(unsigned char* zr);
 
   void mul_GT_vals(unsigned char* gt1, unsigned char* gt2);
   void div_GT_vals(unsigned char* gt1, unsigned char* gt2);
   void exp_GTz(unsigned char* gt, unsigned char* zr);
-
+  void inv_GT_val(unsigned char* gt);
+  
   void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash);
   void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash);
   void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash);

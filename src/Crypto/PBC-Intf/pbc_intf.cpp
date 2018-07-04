@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
+#include <stdint.h>
 #include "pbc_intf.h"
 
 // ---------------------------------------------------
@@ -338,13 +339,35 @@ long check_signature(unsigned char* psig,
 // well, often returning total garbage in such cases. Instead, we must
 // take precautions ourselfves.
 
-int tst_nonzero (unsigned char* ptr, long nel)
+bool tst_nonzero (unsigned char* ptr, long nel)
 {
   // search operand for a non-zero byte
+  // this version assumes at least 8 bytes of memory in buffer
+  return ((((uint64_t*)ptr)[0] != 0) ||
+	  memcmp(ptr, ptr+8, nel-8));
+  
+  /*
+  uint64_t *p64 = (uint64_t*)ptr;
+  for(long ix = (nel >> 3); --ix >= 0; )
+    if(*p64++)
+      return true;
+  uint32_t *p32 = (uint32_t*)p64;
+  if((nel & 4) && (*(uint32_t*)ptr++))
+    return true;
+  uint16_t *p16 = (uint16_t*)p32;
+  if((nel & 2) && (*(uint16_t*)ptr++))
+    return true;
+  uint8_t *p8 = (uint8_t*)p16;
+  if((nel & 1) && *p8)
+    return true;
+  return false;
+  */
+  /*  
   for(long ix = nel; --ix >= 0;)
     if(ptr[ix])
-      return 1;
-  return 0;
+      return true;
+  return false;
+  */
 }
 
 // ----------------------------------------------
@@ -459,6 +482,38 @@ void div_G1_pts(unsigned char* pt1, unsigned char* pt2)
   else if(tst_nonzero(pt2, nel))
     {
       element_from_bytes_compressed(p1, pt2);
+      element_invert(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
+  element_clear(p1);
+}
+  
+extern "C"
+void neg_G1_pt(unsigned char* pt1)
+{
+  element_t p1;
+  long      nel;
+  element_init_G1(p1, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      element_from_bytes_compressed(p1, pt1);
+      element_neg(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
+  element_clear(p1);
+}
+  
+extern "C"
+void inv_G1_pt(unsigned char* pt1)
+{
+  element_t p1;
+  long      nel;
+  element_init_G1(p1, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      element_from_bytes_compressed(p1, pt1);
       element_invert(p1, p1);
       element_to_bytes_compressed(pt1, p1);
     }
@@ -583,6 +638,38 @@ void div_G2_pts(unsigned char* pt1, unsigned char* pt2)
   element_clear(p1);
 }
   
+extern "C"
+void neg_G2_pt(unsigned char* pt1)
+{
+  element_t p1;
+  long      nel;
+  element_init_G2(p1, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      element_from_bytes_compressed(p1, pt1);
+      element_neg(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
+  element_clear(p1);
+}
+  
+extern "C"
+void inv_G2_pt(unsigned char* pt1)
+{
+  element_t p1;
+  long      nel;
+  element_init_G2(p1, gPairing);
+  nel = element_length_in_bytes_compressed(p1);
+  if(tst_nonzero(pt1, nel))
+    {
+      element_from_bytes_compressed(p1, pt1);
+      element_invert(p1, p1);
+      element_to_bytes_compressed(pt1, p1);
+    }
+  element_clear(p1);
+}
+  
 // ----------------------------------------------
 
 extern "C"
@@ -666,6 +753,22 @@ void inv_Zr_val(unsigned char* zr)
     {
       element_from_bytes(z, zr);
       element_invert(z, z);
+      element_to_bytes(zr, z);
+    }
+  element_clear(z);
+}
+
+extern "C"
+void neg_Zr_val(unsigned char* zr)
+{
+  element_t z;
+  long nel;
+  element_init_Zr(z, gPairing);
+  nel = element_length_in_bytes(z);
+  if(tst_nonzero(zr, nel))
+    {
+      element_from_bytes(z, zr);
+      element_neg(z, z);
       element_to_bytes(zr, z);
     }
   element_clear(z);
@@ -844,6 +947,23 @@ void div_GT_vals(unsigned char* gt1, unsigned char* gt2)
 	}
       else
 	memset(gt1, 0, nel);
+    }
+  element_clear(z1);
+}
+  
+extern "C"
+void inv_GT_val(unsigned char* gt)
+{
+  element_t z1;
+  long nel;
+  
+  element_init_GT(z1, gPairing);
+  nel = element_length_in_bytes(z1);
+  if(tst_nonzero(gt, nel))
+    {
+      element_from_bytes(z1, gt);
+      element_invert(z1, z1);
+      element_to_bytes(gt, z1);
     }
   element_clear(z1);
 }
