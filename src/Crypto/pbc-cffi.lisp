@@ -928,15 +928,20 @@ library."
     (make-instance 'g2-cmpr
                    :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
     )))
-                       
+
+(defmethod %zr ((zbuf bev))
+  ;; we take care here to keep %zr an internal-use-only function.
+  ;; we can't accept just any old BEV argument.
+  (make-instance 'zr
+                 :val zbuf))
+
 (defmethod zr-from-hash ((hash hash))
   "Return the hash value mapped into Zr"
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
                        (hbuf   nb  hash))
       (_get-zr-from-hash zbuf hbuf nb)
-      (make-instance 'zr
-                     :val  (xfer-foreign-to-lisp zbuf *zr-size*))
+      (%zr (xfer-foreign-to-lisp zbuf *zr-size*))
       )))
                        
 ;; -------------------------------------------------
@@ -1206,8 +1211,7 @@ Certification includes a BLS Signature on the public key."
                  :pt ans))
 
 (defun make-zr-ans (ans)
-  (make-instance 'zr
-                 :val ans))
+  (%zr ans))
 
 (defun make-gT-ans (ans)
   (make-instance 'gt
@@ -1243,40 +1247,27 @@ Certification includes a BLS Signature on the public key."
         ))
         
 
-(defmethod add-zrs ((z1 zr) (z2 zr))
+(defmethod zr ((val zr))
+  val)
+
+(defmethod zr ((val integer))
+  ;; for ring Zr, any integer value (0 <= z < order) is valid
+  (%zr (bev (mod val (get-order)))))
+
+(defmethod add-zrs (z1 z2)
   ;; add two elements from Zr ring
-  (binop '_add-zr-vals z1 z2
+  (binop '_add-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod add-zrs ((z1 integer) z2)
-  (add-zrs z2 (make-instance 'zr
-                             :val (mod z1 (get-order)))))
-
-
-(defmethod mul-zrs ((z1 zr) (z2 zr))
+(defmethod mul-zrs (z1 z2)
   ;; mult two elements from Zr ring
-  (binop '_mul-zr-vals z1 z2
+  (binop '_mul-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod mul-zrs ((z1 integer) z2)
-  (mul-zrs z2 (make-instance 'zr
-                             :val (mod z1 (get-order)))))
-
-
-(defmethod exp-zrs ((z1 zr) (z2 zr))
+(defmethod exp-zrs (z1 z2)
   ;; mult two elements from Zr ring
-  (binop '_exp-zr-vals z1 z2
+  (binop '_exp-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
-
-(defmethod exp-zrs ((z1 integer) z2)
-  (exp-zrs (make-instance 'zr
-                          :val (mod z1 (get-order)))
-           z2))
-
-(defmethod exp-zrs ((z1 zr) (z2 integer))
-  (exp-zrs z1 (make-instance 'zr
-                             :val (mod z2 (get-order)))))
-
 
 (defmethod inv-zr ((z zr))
   ;; compute inverse of z in ring Zr
@@ -1284,48 +1275,38 @@ Certification includes a BLS Signature on the public key."
     (error "Can't invert zero"))
   (with-fli-buffers ((z-buf  *zr-size* z))
     (_inv-zr-val z-buf)
-    (make-instance 'zr
-                   :val (xfer-foreign-to-lisp z-buf *zr-size*))))
+    (%zr (xfer-foreign-to-lisp z-buf *zr-size*))))
 
 (defmethod inv-zr ((z integer))
-  (inv-zr (make-instance 'zr
-                         :val (mod z (get-order)))))
+  (inv-zr (zr z)))
 
-(defmethod div-zrs ((z1 zr) z2)
+(defmethod div-zrs (z1 z2)
   ;; divide z1 by z2 in ring Zr
   (mul-zrs z1 (inv-zr z2)))
 
 
-(defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
+(defmethod expt-pt-zr ((g1 g1-cmpr) z)
   ;; exponentiate an element of G1 by element z of ring Zr
-  (binop '_exp-G1z g1 z
+  (binop '_exp-G1z g1 (zr z)
          *g1-size* *zr-size* 'make-g1-ans))
 
-(defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
+(defmethod expt-pt-zr ((g2 g2-cmpr) z)
   ;; exponentiate an element of G2 by element z of ring Zr
-  (binop '_exp-G2z g2 z
+  (binop '_exp-G2z g2 (zr z)
          *g2-size* *zr-size* 'make-g2-ans))
-
-(defmethod expt-pt-zr (g1 (z integer))
-  (expt-pt-zr g1 (make-instance 'zr
-                                :val (mod z (get-order)))))
 
 (defun mul-pt-zr (pt z)
   ;; for non-bent nomenclature
   (expt-pt-zr pt z))
 
-(defmethod expt-GT-zr ((gT gT) (z zr))
+(defmethod expt-GT-zr ((gT gT) z)
   ;; exponentiate an element of subgroup GT by element z of ring Zr
   ;;
   ;; Careful here... GT is a prime order subgroup of a large group of
   ;; composite order. No reason to expect x^q = x, for x in GT, q =
   ;; prime order.
-  (binop '_exp-GTz gT z
+  (binop '_exp-GTz gT (zr z)
          *gT-size* *zr-size* 'make-gT-ans))
-
-(defmethod expt-GT-zr ((gT gT) (z integer))
-  (expt-GT-zr gT (make-instance 'zr
-                                :val (mod z (get-order)))))
 
 (defmethod mul-gts ((gt1 gt) (gt2 gt))
   (binop '_mul-gt-vals gt1 gt2
