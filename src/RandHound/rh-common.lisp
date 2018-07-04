@@ -76,14 +76,9 @@ THE SOFTWARE.
                           
 ;; ------------------------------------------------------------------
 
-(defstruct randhound-state
-  config commit)
-
 (defstruct session-config
   pkeys tgrps max-bft purpose tstamp)
 
-(defstruct subgroup-commit
-  epoch thresh encr-shares proofs chks rval)
 
 
                 

@@ -68,14 +68,18 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------
 
 (defstruct rh-group-info
-  session group leader super graph
-  thresh
-  commits     
-  decr-shares
-  rands
-  entropy
-  groups
-  grp-rands)
+  session     ;; session ID for this round
+  group       ;; list of pkeys in subgroup
+  leader      ;; group leader of group (= first in group)
+  super       ;; supervisor of group leader (group leader only)
+  graph       ;; Gossip group ID for subgroup
+  thresh      ;; BFT threshold group
+  commits     ;; list of commits seen 
+  decr-shares ;; 2D array of decrypted shares, indexed as (owner, witness)
+  rands       ;; accumulating subgroup randomness
+  ;; -----------
+  groups      ;; Beacon has the list of groups
+  grp-rands)  ;; and accumulates group randomness values
 
 (defun establish-broadcast-group (pkeys &key graphID)
   (cond (*use-real-gossip*
@@ -139,6 +143,13 @@ THE SOFTWARE.
   (let ((skel (make-start-message-skeleton session epoch pkey groups)))
     (pbc:check-hash skel sig pkey)))
 
+
+(defstruct subgroup-commit
+  thresh      ;; sharing threshold of commit
+  encr-shares ;; list of encrypted shares
+  proofs      ;; list of share proofs
+  chks        ;; list of checks on proofs
+  rval)       ;; grand decryption check value
 
 (defmethod rh-dispatcher ((msg-sym (eql :start)) &key session epoch from groups sig)
   (when (and (= epoch *local-epoch*)
