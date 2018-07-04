@@ -158,4 +158,6 @@
    #:get-stakes
 
    #:*dns-ip-zt.emotiq.ch*
-   #:settings/read))
+   #:settings/read
+   #:genesis/create
+   #:get-genesis-block))
