@@ -946,7 +946,7 @@ library."
                        
 ;; -------------------------------------------------
 
-(defmethod set-element ((x crypto-val) set-fn nb)
+(defmethod %set-element ((x crypto-val) set-fn nb)
   ;; internal routine
   (mpcompat:with-lock (*crypto-lock*)
     (let ((bytes (crypto-val-vec x)))
@@ -955,13 +955,13 @@ library."
 
 (defmethod set-generator ((g1 g1-cmpr))
   "Set the cryptosystem G1 generator"
-  (setf *g1* g1)
-  (set-element g1 '_set-g1 *g1-size*))
+  (%set-element g1 '_set-g1 *g1-size*)
+  (setf *g1* g1))
 
 (defmethod set-generator ((g2 g2-cmpr))
   "Set the cryptosystem G2 generator"
-  (setf *g2* g2)
-  (set-element g2 '_set-g2 *g2-size*))
+  (%set-element g2 '_set-g2 *g2-size*)
+  (setf *g2* g2))
 
 ;; -------------------------------------------------
 
