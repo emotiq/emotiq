@@ -33,22 +33,30 @@ THE SOFTWARE.
 
 extern "C" {
   long echo(long nel, char* msg_in, char* msg_out);
+
   long init_pairing(char* param_str, long nel, long* psize);
+
   long set_g2(unsigned char* pbuf);
   long set_g1(unsigned char* pbuf);
+  long get_g2(unsigned char* pbuf, long buflen);
+  long get_g1(unsigned char* pbuf, long buflen);
+
   void make_key_pair(unsigned char* pskey, unsigned char* ppkey,
 		     unsigned char* phash, long nhash);
   void sign_hash(unsigned char* psig, unsigned char* pskey,
 		 unsigned char* phash, long nhash);
+
   void make_public_subkey(unsigned char* abuf,
 			  unsigned char* pkey,
 			  unsigned char* phash_id, long nhash);
   void make_secret_subkey(unsigned char* abuf,
 			  unsigned char* skey,
 			  unsigned char* phash_id, long nhash);
+
   void compute_pairing(unsigned char* gtbuf,
 		       unsigned char* hbuf,
 		       unsigned char* gbuf);
+
   void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
 			      unsigned char* pbuf, // pairing result in GT
 			      unsigned char* pkey, // public subkey in G2
@@ -59,30 +67,34 @@ extern "C" {
   long sakai_kasahara_check(unsigned char* rkey, // R in G2
 			    unsigned char* pkey, // public subkey in G2
 			    unsigned char* phash, long nhash);
-  long get_g2(unsigned char* pbuf, long buflen);
-  long get_g1(unsigned char* pbuf, long buflen);
+
   long check_signature(unsigned char* psig,
 		       unsigned char* phash, long nhash,
 		       unsigned char *pkey);
+  
   void add_G1_pts(unsigned char* pt1, unsigned char* pt2);
   void sub_G1_pts(unsigned char* pt1, unsigned char* pt2);
   void mul_G1_pts(unsigned char* pt1, unsigned char* pt2);
   void div_G1_pts(unsigned char* pt1, unsigned char* pt2);
+  void exp_G1z(unsigned char* g1, unsigned char* zr);
+
   void add_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void sub_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void mul_G2_pts(unsigned char* pt1, unsigned char* pt2);
   void div_G2_pts(unsigned char* pt1, unsigned char* pt2);
+  void exp_G2z(unsigned char* g2, unsigned char* zr);
+
   void add_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void sub_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void mul_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void div_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void exp_Zr_vals(unsigned char* zr1, unsigned char* zr2);
   void inv_Zr_val(unsigned char* zr);
-  void exp_G1z(unsigned char* g1, unsigned char* zr);
-  void exp_G2z(unsigned char* g2, unsigned char* zr);
+
   void mul_GT_vals(unsigned char* gt1, unsigned char* gt2);
   void div_GT_vals(unsigned char* gt1, unsigned char* gt2);
   void exp_GTz(unsigned char* gt, unsigned char* zr);
+
   void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash);
   void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash);
   void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash);
