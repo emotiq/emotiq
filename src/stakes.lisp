@@ -18,3 +18,19 @@
     (format o ";;; THIS FILE IS FOR TESTING ONLY~%")
     (dolist (stake records)
       (format o "~s~%" stake))))
+
+(defun get-stakes ()
+  (let ((p (make-pathname :name "stakes" :type "conf"
+                          :defaults (emotiq/fs:etc/))))
+    (when (probe-file p)
+      (with-open-file (o p
+                         :direction :input)
+        (let ((*read-supress* t))
+          (loop :with form
+             :while (setf form (read o nil nil nil)) :collecting form))))))
+
+
+
+
+  
+

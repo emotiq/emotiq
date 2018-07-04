@@ -20,7 +20,11 @@
                  :type "json"))
 
 (um:defconstant+ +default-configuration+
-    `((:rest-server
+    `((:hostname
+       . "localhost")
+      (:ip
+       . "127.0.0.1")
+      (:rest-server
        . :true)
       (:rest-server-port
        . 3140)
@@ -32,7 +36,7 @@
        . :true)
       (:gossip-server-port
        . 65002)
-      (:genesis-block
+      (:genesis-block-file
        . "emotiq-genesis-block.json")))
 
 (defun generated-directory (configuration)
@@ -50,7 +54,7 @@
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
                            (list host ip gossip-server-port rest-server-port websocket-server-port))))))
-
+    
 
 (defun network/generate (&key
                            (root (emotiq/fs:tmp/))
@@ -78,8 +82,8 @@
         (push (cons :private
                     (getf node :private))
               configuration)
-        (push (cons :witnesses-and-stakes
-                    (rest stakes))
+        (push (cons :address-for-coins
+                    (getf (first nodes) :public))
               configuration)
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
@@ -103,7 +107,7 @@
                       &key
                         key-records
                         (force nil))
-  "Generate a compete Emotiq node description within DIRECTORY for CONFIGURATION"
+  "Generate a complete Emotiq node description within DIRECTORY for CONFIGURATION"
   (declare (ignore force)) ;; FIXME code explicit re-generation
   (gossip/config:generate-node 
    :root directory
@@ -114,7 +118,7 @@
    :private (alexandria:assoc-value configuration :private)
    :key-records key-records)
   (with-open-file (o (make-pathname :defaults directory
-                                    :name "emotiq-config"
+                                    :name (pathname-name *emotiq-conf*)
                                     :type "json")
                      :if-exists :supersede
                      :direction :output)
@@ -123,7 +127,7 @@
                 :path (make-pathname :defaults directory
                                      :name "stakes"
                                      :type "conf"))
-  (genesis/create configuration :root directory))
+  (genesis/create configuration :root directory :force t))
   
 (defun settings/read () 
   (unless (probe-file *emotiq-conf*)
@@ -133,3 +137,40 @@
   (cl-json:decode-json-from-source *emotiq-conf*))
 
 
+(defun ensure-defaults (&key
+                          (c (copy-alist +default-configuration+))
+                          force 
+                          (nodes-dns-ip *dns-ip-zt.emotiq.ch* nodes-dns-ip-p))
+  "Ensure that configuration will start up, even in the absence of explicit configuration"
+  (let ((root (merge-pathnames (make-pathname
+                                :directory '(:relative "var"))
+                               (emotiq/fs:tmp/)))
+        (local (generated-directory c))
+        (destination (emotiq/fs:etc/)))
+    (unless force 
+      (when (not (zerop
+                  (length (directory
+                           (make-pathname :name :wild :type :wild
+                                           :defaults destination))))))
+
+      (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
+      (return-from ensure-defaults (settings/read)))
+    (unless nodes-dns-ip-p
+      (push
+       `(:hostname "localhost" ;; FIXME: introspect local hostname
+                   :ip "127.0.0.1")
+       nodes-dns-ip))
+    (ensure-directories-exist root)
+    (network/generate :root root
+                      :nodes-dns-ip nodes-dns-ip)
+    (uiop:run-program
+     (format nil "rsync -avzP ~a ~a"
+             (merge-pathnames local root)
+             destination))
+    (settings/read)))
+
+  
+
+
+
+    
