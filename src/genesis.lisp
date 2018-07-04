@@ -12,7 +12,7 @@
       (let ((genesis-block
              (cosi/proofs:create-genesis-block
               (alexandria:assoc-value configuration :address-for-coins)
-              (get-stakes))))
+              (alexandria:assoc-value configuration :stakes))))
         (with-open-file (o genesis-block-path
                            :direction :output
                            :if-exists :supersede)
