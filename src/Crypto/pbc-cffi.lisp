@@ -1276,29 +1276,15 @@ Certification includes a BLS Signature on the public key."
   (mul-zrs z1 (inv-zr z2)))
 
 
-(defvar *g1-zero*
-  (make-instance 'g1-cmpr
-                 :pt (bev 0)))
-
-(defvar *g2-zero*
-  (make-instance 'g2-cmpr
-                 :pt (bev 0)))
-
 (defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
   ;; exponentiate an element of G1 by element z of ring Zr
-  (cond ((zerop (int z)) *g1-zero*)
-        (t
-         (binop '_exp-G1z g1 z
-                *g1-size* *zr-size* 'make-g1-ans))
-        ))
+  (binop '_exp-G1z g1 z
+         *g1-size* *zr-size* 'make-g1-ans))
 
 (defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
   ;; exponentiate an element of G2 by element z of ring Zr
-  (cond ((zerop (int z)) *g2-zero*)
-        (t 
-         (binop '_exp-G2z g2 z
-                *g2-size* *zr-size* 'make-g2-ans))
-        ))
+  (binop '_exp-G2z g2 z
+         *g2-size* *zr-size* 'make-g2-ans))
 
 (defmethod expt-pt-zr (g1 (z integer))
   (expt-pt-zr g1 (make-instance 'zr
@@ -1310,6 +1296,10 @@ Certification includes a BLS Signature on the public key."
 
 (defmethod expt-GT-zr ((gT gT) (z zr))
   ;; exponentiate an element of subgroup GT by element z of ring Zr
+  ;;
+  ;; Careful here... GT is a prime order subgroup of a large group of
+  ;; composite order. No reason to expect x^q = x, for x in GT, q =
+  ;; prime order.
   (binop '_exp-GTz gT z
          *gT-size* *zr-size* 'make-gT-ans))
 
