@@ -200,7 +200,18 @@ THE SOFTWARE.
 ;; new for Gossip support, and conceptually cleaner...
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
-  (call-next-method))
+
+  (unwind-protect 
+
+       ;; Finish basic initialization. Get basic slots set up.
+       (call-next-method)
+
+    ;; Now, initialize node's block chain with genesis block.
+    (let ((blk (emotiq/config:get-genesis-block)))
+      (push blk (node-blockchain node))
+      (setf (gethash (cosi/proofs:hash-block blk) 
+                     (node-blockchain-tbl node))
+            blk))))
 
 ;; --------------------------------------------------------------
 
