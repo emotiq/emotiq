@@ -156,6 +156,7 @@
    #:ensure-defaults
 
    #:get-stakes
+   #:get-genesis-block
 
    #:*dns-ip-zt.emotiq.ch*
    #:settings/read))

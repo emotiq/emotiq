@@ -63,7 +63,9 @@
                            (settings-key-value-alist nil))
   "Generate a test network configuration"
   (let* ((nodes (keys/generate nodes-dns-ip))
-         (stakes (stakes/generate nodes))
+         (stakes (stakes/generate (mapcar (lambda (plist)
+                                            (getf plist :public))
+                                          nodes)))
          directories)
     (dolist (node nodes)
       (let ((configuration
@@ -84,6 +86,9 @@
               configuration)
         (push (cons :address-for-coins
                     (getf (first nodes) :public))
+              configuration)
+        (push (cons :stakes
+                    stakes)
               configuration)
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
@@ -123,11 +128,11 @@
                      :if-exists :supersede
                      :direction :output)
     (cl-json:encode-json configuration o))
-  (stakes/write key-records
+  (stakes/write (alexandria:assoc-value configuration :stakes)
                 :path (make-pathname :defaults directory
                                      :name "stakes"
                                      :type "conf"))
-  (genesis/create configuration :root directory :force t))
+  (genesis/create configuration :directory directory :force t))
   
 (defun settings/read () 
   (unless (probe-file *emotiq-conf*)
