@@ -334,14 +334,17 @@ long check_signature(unsigned char* psig,
 }
 
 // ----------------------------------------------
+// PBC Library does not handle incoming zero (identity) values very
+// well, often returning total garbage in such cases. Instead, we must
+// take precautions ourselfves.
 
 int tst_nonzero (unsigned char* ptr, long nel)
 {
-  long ans = 0;
+  // search operand for a non-zero byte
   for(long ix = nel; --ix >= 0;)
-    if((ans |= ptr[ix]))
-      break;
-  return ans;
+    if(ptr[ix])
+      return 1;
+  return 0;
 }
 
 // ----------------------------------------------
@@ -848,11 +851,11 @@ void exp_GTz(unsigned char* gt, unsigned char* zr)
   long nelg, nelz;
   
   element_init_GT(z1, gPairing);
-  element_init_Zr(z2, gPairing);
   nelg = element_length_in_bytes(z1);
-  nelz = element_length_in_bytes(z2);
   if(tst_nonzero(gt, nelg))
     {
+      element_init_Zr(z2, gPairing);
+      nelz = element_length_in_bytes(z2);
       if(tst_nonzero(zr, nelz))
 	{
 	  element_from_bytes(z1, gt);
@@ -865,9 +868,9 @@ void exp_GTz(unsigned char* gt, unsigned char* zr)
 	}
       else
 	memset(gt, 0, nelg);
+      element_clear(z2);
     }
   element_clear(z1);
-  element_clear(z2);
 }
   
 // ----------------------------------------------
