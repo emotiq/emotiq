@@ -1271,7 +1271,9 @@ Certification includes a BLS Signature on the public key."
 (defmethod exp-zrs (z1 z2)
   ;; mult two elements from Zr ring
   ;; Careful here... z^(q-1) = 1, z^q = z
-  (binop '_exp-zr-vals (zr z1) (zr (mod (int z2) (1- (get-order))))
+  (binop '_exp-zr-vals
+         (zr z1)
+         (%zr (bev (mod (int z2) (1- (get-order)))))
          *zr-size* *zr-size* 'make-zr-ans))
 
 (defmethod inv-zr ((z zr))
