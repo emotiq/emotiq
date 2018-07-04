@@ -327,9 +327,9 @@ THE SOFTWARE.
                 (loop for ix from 0 below ngrp do
                       (let ((yval (aref my-commits for-index ix)))
                         (when yval
-                          (let ((yvexpt  (pbc:expt-pairing-zr yval (funcall lwt ix))))
+                          (let ((yvexpt  (pbc:expt-gt-zr yval (funcall lwt ix))))
                             (setf rand (if rand
-                                           (pbc:mult-pairings rand yvexpt)
+                                           (pbc:mul-gts rand yvexpt)
                                          yvexpt))))))
                 (apply 'send my-group-leader
                        (make-signed-subgroup-randomness-message session for from rand))
@@ -377,7 +377,7 @@ THE SOFTWARE.
             (loop for pair in my-rands do
                   (let ((rand  (second pair)))
                     (setf group-rand (if group-rand
-                                         (pbc:mult-pairings rand group-rand)
+                                         (pbc:mul-gts rand group-rand)
                                        rand))))
             (apply 'send my-super (make-signed-group-randomness-message session me group-rand))
             ))))))
@@ -418,11 +418,16 @@ THE SOFTWARE.
 
         (push rand my-rands)
         (when (= (length my-rands) bft-thresh)
-          (let ((seed  (float (/ (hash/256 (reduce 'logxor my-rands))
-                                 #.(ash 1 256))
-                              1d0)))
-            (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
-            ))))))
+          (let ((trand nil))
+            (dolist (rand my-rands)
+              (setf trand (if trand
+                              (mul-gts trand rand)
+                            rand)))
+            (let ((seed  (float (/ (hash/256 trand)
+                                   #.(ash 1 256))
+                                1d0)))
+              (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+              )))))))
 
 ;; ------------------------------------------------------------------
 #|
