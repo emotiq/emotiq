@@ -7,8 +7,8 @@
    (format nil "Generation of zt.emotiq.ch devnet artifacts from~%~&~s…"
            nodes-dns-ip)))
 
+(prove:plan 1)
 (let ((stakes (emotiq/config:get-stakes)))
-  (prove:plan 1)
   (prove:ok stakes
             "GET-STAKES returns something…"))
   
