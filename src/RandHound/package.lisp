@@ -38,6 +38,7 @@ THE SOFTWARE.
    :current-node
    :node-pkey
    :node-skey
+   :node-stake
    :node-rh-state
    :get-witness-list
    :broadcast+me
@@ -49,7 +50,9 @@ THE SOFTWARE.
    :get-witness-list
    :*use-real-gossip*
    :*local-epoch*
+   :*election-calls*
    :make-signed-election-message
+   :with-current-node
    )
 
   (:export

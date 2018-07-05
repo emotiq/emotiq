@@ -233,12 +233,10 @@ based on their relative stake"
   ;; knocked out, then we fall back to early elections with BFT
   ;; consensus on decision to resync.
   (let ((self      (current-actor))
-        (node      (current-node))
-        (witnesses (get-witness-list)))
+        (node      (current-node)))
     
     (with-accessors ((stake       node-stake) ;; only used for diagnostic messages
-                     (pkey        node-pkey)
-                     (local-epoch node-local-epoch)) node
+                     (pkey        node-pkey)) node
 
       (update-election-seed pkey)
 
@@ -331,7 +329,7 @@ based on their relative stake"
 
 (defun make-signed-call-for-election-message (pkey epoch skey)
   (let ((skel  (make-call-for-election-message-skeleton pkey epoch)))
-    (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
+    (um:append1 skel (pbc:sign-hash (hash/256 skel) skey))))
 
 (defun validate-call-for-election-message (pkey epoch sig)
   (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?

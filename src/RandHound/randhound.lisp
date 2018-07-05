@@ -79,6 +79,7 @@ THE SOFTWARE.
   super       ;; supervisor of group leader (group leader only)
   graph       ;; Gossip group ID for subgroup
   thresh      ;; BFT threshold group
+  share-thr   ;; sharing threshold of group
   commits     ;; list of commits seen 
   decr-shares ;; 2D array of decrypted shares, indexed as (owner, witness)
   rands       ;; accumulating subgroup randomness
@@ -123,11 +124,11 @@ THE SOFTWARE.
                                   (list (first wit) (int (hash/256 session wit))))
                                 witnesses))
              (sorted    (mapcar 'first
-                                (sort grpids <
+                                (sort grpids '<
                                       :key 'second)))
              (twit      (min 1600 (length sorted)))
              (tsqrt     (min   40 (isqrt twit)))
-             (swits     (subseq sorted twit))
+             (swits     (subseq sorted 0 twit))
              (ngrp      (if (< tsqrt 6)
                             twit
                           tsqrt))
@@ -139,7 +140,7 @@ THE SOFTWARE.
             (when (< (length short-grp) 6)
               (setf grps (nconc short-grp (second grps) (cdddr grps))))))
         
-        (broadcast+me (make-signed-start-message session epoch pkey groups
+        (broadcast+me (make-signed-start-message session *local-epoch* me grps
                                                  (node-skey node)))
         ))))
 
@@ -147,17 +148,17 @@ THE SOFTWARE.
 
 (defun make-start-message-skeleton (session epoch pkey groups)
   `(:randhound :start
-    :session session
-    :epoch   epoch
-    :from    pkey
-    :groups  groups
+    :session ,session
+    :epoch   ,epoch
+    :from    ,pkey
+    :groups  ,groups
     :sig))
 
-(defun make-signed-start-message (session epoch pkey skey)
+(defun make-signed-start-message (session epoch pkey groups skey)
   (let ((skel (make-start-message-skeleton session epoch pkey groups)))
-    (um:conc1 skel (pbc:sign-hash skel skey))))
+    (um:append1 skel (pbc:sign-hash skel skey))))
 
-(defun validate-signed-start-message (session epoch pkey sig)
+(defun validate-signed-start-message (session epoch pkey groups sig)
   (let ((skel (make-start-message-skeleton session epoch pkey groups)))
     (pbc:check-hash skel sig pkey)))
 
@@ -184,22 +185,23 @@ THE SOFTWARE.
            (group-leader (first my-group))
            (ngrp         (length my-group))
            (byz-frac     (floor (1- ngrp) 3))
-           (bft-thresh   (- ngrp byz-frac)))
+           (bft-thresh   (- ngrp byz-frac))
+           (kcoffs       (1+ byz-frac)))
       
       (setf *rh-state* (make-rh-group-info
-                        :session session
-                        :group   my-group
-                        :leader  group-leader
-                        :thresh  bft-thresh
-                        :super   (when (int= me group-leader)
-                                   *beacon*)
-                        :graph   graph
+                        :session     session
+                        :group       my-group
+                        :leader      group-leader
+                        :thresh      bft-thresh
+                        :share-thr   kcoffs
+                        :super       (when (int= me group-leader)
+                                       *beacon*)
+                        :graph       graph
                         :decr-shares (make-array `(,ngrp ,ngrp))
                         :groups  (when (int= me *beacon*)
                                    groups)))
               
       (let* ((xvals      (um:range 1 (1+ ngrp)))
-             (kcoffs     (1+ byz-frac))
              (q          (pbc:get-order))
              (coffs      (loop repeat kcoffs collect (random-between 1 q)))
              (krand      (random-between 1 q))
@@ -207,7 +209,7 @@ THE SOFTWARE.
              (proofs     (mapcar (um:compose
                                   (um:curry 'mul-pt-zr (pbc:get-g1))
                                   (let ((sf (with-mod q
-                                              (m/ krand (node-skey node)))))
+                                              (m/ krand (int (node-skey node))))))
                                     (lambda (share)
                                       (with-mod q
                                         (m* sf share)))))
@@ -218,7 +220,7 @@ THE SOFTWARE.
                                     (with-mod q
                                       (m* krand share))))
                                  shares))
-             (enc-shares (mapcar 'mul-pt-zr grp shares))
+             (enc-shares (mapcar 'mul-pt-zr my-group shares))
              (rval       (mul-pt-zr (pbc:get-g1) krand))
              (msg        `(:randhound :subgroup-commit
                            :session ,session
@@ -235,12 +237,12 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------------------------
 
-(defun chk-proofs (proofs chks pkeys)
-  (every (lambda (proof chk pkey)
+(defun chk-proofs (proofs chks pkey)
+  (every (lambda (proof chk)
            (let ((p1  (compute-pairing proof pkey))
                  (p2  (compute-pairing (get-g1) chk)))
              (int= p1 p2)))
-         proofs chks pkeys))
+         proofs chks))
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-commit)) &key session from commit)
   (with-accessors ((my-session  rh-group-info-session)
@@ -252,50 +254,49 @@ THE SOFTWARE.
                      (chks         subgroup-commit-chks)
                      (encr-shares  subgroup-commit-encr-shares)
                      (rval         subgroup-commit-rval)) commit
-    (when (and
-           (int= session my-session)        ;; correct session?
-           (find from my-group :test 'int=) ;; from someone in my group?
-           (not (find from my-commits          ;; not-seen yet
-                      :test 'int=
-                      :key  'first))
-           (chk-proofs proofs chks my-group)) ;; valid collection of proofs?
-      
-      (let* ((q        (pbc:get-order))
-             (ngrp     (length my-group))
-             (byz-frac (floor (1- ngrp) 3))
-             (kcheck   (- ngrp byz-frac 1))
-             (xvals    (um:range 1 (1+ ngrp)))
-             (coffs    (loop repeat kcheck collect (random-between 1 q)))
-             (chks     (mapcar (um:curry 'poly q coffs) xvals))
-             (invwts   (mapcar (um:curry 'invwt q ngrp) xvals))
-             (chkv     (with-mod q
-                         (mapcar 'm/ chks invwts)))
-             (chk      (dotprod-g1-zr proofs chkv)))
-
-        (when (zerop (int chk))
-          (push (list from commit) my-commits)
-          (let* ((node         (current-node))
-                 (my-pkey      (node-pkey node))
-                 (my-index     (position my-pkey my-group
-                                       :test 'int=))
-                 (sender-index (position from my-group
-                                         :test 'int=))
-                 (my-share     (elt encr-shares my-index))
-                 (skey         (node-skey (current-node)))
-                 (decr-share   (compute-pairing
-                                (mul-pt-zr (pbc:get-g1)
-                                           (inv-zr skey))
-                                my-share))
-                 (decr-chkl    (compute-pairing
-                                (mul-pt-zr rval (with-mod (get-order)
-                                                  (m/ skey)))
-                                my-share))
-                 (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
-            (when (int= decr-chkl decr-chkr)
-              (broadcast-grp+me (make-signed-decr-share-message
-                                 session me from decr-share skey)
-                                :graphID my-graph))
-            )))))))
+      (let* ((node  (current-node))
+             (me    (node-pkey node)))
+            
+        (when (and
+               (int= session my-session)        ;; correct session?
+               (find from my-group :test 'int=) ;; from someone in my group?
+               (not (find from my-commits          ;; not-seen yet
+                          :test 'int=
+                          :key  'first))
+               (chk-proofs proofs chks me)) ;; valid collection of proofs?
+          
+          (let* ((q        (pbc:get-order))
+                 (ngrp     (length my-group))
+                 (byz-frac (floor (1- ngrp) 3))
+                 (kcheck   (- ngrp byz-frac 1))
+                 (xvals    (um:range 1 (1+ ngrp)))
+                 (coffs    (loop repeat kcheck collect (random-between 1 q)))
+                 (rschks   (mapcar (um:curry 'poly q coffs) xvals))
+                 (invwts   (mapcar (um:curry 'invwt q ngrp) xvals))
+                 (rschkv   (with-mod q
+                             (mapcar 'm/ rschks invwts)))
+                 (rschk    (dotprod-g1-zr proofs rschkv)))
+            
+            (when (zerop (int rschk))
+              (push (list from commit) my-commits)
+              (let* ((my-index     (position me my-group
+                                             :test 'int=))
+                     (my-share     (elt encr-shares my-index))
+                     (skey         (node-skey (current-node)))
+                     (decr-share   (compute-pairing
+                                    (mul-pt-zr (pbc:get-g1)
+                                               (inv-zr (int skey)))
+                                    my-share))
+                     (decr-chkl    (compute-pairing
+                                    (mul-pt-zr rval (with-mod (get-order)
+                                                      (m/ (int skey))))
+                                    my-share))
+                     (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
+                (when (int= decr-chkl decr-chkr)
+                  (broadcast-grp+me (make-signed-decr-share-message
+                                     session me from decr-share skey)
+                                    :graphID my-graph))
+                ))))))))
 
 ;; ----------------------------------------------------------------------------
 
@@ -309,7 +310,7 @@ THE SOFTWARE.
 
 (defun make-signed-decr-share-message (session from for decr-share skey)
   (let ((skel (make-decr-share-message-skeleton session from for decr-share)))
-    (um:conc1 skel (pbc:sign-hash skel skey))))
+    (um:append1 skel (pbc:sign-hash skel skey))))
 
 (defun validate-signed-decr-share-message (session from for decr-share sig)
   (let ((skel (make-decr-share-message-skeleton session from for decr-share)))
@@ -320,39 +321,39 @@ THE SOFTWARE.
                    (my-group-leader rh-group-info-leader)
                    (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
+                   (thresh          rh-group-info-thresh)
+                   (share-thresh    rh-group-info-share-thr)
                    (my-commits      rh-group-info-commits)) *rh-state*
-    (let* ((me  (node-pkey (current-node))))
-      (when (and
-             (int= session my-session)              ;; correct session?
-             (find from my-group :test 'int=)       ;; from member of my group?
-             (find for  my-group :test 'int=)       ;; for member of my group?
-             (validate-signed-decr-share-message session from for decr-share sig))
+    (when (and
+           (int= session my-session)              ;; correct session?
+           (find from my-group :test 'int=)       ;; from member of my group?
+           (find for  my-group :test 'int=)       ;; for member of my group?
+           (validate-signed-decr-share-message session from for decr-share sig))
+      
+      (let* ((from-index   (position from my-group :test 'int=))
+             (for-index    (position for my-group :test 'int=))
+             (for-count    (loop for ix from 0 below (length my-group) count
+                                 (aref my-shares for-index ix))))
 
-        (let* ((from-index   (position from my-group :test 'int=))
-               (for-index    (position for my-group :test 'int=))
-               (for-count    (loop for ix from 0 below (length my-group) count
-                                   (aref my-shares for-index ix)))
-               (commit       (find for my-commits :test 'int= :key 'first))
-               (share-thresh (subgroup-commit-thresh commit)))
-
-          (unless (and (< for-count share-thresh)
-                       (null (aref my-shares for-index from-index)))
-            (setf (aref my-shares for-index from-index) decr-share)
-            (when (= (1+ for-count) share-thresh)
-              (let* ((ngrp  (length my-group))
-                     (q     (pbc:get-order))
-                     (rand  nil))
-                (loop for ix from 0 below ngrp do
-                      (let ((yval (aref my-commits for-index ix)))
-                        (when yval
-                          (let ((yvexpt  (pbc:expt-gt-zr yval (lagrange-wt q ngrp ix))))
-                            (setf rand (if rand
-                                           (pbc:mul-gts rand yvexpt)
-                                         yvexpt))))))
-                (apply 'send my-group-leader
-                       (make-signed-subgroup-randomness-message session for from rand))
-                )))
-          )))))
+        (when (and (< for-count thresh)
+                   (null (aref my-shares for-index from-index)))
+          (setf (aref my-shares for-index from-index) decr-share)
+          (when (= (1+ for-count) thresh)
+            (let* ((ngrp  (length my-group))
+                   (q     (pbc:get-order))
+                   (rand  nil))
+              (loop for ix from 0 below ngrp do
+                    (let ((yval (aref my-commits for-index ix)))
+                      (when yval
+                        (let ((yvexpt  (pbc:expt-gt-zr yval (lagrange-wt q ngrp ix))))
+                          (setf rand (if rand
+                                         (pbc:mul-gts rand yvexpt)
+                                       yvexpt))))))
+              (apply 'send my-group-leader
+                     (make-signed-subgroup-randomness-message session for from rand
+                                                              (node-skey (current-node))))
+              )))
+        ))))
 
 ;; ----------------------------------------------------------------------------
 
@@ -366,7 +367,7 @@ THE SOFTWARE.
 
 (defun make-signed-subgroup-randomness-message (session for from rand skey)
   (let ((skel (make-subgroup-randomness-message-skeleton session for from rand)))
-    (um:conc1 skel (pbc:sign-hash skel skey))))
+    (um:append1 skel (pbc:sign-hash skel skey))))
 
 (defun validate-signed-subgroup-randomness-message (session for from rand sig)
   (let ((skel (make-subgroup-randomness-message-skeleton session for from rand)))
@@ -397,7 +398,8 @@ THE SOFTWARE.
                     (setf group-rand (if group-rand
                                          (pbc:mul-gts rand group-rand)
                                        rand))))
-            (apply 'send my-super (make-signed-group-randomness-message session me group-rand))
+            (apply 'send my-super (make-signed-group-randomness-message session me group-rand
+                                                                        (node-skey (current-node))))
             ))))))
 
 ;; ------------------------------------------------------------------
@@ -411,7 +413,7 @@ THE SOFTWARE.
 
 (defun make-signed-group-randomness-message (session from rand skey)
   (let ((skel (make-group-randomness-message-skeleton session from rand)))
-    (um:conc1 skel (pbc:sign-hash skel skey))))
+    (um:append1 skel (pbc:sign-hash skel skey))))
 
 (defun validate-signed-group-randomness-message (session from rand sig)
   (let ((skel (make-group-randomness-message-skeleton session from rand)))
