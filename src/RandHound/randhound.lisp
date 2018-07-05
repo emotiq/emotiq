@@ -87,8 +87,13 @@ THE SOFTWARE.
   share-thr   ;; sharing threshold of group
   commits     ;; list of commits seen 
   decr-shares ;; 2D array of decrypted shares, indexed as (owner, witness)
+  ;; ----------
+  ;; in group leader nodes
   rands       ;; accumulating subgroup randomness
+  entropy     ;; list of random vals for each commitment
   ;; -----------
+  ;; in beacon node
+  tentropy    ;; list of entropy from group leaders
   groups      ;; Beacon has the list of groups
   grp-rands)  ;; and accumulates group randomness values
 
@@ -180,18 +185,19 @@ THE SOFTWARE.
              (int= from *beacon*)
              (validate-signed-start-message session epoch from groups sig))
 
-    (let* ((node        (current-node))
-           (me          (node-pkey node))
-           (my-group    (find-if (lambda (grp)
-                                   (find me grp :test 'int=))
-                                 groups))
-           (graph-name   (format nil "beacon-~A" (1+ (position my-group groups))))
-           (graph        (establish-broadcast-group my-group :graphID graph-name))
-           (group-leader (first my-group))
-           (ngrp         (length my-group))
-           (byz-frac     (floor (1- ngrp) 3))
-           (bft-thresh   (- ngrp byz-frac))
-           (kcoffs       (1+ byz-frac)))
+    (let* ((node           (current-node))
+           (me             (node-pkey node))
+           (my-group       (find-if (lambda (grp)
+                                      (find me grp :test 'int=))
+                                    groups))
+           (graph-name     (format nil "beacon-~A" (1+ (position my-group groups))))
+           (graph          (establish-broadcast-group my-group :graphID graph-name))
+           (group-leader   (first my-group))
+           (group-leader-p (int= me group-leader))
+           (ngrp           (length my-group))
+           (byz-frac       (floor (1- ngrp) 3))
+           (bft-thresh     (- ngrp byz-frac))
+           (kcoffs         (1+ byz-frac)))
       
       (setf *rh-state* (make-rh-group-info
                         :session     session
@@ -199,12 +205,14 @@ THE SOFTWARE.
                         :leader      group-leader
                         :thresh      bft-thresh
                         :share-thr   kcoffs
-                        :super       (when (int= me group-leader)
+                        :super       (when group-leader-p
                                        *beacon*)
                         :graph       graph
                         :decr-shares (make-hash-table)
-                        :groups  (when (int= me *beacon*)
-                                   groups)))
+                        :rands       (when group-leader-p
+                                       (make-hash-table))
+                        :groups      (when (int= me *beacon*)
+                                       groups)))
               
       (let* ((xvals      (um:range 1 (1+ ngrp)))
              (q          (pbc:get-order))
@@ -334,7 +342,9 @@ THE SOFTWARE.
            (find for  my-group :test 'int=)       ;; for member of my group?
            (validate-signed-decr-share-message session from for decr-share sig))
       
-      (let* ((for-key      (int for))
+      (let* ((node         (current-node))
+             (me           (node-pkey node))
+             (for-key      (int for))
              (for-shares   (gethash for-key my-shares))
              (for-count    (length for-shares)))
         (when (and (< for-count thresh)
@@ -366,7 +376,7 @@ THE SOFTWARE.
                     ))
                 (when ptries
                   (apply 'send my-group-leader
-                         (make-signed-subgroup-randomness-message session for from ptries
+                         (make-signed-subgroup-randomness-message session for me ptries
                                                                   (node-skey (current-node)))))
                 )))
           )))))
@@ -495,34 +505,68 @@ THE SOFTWARE.
   (let ((skel (make-subgroup-randomness-message-skeleton session for from rand)))
     (pbc:check-hash skel sig from)))
 
+(defstruct rand-entry
+  froms rands)
+
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session for from rand sig)
-  (with-accessors ((my-shares       rh-group-info-decr-shares)
-                   (my-super        rh-group-info-super)
+  ;; Group leaders perform this code.
+  ;;
+  ;; Collect a BFT Threshold number of decoded secret random values
+  ;; for each commitment which agree in value.
+  ;;
+  ;; After than, assuming a BFT number of commitments have seen a BFT
+  ;; threshold number of secrets that agree in value, combine these
+  ;; secrets from each commitment into one group-random value and send
+  ;; along to Beacon node. We combine by multiplication in the pairing
+  ;; group.
+  ;;
+  (with-accessors ((my-super        rh-group-info-super)
                    (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
-                   (my-commits      rh-group-info-commits)
                    (my-rands        rh-group-info-rands)
+                   (my-entropy      rh-group-info-entropy)
                    (my-bft-thresh   rh-group-info-thresh)) *rh-state*
-    (let* ((me  (node-pkey (current-node))))
+    (let* ((node  (current-node))
+           (me    (node-pkey node)))
       (when (and
-             my-super
-             (not (find for my-rands :key 'first :test 'int=))
-             (int= session my-session)
-             (find for my-group :test 'int=)
-             (find from my-group :test 'int=)
-             (validate-signed-subgroup-randomness-message session for from rand sig))
+             my-super                                          ;; I'm a group leader?
+             (int= session my-session)                         ;; correct session?
+             (find for my-group :test 'int=)                   ;; for commitment in my group
+             (find from my-group :test 'int=)                  ;; from witness in my group
+             (validate-signed-subgroup-randomness-message session for from rand sig)) ;; valid message?
 
-        (push (list for rand) my-rands)
-        (when (= (length my-rands) my-bft-thresh)
-          (let ((group-rand  nil))
-            (loop for pair in my-rands do
-                  (let* ((rand  (second pair)))
-                    (setf group-rand (if group-rand
-                                         (pbc:mul-gts rand group-rand)
-                                       rand))))
-            (apply 'send my-super (make-signed-group-randomness-message session me group-rand
-                                                                        (node-skey (current-node))))
-            ))))))
+        (let* ((for-key   (int for))
+               (for-rands (gethash for-key my-rands))
+               (rkey      (int rand)))
+          (cond (for-rands
+                 (with-accessors ((for-froms  rand-entry-froms)
+                                  (for-counts rand-entry-rands)) for-rands
+                   (unless (find from for-froms :test 'int=) ;; ignore duplicates
+                     (let* ((count (1+ (gethash rkey for-counts 0))))
+                       (push from for-froms)
+                       (setf (gethash rkey for-counts) count)
+                       (when (= count my-bft-thresh) ;; when one rand values has BFT count
+                         (push rand my-entropy)      ;; copy that rand value into entropy list
+                         (when (= (length my-entropy) my-bft-thresh) ;; when entropy list has BFT count
+                           (let ((group-rand  nil))  ;; compute group entropy
+                             (dolist (rand my-entropy)
+                               (setf group-rand (if group-rand
+                                                    (pbc:mul-gts rand group-rand)
+                                                  rand)))
+                             (apply 'send my-super   ;; send to beacon
+                                    (make-signed-group-randomness-message session me group-rand
+                                                                          (node-skey node)))
+                             )))))))
+
+                (t
+                 (let ((tbl  (make-hash-table)))
+                   (setf (gethash rkey tbl)  1
+                         (gethash for-key my-rands)
+                         (make-rand-entry
+                          :froms (list from)
+                          :rands tbl))))
+                ))
+        ))))
 
 ;; ------------------------------------------------------------------
 
@@ -544,9 +588,19 @@ THE SOFTWARE.
 (defmethod rh-dispatcher ((msg-sym (eql :group-randomness)) &key session from rand sig)
   ;; this message should only arrive at *BEACON*, as group leaders
   ;; forward their composite randomness
-  (with-accessors ((my-groups  rh-group-info-groups)
-                   (my-rands   rh-group-info-grp-rands)
-                   (my-session rh-group-info-session)) *rh-state*
+  ;;
+  ;; Collectc a BFT Threshold number of group-random values from the
+  ;; group-leaders, then fold them into one grand randomness by
+  ;; multiplication.
+  ;;
+  ;; Convert the grand randomness by hash to a shorter value, then
+  ;; normalize to a double-precision float value to be used as an
+  ;; election seed. Call for an election among all witnesses with that
+  ;; seed.
+  ;;
+  (with-accessors ((my-groups   rh-group-info-groups)
+                   (my-tentropy rh-group-info-tentropy)
+                   (my-session  rh-group-info-session)) *rh-state*
     (let* ((ngrps      (length my-groups))
            (byz-frac   (floor (1- ngrps) 3))
            (bft-thresh (- ngrps byz-frac)))
@@ -555,13 +609,14 @@ THE SOFTWARE.
              my-groups  ;; only *BEACON* should have this
              (int= session my-session)
              (find from (mapcar 'first my-groups) :test 'int=) ;; should only arrive from group leaders
-             (< (length my-rands) bft-thresh)
+             (not (find from my-tentropy :key 'first :test 'int=))
+             (< (length my-tentropy) bft-thresh)
              (validate-signed-group-randomness-message session from rand sig))
 
-        (push rand my-rands)
-        (when (= (length my-rands) bft-thresh)
-          (let* ((trand (reduce 'mul-gts (cdr my-rands)
-                               :initial-value (car my-rands)))
+        (push (list from rand) my-tentropy)
+        (when (= (length my-tentropy) bft-thresh)
+          (let* ((trand (reduce (um:compose 'mul-gts 'second) (cdr my-tentropy)
+                                :initial-value (second (car my-tentropy))))
                  (seed  (float (/ (int (hash/256 trand))
                                   #.(ash 1 256))
                                1d0)))
