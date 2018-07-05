@@ -201,8 +201,12 @@ THE SOFTWARE.
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
   (call-next-method)
-  (push (emotiq/config:get-genesis-block) (node-blockchain node)))
-
+  (let ((genesis-block (emotiq/config:get-genesis-block)))
+    (push genesis-block
+          (node-blockchain node))
+    (setf (gethash (cosi/proofs:hash-block genesis-block)
+                   (node-blockchain-tbl node))
+          genesis-block)))
 
 ;; --------------------------------------------------------------
 
