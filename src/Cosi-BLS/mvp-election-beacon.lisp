@@ -33,15 +33,18 @@ THE SOFTWARE.
 
 (defvar *all-nodes*  nil) 
 
-(defun set-nodes (node-list)
-  "NODE-LIST is a list of (public-key stake-amount) pairs"
-  (ac:pr (format nil "election set-nodes ~A" node-list))
-  (assert node-list)
-  (setf *all-nodes* (mapcar (lambda (pair)
-                              (destructuring-bind (pkey stake) pair
-                                (list (pbc:public-key pkey)
-                                      stake)))
-                            node-list)))
+(defun set-nodes (node-alist)
+  "NODE-ALIST is an alist of (public-key . stake-amount) pairs"
+  (ac:pr (format nil "election set-nodes ~A" node-alist))
+  (if node-alist 
+      (setf *all-nodes* (mapcar (lambda (pair)
+                                  (destructuring-bind (pkey . stake) pair
+                                    (list (pbc:public-key pkey)
+                                          stake)))
+                                node-alist))
+      (progn
+        (emotiq:note "Ignoring call to set nodes with no members")
+        nil)))
 
 (defun get-witness-list ()
   *all-nodes*)
@@ -292,7 +295,7 @@ based on their relative stake"
       ;; *local-epoch* will also not have
       ;; changed
       (unless (get-witness-list)
-        (set-nodes (gossip:get-stakes))  ;; <<--- THIS NEEDS TO CHANGE TO MARK D's NOTIONS
+        (set-nodes (emotiq/config:get-stakes)) 
         (setf (node-stake node) ;; probably never used elsewhere...
               (second (assoc (node-pkey node) (get-witness-list)
                              :test 'int=))))
