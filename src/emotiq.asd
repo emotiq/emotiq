@@ -119,6 +119,7 @@
   :depends-on (cl-json
                emotiq/logging
                emotiq/filesystem
+               emotiq/config/settings
                emotiq/config/genesis
                emotiq/config/stakes
                lisp-object-encoder
@@ -131,8 +132,16 @@
                 :components ((:file "keys")
                              (:file "config")))))
 
+(defsystem "emotiq/config/settings"
+  :depends-on (emotiq/logging
+               cl-json)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "settings")))))
+
+
 (defsystem "emotiq/config/stakes"
-  :depends-on (emotiq)
+  :depends-on (emotiq/logging)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "stakes")))))
@@ -140,6 +149,8 @@
 
 (defsystem "emotiq/config/genesis"
   :depends-on (cosi/proofs/newtx
+               emotiq/config/settings
+               cl-json
                alexandria
                lisp-object-encoder)
   :components ((:module source

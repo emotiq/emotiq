@@ -32,6 +32,7 @@ THE SOFTWARE.
                ironclad
                actors
                emotiq/config/stakes
+               emotiq/config/genesis
                core-crypto
                crypto-pairings
                lisp-object-encoder

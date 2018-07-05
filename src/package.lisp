@@ -154,8 +154,15 @@
    #:node/generate
 
    #:ensure-defaults
-
-   #:get-stakes
-
    #:*dns-ip-zt.emotiq.ch*
-   #:settings/read))
+   #:settings/read)
+
+     ;;; ASDF emotiq/config/stakes
+  (:export 
+
+   #:get-stakes)
+     ;;; ASDF emotiq/config/genesis
+  (:export
+   #:get-genesis-block))
+
+

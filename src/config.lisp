@@ -14,11 +14,6 @@
     (:hostname "zt-emq-03.zt.emotiq.ch"
      :ip "10.178.15.71")))
 
-(defparameter *emotiq-conf*
-  (make-pathname :defaults (emotiq/fs:etc/)
-                 :name "emotiq-conf"
-                 :type "json"))
-
 (um:defconstant+ +default-configuration+
     `((:hostname
        . "localhost")
@@ -134,14 +129,6 @@
                                      :type "conf"))
   (genesis/create configuration :directory directory :force t))
   
-(defun settings/read () 
-  (unless (probe-file *emotiq-conf*)
-    (emotiq:note "No configuration able to be read from '~a'" *emotiq-conf*)
-    (return-from settings/read nil))
-  ;;; TODO: do gossip/configuration sequence
-  (cl-json:decode-json-from-source *emotiq-conf*))
-
-
 (defun ensure-defaults (&key
                           (c (copy-alist +default-configuration+))
                           force 
