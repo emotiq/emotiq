@@ -200,8 +200,9 @@ THE SOFTWARE.
 ;; new for Gossip support, and conceptually cleaner...
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
-  (push (emotiq/config:get-genesis-block) (node-blockchain node))
-  (call-next-method))
+  (call-next-method)
+  (push (emotiq/config:get-genesis-block) (node-blockchain node)))
+
 
 ;; --------------------------------------------------------------
 
