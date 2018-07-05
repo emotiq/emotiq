@@ -222,6 +222,8 @@
    make-transaction-outputs
    make-transaction-inputs
    initial-total-coin-amount
+   in-legal-money-range-p
+   in-legal-stake-range-p
    validate-transaction
    get-transactions-for-new-block
    check-block-transactions

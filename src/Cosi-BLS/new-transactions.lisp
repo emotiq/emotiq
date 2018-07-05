@@ -912,6 +912,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (and (>= amount *minimum-spend-amount*)
        (<= amount *maximmum-spend-amount*)))
 
+(defun in-legal-stake-range-p (amount)
+  (in-legal-money-range-p amount))
+
+;; ---!!! Above forms need review!!  -mhd, 7/5/18
+
+
 
 
 
