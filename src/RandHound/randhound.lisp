@@ -328,60 +328,7 @@ THE SOFTWARE.
     (pbc:check-hash skel sig from)))
 
 
-(defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
-  (with-accessors ((my-shares       rh-group-info-decr-shares)
-                   (my-group-leader rh-group-info-leader)
-                   (my-group        rh-group-info-group)
-                   (my-session      rh-group-info-session)
-                   (thresh          rh-group-info-thresh)
-                   (share-thresh    rh-group-info-share-thr)
-                   (my-commits      rh-group-info-commits)) *rh-state*
-    (when (and
-           (int= session my-session)              ;; correct session?
-           (find from my-group :test 'int=)       ;; from member of my group?
-           (find for  my-group :test 'int=)       ;; for member of my group?
-           (validate-signed-decr-share-message session from for decr-share sig))
-      
-      (let* ((node         (current-node))
-             (me           (node-pkey node))
-             (for-key      (int for))
-             (for-shares   (gethash for-key my-shares))
-             (for-count    (length for-shares)))
-        (when (and (< for-count thresh)
-                   (not (find from for-shares
-                              :key  'first
-                              :test 'int=)))
-          (let ((from-index (1+ (position from my-group :test 'int=))))
-            (push (list from from-index decr-share) for-shares)
-            (setf (gethash for-key my-shares) for-shares)
-            (when (= (1+ for-count) thresh)
-              (let* ((ngrp    (length my-group))
-                     (q       (pbc:get-order))
-                     (xypairs (mapcar 'cdr for-shares))
-                     (rands   (make-hash-table))
-                     (ptries  (list  nil)))
-                (um:nlet-tail iter ((trial 0))
-                  (if (> trial (* 2 thresh))
-                      (setf ptries nil) ;; give up...
-                    ;; else
-                    (let* ((combo (generate-new-combo xypairs share-thresh ptries))
-                           (rand  (reduce-lagrange-interpolate combo ngrp q))
-                           (rkey  (int rand))
-                           (count (gethash rkey rands 0)))
-                      (if (>= (setf (gethash rkey rands) (1+ count))
-                              thresh)
-                          (setf ptries rand) ;; achieved BFT randomness
-                        ;; else - one more time
-                        (iter (1+ trial))))
-                    ))
-                (when ptries
-                  (apply 'send my-group-leader
-                         (make-signed-subgroup-randomness-message session for me ptries
-                                                                  (node-skey (current-node)))))
-                )))
-          )))))
-
-(defun reduce-lagrange-interpolate (combo ngrp q)
+(defun reduce-lagrange-interpolate (combo q)
   (with-mod q
     (let ((prod nil)
           (ns   (mapcar 'first combo))
@@ -419,6 +366,58 @@ THE SOFTWARE.
                 (cons pair ans)))
         ))
     ))
+
+(defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
+  (with-accessors ((my-shares       rh-group-info-decr-shares)
+                   (my-group-leader rh-group-info-leader)
+                   (my-group        rh-group-info-group)
+                   (my-session      rh-group-info-session)
+                   (thresh          rh-group-info-thresh)
+                   (share-thresh    rh-group-info-share-thr)
+                   (my-commits      rh-group-info-commits)) *rh-state*
+    (when (and
+           (int= session my-session)              ;; correct session?
+           (find from my-group :test 'int=)       ;; from member of my group?
+           (find for  my-group :test 'int=)       ;; for member of my group?
+           (validate-signed-decr-share-message session from for decr-share sig))
+      
+      (let* ((node         (current-node))
+             (me           (node-pkey node))
+             (for-key      (int for))
+             (for-shares   (gethash for-key my-shares))
+             (for-count    (length for-shares)))
+        (when (and (< for-count thresh)
+                   (not (find from for-shares
+                              :key  'first
+                              :test 'int=)))
+          (let ((from-index (1+ (position from my-group :test 'int=))))
+            (push (list from from-index decr-share) for-shares)
+            (setf (gethash for-key my-shares) for-shares)
+            (when (= (1+ for-count) thresh)
+              (let* ((q       (pbc:get-order))
+                     (xypairs (mapcar 'cdr for-shares))
+                     (rands   (make-hash-table))
+                     (ptries  (list  nil)))
+                (um:nlet-tail iter ((trial 0))
+                  (if (> trial (* 2 thresh))
+                      (setf ptries nil) ;; give up...
+                    ;; else
+                    (let* ((combo (generate-new-combo xypairs share-thresh ptries))
+                           (rand  (reduce-lagrange-interpolate combo q))
+                           (rkey  (int rand))
+                           (count (gethash rkey rands 0)))
+                      (if (>= (setf (gethash rkey rands) (1+ count))
+                              thresh)
+                          (setf ptries rand) ;; achieved BFT randomness
+                        ;; else - one more time
+                        (iter (1+ trial))))
+                    ))
+                (when ptries
+                  (apply 'send my-group-leader
+                         (make-signed-subgroup-randomness-message session for me ptries
+                                                                  (node-skey (current-node)))))
+                )))
+          )))))
 
 #|
 ;; ------------------------------------------------------
@@ -542,8 +541,8 @@ THE SOFTWARE.
                  (with-accessors ((for-froms  rand-entry-froms)
                                   (for-counts rand-entry-rands)) for-rands
                    (unless (find from for-froms :test 'int=) ;; ignore duplicates
-                     (let* ((count (1+ (gethash rkey for-counts 0))))
-                       (push from for-froms)
+                     (let* ((count (1+ (gethash rkey for-counts 0)))) ;; incr count for this value
+                       (push from for-froms)                          ;; retain record of who submitted it
                        (setf (gethash rkey for-counts) count)
                        (when (= count my-bft-thresh) ;; when one rand values has BFT count
                          (push rand my-entropy)      ;; copy that rand value into entropy list
