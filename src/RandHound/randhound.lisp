@@ -52,10 +52,15 @@ THE SOFTWARE.
                 (m* prod (m- xj ix))))
         ))))
 
-(defun lagrange-wt (q n xj)
+(defun lagrange-wt (q ns xj)
   (with-mod q
-    (m/ xj
-        (invwt q n xj))))
+    (let ((num  1)
+          (den  1))
+      (loop for ix in ns do
+            (unless (= ix xj)
+              (setf num (m* num ix)
+                    den (m* den (- ix xj))))
+      (m/ num den)))))
 
 (defun dotprod-g1-zr (pts zrs)
   (um:nlet-tail iter ((pts  pts)
@@ -194,7 +199,7 @@ THE SOFTWARE.
                         :super       (when (int= me group-leader)
                                        *beacon*)
                         :graph       graph
-                        :decr-shares (make-array `(,ngrp ,ngrp))
+                        :decr-shares (make-hash-table)
                         :groups  (when (int= me *beacon*)
                                    groups)))
               
@@ -244,7 +249,6 @@ THE SOFTWARE.
   (with-accessors ((my-session  rh-group-info-session)
                    (my-group    rh-group-info-group)
                    (my-commits  rh-group-info-commits)
-                   (my-shares   rh-group-info-decr-shares)
                    (my-graph    rh-group-info-graph)) *rh-state*
     (with-accessors ((proofs       subgroup-commit-proofs)
                      (chks         subgroup-commit-chks)
@@ -312,6 +316,7 @@ THE SOFTWARE.
   (let ((skel (make-decr-share-message-skeleton session from for decr-share)))
     (pbc:check-hash skel sig from)))
 
+
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-group-leader rh-group-info-leader)
@@ -326,30 +331,147 @@ THE SOFTWARE.
            (find for  my-group :test 'int=)       ;; for member of my group?
            (validate-signed-decr-share-message session from for decr-share sig))
       
-      (let* ((from-index   (position from my-group :test 'int=))
-             (for-index    (position for my-group :test 'int=))
-             (for-count    (loop for ix from 0 below (length my-group) count
-                                 (aref my-shares for-index ix))))
-
+      (let* ((for-key      (int for))
+             (for-shares   (gethash for-key my-shares))
+             (for-count    (length for-shares)))
         (when (and (< for-count thresh)
-                   (null (aref my-shares for-index from-index)))
-          (setf (aref my-shares for-index from-index) decr-share)
-          (when (= (1+ for-count) thresh)
-            (let* ((ngrp  (length my-group))
-                   (q     (pbc:get-order))
-                   (rand  nil))
-              (loop for ix from 0 below ngrp do
-                    (let ((yval (aref my-shares for-index ix)))
-                      (when yval
-                        (let ((yvexpt  (pbc:expt-gt-zr yval (lagrange-wt q ngrp ix))))
-                          (setf rand (if rand
-                                         (pbc:mul-gts rand yvexpt)
-                                       yvexpt))))))
-              (apply 'send my-group-leader
-                     (make-signed-subgroup-randomness-message session for from rand
-                                                              (node-skey (current-node))))
-              )))
-        ))))
+                   (not (find from for-shares
+                              :key  'first
+                              :test 'int=)))
+          (let ((from-index (1+ (position from my-group :test 'int=))))
+            (push (list from from-index decr-share) for-shares)
+            (setf (gethash for-key my-shares) for-shares)
+            (when (= (1+ for-count) thresh)
+              (let* ((ngrp    (length my-group))
+                     (q       (pbc:get-order))
+                     (xypairs (mapcar 'cdr for-shares))
+                     (rands   (make-hash-table))
+                     (ptries  (list  nil))
+                (um:nlet-tail iter ((trial 0))
+                  (if (> trial (* 2 thresh))
+                      (setf ptries nil) ;; give up...
+                    ;; else
+                    (let* ((combo (generate-new-combo xypairs share-thresh ptries))
+                           (rand  (reduce-lagrange-interpolate combo ngrp q))
+                           (count (gethash rand rands 0)))
+                      (if (>= (setf (gethash rand rands) (1+ count))
+                              thresh)
+                          (setf ptries rand) ;; achieved BFT randomness
+                        ;; else - one more time
+                        (iter (1+ trial))))
+                    ))
+                (when ptries
+                  (apply 'send my-group-leader
+                         (make-signed-subgroup-randomness-message session for from tries
+                                                                  (node-skey (current-node)))))
+                )))
+            ))))))
+
+(defun reduce-lagrange-interpolate (combo ngrp q)
+  (with-mod q
+    (let ((prod nil)
+          (ns   (mapcar 'first combo))
+          (ys   (mapcar 'second combo)))
+      (loop for jx in ns
+            for y  in ys
+            do
+            (let* ((expon (lagrange-wt q ns jx))
+                   (yrand (expt-gt-zr y expon)))
+              (setf prod (if prod
+                             (mul-gts prod yrand)
+                           yrand))))
+      prod)))
+
+
+(defun generate-new-combo (xy-pairs npairs ptries)
+  (um:nlet-tail again ()
+    (um:nlet-tail iter ((pairs xy-pairs)
+                        (index 0)
+                        (ans   nil))
+      (if (>= index npairs)
+          (let* ((sorted (sort ans '<
+                               :key 'first))
+                 (key    (mapcar 'first sorted)))
+            (if (find key (car ptries) :test 'equal)
+                (again)
+              (progn
+                (push key (car ptries))
+                sorted)))
+        ;; else - perform a selection
+        (let* ((ix   (random (length pairs)))
+               (pair (nth ix pairs)))
+          (iter (remove pair pairs)
+                (1+ index)
+                (cons pair ans)))
+        ))
+    ))
+
+#|
+;; ------------------------------------------------------
+;; To Prove: (We only need to worry when small numbers are in use)
+;;   N Nodes,
+;;   MaxFail F = Floor((N-1)/3),
+;;   Sharing thresh K = F + 1
+;;   BFT Threshold T = N - F
+;;   Nbr combos for BFT sharing:
+;;      C(T, K) = T! / (K! * (T-K)!)
+;;              = C(N-F, F+1)
+;;              = (N-F)! / ((F+1)! * (N-2*F-1)!)
+;;
+;; Look for N where C(T,K) >= 2*T
+;;
+;; We use probabilistic unique groupings until BFT Threshold
+;; derivations of randomness agree with each other, or else a maximum
+;; of 2*BFT Threshold number of trials.
+;;
+;; So look for what conditions assure that number of combos available
+;; equal or exceed twice the threshold. Only need to worry for small
+;; configurations. By the time we reach 40 nodes in a group, we have
+;; more than 20M possible combos.
+;;
+;; Looks like the minimum configuration is 6 nodes.
+
+(defun factorial (n &optional (nstop 1))
+  (declare n nstop)
+  (if (zerop n)
+      1
+    (um:nlet-tail iter ((n n)
+                        (ans 1))
+      (if (<= n nstop)
+          ans
+        (iter (1- n) (* n ans))))))
+  
+(defun combinations (n m)
+  ;; combinations of n items, taken m at a time
+  (declare (integer n m))
+  (assert (>= n m))
+  (let ((excess (- n m)))
+    (/ (factorial n (max m excess))
+       (factorial (min m excess)))))
+
+(loop for n from 1 to 40 do
+      (let* ((nfail  (floor (1- n) 3))
+             (kshare (1+ nfail))
+             (thresh (- n nfail))
+             (combos (combinations thresh kshare)))
+        (with-standard-io-syntax
+          (pprint
+           (list :nodes  n
+                 :nfail  nfail
+                 :kshare kshare
+                 :thresh thresh
+                 :combos combos)))))
+
+;; ------------------------------------------------------
+
+(let* ((ptries (list nil))
+       (pairs  '((1 a) (2 b) (3 c) (4 d))))
+  (loop repeat 6 collect
+        (generate-new-combo pairs 2 ptries))
+  (pprint ptries))
+
+;; ------------------------------------------------------
+|#
 
 ;; ----------------------------------------------------------------------------
 
