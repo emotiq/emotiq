@@ -12,11 +12,7 @@
 (defparameter *tracking-actor* nil)
 
 (defun track (&rest msg)
-  (if (and
-       (eql (first msg) :reset)
-       (null *tracking-actor*))
-      (emotiq:note "~%*** Don't care :reset ***~%")  ;; don't care about this condition
-    (actors:send *tracking-actor* msg)))
+  (actors:send *tracking-actor* msg))
 
 (defun start-tracker ()
   "returns an actor that can be sent messages about changes to the system state"
