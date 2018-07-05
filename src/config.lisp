@@ -132,7 +132,7 @@
                 :path (make-pathname :defaults directory
                                      :name "stakes"
                                      :type "conf"))
-  (genesis/create configuration :root directory :force t))
+  (genesis/create configuration :directory directory :force t))
   
 (defun settings/read () 
   (unless (probe-file *emotiq-conf*)
