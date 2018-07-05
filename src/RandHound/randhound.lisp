@@ -119,7 +119,7 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
-(defvar *rh-start*  nil)
+(defvar *rh-start*  nil) ;; record time of start so we can report run times.
 
 (defun start-randhound-round ()
   ;; The Actor running the election calls this function to start up a
@@ -136,7 +136,7 @@ THE SOFTWARE.
   ;; Otherwise, make Sqrt number of groups, of size Sqrt number of
   ;; nodes.
   ;;
-  (setf *rh-start* (get-universal-time))
+  (setf *rh-start* (get-universal-time)) ;; record start time for timings
   (let* ((node (current-node))
          (me   (node-pkey node)))
 
@@ -674,7 +674,11 @@ THE SOFTWARE.
                  (seed  (float (/ (int (hash/256 trand))
                                   #.(ash 1 256))
                                1d0)))
+            ;; ------------------------------------------------------------------
+            ;; while debugging, don't run actual elections, uncomment for prodution
+            ;; 
             ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+            ;; ------------------------------------------------------------------
             (pr (format nil "~%Hold election from RandHound: ~A" seed))
             (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
             ))))))
