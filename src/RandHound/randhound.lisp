@@ -59,8 +59,8 @@ THE SOFTWARE.
       (loop for ix in ns do
             (unless (= ix xj)
               (setf num (m* num ix)
-                    den (m* den (- ix xj))))
-      (m/ num den)))))
+                    den (m* den (- ix xj)))))
+      (m/ num den))))
 
 (defun dotprod-g1-zr (pts zrs)
   (um:nlet-tail iter ((pts  pts)
@@ -114,9 +114,12 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
+(defvar *rh-start*  nil)
+
 (defun start-randhound-round ()
   ;; take the list of witness nodes, and partition into a 2-level
   ;; graph with *BEACON* at the top
+  (setf *rh-start* (get-universal-time))
   (let* ((node (current-node))
          (me   (node-pkey node)))
 
@@ -129,13 +132,13 @@ THE SOFTWARE.
              (sorted    (mapcar 'first
                                 (sort grpids '<
                                       :key 'second)))
-             (twit      (min 1600 (length sorted)))
-             (tsqrt     (min   40 (isqrt twit)))
-             (swits     (subseq sorted 0 twit))
-             (ngrp      (if (< tsqrt 6)
+             (twit      (min 1600 (length sorted)))  ;; total witness nodes
+             (tsqrt     (min   40 (isqrt twit)))     ;; their square root
+             (swits     (subseq sorted 0 twit))      ;; select out no more than 1600 nodes
+             (ngrp      (if (< tsqrt 6)  ;; nbr nodes per group
                             twit
                           tsqrt))
-             (grps      (nreverse (um:group swits ngrp))))
+             (grps      (nreverse (um:group swits ngrp)))) ;; actual groups
 
         (when (> (length grps) 1)
           ;; absorb short group into last group if fewer than 6 members
@@ -346,15 +349,16 @@ THE SOFTWARE.
                      (q       (pbc:get-order))
                      (xypairs (mapcar 'cdr for-shares))
                      (rands   (make-hash-table))
-                     (ptries  (list  nil))
+                     (ptries  (list  nil)))
                 (um:nlet-tail iter ((trial 0))
                   (if (> trial (* 2 thresh))
                       (setf ptries nil) ;; give up...
                     ;; else
                     (let* ((combo (generate-new-combo xypairs share-thresh ptries))
                            (rand  (reduce-lagrange-interpolate combo ngrp q))
-                           (count (gethash rand rands 0)))
-                      (if (>= (setf (gethash rand rands) (1+ count))
+                           (rkey  (int rand))
+                           (count (gethash rkey rands 0)))
+                      (if (>= (setf (gethash rkey rands) (1+ count))
                               thresh)
                           (setf ptries rand) ;; achieved BFT randomness
                         ;; else - one more time
@@ -362,10 +366,10 @@ THE SOFTWARE.
                     ))
                 (when ptries
                   (apply 'send my-group-leader
-                         (make-signed-subgroup-randomness-message session for from tries
+                         (make-signed-subgroup-randomness-message session for from ptries
                                                                   (node-skey (current-node)))))
                 )))
-            ))))))
+          )))))
 
 (defun reduce-lagrange-interpolate (combo ngrp q)
   (with-mod q
@@ -432,7 +436,7 @@ THE SOFTWARE.
 ;; Looks like the minimum configuration is 6 nodes.
 
 (defun factorial (n &optional (nstop 1))
-  (declare n nstop)
+  (declare (integer n nstop))
   (if (zerop n)
       1
     (um:nlet-tail iter ((n n)
@@ -512,7 +516,7 @@ THE SOFTWARE.
         (when (= (length my-rands) my-bft-thresh)
           (let ((group-rand  nil))
             (loop for pair in my-rands do
-                  (let ((rand  (second pair)))
+                  (let* ((rand  (second pair)))
                     (setf group-rand (if group-rand
                                          (pbc:mul-gts rand group-rand)
                                        rand))))
@@ -563,6 +567,7 @@ THE SOFTWARE.
                                1d0)))
             ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
             (pr (format nil "~%Hold election from RandHound: ~A" seed))
+            (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
             ))))))
 
 ;; ------------------------------------------------------------------
