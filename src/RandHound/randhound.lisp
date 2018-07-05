@@ -102,10 +102,8 @@ THE SOFTWARE.
         
         (t
          (let ((me (node-pkey (current-node))))
-           (apply 'send me msg)
-           (mapc (lambda (pkey)
-                   (apply 'send pkey msg))
-                 (remove me graphID :test 'int=))))
+           (dolist (pkey (cons me (remove me graphID :test 'int=)))
+             (apply 'send pkey msg))))
         ))
 
 ;; ------------------------------------------------------------------
@@ -164,7 +162,6 @@ THE SOFTWARE.
 
 
 (defstruct subgroup-commit
-  thresh      ;; sharing threshold of commit
   encr-shares ;; list of encrypted shares
   proofs      ;; list of share proofs
   chks        ;; list of checks on proofs
@@ -226,7 +223,6 @@ THE SOFTWARE.
                            :session ,session
                            :from    ,me
                            :commit  ,(make-subgroup-commit
-                                      :thresh      kcoffs
                                       :encr-shares enc-shares
                                       :proofs      proofs
                                       :chks        chks
@@ -263,7 +259,7 @@ THE SOFTWARE.
                (not (find from my-commits          ;; not-seen yet
                           :test 'int=
                           :key  'first))
-               (chk-proofs proofs chks me)) ;; valid collection of proofs?
+               (chk-proofs proofs chks from)) ;; valid collection of proofs?
           
           (let* ((q        (pbc:get-order))
                  (ngrp     (length my-group))
@@ -343,7 +339,7 @@ THE SOFTWARE.
                    (q     (pbc:get-order))
                    (rand  nil))
               (loop for ix from 0 below ngrp do
-                    (let ((yval (aref my-commits for-index ix)))
+                    (let ((yval (aref my-shares for-index ix)))
                       (when yval
                         (let ((yvexpt  (pbc:expt-gt-zr yval (lagrange-wt q ngrp ix))))
                           (setf rand (if rand
@@ -440,10 +436,11 @@ THE SOFTWARE.
         (when (= (length my-rands) bft-thresh)
           (let* ((trand (reduce 'mul-gts (cdr my-rands)
                                :initial-value (car my-rands)))
-                 (seed  (float (/ (hash/256 trand)
+                 (seed  (float (/ (int (hash/256 trand))
                                   #.(ash 1 256))
                                1d0)))
-            (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+            ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+            (pr (format nil "~%Hold election from RandHound: ~A" seed))
             ))))))
 
 ;; ------------------------------------------------------------------

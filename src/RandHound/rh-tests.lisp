@@ -5,6 +5,7 @@
 ;; (emotiq/sim::initialize)
 
 (defun test-rh ()
+  (setf cosi-simgen::*testing-randhound* t)
   (let* ((nodes  (coerce cosi-simgen:*node-bit-tbl* 'list))
          (pkeys  (mapcar 'node-pkey nodes))
          (stakes (mapcar 'node-stake nodes)))
