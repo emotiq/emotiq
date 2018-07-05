@@ -122,8 +122,20 @@ THE SOFTWARE.
 (defvar *rh-start*  nil)
 
 (defun start-randhound-round ()
-  ;; take the list of witness nodes, and partition into a 2-level
-  ;; graph with *BEACON* at the top
+  ;; The Actor running the election calls this function to start up a
+  ;; Randhound session.
+  ;;
+  ;; Take the list of witness nodes, and partition into a 2-level
+  ;; graph with *BEACON* at the top.
+  ;;
+  ;; All witness nodes are potential participants, including BEACON
+  ;; and LEADER just elected. But we limit the number of participats
+  ;; to 1600 nodes or fewer.
+  ;;
+  ;; If fewer than 36 nodes in the network, then make only one group.
+  ;; Otherwise, make Sqrt number of groups, of size Sqrt number of
+  ;; nodes.
+  ;;
   (setf *rh-start* (get-universal-time))
   (let* ((node (current-node))
          (me   (node-pkey node)))
@@ -181,6 +193,13 @@ THE SOFTWARE.
   rval)       ;; grand decryption check value
 
 (defmethod rh-dispatcher ((msg-sym (eql :start)) &key session epoch from groups sig)
+  ;; Every node runs this startup code.
+  ;;
+  ;; Construct Randhound state for ourselves, compute a shared secret
+  ;; randomness along with ZKP proofs on the sharing polynomial
+  ;; coefficients and proofs of the computed shares. Send all this
+  ;; information to all other nodes in our group.
+  ;;
   (when (and (= epoch *local-epoch*)
              (int= from *beacon*)
              (validate-signed-start-message session epoch from groups sig))
@@ -257,6 +276,15 @@ THE SOFTWARE.
          proofs chks))
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-commit)) &key session from commit)
+  ;; Every node in a group produces a randomness commitment along with
+  ;; a ZKP on the polynomial coefficients and the values of the secret
+  ;; shares provided to all other group members.
+  ;;
+  ;; This is the code that receives the commitments from other nodes
+  ;; and validates them, and then decrypts its particular share of the
+  ;; secret. We forward that decrypted share to all other group
+  ;; members.
+  ;;
   (with-accessors ((my-session  rh-group-info-session)
                    (my-group    rh-group-info-group)
                    (my-commits  rh-group-info-commits)
@@ -368,6 +396,33 @@ THE SOFTWARE.
     ))
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
+  ;; Each node gets this message from other nodes in the group, and
+  ;; from themself. Collect the decrypted shares into lists per the
+  ;; "for" node which constructed the corresponding commitment.
+  ;;
+  ;; After a BFT threshold number of decrypted shares for any one
+  ;; commitment, combine them using Lagrange interpolation to find the
+  ;; secret random value.
+
+  ;; But since some decrypts may be bogus, we need to repeat the
+  ;; secret extraction over different unique subgroups of the group,
+  ;; till we obtain a BFT consensus on the value of the secret. Once
+  ;; that consensus is reached, send the secret randomness to the
+  ;; group leader.
+  ;;
+  ;; We use a probabilistic search of the combination space of
+  ;; subgroupings - BFT Thresh number of decrypts, taken Sharing
+  ;; Thresh number at a time.
+  ;;
+  ;; The probabilistic search operates by randomly selecting node
+  ;; responses, until Sharing Thresh number are obtained, and this
+  ;; sorted grouping has not been seen before.
+  ;;
+  ;; We do this until either a BFT threshold number of such subgroups
+  ;; produce the same secret random value, or until we have tried
+  ;; twice the BFT threshold number of times. If we exceed the limit,
+  ;; then just give up as though BFT consensus could not be reached.
+  ;;
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-group-leader rh-group-info-leader)
                    (my-group        rh-group-info-group)
@@ -586,7 +641,7 @@ THE SOFTWARE.
 
 (defmethod rh-dispatcher ((msg-sym (eql :group-randomness)) &key session from rand sig)
   ;; this message should only arrive at *BEACON*, as group leaders
-  ;; forward their composite randomness
+  ;; forward their composite group randomness
   ;;
   ;; Collectc a BFT Threshold number of group-random values from the
   ;; group-leaders, then fold them into one grand randomness by
