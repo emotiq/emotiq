@@ -120,7 +120,7 @@ THE SOFTWARE.
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
 (defvar *rh-start*  nil) ;; record time of start so we can report run times.
-(defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
+;; (defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
 
 (defun start-randhound-round ()
   ;; The Actor running the election calls this function to start up a
@@ -138,7 +138,7 @@ THE SOFTWARE.
   ;; nodes.
   ;;
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
-  (clrhash *check-rh*)
+  ;; (clrhash *check-rh*)
   
   (let* ((node (current-node))
          (me   (node-pkey node)))
@@ -425,13 +425,15 @@ THE SOFTWARE.
         ))
     ))
 
-  ;; ----------------------------------------------------
-  ;; for debug checking that we got the right answer
+#|
+;; ----------------------------------------------------
+;; for debug checking that we got the right answer
 (defun check-rh (for rand)
   (let* ((forkey  (int for))
          (chkval  (gethash forkey *check-rh*)))
     (assert (int= chkval rand))))
 ;; ----------------------------------------------------
+|#
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   ;; Each node gets this message from other nodes in the group, and
