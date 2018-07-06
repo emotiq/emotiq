@@ -277,21 +277,6 @@ THE SOFTWARE.
           (broadcast-grp+me msg :graphID graph)
           )))))
 
-#|
-(let* ((q     (get-order))
-       (coffs '(115 32 13))
-       (ps    (mapcar (um:curry 'poly  q coffs) '(0 1 2 3)))
-       (shs   (mapcar (lambda (p)
-                        (compute-pairing (mul-pt-zr (get-g1) p)
-                                         (get-g2)))
-                      ps))
-       (xs    '(1 2 3))
-       (pairs (mapcar 'list xs (cdr shs)))
-       (chk   (reduce-lagrange-interpolate pairs q)))
-  (int= (car shs) chk))
-
-|#
-
 ;; ----------------------------------------------------------------------------
 
 (defun chk-proofs (proofs chks pkey)
@@ -418,31 +403,11 @@ THE SOFTWARE.
   ;; After a BFT threshold number of decrypted shares for any one
   ;; commitment, combine them using Lagrange interpolation to find the
   ;; secret random value.
-
-  ;; But since some decrypts may be bogus, we need to repeat the
-  ;; secret extraction over different unique subgroups of the group,
-  ;; till we obtain a BFT consensus on the value of the secret. Once
-  ;; that consensus is reached, send the secret randomness to the
-  ;; group leader.
-  ;;
-  ;; We use a probabilistic search of the combination space of
-  ;; subgroupings - BFT Thresh number of decrypts, taken Sharing
-  ;; Thresh number at a time.
-  ;;
-  ;; The probabilistic search operates by randomly selecting node
-  ;; responses, until Sharing Thresh number are obtained, and this
-  ;; sorted grouping has not been seen before.
-  ;;
-  ;; We do this until either a BFT threshold number of such subgroups
-  ;; produce the same secret random value, or until we have tried
-  ;; twice the BFT threshold number of times. If we exceed the limit,
-  ;; then just give up as though BFT consensus could not be reached.
   ;;
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-group-leader rh-group-info-leader)
                    (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
-                   (thresh          rh-group-info-thresh)
                    (share-thresh    rh-group-info-share-thr)) *rh-state*
     (when (and
            (int= session my-session)              ;; correct session?
@@ -455,20 +420,20 @@ THE SOFTWARE.
              (for-key      (int for))
              (for-shares   (gethash for-key my-shares))
              (for-count    (length for-shares)))
-        (when (and (< for-count thresh)
+        (when (and (< for-count share-thresh)
                    (not (find from for-shares
                               :key  'first
                               :test 'int=)))
           (let ((from-index (1+ (position from my-group :test 'int=))))
             (push (list from from-index decr-share) for-shares)
-            (if (= (1+ for-count) thresh)
+            (if (= (1+ for-count) share-thresh)
                 (let* ((q       (pbc:get-order))
                        ;; since share-thresh = byz-fail + 1, any
                        ;; collection of share-thresh values will
                        ;; include at least one honest random
                        ;; contribution. So just take the first of them
                        ;; in the list.
-                       (xypairs (mapcar 'cdr (subseq for-shares 0 share-thresh)))
+                       (xypairs (mapcar 'cdr for-shares))
                        (rand    (reduce-lagrange-interpolate xypairs q)))
                   (apply 'send my-group-leader
                          (make-signed-subgroup-randomness-message session for me rand
@@ -504,20 +469,21 @@ THE SOFTWARE.
   ;; Group leaders perform this code.
   ;;
   ;; Collect a BFT Threshold number of decoded secret random values
-  ;; for each commitment which agree in value.
+  ;; for each commitment. We combine that incoming randomness as an
+  ;; accumulating product of randomness.
   ;;
-  ;; After than, assuming a BFT number of commitments have seen a BFT
-  ;; threshold number of secrets that agree in value, combine these
-  ;; secrets from each commitment into one group-random value and send
-  ;; along to Beacon node. We combine by multiplication in the pairing
-  ;; group.
+  ;; Once a BFT threshold number have been received and accumulated,
+  ;; we accumulate that product randomness into another accumulating
+  ;; group randomness.  And once a BFT threshold of contributions has
+  ;; been made to the group randomness, we send that off to the Beacon
+  ;; node.
   ;;
   (with-accessors ((my-super        rh-group-info-super)
                    (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
                    (my-rands        rh-group-info-rands)
                    (my-entropy      rh-group-info-entropy)
-                   (my-bft-thresh   rh-group-info-thresh)) *rh-state*
+                   (share-thresh    rh-group-info-share-thr)) *rh-state*
     (let* ((node  (current-node))
            (me    (node-pkey node)))
       (when (and
@@ -534,18 +500,18 @@ THE SOFTWARE.
                                   (for-rand   rand-entry-rand)) for-rands
                    (let ((for-count (length for-froms)))
                      (unless (or (find from for-froms :test 'int=) ;; ignore duplicates
-                                 (>= for-count my-bft-thresh))
+                                 (>= for-count share-thresh))
                        (push from for-froms)
                        (setf for-rand (mul-gts rand for-rand))
-                       (when (= (1+ for-count) my-bft-thresh)
+                       (when (= (1+ for-count) share-thresh)
                          (cond (my-entropy
                                 (with-accessors ((entropy-froms  rand-entry-froms)
                                                  (entropy-rand   rand-entry-rand)) my-entropy
                                   (let ((entropy-count (length entropy-froms)))
-                                    (when (< entropy-count my-bft-thresh)
+                                    (when (< entropy-count share-thresh)
                                       (push for entropy-froms)
                                       (setf entropy-rand (mul-gts entropy-rand for-rand))
-                                      (when (= (1+ entropy-count) my-bft-thresh)
+                                      (when (= (1+ entropy-count) share-thresh)
                                         (apply 'send my-super   ;; send to beacon
                                                (make-signed-group-randomness-message session me entropy-rand
                                                                                      (node-skey node))))
@@ -602,13 +568,13 @@ THE SOFTWARE.
       
     (let* ((ngrps         (length my-groups))
            (byz-frac      (floor (1- ngrps) 3))
-           (bft-thresh    (- ngrps byz-frac))
+           (share-thresh  (1+ byz-frac))
            (entropy-count (if my-tentropy
                               (length entropy-froms)
                             0)))
         (when (and
                my-groups                       ;; only *BEACON* should have this
-               (< entropy-count bft-thresh)    ;; still awaiting contributions?
+               (< entropy-count share-thresh)    ;; still awaiting contributions?
                (int= session my-session)                         ;; correct session?
                (find from (mapcar 'first my-groups) :test 'int=) ;; should only arrive from group leaders
                (not (and my-tentropy                             ;; not already seen?
@@ -625,7 +591,7 @@ THE SOFTWARE.
                    :froms (list from)
                    :rand  rand)))
 
-          (when (= (1+ entropy-count) bft-thresh)
+          (when (= (1+ entropy-count) share-thresh)
             (let* ((seed  (float (/ (int (hash/256 (rand-entry-rand my-tentropy)))
                                     #.(ash 1 256))
                                  1d0)))
