@@ -526,7 +526,8 @@ THE SOFTWARE.
     (pbc:check-hash skel sig from)))
 
 (defstruct rand-entry
-  froms rand)
+  froms  ;; holds list of contributor pkeys
+  rand)  ;; holds accumulating randomness
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session for from rand sig)
   ;; Group leaders perform this code.
@@ -653,18 +654,17 @@ THE SOFTWARE.
                    :froms (list from)
                    :rand  rand)))
 
-          (with-accessors ((entropy-rand   rand-entry-rand)) my-tentropy
-            (when (= (1+ entropy-count) bft-thresh)
-              (let* ((seed  (float (/ (int (hash/256 entropy-rand))
-                                      #.(ash 1 256))
-                                   1d0)))
-                ;; ------------------------------------------------------------------
-                ;; while debugging, don't run actual elections, uncomment for prodution
-                ;; 
-                ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
-                (pr (format nil "~%Hold election from RandHound: ~A" seed))
-                (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
-                ;; ------------------------------------------------------------------
-                ))))))))
+          (when (= (1+ entropy-count) bft-thresh)
+            (let* ((seed  (float (/ (int (hash/256 (rand-entry-rand my-tentropy)))
+                                    #.(ash 1 256))
+                                 1d0)))
+              ;; ------------------------------------------------------------------
+              ;; while debugging, don't run actual elections, uncomment for prodution
+              ;; 
+              ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+              (pr (format nil "~%Hold election from RandHound: ~A" seed))
+              (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
+              ;; ------------------------------------------------------------------
+              )))))))
   
 ;; ------------------------------------------------------------------
