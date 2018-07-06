@@ -37,7 +37,7 @@ THE SOFTWARE.
   (let* ((byz-fail     (floor (1- ngrp) 3))
          (byz-thr      (- ngrp byz-fail))
          (share-thresh (1+ byz-fail))
-         (kcoffs       (1+ share-thresh)))
+         (kcoffs       share-thresh))
     (values byz-fail byz-thr share-thresh kcoffs)))
 
 ;; ----------------------------------------------------------------
