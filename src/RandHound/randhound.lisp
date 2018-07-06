@@ -27,7 +27,7 @@ THE SOFTWARE.
 |#
 
 (in-package :randhound)
-(pushnew :testing *features*)
+;; (pushnew :rh-testing *features*)
 
 ;; ---------------------------------------------------------------
 
@@ -132,7 +132,7 @@ THE SOFTWARE.
 
 (defvar *rh-start*  nil) ;; record time of start so we can report run times.
 
-#+:TESTING
+#+:rh-testing
 (defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
 
 (defun start-randhound-round ()
@@ -151,7 +151,7 @@ THE SOFTWARE.
   ;; nodes.
   ;;
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
-  #+:TESTING
+  #+:rh-testing
   (clrhash *check-rh*)
   
   (let* ((node (current-node))
@@ -282,7 +282,7 @@ THE SOFTWARE.
           
           ;; -----------------------------------------------------------
           ;; for checking debugging
-          #+:TESTING
+          #+:rh-testing
           (let ((mykey (int me)))
             (setf (gethash mykey *check-rh*)
                   (compute-pairing (mul-pt-zr (get-g1) (poly q coffs 0))
@@ -355,7 +355,7 @@ THE SOFTWARE.
                                (mapcar 'm/ rschks invwts)))
                    (rschk    (dotprod-g1-zr proofs rschkv)))
 
-              #+:TESTING
+              #+:rh-testing
               (assert (zerop (int rschk)))
               
               (when (zerop (int rschk))
@@ -374,7 +374,7 @@ THE SOFTWARE.
                                       my-share))
                        (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
                   ;; ----------------------------------------------------------
-                  #+:TESTING
+                  #+:rh-testing
                   (assert (int= decr-chkl decr-chkr))
                   ;; ----------------------------------------------------------
                   
@@ -564,7 +564,7 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------
 ;; for debug checking that we got the right answer
-#+:TESTING
+#+:rh-testing
 (defun check-rh (for rand)
   (let* ((forkey  (int for))
          (chkval  (gethash forkey *check-rh*)))
@@ -656,7 +656,7 @@ THE SOFTWARE.
                                                                   (node-skey node)))
                   ;; ----------------------------------------------------
                   ;; for debug checking that we got the right answer
-                  #+:TESTING
+                  #+:rh-testing
                   (when (int= me (car my-group))
                     (check-rh for ptries))
                   ;; ----------------------------------------------------
