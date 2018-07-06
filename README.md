@@ -22,6 +22,7 @@ our we intend our full functionality to be always be available by
 running on source with an arbitrary Common Lisp implementation to the
 extent we have the resources for such an effort.
 
+
 ### Tell ASDF where to find the Emotiq systems
 
 First, place a copy of this repository somewhere locally on your
@@ -84,7 +85,16 @@ To effect the configuration of this setup, execute the forms in
 (load (asdf:system-relative-pathname :emotiq "../etc/setup-emotiq-quicklisp.lisp"))
 ```
 
-# Install the dependencies
+### Software requirements:
+#### macOS
+* LispWorks Pro v7.1.1 (or 7.1.0 with all official patches applied)
+* XCode Command Line Tools
+#### Linux
+* LispWorks Pro v7.1.1 (or 7.1.0 with all official patches applied)
+* Ubuntu 16.04 or later
+* `build-essentials`
+
+### Install the dependencies
 
 After Quicklisp has been installed and configured, then issuing
 ```lisp
@@ -93,7 +103,7 @@ After Quicklisp has been installed and configured, then issuing
 will download all the dependencies needed by the tests gathered into
 the `emotiq/sim` ASDF system.
 
-# Test
+### Test
 
 To evaluate form to test, which also loads, the system:
 ```lisp
@@ -113,12 +123,12 @@ At end you should see a result like
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
 
-# Running
+### Running
 
 To run the single node simulator, see the instructions in
 [Running simulator](src/simulation.md).
 
-### Notes on missing dependencies
+#### Notes on missing dependencies
 
 We have many ASDF descriptions within this repository whose
 dependencies may need to be satisfied by via `ql:quickload`.
@@ -135,7 +145,7 @@ system `cosi-bls`, a simple
 should satisfy the dependencies.  (TODO: `cl:restart` for missing
 dependencies).
 
-### Notes on building the native libraries required by CRYPTO-PAIRINGS
+#### Notes on building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
 curve (PBC) cryptography, which in turn depends on GMP library.
