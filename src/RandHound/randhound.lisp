@@ -36,9 +36,8 @@ THE SOFTWARE.
   ;; too easy to goof up if you have to recompute them
   (let* ((byz-fail     (floor (1- ngrp) 3))
          (byz-thr      (- ngrp byz-fail))
-         (share-thresh (1+ byz-fail))
-         (kcoffs       share-thresh))
-    (values byz-fail byz-thr share-thresh kcoffs)))
+         (share-thresh (1+ byz-fail)))
+    (values byz-fail byz-thr share-thresh)))
 
 ;; ----------------------------------------------------------------
 (defun poly (q coffs x)
@@ -232,7 +231,7 @@ THE SOFTWARE.
            (group-leader   (first my-group))
            (group-leader-p (int= me group-leader))
            (ngrp           (length my-group)))
-      (multiple-value-bind (byz-frac bft-thresh share-thresh kcoffs)
+      (multiple-value-bind (byz-frac bft-thresh share-thresh)
           (byz-params ngrp)
         (setf *rh-state* (make-rh-group-info
                           :session     session
@@ -251,7 +250,7 @@ THE SOFTWARE.
         
         (let* ((xvals      (um:range 1 (1+ ngrp)))
                (q          (pbc:get-order))
-               (coffs      (loop repeat kcoffs collect (random-between 1 q)))
+               (coffs      (loop repeat share-thresh collect (random-between 1 q)))
                (krand      (random-between 1 q))
                (shares     (mapcar (um:curry 'poly q coffs) xvals))
                (proofs     (mapcar (um:compose
@@ -340,14 +339,14 @@ THE SOFTWARE.
         (when (and
                (int= session my-session)        ;; correct session?
                (find from my-group :test 'int=) ;; from someone in my group?
-               (not (find from my-commits          ;; not-seen yet
+               (not (find from my-commits       ;; not-seen yet
                           :test 'int=
                           :key  'first))
-               (chk-proofs proofs chks from)) ;; valid collection of proofs?
-          (multiple-value-bind (byz-frac byz-thr share-thr kcoffs)
+               (chk-proofs proofs chks from))   ;; valid collection of proofs?
+          (multiple-value-bind (byz-frac byz-thr share-thr)
               (byz-params ngrp)
             (let* ((q        (pbc:get-order))
-                   (kcheck   (- ngrp kcoffs)) ;; (- ngrp byz-frac 1))
+                   (kcheck   (- ngrp share-thr))
                    (xvals    (um:range 1 (1+ ngrp)))
                    (coffs    (loop repeat kcheck collect (random-between 1 q)))
                    (rschks   (mapcar (um:curry 'poly q coffs) xvals))
@@ -707,6 +706,7 @@ THE SOFTWARE.
     (/ (factorial n (max m excess))
        (factorial (min m excess)))))
 
+;; show table of thresholds by group size
 (loop for n from 1 to 40 do
       (multiple-value-bind (byz-frac byz-thr share-thr)
           (byz-params n)
