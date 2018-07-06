@@ -117,10 +117,12 @@ As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
 is updating this tree from a previous version, one may explicitly have
 to force the asdf `prepare-op` via so:
+:bangbang: Not needed during normal workflow
+
 ```lisp
 (asdf:make :crypto-pairings)
 ```
-:heavy_exclamation_mark: Not needed during normal workflow
+:bangbang: Not needed during normal workflow
 
 # Running
 
