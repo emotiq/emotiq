@@ -822,6 +822,92 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
+;;;; Transaction Printer
+
+
+
+(defmethod print-object ((tx transaction) stream)
+  "Prints TX to STREAM."
+  (print-transaction tx stream))
+
+
+;;; PRINT-TRANSACTION: print TRANSACTION to STREAM in an informative way.
+;;;
+;;; Here is the general format and some examples:
+;;;
+;;;   #<Tx TxID   Type  inputs    => outputs>
+;;;
+;;;   #<Tx b0b7b! Spend 1991c![0] => 500/z6E165!, 380/z2QKxC!>
+;;;   #<Tx 005a6! Collect => 30/ynVSvw!>
+;;;
+;;; Each input if any is the form abreviated-id[index].
+;;; Each output is of the form amount/abbreviated-address.
+
+(defun print-transaction (transaction stream)
+  (print-unreadable-object (transaction stream)
+    (with-slots 
+          (transaction-inputs transaction-outputs)
+        transaction
+      (format stream "Tx ~a "
+              (abbrev-hash-string (txid-string (transaction-id transaction))))
+      (format stream "~:(~a~) " (transaction-type transaction))
+      (unless (member (transaction-type transaction)
+                      '(:coinbase :collect)) ; no-input tx types
+        (loop for transaction-input in transaction-inputs
+              as first-time = t then nil
+              as tx-in-id = (tx-in-id transaction-input)
+              as index = (tx-in-index transaction-input)
+              when (not first-time)
+                do (format stream ", ")
+              do (format stream "~a[~d]"
+                         (abbrev-hash-string (txid-string tx-in-id)) index)
+                 (format stream " "))) ; (normal tx has 1+ inputs)
+      (format stream "=> ")
+      (loop for tx-out in transaction-outputs
+            as public-key-hash-string
+              = (abbrev-hash-string
+                 (tx-out-public-key-hash tx-out) :style ':address)
+            as amt = (tx-out-amount tx-out)
+            as first-time = t then nil
+            when (not first-time)
+              do (format stream ", ")
+            do (format stream "~d/~a" amt public-key-hash-string amt)))))
+
+
+
+(defparameter *hash-abbrev-length* 5)
+(defparameter *hash-abbrev-ending* "!") ; Alts: "\\" "-|" ".:"
+
+
+(defun abbrev-hash-string (string &key style)
+  "By default abbreviate STRING by writing just its STYLE-specific
+   preferense for the number of characters to write --
+   *hash-abbrev-length* gives the default. Default for abbrev length
+   is 5. STYLE can be either :address or :id. If STYLE is :address,
+   add 1 to abbrev length. This should be used for an
+   \"address\" (i.e., a public key hash, as produced by
+   public-key-to-address), which has a nonrandom initial character;
+   therefore, 1 will be added to the abbrev length."
+  (with-output-to-string (out)
+    (let ((length (length string)))
+      (write-string
+       string out
+       :start 0
+       :end (min length
+                 (+ *hash-abbrev-length*
+                    (or (case style (:address 1) (otherwise nil)) 0))))
+      (write-string *hash-abbrev-ending* out))))
+
+;; Note: to avoid describe output truncation, may need something like
+;;
+;;   (setq *print-right-margin* 1000)
+;;
+;; I found this to be true on SBCL.  -mhd, 2/25/18
+
+
+
+
+
 ;;;; Genesis Block Creation
 
 ;;; In Bitcoin the first transaction of a block is created by a miner, and it's
