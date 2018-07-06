@@ -27,8 +27,20 @@ THE SOFTWARE.
 |#
 
 (in-package :randhound)
+(pushnew :testing *features*)
+
 ;; ---------------------------------------------------------------
 
+(defun byz-params (ngrp)
+  ;; offer up answers in one place so all are on same footing...
+  ;; too easy to goof up if you have to recompute them
+  (let* ((byz-fail     (floor (1- ngrp) 3))
+         (byz-thr      (- ngrp byz-fail))
+         (share-thresh (1+ byz-fail))
+         (kcoffs       (1+ share-thresh)))
+    (values byz-fail byz-thr share-thresh kcoffs)))
+
+;; ----------------------------------------------------------------
 (defun poly (q coffs x)
   (with-mod q
     (um:nlet-tail iter ((cs  coffs)
@@ -120,7 +132,9 @@ THE SOFTWARE.
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
 (defvar *rh-start*  nil) ;; record time of start so we can report run times.
-;; (defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
+
+#+:TESTING
+(defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
 
 (defun start-randhound-round ()
   ;; The Actor running the election calls this function to start up a
@@ -138,7 +152,8 @@ THE SOFTWARE.
   ;; nodes.
   ;;
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
-  ;; (clrhash *check-rh*)
+  #+:TESTING
+  (clrhash *check-rh*)
   
   (let* ((node (current-node))
          (me   (node-pkey node)))
@@ -216,66 +231,65 @@ THE SOFTWARE.
            (graph          (establish-broadcast-group my-group :graphID graph-name))
            (group-leader   (first my-group))
            (group-leader-p (int= me group-leader))
-           (ngrp           (length my-group))
-           (byz-frac       (floor (1- ngrp) 3))
-           (bft-thresh     (- ngrp byz-frac))
-           (kcoffs         (1+ byz-frac)))
-      
-      (setf *rh-state* (make-rh-group-info
-                        :session     session
-                        :group       my-group
-                        :leader      group-leader
-                        :thresh      bft-thresh
-                        :share-thr   kcoffs
-                        :super       (when group-leader-p
-                                       *beacon*)
-                        :graph       graph
-                        :decr-shares (make-hash-table)
-                        :rands       (when group-leader-p
-                                       (make-hash-table))
-                        :groups      (when (int= me *beacon*)
-                                       groups)))
-              
-      (let* ((xvals      (um:range 1 (1+ ngrp)))
-             (q          (pbc:get-order))
-             (coffs      (loop repeat kcoffs collect (random-between 1 q)))
-             (krand      (random-between 1 q))
-             (shares     (mapcar (um:curry 'poly q coffs) xvals))
-             (proofs     (mapcar (um:compose
-                                  (um:curry 'mul-pt-zr (pbc:get-g1))
-                                  (let ((sf (with-mod q
-                                              (m/ krand (int (node-skey node))))))
+           (ngrp           (length my-group)))
+      (multiple-value-bind (byz-frac bft-thresh share-thresh kcoffs)
+          (byz-params ngrp)
+        (setf *rh-state* (make-rh-group-info
+                          :session     session
+                          :group       my-group
+                          :leader      group-leader
+                          :thresh      bft-thresh
+                          :share-thr   share-thresh
+                          :super       (when group-leader-p
+                                         *beacon*)
+                          :graph       graph
+                          :decr-shares (make-hash-table)
+                          :rands       (when group-leader-p
+                                         (make-hash-table))
+                          :groups      (when (int= me *beacon*)
+                                         groups)))
+        
+        (let* ((xvals      (um:range 1 (1+ ngrp)))
+               (q          (pbc:get-order))
+               (coffs      (loop repeat kcoffs collect (random-between 1 q)))
+               (krand      (random-between 1 q))
+               (shares     (mapcar (um:curry 'poly q coffs) xvals))
+               (proofs     (mapcar (um:compose
+                                    (um:curry 'mul-pt-zr (pbc:get-g1))
+                                    (let ((sf (with-mod q
+                                                (m/ krand (int (node-skey node))))))
+                                      (lambda (share)
+                                        (with-mod q
+                                          (m* sf share)))))
+                                   shares))
+               (chks       (mapcar (um:compose
+                                    (um:curry 'mul-pt-zr (pbc:get-g2))
                                     (lambda (share)
                                       (with-mod q
-                                        (m* sf share)))))
-                                 shares))
-             (chks       (mapcar (um:compose
-                                  (um:curry 'mul-pt-zr (pbc:get-g2))
-                                  (lambda (share)
-                                    (with-mod q
-                                      (m* krand share))))
-                                 shares))
-             (enc-shares (mapcar 'mul-pt-zr my-group shares))
-             (rval       (mul-pt-zr (pbc:get-g1) krand))
-             (msg        `(:randhound :subgroup-commit
-                           :session ,session
-                           :from    ,me
-                           :commit  ,(make-subgroup-commit
-                                      :encr-shares enc-shares
-                                      :proofs      proofs
-                                      :chks        chks
-                                      :rval        rval))))
-
-        (broadcast-grp+me msg :graphID graph)
-
-        ;; -----------------------------------------------------------
-        ;; for checking debugging
-        ;; (let ((mykey (int me)))
-        ;;   (setf (gethash mykey *check-rh*)
-        ;;         (compute-pairing (mul-pt-zr (get-g1) (poly q coffs 0))
-        ;;                          (get-g2))))
-        ;; ------------------------------------------------------------
-        ))))
+                                        (m* krand share))))
+                                   shares))
+               (enc-shares (mapcar 'mul-pt-zr my-group shares))
+               (rval       (mul-pt-zr (pbc:get-g1) krand))
+               (msg        `(:randhound :subgroup-commit
+                             :session ,session
+                             :from    ,me
+                             :commit  ,(make-subgroup-commit
+                                        :encr-shares enc-shares
+                                        :proofs      proofs
+                                        :chks        chks
+                                        :rval        rval))))
+          
+          (broadcast-grp+me msg :graphID graph)
+          
+          ;; -----------------------------------------------------------
+          ;; for checking debugging
+          #+:TESTING
+          (let ((mykey (int me)))
+            (setf (gethash mykey *check-rh*)
+                  (compute-pairing (mul-pt-zr (get-g1) (poly q coffs 0))
+                                   (get-g2))))
+          ;; ------------------------------------------------------------
+          )))))
 
 #|
 (let* ((q     (get-order))
@@ -320,7 +334,8 @@ THE SOFTWARE.
                      (encr-shares  subgroup-commit-encr-shares)
                      (rval         subgroup-commit-rval)) commit
       (let* ((node  (current-node))
-             (me    (node-pkey node)))
+             (me    (node-pkey node))
+             (ngrp  (length my-group)))
             
         (when (and
                (int= session my-session)        ;; correct session?
@@ -329,43 +344,46 @@ THE SOFTWARE.
                           :test 'int=
                           :key  'first))
                (chk-proofs proofs chks from)) ;; valid collection of proofs?
-          
-          (let* ((q        (pbc:get-order))
-                 (ngrp     (length my-group))
-                 (byz-frac (floor (1- ngrp) 3))
-                 (kcheck   (- ngrp byz-frac 1))
-                 (xvals    (um:range 1 (1+ ngrp)))
-                 (coffs    (loop repeat kcheck collect (random-between 1 q)))
-                 (rschks   (mapcar (um:curry 'poly q coffs) xvals))
-                 (invwts   (mapcar (um:curry 'invwt q ngrp) xvals))
-                 (rschkv   (with-mod q
-                             (mapcar 'm/ rschks invwts)))
-                 (rschk    (dotprod-g1-zr proofs rschkv)))
-            
-            (when (zerop (int rschk))
-              (push (list from commit) my-commits)
-              (let* ((my-index     (position me my-group
-                                             :test 'int=))
-                     (my-share     (elt encr-shares my-index))
-                     (skey         (node-skey node))
-                     (decr-share   (compute-pairing
-                                    (mul-pt-zr (pbc:get-g1)
-                                               (inv-zr (int skey)))
-                                    my-share))
-                     (decr-chkl    (compute-pairing
-                                    (mul-pt-zr rval (with-mod (get-order)
-                                                      (m/ (int skey))))
-                                    my-share))
-                     (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
-                ;; ----------------------------------------------------------
-                ;; (assert (int= decr-chkl decr-chkr))
-                ;; ----------------------------------------------------------
+          (multiple-value-bind (byz-frac byz-thr share-thr kcoffs)
+              (byz-params ngrp)
+            (let* ((q        (pbc:get-order))
+                   (kcheck   (- ngrp kcoffs)) ;; (- ngrp byz-frac 1))
+                   (xvals    (um:range 1 (1+ ngrp)))
+                   (coffs    (loop repeat kcheck collect (random-between 1 q)))
+                   (rschks   (mapcar (um:curry 'poly q coffs) xvals))
+                   (invwts   (mapcar (um:curry 'invwt q ngrp) xvals))
+                   (rschkv   (with-mod q
+                               (mapcar 'm/ rschks invwts)))
+                   (rschk    (dotprod-g1-zr proofs rschkv)))
 
-                (when (int= decr-chkl decr-chkr)
-                  (broadcast-grp+me (make-signed-decr-share-message
-                                     session me from decr-share skey)
-                                    :graphID my-graph))
-                ))))))))
+              #+:TESTING
+              (assert (zerop (int rschk)))
+              
+              (when (zerop (int rschk))
+                (push (list from commit) my-commits)
+                (let* ((my-index     (position me my-group
+                                               :test 'int=))
+                       (my-share     (elt encr-shares my-index))
+                       (skey         (node-skey node))
+                       (decr-share   (compute-pairing
+                                      (mul-pt-zr (pbc:get-g1)
+                                                 (inv-zr (int skey)))
+                                      my-share))
+                       (decr-chkl    (compute-pairing
+                                      (mul-pt-zr rval (with-mod (get-order)
+                                                        (m/ (int skey))))
+                                      my-share))
+                       (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
+                  ;; ----------------------------------------------------------
+                  #+:TESTING
+                  (assert (int= decr-chkl decr-chkr))
+                  ;; ----------------------------------------------------------
+                  
+                  (when (int= decr-chkl decr-chkr)
+                    (broadcast-grp+me (make-signed-decr-share-message
+                                       session me from decr-share skey)
+                                      :graphID my-graph))
+                  )))))))))
 
 ;; ----------------------------------------------------------------------------
 
@@ -402,38 +420,158 @@ THE SOFTWARE.
       prod)))
 
 
-(defun generate-new-combo (xy-pairs npairs ptries)
-  (um:nlet-tail again ()
-    (um:nlet-tail iter ((pairs xy-pairs)
-                        (index 0)
-                        (ans   nil))
-      (if (>= index npairs)
-          (let* ((sorted (sort ans '<
-                               :key 'first))
-                 (key    (mapcar 'first sorted)))
-            (if (find key (car ptries) :test 'equal)
-                (again)
-              (progn
-                (push key (car ptries))
-                sorted)))
-        ;; else - perform a selection
-        (let* ((ix   (random (length pairs)))
-               (pair (nth ix pairs)))
-          (iter (remove pair pairs)
-                (1+ index)
-                (cons pair ans)))
-        ))
+(defun choose (lst)
+  ;; randomly select and return one item from a list.
+  ;;
+  ;; second returned value is original index of item in list, and
+  ;; third returned value is list with item removed
+  (let* ((ix   (random (length lst)))
+         (item nil)
+         (tl   nil)
+         (hd   (um:accum acc
+                 (um:nlet-tail iter ((count ix)
+                                     (lst   lst))
+                   (if (zerop count)
+                       (setf item (car lst)
+                             tl   (cdr lst))
+                     (progn
+                       (acc (car lst))
+                       (iter (1- count) (cdr lst)))
+                     )))))
+    (values item ix (nconc hd tl))
     ))
 
+;; --------------------------------------------------------------
+;; Dealing with random selections of K-tuples from N possibilities
+
+(defstruct combo-state
+  iter nel combos)
+
+(defun randomize-list (lst)
+  (um:nlet-tail iter ((lst lst)
+                      (ans nil))
+    (if (endp lst)
+        ans
+      (multiple-value-bind (item _ rem) (choose lst)
+        (iter rem (cons item ans)))
+      )))
+
+(defun init-combos (ngrp)
+  ;; for small group sizes, we face the possibility that we may need
+  ;; to see every possible combination of k-tuples. In that case,
+  ;; random selection will be penalized as the list of remaining
+  ;; unique possibilies shrinks toward one element.
+  ;;
+  ;; So for those cases (NGRP = 6, 7) we precompute all possibilities
+  ;; and return them one by one on each successive call.
+  ;;
+  (multiple-value-bind (byz-fail byz-thr share-thr)
+      (byz-params ngrp)
+    (cond ((< ngrp 6)
+           (error "Too few Nodes in Randhound BFT protocol"))
+          ((and (= byz-thr 5)  ;; happens when ngrp = 6
+                (= share-thr 2))
+           (make-combo-state
+            :iter 0
+            :nel  10
+            :combos (coerce
+                     (randomize-list
+                      '((0 1) (0 2) (0 3) (0 4)
+                        (1 2) (1 3) (1 4)
+                        (2 3) (2 4)
+                        (3 4)))
+                     'vector)))
+          ((and (= byz-thr 5) ;; happens when ngrp = 7
+                (= share-thr 3))
+           (make-combo-state
+            :iter 0
+            :nel  10
+            :combos (coerce
+                     (randomize-list
+                      '((0 1 2) (0 1 3) (0 1 4)
+                        (0 2 3) (0 2 4)
+                        (0 3 4)
+                        (1 2 3) (1 2 4)
+                        (1 3 4)
+                        (2 3 4)))
+                     'vector)))
+          (t
+           ;; in all other cases, we have enough combo possibilities
+           ;; that random selection won't be badly penalized
+           (list nil))
+          )))
+
+(defmethod generate-new-combo ((ptries combo-state) xy-pairs npairs)
+  (with-accessors ((iter   combo-state-iter)
+                   (nel    combo-state-nel)
+                   (combos combo-state-combos)) ptries
+    (let* ((combo (aref combos iter))
+           (ans   (mapcar (um:rcurry 'nth xy-pairs) combo)))
+      (assert (= npairs (length (first ans))))
+      ;; protect aganist too many calls - just recycle
+      (setf iter (mod (1+ iter) nel))
+      ans)))
+
+(defmethod generate-new-combo ((ptries list) xy-pairs npairs)
+  ;; given a list of N items, we want to select a K-tuple of them (K
+  ;; <= N), where that tuple has never been selected during prior
+  ;; calls. Each item must be a tuple with its key as the car.
+  ;;
+  ;; Argument ptries is a cons cell containing the history list of
+  ;; prior selections.
+  ;;
+  ;; Worst case will be with our 6 (or 7) nodes minimum configuration,
+  ;;     N = 6, F = 1, K = 2, T = 5, max trials = 10 (= 2*T)
+  ;;     N = 7, F = 2, K = 3, T = 5, max trials = 10
+  ;; meaning that there will be 5 tuples to choose from, and we
+  ;; potentially need all 10 of the possible combinations of pairs. It
+  ;; could take a while to randomly find the last unique pair.
+  ;;
+  (let ((ntrials 0))
+    (um:nlet-tail again ()
+      (um:nlet-tail iter ((count npairs)
+                          (pairs xy-pairs)
+                          (keys  nil)
+                          (ans   nil))
+        (incf ntrials)
+        (if (zerop count)
+            (let ((skeys (sort keys '<)))
+              (if (find skeys (car ptries) :test 'equal)
+                  (again)
+                (progn
+                  (push skeys (car ptries))
+                  (values ans ntrials))))
+          ;; else - perform a selection
+          (multiple-value-bind (item _ rest) (choose pairs)
+            (declare (ignore _))
+            (iter (1- count)
+                  rest
+                  (cons (car item) keys)
+                  (cons item ans)))
+          )))))
+
 #|
+;; test our worst case possibility
+(let* ((ptrials (list nil))
+       (items   '((1 a) (2 b) (3 c) (4 d) (5 e)))
+       (maxtrials 0)
+       (combos  (loop repeat 10 collect
+                      (multiple-value-bind (ans ntrials)
+                          (generate-new-combo items 2 ptrials)
+                        (setf maxtrials (max ntrials maxtrials))
+                        ans))))
+  (inspect (list maxtrials combos ptrials)))
+|#
+
 ;; ----------------------------------------------------
 ;; for debug checking that we got the right answer
+#+:TESTING
 (defun check-rh (for rand)
   (let* ((forkey  (int for))
          (chkval  (gethash forkey *check-rh*)))
     (assert (int= chkval rand))))
 ;; ----------------------------------------------------
-|#
+
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   ;; Each node gets this message from other nodes in the group, and
@@ -492,12 +630,12 @@ THE SOFTWARE.
               (let* ((q       (pbc:get-order))
                      (xypairs (mapcar 'cdr for-shares))
                      (rands   (make-hash-table))
-                     (ptries  (list  nil)))
+                     (ptries  (init-combos (length my-group))))
                 (um:nlet-tail iter ((trial 0))
                   (if (> trial (* 2 thresh))
                       (setf ptries nil) ;; give up...
                     ;; else
-                    (let* ((combo (generate-new-combo xypairs share-thresh ptries))
+                    (let* ((combo (generate-new-combo ptries xypairs share-thresh))
                            (rand  (reduce-lagrange-interpolate combo q))
                            (rkey  (int rand))
                            (count (1+ (gethash rkey rands 0))))
@@ -519,8 +657,9 @@ THE SOFTWARE.
                                                                   (node-skey node)))
                   ;; ----------------------------------------------------
                   ;; for debug checking that we got the right answer
-                  ;; (when (int= me (car my-group))
-                  ;;   (check-rh for ptries))
+                  #+:TESTING
+                  (when (int= me (car my-group))
+                    (check-rh for ptries))
                   ;; ----------------------------------------------------
                   ))))
           )))))
@@ -569,17 +708,16 @@ THE SOFTWARE.
        (factorial (min m excess)))))
 
 (loop for n from 1 to 40 do
-      (let* ((nfail  (floor (1- n) 3))
-             (kshare (1+ nfail))
-             (thresh (- n nfail))
-             (combos (combinations thresh kshare)))
-        (with-standard-io-syntax
-          (pprint
-           (list :nodes  n
-                 :nfail  nfail
-                 :kshare kshare
-                 :thresh thresh
-                 :combos combos)))))
+      (multiple-value-bind (byz-frac byz-thr share-thr)
+          (byz-params n)
+        (let* ((combos (combinations byz-thr share-thr)))
+          (with-standard-io-syntax
+            (pprint
+             (list :nodes  n
+                   :nfail  byz-frac
+                   :kshare share-thr
+                   :thresh byz-thr
+                   :combos combos))))))
 
 ;; ------------------------------------------------------
 
