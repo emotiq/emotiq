@@ -113,6 +113,8 @@ by the variable `EXTERNAL_LIBS_VERSION` in the script
 release of `emotiq-external-libs` from
 [Releases](https://github.com/emotiq/emotiq-external-libs/releases)
 
+All these compilations and linking are done transparently during normal systems quikload process, so no additional steps are required.
+
 As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
 is updating this tree from a previous version, one may explicitly have
