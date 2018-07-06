@@ -218,6 +218,7 @@
    transaction-outputs
    transaction-inputs
    make-transaction
+   sign-transaction
    make-and-maybe-sign-transaction
    make-transaction-outputs
    make-transaction-inputs
