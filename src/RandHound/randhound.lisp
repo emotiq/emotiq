@@ -391,54 +391,24 @@ THE SOFTWARE.
     (pbc:check-hash skel sig from)))
 
 
-(defun reduce-lagrange-interpolate (combo q)
-  (with-mod q
-    (let ((prod nil)
-          (ns   (mapcar 'first combo))
-          (ys   (mapcar 'second combo)))
-      (loop for jx in ns
-            for y  in ys
-            do
-            (let* ((expon (lagrange-wt q ns jx))
-                   (yrand (expt-gt-zr y expon)))
-              (setf prod (if prod
-                             (mul-gts prod yrand)
-                           yrand))))
-      prod)))
-
-
-(defun choose (lst)
-  ;; randomly select and return one item from a list.
+(defun reduce-lagrange-interpolate (xy-pairs q)
+  ;; xy-pairs is a list of (x y) pairs, where x's are cardinal indexes 1, 2, ...
+  ;; and y is a GT field subgroup value computed from some Tate pairing operation.
   ;;
-  ;; second returned value is original index of item in list, and
-  ;; third returned value is list with item removed
-  (let* ((ix   (random (length lst)))
-         (item nil)
-         (tl   nil)
-         (hd   (um:accum acc
-                 (um:nlet-tail iter ((count ix)
-                                     (lst   lst))
-                   (if (zerop count)
-                       (setf item (car lst)
-                             tl   (cdr lst))
-                     (progn
-                       (acc (car lst))
-                       (iter (1- count) (cdr lst)))
-                     )))))
-    (values item ix (nconc hd tl))
-    ))
-
-(defun generate-combo (xy-pairs npairs)
-  ;; Randomly select K items from a list of N items
-  (um:nlet-tail iter ((count npairs)
-                      (lst   xy-pairs)
-                      (ans   nil))
-    (if (zerop count)
-        ans
-      (multiple-value-bind (item _ rem) (choose lst)
-        (declare (ignore _))
-        (iter (1- count) rem (cons item ans)))
-      )))
+  ;; We combine these pairs by expnentiating each y GT-field value by the Lagrange
+  ;; interpolation weight for the x value, and multiply them all
+  ;; together to derive a final randomness value.
+  ;;;
+  (let ((xs (mapcar 'first xy-pairs)))
+    (labels ((rand-gt (x y)
+               (expt-gt-zr y (lagrange-wt q xs x)))
+             (rand-gt-pair (pair)
+               (apply #'rand-gt pair)))
+      (reduce (lambda (prod pair)
+                (mul-gts prod (rand-gt-pair pair)))
+              (cdr xy-pairs)
+              :initial-value (rand-gt-pair (car xy-pairs))
+              ))))
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   ;; Each node gets this message from other nodes in the group, and
@@ -493,12 +463,13 @@ THE SOFTWARE.
             (push (list from from-index decr-share) for-shares)
             (if (= (1+ for-count) thresh)
                 (let* ((q       (pbc:get-order))
-                       (xypairs (mapcar 'cdr for-shares))
                        ;; since share-thresh = byz-fail + 1, any
-                       ;; collection of share-thresh values will include
-                       ;; at least one honest random contribution
-                       (combo   (generate-combo xypairs share-thresh))
-                       (rand    (reduce-lagrange-interpolate combo q)))
+                       ;; collection of share-thresh values will
+                       ;; include at least one honest random
+                       ;; contribution. So just take the first of them
+                       ;; in the list.
+                       (xypairs (mapcar 'cdr (subseq for-shares 0 share-thresh)))
+                       (rand    (reduce-lagrange-interpolate xypairs q)))
                   (apply 'send my-group-leader
                          (make-signed-subgroup-randomness-message session for me rand
                                                                   (node-skey node))))
