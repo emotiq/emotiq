@@ -132,9 +132,6 @@ THE SOFTWARE.
 
 (defvar *rh-start*  nil) ;; record time of start so we can report run times.
 
-#+:rh-testing
-(defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
-
 (defun start-randhound-round ()
   ;; The Actor running the election calls this function to start up a
   ;; Randhound session.
@@ -151,8 +148,6 @@ THE SOFTWARE.
   ;; nodes.
   ;;
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
-  #+:rh-testing
-  (clrhash *check-rh*)
   
   (let* ((node (current-node))
          (me   (node-pkey node)))
@@ -233,6 +228,7 @@ THE SOFTWARE.
            (ngrp           (length my-group)))
       (multiple-value-bind (byz-frac bft-thresh share-thresh)
           (byz-params ngrp)
+        (declare (ignore byz-frac))
         (setf *rh-state* (make-rh-group-info
                           :session     session
                           :group       my-group
@@ -279,15 +275,6 @@ THE SOFTWARE.
                                         :rval        rval))))
           
           (broadcast-grp+me msg :graphID graph)
-          
-          ;; -----------------------------------------------------------
-          ;; for checking debugging
-          #+:rh-testing
-          (let ((mykey (int me)))
-            (setf (gethash mykey *check-rh*)
-                  (compute-pairing (mul-pt-zr (get-g1) (poly q coffs 0))
-                                   (get-g2))))
-          ;; ------------------------------------------------------------
           )))))
 
 #|
@@ -345,6 +332,7 @@ THE SOFTWARE.
                (chk-proofs proofs chks from))   ;; valid collection of proofs?
           (multiple-value-bind (byz-frac byz-thr share-thr)
               (byz-params ngrp)
+            (declare (ignore byz-frac byz-thr))
             (let* ((q        (pbc:get-order))
                    (kcheck   (- ngrp share-thr))
                    (xvals    (um:range 1 (1+ ngrp)))
@@ -440,137 +428,17 @@ THE SOFTWARE.
     (values item ix (nconc hd tl))
     ))
 
-;; --------------------------------------------------------------
-;; Dealing with random selections of K-tuples from N possibilities
-
-(defstruct combo-state
-  iter nel combos)
-
-(defun randomize-list (lst)
-  (um:nlet-tail iter ((lst lst)
-                      (ans nil))
-    (if (endp lst)
+(defun generate-combo (xy-pairs npairs)
+  ;; Randomly select K items from a list of N items
+  (um:nlet-tail iter ((count npairs)
+                      (lst   xy-pairs)
+                      (ans   nil))
+    (if (zerop count)
         ans
       (multiple-value-bind (item _ rem) (choose lst)
-        (iter rem (cons item ans)))
+        (declare (ignore _))
+        (iter (1- count) rem (cons item ans)))
       )))
-
-(defun init-combos (ngrp)
-  ;; for small group sizes, we face the possibility that we may need
-  ;; to see every possible combination of k-tuples. In that case,
-  ;; random selection will be penalized as the list of remaining
-  ;; unique possibilies shrinks toward one element.
-  ;;
-  ;; So for those cases (NGRP = 6, 7) we precompute all possibilities
-  ;; and return them one by one on each successive call.
-  ;;
-  (multiple-value-bind (byz-fail byz-thr share-thr)
-      (byz-params ngrp)
-    (cond ((< ngrp 6)
-           (error "Too few Nodes in Randhound BFT protocol"))
-          ((and (= byz-thr 5)  ;; happens when ngrp = 6
-                (= share-thr 2))
-           (make-combo-state
-            :iter 0
-            :nel  10
-            :combos (coerce
-                     (randomize-list
-                      '((0 1) (0 2) (0 3) (0 4)
-                        (1 2) (1 3) (1 4)
-                        (2 3) (2 4)
-                        (3 4)))
-                     'vector)))
-          ((and (= byz-thr 5) ;; happens when ngrp = 7
-                (= share-thr 3))
-           (make-combo-state
-            :iter 0
-            :nel  10
-            :combos (coerce
-                     (randomize-list
-                      '((0 1 2) (0 1 3) (0 1 4)
-                        (0 2 3) (0 2 4)
-                        (0 3 4)
-                        (1 2 3) (1 2 4)
-                        (1 3 4)
-                        (2 3 4)))
-                     'vector)))
-          (t
-           ;; in all other cases, we have enough combo possibilities
-           ;; that random selection won't be badly penalized
-           (list nil))
-          )))
-
-(defmethod generate-new-combo ((ptries combo-state) xy-pairs npairs)
-  (with-accessors ((iter   combo-state-iter)
-                   (nel    combo-state-nel)
-                   (combos combo-state-combos)) ptries
-    (let* ((combo (aref combos iter))
-           (ans   (mapcar (um:rcurry 'nth xy-pairs) combo)))
-      (assert (= npairs (length (first ans))))
-      ;; protect aganist too many calls - just recycle
-      (setf iter (mod (1+ iter) nel))
-      ans)))
-
-(defmethod generate-new-combo ((ptries list) xy-pairs npairs)
-  ;; given a list of N items, we want to select a K-tuple of them (K
-  ;; <= N), where that tuple has never been selected during prior
-  ;; calls. Each item must be a tuple with its key as the car.
-  ;;
-  ;; Argument ptries is a cons cell containing the history list of
-  ;; prior selections.
-  ;;
-  ;; Worst case will be with our 6 (or 7) nodes minimum configuration,
-  ;;     N = 6, F = 1, K = 2, T = 5, max trials = 10 (= 2*T)
-  ;;     N = 7, F = 2, K = 3, T = 5, max trials = 10
-  ;; meaning that there will be 5 tuples to choose from, and we
-  ;; potentially need all 10 of the possible combinations of pairs. It
-  ;; could take a while to randomly find the last unique pair.
-  ;;
-  (let ((ntrials 0))
-    (um:nlet-tail again ()
-      (um:nlet-tail iter ((count npairs)
-                          (pairs xy-pairs)
-                          (keys  nil)
-                          (ans   nil))
-        (incf ntrials)
-        (if (zerop count)
-            (let ((skeys (sort keys '<)))
-              (if (find skeys (car ptries) :test 'equal)
-                  (again)
-                (progn
-                  (push skeys (car ptries))
-                  (values ans ntrials))))
-          ;; else - perform a selection
-          (multiple-value-bind (item _ rest) (choose pairs)
-            (declare (ignore _))
-            (iter (1- count)
-                  rest
-                  (cons (car item) keys)
-                  (cons item ans)))
-          )))))
-
-#|
-;; test our worst case possibility
-(let* ((ptrials (list nil))
-       (items   '((1 a) (2 b) (3 c) (4 d) (5 e)))
-       (maxtrials 0)
-       (combos  (loop repeat 10 collect
-                      (multiple-value-bind (ans ntrials)
-                          (generate-new-combo items 2 ptrials)
-                        (setf maxtrials (max ntrials maxtrials))
-                        ans))))
-  (inspect (list maxtrials combos ptrials)))
-|#
-
-;; ----------------------------------------------------
-;; for debug checking that we got the right answer
-#+:rh-testing
-(defun check-rh (for rand)
-  (let* ((forkey  (int for))
-         (chkval  (gethash forkey *check-rh*)))
-    (assert (int= chkval rand))))
-;; ----------------------------------------------------
-
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   ;; Each node gets this message from other nodes in the group, and
@@ -605,8 +473,7 @@ THE SOFTWARE.
                    (my-group        rh-group-info-group)
                    (my-session      rh-group-info-session)
                    (thresh          rh-group-info-thresh)
-                   (share-thresh    rh-group-info-share-thr)
-                   (my-commits      rh-group-info-commits)) *rh-state*
+                   (share-thresh    rh-group-info-share-thr)) *rh-state*
     (when (and
            (int= session my-session)              ;; correct session?
            (find from my-group :test 'int=)       ;; from member of my group?
@@ -624,111 +491,21 @@ THE SOFTWARE.
                               :test 'int=)))
           (let ((from-index (1+ (position from my-group :test 'int=))))
             (push (list from from-index decr-share) for-shares)
-            (setf (gethash for-key my-shares) for-shares)
-            (when (= (1+ for-count) thresh)
-              (let* ((q       (pbc:get-order))
-                     (xypairs (mapcar 'cdr for-shares))
-                     (rands   (make-hash-table))
-                     (ptries  (init-combos (length my-group))))
-                (um:nlet-tail iter ((trial 0))
-                  (if (> trial (* 2 thresh))
-                      (setf ptries nil) ;; give up...
-                    ;; else
-                    (let* ((combo (generate-new-combo ptries xypairs share-thresh))
-                           (rand  (reduce-lagrange-interpolate combo q))
-                           (rkey  (int rand))
-                           (count (1+ (gethash rkey rands 0))))
-                      ;; -----------------------------------
-                      ;; for debug checking that we got the right answer
-                      ;; (when (int= me (car my-group))
-                      ;;   (check-rh for rand))
-                      ;; -----------------------------------
-                      
-                      (setf (gethash rkey rands) count)
-                      (if (= count thresh)
-                          (setf ptries rand) ;; achieved BFT randomness
-                        ;; else - one more time
-                        (iter (1+ trial))))
-                    ))
-                (when ptries
+            (if (= (1+ for-count) thresh)
+                (let* ((q       (pbc:get-order))
+                       (xypairs (mapcar 'cdr for-shares))
+                       ;; since share-thresh = byz-fail + 1, any
+                       ;; collection of share-thresh values will include
+                       ;; at least one honest random contribution
+                       (combo   (generate-combo xypairs share-thresh))
+                       (rand    (reduce-lagrange-interpolate combo q)))
                   (apply 'send my-group-leader
-                         (make-signed-subgroup-randomness-message session for me ptries
-                                                                  (node-skey node)))
-                  ;; ----------------------------------------------------
-                  ;; for debug checking that we got the right answer
-                  #+:rh-testing
-                  (when (int= me (car my-group))
-                    (check-rh for ptries))
-                  ;; ----------------------------------------------------
-                  ))))
-          )))))
-
-#|
-;; ------------------------------------------------------
-;; To Prove: (We only need to worry when small numbers are in use)
-;;   N Nodes,
-;;   MaxFail F = Floor((N-1)/3),
-;;   Sharing thresh K = F + 1
-;;   BFT Threshold T = N - F
-;;   Nbr combos for BFT sharing:
-;;      C(T, K) = T! / (K! * (T-K)!)
-;;              = C(N-F, F+1)
-;;              = (N-F)! / ((F+1)! * (N-2*F-1)!)
-;;
-;; Look for N where C(T,K) >= 2*T
-;;
-;; We use probabilistic unique groupings until BFT Threshold
-;; derivations of randomness agree with each other, or else a maximum
-;; of 2*BFT Threshold number of trials.
-;;
-;; So look for what conditions assure that number of combos available
-;; equal or exceed twice the threshold. Only need to worry for small
-;; configurations. By the time we reach 40 nodes in a group, we have
-;; more than 20M possible combos.
-;;
-;; Looks like the minimum configuration is 6 nodes.
-
-(defun factorial (n &optional (nstop 1))
-  (declare (integer n nstop))
-  (if (zerop n)
-      1
-    (um:nlet-tail iter ((n n)
-                        (ans 1))
-      (if (<= n nstop)
-          ans
-        (iter (1- n) (* n ans))))))
-  
-(defun combinations (n m)
-  ;; combinations of n items, taken m at a time
-  (declare (integer n m))
-  (assert (>= n m))
-  (let ((excess (- n m)))
-    (/ (factorial n (max m excess))
-       (factorial (min m excess)))))
-
-;; show table of thresholds by group size
-(loop for n from 1 to 40 do
-      (multiple-value-bind (byz-frac byz-thr share-thr)
-          (byz-params n)
-        (let* ((combos (combinations byz-thr share-thr)))
-          (with-standard-io-syntax
-            (pprint
-             (list :nodes  n
-                   :nfail  byz-frac
-                   :kshare share-thr
-                   :thresh byz-thr
-                   :combos combos))))))
-
-;; ------------------------------------------------------
-
-(let* ((ptries (list nil))
-       (pairs  '((1 a) (2 b) (3 c) (4 d))))
-  (loop repeat 6 collect
-        (generate-new-combo pairs 2 ptries))
-  (pprint ptries))
-
-;; ------------------------------------------------------
-|#
+                         (make-signed-subgroup-randomness-message session for me rand
+                                                                  (node-skey node))))
+              ;; else
+              (setf (gethash for-key my-shares) for-shares))
+            ))
+        ))))
 
 ;; ----------------------------------------------------------------------------
 
@@ -749,7 +526,7 @@ THE SOFTWARE.
     (pbc:check-hash skel sig from)))
 
 (defstruct rand-entry
-  froms rands)
+  froms rand)
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session for from rand sig)
   ;; Group leaders perform this code.
@@ -779,37 +556,41 @@ THE SOFTWARE.
              (validate-signed-subgroup-randomness-message session for from rand sig)) ;; valid message?
 
         (let* ((for-key   (int for))
-               (for-rands (gethash for-key my-rands))
-               (rkey      (int rand)))
+               (for-rands (gethash for-key my-rands)))
           (cond (for-rands
                  (with-accessors ((for-froms  rand-entry-froms)
-                                  (for-counts rand-entry-rands)) for-rands
-                   (unless (find from for-froms :test 'int=) ;; ignore duplicates
-                     (let* ((count (1+ (gethash rkey for-counts 0)))) ;; incr count for this value
-                       (push from for-froms)                          ;; retain record of who submitted it
-                       (setf (gethash rkey for-counts) count)
-                       (when (= count my-bft-thresh) ;; when one rand values has BFT count
-                         (push rand my-entropy)      ;; copy that rand value into entropy list
-                         (when (= (length my-entropy) my-bft-thresh) ;; when entropy list has BFT count
-                           (let ((group-rand  nil))  ;; compute group entropy
-                             (dolist (rand my-entropy)
-                               (setf group-rand (if group-rand
-                                                    (pbc:mul-gts rand group-rand)
-                                                  rand)))
-                             (apply 'send my-super   ;; send to beacon
-                                    (make-signed-group-randomness-message session me group-rand
-                                                                          (node-skey node)))
-                             )))))))
-
+                                  (for-rand   rand-entry-rand)) for-rands
+                   (let ((for-count (length for-froms)))
+                     (unless (or (find from for-froms :test 'int=) ;; ignore duplicates
+                                 (>= for-count my-bft-thresh))
+                       (push from for-froms)
+                       (setf for-rand (mul-gts rand for-rand))
+                       (when (= (1+ for-count) my-bft-thresh)
+                         (cond (my-entropy
+                                (with-accessors ((entropy-froms  rand-entry-froms)
+                                                 (entropy-rand   rand-entry-rand)) my-entropy
+                                  (let ((entropy-count (length entropy-froms)))
+                                    (when (< entropy-count my-bft-thresh)
+                                      (push for entropy-froms)
+                                      (setf entropy-rand (mul-gts entropy-rand for-rand))
+                                      (when (= (1+ entropy-count) my-bft-thresh)
+                                        (apply 'send my-super   ;; send to beacon
+                                               (make-signed-group-randomness-message session me entropy-rand
+                                                                                     (node-skey node))))
+                                      ))))
+                               (t
+                                (setf my-entropy
+                                      (make-rand-entry
+                                       :froms (list for)
+                                       :rand  for-rand)))
+                               ))))))
+                
                 (t
-                 (let ((tbl  (make-hash-table)))
-                   (setf (gethash rkey tbl)  1
-                         (gethash for-key my-rands)
-                         (make-rand-entry
-                          :froms (list from)
-                          :rands tbl))))
-                ))
-        ))))
+                 (setf (gethash for-key my-rands)
+                       (make-rand-entry
+                        :froms (list from)
+                        :rand  rand)))
+                ))))))
 
 ;; ------------------------------------------------------------------
 
@@ -844,32 +625,46 @@ THE SOFTWARE.
   (with-accessors ((my-groups   rh-group-info-groups)
                    (my-tentropy rh-group-info-tentropy)
                    (my-session  rh-group-info-session)) *rh-state*
-    (let* ((ngrps      (length my-groups))
-           (byz-frac   (floor (1- ngrps) 3))
-           (bft-thresh (- ngrps byz-frac)))
+    (with-accessors ((entropy-froms  rand-entry-froms)
+                     (entropy-rand   rand-entry-rand)) my-tentropy
       
-      (when (and
-             my-groups  ;; only *BEACON* should have this
-             (int= session my-session)                             ;; correct session?
-             (find from (mapcar 'first my-groups) :test 'int=)     ;; should only arrive from group leaders
-             (not (find from my-tentropy :key 'first :test 'int=)) ;; have not seen this group leader yet?
-             (< (length my-tentropy) bft-thresh)                   ;; still awaiting a BFT thresh
-             (validate-signed-group-randomness-message session from rand sig)) ;; valid message?
+    (let* ((ngrps         (length my-groups))
+           (byz-frac      (floor (1- ngrps) 3))
+           (bft-thresh    (- ngrps byz-frac))
+           (entropy-count (if my-tentropy
+                              (length entropy-froms)
+                            0)))
+        (when (and
+               my-groups                       ;; only *BEACON* should have this
+               (< entropy-count bft-thresh)    ;; still awaiting contributions?
+               (int= session my-session)                         ;; correct session?
+               (find from (mapcar 'first my-groups) :test 'int=) ;; should only arrive from group leaders
+               (not (and my-tentropy                             ;; not already seen?
+                         (find from entropy-froms :test 'int=)))
+               (validate-signed-group-randomness-message session from rand sig)) ;; valid message?
 
-        (push (list from rand) my-tentropy)
-        (when (= (length my-tentropy) bft-thresh)
-          (let* ((trand (reduce (um:compose 'mul-gts 'second) (cdr my-tentropy)
-                                :initial-value (second (car my-tentropy))))
-                 (seed  (float (/ (int (hash/256 trand))
-                                  #.(ash 1 256))
-                               1d0)))
-            ;; ------------------------------------------------------------------
-            ;; while debugging, don't run actual elections, uncomment for prodution
-            ;; 
-            ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
-            (pr (format nil "~%Hold election from RandHound: ~A" seed))
-            (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
-            ;; ------------------------------------------------------------------
-            ))))))
+          (if my-tentropy
+              (progn
+                (push from entropy-froms)
+                (setf entropy-rand (mul-gts rand entropy-rand)))
+            ;; else
+            (setf my-tentropy
+                  (make-rand-entry
+                   :froms (list from)
+                   :rand  rand)))
 
+          (with-accessors ((entropy-rand   rand-entry-rand)) my-tentropy
+            (when (= (1+ entropy-count) bft-thresh)
+              (let* ((seed  (float (/ (int (hash/256 entropy-rand))
+                                      #.(ash 1 256))
+                                   1d0)))
+                ;; ------------------------------------------------------------------
+                ;; while debugging, don't run actual elections, uncomment for prodution
+                ;; 
+                ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
+                (pr (format nil "~%Hold election from RandHound: ~A" seed))
+                (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
+                ;; ------------------------------------------------------------------
+                ))))))))
+  
 ;; ------------------------------------------------------------------
