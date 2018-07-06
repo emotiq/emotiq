@@ -84,6 +84,57 @@ To effect the configuration of this setup, execute the forms in
 (load (asdf:system-relative-pathname :emotiq "../etc/setup-emotiq-quicklisp.lisp"))
 ```
 
+# Install the dependencies
+
+After Quicklisp has been installed and configured, then issuing
+```lisp
+(ql:quickload :emotiq/sim)
+```
+will download all the dependencies needed by the tests gathered into
+the `emotiq/sim` ASDF system.
+
+# Test
+
+To evaluate form to test, which also loads, the system:
+```lisp
+(ql:quickload :lisp-unit)       ;;; this requirement will be removed soon
+(asdf:test-system :emotiq)
+```
+
+At end you should see a result like
+```
+    Unit Test Summary
+     | 12 assertions total
+     | 12 passed
+     | 0 failed
+     | 0 execution errors
+     | 0 missing tests
+```
+The counts of assertions/passed should go up over time, and should
+stay equal, with other counts staying zero.
+
+# Running
+
+To run the single node simulator, see the instructions in
+[Running simulator](src/simulation.md).
+
+### Notes on missing dependencies
+
+We have many ASDF descriptions within this repository whose
+dependencies may need to be satisfied by via `ql:quickload`.
+
+Currently we are working on many systems simultaneously, most noteworthy
+among them being the work in the `cosi-bls` system.
+
+If in exploring the code one finds a missing dependency, say for the
+system `cosi-bls`, a simple
+```lisp
+(ql:quickload :cosi-bls)
+```
+
+should satisfy the dependencies.  (TODO: `cl:restart` for missing
+dependencies).
+
 ### Notes on building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
@@ -126,56 +177,7 @@ to force the asdf `prepare-op` via so:
 ```
 :bangbang: Not needed during normal workflow
 
-# Running
-
-After Quicklisp has been installed and configured, then issuing
-```lisp
-(ql:quickload :emotiq/sim)
-```
-
-will download all the dependencies needed by the tests gathered into
-the `emotiq/sim` ASDF system.
-
-To run the single node simulator, see the instructions in
-[Running simulator](src/simulation.md).
-
-### Notes on missing dependencies
-
-We have many ASDF descriptions within this repository whose
-dependencies may need to be satisfied by via `ql:quickload`.
-
-Currently we are working on many systems simultaneously, most noteworthy
-among them being the work in the `cosi-bls` system.
-
-If in exploring the code one finds a missing dependency, say for the
-system `cosi-bls`, a simple
-```lisp
-(ql:quickload :cosi-bls)
-```
-
-should satisfy the dependencies.  (TODO: `cl:restart` for missing
-dependencies).
-
-# Test
-
-To Evaluate form to test, which also loads, the system:
-```lisp
-(ql:quickload :lisp-unit)
-(asdf:test-system :emotiq)
-```
-
-At end you should see a result like
-```
-    Unit Test Summary
-     | 12 assertions total
-     | 12 passed
-     | 0 failed
-     | 0 execution errors
-     | 0 missing tests
-```
-The counts of assertions/passed should go up over time, and should
-stay equal, with other counts staying zero.
-
+----
 All pushes to the source tree result in "Continuous Integration" build
 by Gitlab CI: <https://gitlab.aws.emotiq.ch/emotiq/emotiq/pipelines>.
 
