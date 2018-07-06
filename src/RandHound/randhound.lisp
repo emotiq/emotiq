@@ -315,6 +315,8 @@ THE SOFTWARE.
                           :test 'int=
                           :key  'first))
                (chk-proofs proofs chks from))   ;; valid collection of proofs?
+
+          (push (from commit) my-commits)
           (multiple-value-bind (byz-frac byz-thr share-thr)
               (byz-params ngrp)
             (declare (ignore byz-frac byz-thr))
@@ -332,7 +334,6 @@ THE SOFTWARE.
               (assert (zerop (int rschk)))
               
               (when (zerop (int rschk))
-                (push (list from commit) my-commits)
                 (let* ((my-index     (position me my-group
                                                :test 'int=))
                        (my-share     (elt encr-shares my-index))
@@ -573,7 +574,7 @@ THE SOFTWARE.
                               (length entropy-froms)
                             0)))
         (when (and
-               my-groups                       ;; only *BEACON* should have this
+               my-groups                         ;; only *BEACON* should have this
                (< entropy-count share-thresh)    ;; still awaiting contributions?
                (int= session my-session)                         ;; correct session?
                (find from (mapcar 'first my-groups) :test 'int=) ;; should only arrive from group leaders
