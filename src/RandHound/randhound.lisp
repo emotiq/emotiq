@@ -120,6 +120,7 @@ THE SOFTWARE.
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
 (defvar *rh-start*  nil) ;; record time of start so we can report run times.
+(defvar *check-rh* (make-hash-table)) ;; holds values of secret randomness for cheching its recovery
 
 (defun start-randhound-round ()
   ;; The Actor running the election calls this function to start up a
@@ -137,6 +138,8 @@ THE SOFTWARE.
   ;; nodes.
   ;;
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
+  (clrhash *check-rh*)
+  
   (let* ((node (current-node))
          (me   (node-pkey node)))
 
@@ -264,7 +267,30 @@ THE SOFTWARE.
                                       :rval        rval))))
 
         (broadcast-grp+me msg :graphID graph)
+
+        ;; -----------------------------------------------------------
+        ;; for checking debugging
+        ;; (let ((mykey (int me)))
+        ;;   (setf (gethash mykey *check-rh*)
+        ;;         (compute-pairing (mul-pt-zr (get-g1) (poly q coffs 0))
+        ;;                          (get-g2))))
+        ;; ------------------------------------------------------------
         ))))
+
+#|
+(let* ((q     (get-order))
+       (coffs '(115 32 13))
+       (ps    (mapcar (um:curry 'poly  q coffs) '(0 1 2 3)))
+       (shs   (mapcar (lambda (p)
+                        (compute-pairing (mul-pt-zr (get-g1) p)
+                                         (get-g2)))
+                      ps))
+       (xs    '(1 2 3))
+       (pairs (mapcar 'list xs (cdr shs)))
+       (chk   (reduce-lagrange-interpolate pairs q)))
+  (int= (car shs) chk))
+
+|#
 
 ;; ----------------------------------------------------------------------------
 
@@ -321,7 +347,7 @@ THE SOFTWARE.
               (let* ((my-index     (position me my-group
                                              :test 'int=))
                      (my-share     (elt encr-shares my-index))
-                     (skey         (node-skey (current-node)))
+                     (skey         (node-skey node))
                      (decr-share   (compute-pairing
                                     (mul-pt-zr (pbc:get-g1)
                                                (inv-zr (int skey)))
@@ -331,6 +357,10 @@ THE SOFTWARE.
                                                       (m/ (int skey))))
                                     my-share))
                      (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
+                ;; ----------------------------------------------------------
+                ;; (assert (int= decr-chkl decr-chkr))
+                ;; ----------------------------------------------------------
+
                 (when (int= decr-chkl decr-chkr)
                   (broadcast-grp+me (make-signed-decr-share-message
                                      session me from decr-share skey)
@@ -394,6 +424,14 @@ THE SOFTWARE.
                 (cons pair ans)))
         ))
     ))
+
+  ;; ----------------------------------------------------
+  ;; for debug checking that we got the right answer
+(defun check-rh (for rand)
+  (let* ((forkey  (int for))
+         (chkval  (gethash forkey *check-rh*)))
+    (assert (int= chkval rand))))
+;; ----------------------------------------------------
 
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
   ;; Each node gets this message from other nodes in the group, and
@@ -460,9 +498,15 @@ THE SOFTWARE.
                     (let* ((combo (generate-new-combo xypairs share-thresh ptries))
                            (rand  (reduce-lagrange-interpolate combo q))
                            (rkey  (int rand))
-                           (count (gethash rkey rands 0)))
-                      (if (>= (setf (gethash rkey rands) (1+ count))
-                              thresh)
+                           (count (1+ (gethash rkey rands 0))))
+                      ;; -----------------------------------
+                      ;; for debug checking that we got the right answer
+                      ;; (when (int= me (car my-group))
+                      ;;   (check-rh for rand))
+                      ;; -----------------------------------
+                      
+                      (setf (gethash rkey rands) count)
+                      (if (= count thresh)
                           (setf ptries rand) ;; achieved BFT randomness
                         ;; else - one more time
                         (iter (1+ trial))))
@@ -470,8 +514,13 @@ THE SOFTWARE.
                 (when ptries
                   (apply 'send my-group-leader
                          (make-signed-subgroup-randomness-message session for me ptries
-                                                                  (node-skey (current-node)))))
-                )))
+                                                                  (node-skey node)))
+                  ;; ----------------------------------------------------
+                  ;; for debug checking that we got the right answer
+                  ;; (when (int= me (car my-group))
+                  ;;   (check-rh for ptries))
+                  ;; ----------------------------------------------------
+                  ))))
           )))))
 
 #|
@@ -661,11 +710,11 @@ THE SOFTWARE.
       
       (when (and
              my-groups  ;; only *BEACON* should have this
-             (int= session my-session)
-             (find from (mapcar 'first my-groups) :test 'int=) ;; should only arrive from group leaders
-             (not (find from my-tentropy :key 'first :test 'int=))
-             (< (length my-tentropy) bft-thresh)
-             (validate-signed-group-randomness-message session from rand sig))
+             (int= session my-session)                             ;; correct session?
+             (find from (mapcar 'first my-groups) :test 'int=)     ;; should only arrive from group leaders
+             (not (find from my-tentropy :key 'first :test 'int=)) ;; have not seen this group leader yet?
+             (< (length my-tentropy) bft-thresh)                   ;; still awaiting a BFT thresh
+             (validate-signed-group-randomness-message session from rand sig)) ;; valid message?
 
         (push (list from rand) my-tentropy)
         (when (= (length my-tentropy) bft-thresh)
@@ -678,9 +727,9 @@ THE SOFTWARE.
             ;; while debugging, don't run actual elections, uncomment for prodution
             ;; 
             ;; (broadcast+me (make-signed-election-message *beacon* seed (node-skey (current-node))))
-            ;; ------------------------------------------------------------------
             (pr (format nil "~%Hold election from RandHound: ~A" seed))
             (pr (format nil "~%Elapsed Time = ~A" (- (get-universal-time) *rh-start*)))
+            ;; ------------------------------------------------------------------
             ))))))
 
 ;; ------------------------------------------------------------------
