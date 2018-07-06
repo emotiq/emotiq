@@ -84,7 +84,7 @@ To effect the configuration of this setup, execute the forms in
 (load (asdf:system-relative-pathname :emotiq "../etc/setup-emotiq-quicklisp.lisp"))
 ```
 
-### Building the native libraries required by CRYPTO-PAIRINGS
+### Notes on building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
 curve (PBC) cryptography, which in turn depends on GMP library.
@@ -120,6 +120,7 @@ to force the asdf `prepare-op` via so:
 ```lisp
 (asdf:make :crypto-pairings)
 ```
+:heavy_exclamation_mark: Not needed during normal workflow
 
 # Running
 
@@ -132,7 +133,9 @@ will download all the dependencies needed by the tests gathered into
 the `emotiq/sim` ASDF system.
 
 To run the single node simulator, see the instructions in
-`src/simulation.md`.
+[Running simulator](src/simulation.md).
+
+### Notes on missing dependencies
 
 We have many ASDF descriptions within this repository whose
 dependencies may need to be satisfied by via `ql:quickload`.
@@ -153,6 +156,7 @@ dependencies).
 
 To Evaluate form to test, which also loads, the system:
 ```lisp
+(ql:quickload :lisp-unit)
 (asdf:test-system :emotiq)
 ```
 
