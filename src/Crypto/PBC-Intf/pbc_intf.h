@@ -33,46 +33,46 @@ THE SOFTWARE.
 
 extern "C" {
   long echo(long nel, char* msg_in, char* msg_out);
-  long init_pairing(char* param_str, long nel, long* psize);
-  long set_g2(unsigned char* pbuf);
-  long set_g1(unsigned char* pbuf);
-  void make_key_pair(unsigned char* pskey, unsigned char* ppkey,
+  long init_pairing(long ctxt, char* param_str, long nel, long* psize);
+  long set_g2(long ctxt, unsigned char* pbuf);
+  long set_g1(long ctxt, unsigned char* pbuf);
+  void make_key_pair(long ctxt, unsigned char* pskey, unsigned char* ppkey,
 		     unsigned char* phash, long nhash);
-  void sign_hash(unsigned char* psig, unsigned char* pskey,
+  void sign_hash(long ctxt, unsigned char* psig, unsigned char* pskey,
 		 unsigned char* phash, long nhash);
-  void make_public_subkey(unsigned char* abuf,
+  void make_public_subkey(long ctxt, unsigned char* abuf,
 			  unsigned char* pkey,
 			  unsigned char* phash_id, long nhash);
-  void make_secret_subkey(unsigned char* abuf,
+  void make_secret_subkey(long ctxt, unsigned char* abuf,
 			  unsigned char* skey,
 			  unsigned char* phash_id, long nhash);
-  void compute_pairing(unsigned char* gtbuf,
+  void compute_pairing(long ctxt, unsigned char* gtbuf,
 		       unsigned char* hbuf,
 		       unsigned char* gbuf);
-  void sakai_kasahara_encrypt(unsigned char* rbuf, // R result in G2
+  void sakai_kasahara_encrypt(long ctxt, unsigned char* rbuf, // R result in G2
 			      unsigned char* pbuf, // pairing result in GT
 			      unsigned char* pkey, // public subkey in G2
 			      unsigned char* phash, long nhash);
-  void sakai_kasahara_decrypt(unsigned char* pbuf, // pairing result in GT
+  void sakai_kasahara_decrypt(long ctxt, unsigned char* pbuf, // pairing result in GT
 			      unsigned char* rbuf, // R pt in G2
 			      unsigned char* sbuf); // secret subkey in G1
-  long sakai_kasahara_check(unsigned char* rkey, // R in G2
+  long sakai_kasahara_check(long ctxt, unsigned char* rkey, // R in G2
 			    unsigned char* pkey, // public subkey in G2
 			    unsigned char* phash, long nhash);
-  long get_g2(unsigned char* pbuf, long buflen);
-  long get_g1(unsigned char* pbuf, long buflen);
-  long check_signature(unsigned char* psig,
+  long get_g2(long ctxt, unsigned char* pbuf, long buflen);
+  long get_g1(long ctxt, unsigned char* pbuf, long buflen);
+  long check_signature(long ctxt, unsigned char* psig,
 		       unsigned char* phash, long nhash,
 		       unsigned char *pkey);
-  void mul_G1_pts(unsigned char* pt1, unsigned char* pt2);
-  void mul_G2_pts(unsigned char* pt1, unsigned char* pt2);
-  void add_Zr_vals(unsigned char* zr1, unsigned char* zr2);
-  void inv_Zr_val(unsigned char* zr);
-  void exp_G1z(unsigned char* g1, unsigned char* zr);
-  void exp_G2z(unsigned char* g2, unsigned char* zr);
-  void get_G1_from_hash(unsigned char *g1_pt, unsigned char *phash, long nhash);
-  void get_G2_from_hash(unsigned char *g2_pt, unsigned char *phash, long nhash);
-  void get_Zr_from_hash(unsigned char *zr_val, unsigned char *phash, long nhash);
+  void mul_G1_pts(long ctxt, unsigned char* pt1, unsigned char* pt2);
+  void mul_G2_pts(long ctxt, unsigned char* pt1, unsigned char* pt2);
+  void add_Zr_vals(long ctxt, unsigned char* zr1, unsigned char* zr2);
+  void inv_Zr_val(long ctxt, unsigned char* zr);
+  void exp_G1z(long ctxt, unsigned char* g1, unsigned char* zr);
+  void exp_G2z(long ctxt, unsigned char* g2, unsigned char* zr);
+  void get_G1_from_hash(long ctxt, unsigned char *g1_pt, unsigned char *phash, long nhash);
+  void get_G2_from_hash(long ctxt, unsigned char *g2_pt, unsigned char *phash, long nhash);
+  void get_Zr_from_hash(long ctxt, unsigned char *zr_val, unsigned char *phash, long nhash);
 }
 
 // -- end of pbc_intf.h -- //

@@ -168,6 +168,7 @@ THE SOFTWARE.
 ;; Init interface - this must be performed first
 
 (cffi:defcfun ("init_pairing" _init-pairing) :long
+  (context     :long)
   (param-text  :pointer :unsigned-char)
   (ntext       :long)
   (psizes      :pointer :long))
@@ -176,10 +177,12 @@ THE SOFTWARE.
 ;; Query interface
 
 (cffi:defcfun ("get_g2" _get-g2) :long
+  (context     :long)
   (pbuf        :pointer :void)
   (nbuf        :long))
 
 (cffi:defcfun ("get_g1" _get-g1) :long
+  (context     :long)
   (pbuf        :pointer :void)
   (nbuf        :long))
 
@@ -187,27 +190,32 @@ THE SOFTWARE.
 ;; Setter interface
 
 (cffi:defcfun ("set_g2" _set-g2) :long
+  (context     :long)
   (pbuf   :pointer :unsigned-char))
 
 (cffi:defcfun ("set_g1" _set-g1) :long
+  (context     :long)
   (pbuf   :pointer :unsigned-char))
 
 ;; -------------------------------------------------
 ;; Keying interface
 
 (cffi:defcfun ("make_key_pair" _make-key-pair) :void
+  (context     :long)
   (skbuf  :pointer :unsigned-char)
   (pkbuf  :pointer :unsigned-char)
   (hbuf   :pointer :unsigned-char)
   (nhash  :long))
 
 (cffi:defcfun ("make_public_subkey" _make-public-subkey) :void
+  (context     :long)
   (abuf   :pointer :unsigned-char)
   (pbuf   :pointer :unsigned-char)
   (hbuf   :pointer :unsigned-char)
   (hlen   :long))
 
 (cffi:defcfun ("make_secret_subkey" _make-secret-subkey) :void
+  (context     :long)
   (abuf   :pointer :unsigned-char)
   (sbuf   :pointer :unsigned-char)
   (hbuf   :pointer :unsigned-char)
@@ -215,6 +223,7 @@ THE SOFTWARE.
 
 (cffi:defcfun ("sakai_kasahara_encrypt" _sakai-kasahara-encrypt) :void
   ;; aka SAKKE, IETF RFC 6508
+  (context     :long)
   (rbuf   :pointer :unsigned-char) ;; returned R point in G2
   (pbuf   :pointer :unsigned-char) ;; returned pairing for encryption in GT
   (pkey   :pointer :unsigned-char) ;; public subkey in G2
@@ -223,12 +232,14 @@ THE SOFTWARE.
 
 (cffi:defcfun ("sakai_kasahara_decrypt" _sakai-kasahara-decrypt) :void
   ;; aka SAKKE, IETF RFC 6508
+  (context     :long)
   (pbuf   :pointer :unsigned-char)  ;; returned pairing for decryptin in GT
   (rbuf   :pointer :unsigned-char)  ;; R point in G2
   (skey   :pointer :unsigned-char)) ;; secret subkey in G1
 
 (cffi:defcfun ("sakai_kasahara_check" _sakai-kasahara-check) :long
   ;; aka SAKKE, IETF RFC 6508
+  (context     :long)
   (rbuf   :pointer :unsigned-char)  ;; R point in G2
   (pkey   :pointer :unsigned-char)  ;; public subkey in G2
   (hbuf   :pointer :unsigned-char)  ;; hash(ID, msg)
@@ -238,12 +249,14 @@ THE SOFTWARE.
 ;; BLS Signatures
 
 (cffi:defcfun ("sign_hash" _sign-hash) :void
+  (context     :long)
   (sig    :pointer :unsigned-char)
   (skbuf  :pointer :unsigned-char)
   (pbuf   :pointer :unsigned-char)
   (nbuf   :long))
 
 (cffi:defcfun ("check_signature" _check-signature) :long
+  (context     :long)
   (psig   :pointer :unsigned-char)
   (phash  :pointer :unsigned-char)
   (nhash  :long)
@@ -253,29 +266,36 @@ THE SOFTWARE.
 ;; Curve math ops
 
 (cffi:defcfun ("mul_G1_pts" _mul-g1-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_G2_pts" _mul-g2-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("add_Zr_vals" _add-zr-vals) :void
+  (context     :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
+  (context     :long)
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("exp_G1z" _exp-G1z) :void
+  (context     :long)
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("exp_G2z" _exp-G2z) :void
+  (context     :long)
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("compute_pairing" _compute-pairing) :void
+  (context     :long)
   (gtbuf :pointer :unsigned-char)  ;; result returned here
   (hbuf  :pointer :unsigned-char)
   (gbuf  :pointer :unsigned-char))
@@ -283,16 +303,19 @@ THE SOFTWARE.
 ;; ----------------------------------------------------
 
 (cffi:defcfun ("get_G1_from_hash" _get-g1-from-hash) :void
+  (context     :long)
   (g1buf :pointer :unsigned-char)
   (hbuf  :pointer :unsigned-char)
   (nhash :long))
 
 (cffi:defcfun ("get_G2_from_hash" _get-g2-from-hash) :void
+  (context     :long)
   (g2buf :pointer :unsigned-char)
   (hbuf  :pointer :unsigned-char)
   (nhash :long))
 
 (cffi:defcfun ("get_Zr_from_hash" _get-zr-from-hash) :void
+  (context     :long)
   (zrbuf :pointer :unsigned-char)
   (hbuf  :pointer :unsigned-char)
   (nhash :long))
@@ -389,6 +412,7 @@ not belonging to any field"))
 (defstruct (full-curve-params
             (:include curve-params))
   ;; cached values filled in at init
+  context
   order g1-len g2-len zr-len gt-len)
 
 ;; ---------------------------------------------------------------------------------------
@@ -686,6 +710,7 @@ comparison.")
 (define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
 (define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
 
+(define-symbol-macro *context*       (full-curve-params-context *curve*)) ;; which context of PBC? (0..15)
 (define-symbol-macro *curve-order*   (full-curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
 (define-symbol-macro *g1-size*       (full-curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
 (define-symbol-macro *g2-size*       (full-curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
@@ -724,7 +749,7 @@ comparison.")
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
 
-(defun init-pairing (&optional (params nil params-supplied-p))
+(defun init-pairing (&key (params nil params-supplied-p) (context 0))
   "Initialize the pairings lib.
 
   If params not specified and we haven't been called yet, or specified
@@ -741,8 +766,8 @@ also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
   (mpcompat:with-lock (*crypto-lock*)
     (let ((prev   *curve*)
-          (params (or params
-                      *curve-fr449-params*)))
+          (cparams (or params
+                       *curve-fr449-params*)))
       ;; If params not specified, and we have already been called,
       ;; just skip doing anything.
       (when (or params-supplied-p
@@ -751,16 +776,17 @@ SMP access. Everything else should be SMP-safe."
 	(load-dlls)
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
-                         (g2   curve-params-g2)) params
+                         (g2   curve-params-g2)) cparams
           (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
-              (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
+              (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
               (setf *curve* (make-full-curve-params
-                             :name          (curve-params-name         params)
-                             :pairing-text  (curve-params-pairing-text params)
-                             :g1            (curve-params-g1           params)
-                             :g2            (curve-params-g2           params))
+                             :name          (curve-params-name         cparams)
+                             :pairing-text  (curve-params-pairing-text cparams)
+                             :g1            (curve-params-g1           cparams)
+                             :g2            (curve-params-g2           cparams)
+                             :context       context)
                     *g1-size*  (cffi:mem-aref ansbuf :long 0)
                     *g2-size*  (cffi:mem-aref ansbuf :long 1)
                     *gt-size*  (cffi:mem-aref ansbuf :long 2)
@@ -830,7 +856,7 @@ SMP access. Everything else should be SMP-safe."
   "Internal routine to read a (possibly compressed) element from the C
 library."
   (with-fli-buffers ((buf nb))
-    (assert (eql nb (funcall get-fn buf nb)))
+    (assert (eql nb (funcall get-fn *context* buf nb)))
     (xfer-foreign-to-lisp buf nb)))
               
 ;; -------------------------------------------------
@@ -894,7 +920,7 @@ library."
   (let ((nb  (hash-length hash)))
     (with-fli-buffers ((ptbuf  *g1-size*)
                        (hbuf   nb  hash))
-      (_get-g1-from-hash ptbuf hbuf nb)
+      (_get-g1-from-hash *context* ptbuf hbuf nb)
       (make-instance 'g1-cmpr
                      :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
       )))
@@ -904,7 +930,7 @@ library."
   (let ((nb (hash-length hash)))
   (with-fli-buffers ((ptbuf  *g2-size*)
                      (hbuf   nb  hash))
-    (_get-g2-from-hash ptbuf hbuf nb)
+    (_get-g2-from-hash *context* ptbuf hbuf nb)
     (make-instance 'g2-cmpr
                    :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
     )))
@@ -914,7 +940,7 @@ library."
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
                        (hbuf   nb  hash))
-      (_get-zr-from-hash zbuf hbuf nb)
+      (_get-zr-from-hash *context* zbuf hbuf nb)
       (make-instance 'zr
                      :val  (xfer-foreign-to-lisp zbuf *zr-size*))
       )))
@@ -926,7 +952,7 @@ library."
   (mpcompat:with-lock (*crypto-lock*)
     (let ((bytes (crypto-val-vec x)))
       (with-fli-buffers ((buf nb bytes))
-        (funcall set-fn buf)))))
+        (funcall set-fn *context* buf)))))
 
 (defmethod set-generator ((g1 g1-cmpr))
   "Set the cryptosystem G1 generator"
@@ -946,7 +972,7 @@ library."
     (with-fli-buffers ((sigbuf *g1-size*)
                        (skbuf  *zr-size* skey)
                        (hbuf nhash hash))
-      (_sign-hash sigbuf skbuf hbuf nhash)
+      (_sign-hash *context* sigbuf skbuf hbuf nhash)
       (make-instance 'signature
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
@@ -964,7 +990,7 @@ library."
     (with-fli-buffers ((sbuf *g1-size*  sig)
                        (hbuf nhash      hash)
                        (pbuf *g2-size*  pkey))
-      (zerop (_check-signature sbuf hbuf nhash pbuf))
+      (zerop (_check-signature *context* sbuf hbuf nhash pbuf))
       )))
 
 (defmethod check-hash ((hash hash) sig pkey)
@@ -1016,7 +1042,7 @@ Certification includes a BLS Signature on the public key."
     (with-fli-buffers ((sbuf *zr-size*)
                        (pbuf *g2-size*)
                        (hbuf hlen hsh))
-      (_make-key-pair sbuf pbuf hbuf hlen)
+      (_make-key-pair *context* sbuf pbuf hbuf hlen)
       (let* ((pkey (make-instance 'public-key
                                   :val (xfer-foreign-to-lisp pbuf *g2-size*)))
              (skey (make-instance 'secret-key
@@ -1047,7 +1073,7 @@ Certification includes a BLS Signature on the public key."
     (with-fli-buffers ((hbuf hlen      hsh)
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
-      (_make-public-subkey abuf pbuf hbuf hlen)
+      (_make-public-subkey *context* abuf pbuf hbuf hlen)
       (make-instance 'public-subkey
                      :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
@@ -1060,7 +1086,7 @@ Certification includes a BLS Signature on the public key."
     (with-fli-buffers ((hbuf hlen      hsh)
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
-      (_make-secret-subkey abuf sbuf hbuf hlen)
+      (_make-secret-subkey *context* abuf sbuf hbuf hlen)
       (make-instance 'secret-subkey
                      :val (xfer-foreign-to-lisp abuf *g1-size*)))))
 
@@ -1107,7 +1133,7 @@ Certification includes a BLS Signature on the public key."
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
-      (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf 32)
+      (_sakai-kasahara-encrypt *context* rbuf pbuf kbuf hbuf 32)
       (let* ((pval (get-hash-nbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
              (cmsg (make-instance 'crypto-text
                                   :vec (construct-bev
@@ -1137,7 +1163,7 @@ Certification includes a BLS Signature on the public key."
       (with-fli-buffers ((pbuf  *gt-size*)
                          (kbuf  *g1-size*  skid)
                          (rbuf  *g2-size*  rval))
-        (_sakai-kasahara-decrypt pbuf rbuf kbuf)
+        (_sakai-kasahara-decrypt *context* pbuf rbuf kbuf)
         (let* ((cmsg-bytes (raw-bytes cmsg))
                (nb         (length cmsg-bytes))
                (pval (get-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
@@ -1146,7 +1172,7 @@ Certification includes a BLS Signature on the public key."
                (hval (hash/256 id tstamp msg)))
           (with-fli-buffers ((hbuf 32        hval)
                              (kbuf *g2-size* pkey))
-            (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf 32))
+            (when (zerop (_sakai-kasahara-check *context* rbuf kbuf hbuf 32))
               (loenc:decode (raw-bytes msg))))
           )))))
 
@@ -1159,7 +1185,7 @@ Certification includes a BLS Signature on the public key."
   (with-fli-buffers ((hbuf  *g1-size*  hval)
                      (gbuf  *g2-size*  gval)
                      (gtbuf *gt-size*))
-    (_compute-pairing gtbuf hbuf gbuf)
+    (_compute-pairing *context* gtbuf hbuf gbuf)
     (make-instance 'pairing
                    :val (xfer-foreign-to-lisp gtbuf *gt-size*))))
 
@@ -1174,7 +1200,7 @@ Certification includes a BLS Signature on the public key."
   ;; it is assumed that the a-siz is also the size of result.
   (with-fli-buffers ((a-buf  a-siz  a)
                      (b-buf  b-siz  b))
-    (funcall op a-buf b-buf) ;; result returned in first arg buffer
+    (funcall op *context* a-buf b-buf) ;; result returned in first arg buffer
     (funcall final (xfer-foreign-to-lisp a-buf a-siz))))
 
 (defun make-g1-ans (ans)
@@ -1232,7 +1258,7 @@ Certification includes a BLS Signature on the public key."
   (when (zerop (int z))
     (error "Can't invert zero"))
   (with-fli-buffers ((z-buf  *zr-size* z))
-    (_inv-zr-val z-buf)
+    (_inv-zr-val *context* z-buf)
     (make-instance 'zr
                    :val (xfer-foreign-to-lisp z-buf *zr-size*))))
 
