@@ -31,13 +31,10 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------------------
 
-(defun byz-params (ngrp)
+(defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
   ;; too easy to goof up if you have to recompute them
-  (let* ((byz-fail     (floor (1- ngrp) 3))
-         (byz-thr      (- ngrp byz-fail))
-         (share-thresh (1+ byz-fail)))
-    (values byz-fail byz-thr share-thresh)))
+  (floor (* 0.6 (1- ngrp))))
 
 ;; ----------------------------------------------------------------
 (defun poly (q coffs x)
@@ -94,7 +91,6 @@ THE SOFTWARE.
   leader      ;; group leader of group (= first in group)
   super       ;; supervisor of group leader (group leader only)
   graph       ;; Gossip group ID for subgroup
-  thresh      ;; BFT threshold group
   share-thr   ;; sharing threshold of group
   commits     ;; list of commits seen 
   decr-shares ;; 2D array of decrypted shares, indexed as (owner, witness)
@@ -104,6 +100,7 @@ THE SOFTWARE.
   entropy     ;; list of random vals for each commitment
   ;; -----------
   ;; in beacon node
+  beacon-thr  ;; threshold for Beacon reaping
   tentropy    ;; list of entropy from group leaders
   groups      ;; Beacon has the list of groups
   grp-rands)  ;; and accumulates group randomness values
@@ -226,23 +223,36 @@ THE SOFTWARE.
            (group-leader   (first my-group))
            (group-leader-p (int= me group-leader))
            (ngrp           (length my-group)))
-      (multiple-value-bind (byz-frac bft-thresh share-thresh)
-          (byz-params ngrp)
-        (declare (ignore byz-frac))
+      (let* ((byz-fails    (max-byz-fails ngrp))
+             (share-thresh (1+ byz-fails)))
         (setf *rh-state* (make-rh-group-info
                           :session     session
                           :group       my-group
                           :leader      group-leader
-                          :thresh      bft-thresh
                           :share-thr   share-thresh
                           :super       (when group-leader-p
                                          *beacon*)
                           :graph       graph
                           :decr-shares (make-hash-table)
                           :rands       (when group-leader-p
-                                         (make-hash-table))
-                          :groups      (when (int= me *beacon*)
-                                         groups)))
+                                         (make-hash-table))))
+
+        (when (int= me *beacon*)
+          (let* ((tnodes        (loop for grp in groups sum (length grp)))
+                 (tfails        (floor (1- tnodes) 3))
+                 (grp-fails     (um:nlet-tail iter ((grps   groups)
+                                                    (fails  tfails)
+                                                    (gfails 0))
+                                  
+                                  (let* ((grp       (car grps))
+                                         (byz-fails (1+ (max-byz-fails (length grp)))))
+                                    (if (>= fails byz-fails)
+                                        (iter (cdr grps) (- fails byz-fails) (1+ gfails))
+                                      gfails)))
+                                ))
+            (setf (rh-group-info-groups     *rh-state*) groups
+                  (rh-group-info-beacon-thr *rh-state*) (1+ grp-fails))
+            ))
         
         (let* ((xvals      (um:range 1 (1+ ngrp)))
                (q          (pbc:get-order))
@@ -252,16 +262,16 @@ THE SOFTWARE.
                (proofs     (mapcar (um:compose
                                     (um:curry 'mul-pt-zr (pbc:get-g1))
                                     (let ((sf (with-mod q
-                                                (m/ krand (int (node-skey node))))))
+                                                        (m/ krand (int (node-skey node))))))
                                       (lambda (share)
                                         (with-mod q
-                                          (m* sf share)))))
+                                                  (m* sf share)))))
                                    shares))
                (chks       (mapcar (um:compose
                                     (um:curry 'mul-pt-zr (pbc:get-g2))
                                     (lambda (share)
                                       (with-mod q
-                                        (m* krand share))))
+                                                (m* krand share))))
                                    shares))
                (enc-shares (mapcar 'mul-pt-zr my-group shares))
                (rval       (mul-pt-zr (pbc:get-g1) krand))
@@ -316,47 +326,46 @@ THE SOFTWARE.
                           :key  'first))
                (chk-proofs proofs chks from))   ;; valid collection of proofs?
 
-          (push (from commit) my-commits)
-          (multiple-value-bind (byz-frac byz-thr share-thr)
-              (byz-params ngrp)
-            (declare (ignore byz-frac byz-thr))
-            (let* ((q        (pbc:get-order))
-                   (kcheck   (- ngrp share-thr))
-                   (xvals    (um:range 1 (1+ ngrp)))
-                   (coffs    (loop repeat kcheck collect (random-between 1 q)))
-                   (rschks   (mapcar (um:curry 'poly q coffs) xvals))
-                   (invwts   (mapcar (um:curry 'invwt q ngrp) xvals))
-                   (rschkv   (with-mod q
-                               (mapcar 'm/ rschks invwts)))
-                   (rschk    (dotprod-g1-zr proofs rschkv)))
-
-              #+:rh-testing
-              (assert (zerop (int rschk)))
-              
-              (when (zerop (int rschk))
-                (let* ((my-index     (position me my-group
-                                               :test 'int=))
-                       (my-share     (elt encr-shares my-index))
-                       (skey         (node-skey node))
-                       (decr-share   (compute-pairing
-                                      (mul-pt-zr (pbc:get-g1)
-                                                 (inv-zr (int skey)))
-                                      my-share))
-                       (decr-chkl    (compute-pairing
-                                      (mul-pt-zr rval (with-mod (get-order)
-                                                        (m/ (int skey))))
-                                      my-share))
-                       (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
-                  ;; ----------------------------------------------------------
-                  #+:rh-testing
-                  (assert (int= decr-chkl decr-chkr))
-                  ;; ----------------------------------------------------------
-                  
-                  (when (int= decr-chkl decr-chkr)
-                    (broadcast-grp+me (make-signed-decr-share-message
-                                       session me from decr-share skey)
-                                      :graphID my-graph))
-                  )))))))))
+          (push (list from commit) my-commits)
+          (let* ((byz-fails (max-byz-fails ngrp))
+                 (share-thr (1+ byz-fails))
+                 (q         (pbc:get-order))
+                 (kcheck    (- ngrp share-thr))
+                 (xvals     (um:range 1 (1+ ngrp)))
+                 (coffs     (loop repeat kcheck collect (random-between 1 q)))
+                 (rschks    (mapcar (um:curry 'poly q coffs) xvals))
+                 (invwts    (mapcar (um:curry 'invwt q ngrp) xvals))
+                 (rschkv    (with-mod q
+                                      (mapcar 'm/ rschks invwts)))
+                 (rschk     (dotprod-g1-zr proofs rschkv)))
+            
+            #+:rh-testing
+            (assert (zerop (int rschk)))
+            
+            (when (zerop (int rschk))
+              (let* ((my-index     (position me my-group
+                                             :test 'int=))
+                     (my-share     (elt encr-shares my-index))
+                     (skey         (node-skey node))
+                     (decr-share   (compute-pairing
+                                    (mul-pt-zr (pbc:get-g1)
+                                               (inv-zr (int skey)))
+                                    my-share))
+                     (decr-chkl    (compute-pairing
+                                    (mul-pt-zr rval (with-mod (get-order)
+                                                              (m/ (int skey))))
+                                    my-share))
+                     (decr-chkr    (compute-pairing (get-g1) (elt chks my-index))))
+                ;; ----------------------------------------------------------
+                #+:rh-testing
+                (assert (int= decr-chkl decr-chkr))
+                ;; ----------------------------------------------------------
+                
+                (when (int= decr-chkl decr-chkr)
+                  (broadcast-grp+me (make-signed-decr-share-message
+                                     session me from decr-share skey)
+                                    :graphID my-graph))
+                ))))))))
 
 ;; ----------------------------------------------------------------------------
 
@@ -561,39 +570,37 @@ THE SOFTWARE.
   ;; election seed. Call for an election among all witnesses with that
   ;; seed.
   ;;
-  (with-accessors ((my-groups   rh-group-info-groups)
-                   (my-tentropy rh-group-info-tentropy)
+  (with-accessors ((groups      rh-group-info-groups)
+                   (beacon-thr  rh-group-info-beacon-thr)
+                   (tentropy    rh-group-info-tentropy)
                    (my-session  rh-group-info-session)) *rh-state*
     (with-accessors ((entropy-froms  rand-entry-froms)
-                     (entropy-rand   rand-entry-rand)) my-tentropy
+                     (entropy-rand   rand-entry-rand)) tentropy
       
-    (let* ((ngrps         (length my-groups))
-           (byz-frac      (floor (1- ngrps) 3))
-           (share-thresh  (1+ byz-frac))
-           (entropy-count (if my-tentropy
-                              (length entropy-froms)
-                            0)))
+      (let* ((entropy-count (if tentropy
+                                (length entropy-froms)
+                              0)))
         (when (and
-               my-groups                         ;; only *BEACON* should have this
-               (< entropy-count share-thresh)    ;; still awaiting contributions?
+               groups                            ;; only *BEACON* should have this
+               (< entropy-count beacon-thr)      ;; still awaiting contributions?
                (int= session my-session)                         ;; correct session?
-               (find from (mapcar 'first my-groups) :test 'int=) ;; should only arrive from group leaders
-               (not (and my-tentropy                             ;; not already seen?
+               (find from (mapcar 'first groups) :test 'int=) ;; should only arrive from group leaders
+               (not (and tentropy                             ;; not already seen?
                          (find from entropy-froms :test 'int=)))
                (validate-signed-group-randomness-message session from rand sig)) ;; valid message?
 
-          (if my-tentropy
+          (if tentropy
               (progn
                 (push from entropy-froms)
                 (setf entropy-rand (mul-gts rand entropy-rand)))
             ;; else
-            (setf my-tentropy
+            (setf tentropy
                   (make-rand-entry
                    :froms (list from)
                    :rand  rand)))
 
-          (when (= (1+ entropy-count) share-thresh)
-            (let* ((seed  (float (/ (int (hash/256 (rand-entry-rand my-tentropy)))
+          (when (= (1+ entropy-count) beacon-thr)
+            (let* ((seed  (float (/ (int (hash/256 (rand-entry-rand tentropy)))
                                     #.(ash 1 256))
                                  1d0)))
               ;; ------------------------------------------------------------------
