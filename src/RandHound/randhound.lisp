@@ -34,7 +34,7 @@ THE SOFTWARE.
 (defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
   ;; too easy to goof up if you have to recompute them
-  (floor (* 0.6 (1- ngrp))))
+  (floor (1- ngrp) 2))
 
 ;; ----------------------------------------------------------------
 (defun poly (q coffs x)
