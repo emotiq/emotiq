@@ -22,6 +22,7 @@ our we intend our full functionality to be always be available by
 running on source with an arbitrary Common Lisp implementation to the
 extent we have the resources for such an effort.
 
+
 ### Tell ASDF where to find the Emotiq systems
 
 First, place a copy of this repository somewhere locally on your
@@ -84,7 +85,67 @@ To effect the configuration of this setup, execute the forms in
 (load (asdf:system-relative-pathname :emotiq "../etc/setup-emotiq-quicklisp.lisp"))
 ```
 
-### Building the native libraries required by CRYPTO-PAIRINGS
+### Software requirements:
+#### macOS
+* LispWorks Pro v7.1.1 (or 7.1.0 with all official patches applied)
+* XCode Command Line Tools
+#### Linux
+* LispWorks Pro v7.1.1 (or 7.1.0 with all official patches applied)
+* Ubuntu 16.04 or later
+* `build-essentials`
+
+### Install the dependencies
+
+After Quicklisp has been installed and configured, then issuing
+```lisp
+(ql:quickload :emotiq/sim)
+```
+will download all the dependencies needed by the tests gathered into
+the `emotiq/sim` ASDF system.
+
+### Test
+
+To evaluate form to test, which also loads, the system:
+```lisp
+(ql:quickload :lisp-unit)       ;;; this requirement will be removed soon
+(asdf:test-system :emotiq)
+```
+
+At end you should see a result like
+```
+    Unit Test Summary
+     | 12 assertions total
+     | 12 passed
+     | 0 failed
+     | 0 execution errors
+     | 0 missing tests
+```
+The counts of assertions/passed should go up over time, and should
+stay equal, with other counts staying zero.
+
+### Running
+
+To run the single node simulator, see the instructions in
+[Running simulator](src/simulation.md).
+
+#### Notes on missing dependencies
+
+We have many ASDF descriptions within this repository whose
+dependencies may need to be satisfied by via `ql:quickload`.
+
+Currently we are working on many systems simultaneously, most noteworthy
+among them being the work in the `cosi-bls` system.
+
+If in exploring the code one finds a missing dependency, say for the
+system `cosi-bls`, a simple
+```lisp
+(ql:quickload :cosi-bls)
+```
+
+should satisfy the dependencies.  (TODO: `cl:restart` for missing
+dependencies).
+
+#### Notes on building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
 curve (PBC) cryptography, which in turn depends on GMP library.
@@ -113,61 +174,20 @@ by the variable `EXTERNAL_LIBS_VERSION` in the script
 release of `emotiq-external-libs` from
 [Releases](https://github.com/emotiq/emotiq-external-libs/releases)
 
+All these compilations and linking are done transparently during normal systems quikload process, so no additional steps are required.
+
 As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
 is updating this tree from a previous version, one may explicitly have
 to force the asdf `prepare-op` via so:
+:bangbang: Not needed during normal workflow
+
 ```lisp
 (asdf:make :crypto-pairings)
 ```
+:bangbang: Not needed during normal workflow
 
-# Running
-
-After Quicklisp has been installed and configured, then issuing
-```lisp
-(ql:quickload :emotiq/sim)
-```
-
-will download all the dependencies needed by the tests gathered into
-the `emotiq/sim` ASDF system.
-
-To run the single node simulator, see the instructions in
-`src/simulation.md`.
-
-We have many ASDF descriptions within this repository whose
-dependencies may need to be satisfied by via `ql:quickload`.
-
-Currently we are working on many systems simultaneously, most noteworthy
-among them being the work in the `cosi-bls` system.
-
-If in exploring the code one finds a missing dependency, say for the
-system `cosi-bls`, a simple
-```lisp
-(ql:quickload :cosi-bls)
-```
-
-should satisfy the dependencies.  (TODO: `cl:restart` for missing
-dependencies).
-
-# Test
-
-To Evaluate form to test, which also loads, the system:
-```lisp
-(asdf:test-system :emotiq)
-```
-
-At end you should see a result like
-```
-    Unit Test Summary
-     | 12 assertions total
-     | 12 passed
-     | 0 failed
-     | 0 execution errors
-     | 0 missing tests
-```
-The counts of assertions/passed should go up over time, and should
-stay equal, with other counts staying zero.
-
+----
 All pushes to the source tree result in "Continuous Integration" build
 by Gitlab CI: <https://gitlab.aws.emotiq.ch/emotiq/emotiq/pipelines>.
 
