@@ -253,7 +253,7 @@ THE SOFTWARE.
             (setf (rh-group-info-groups     *rh-state*) groups
                   (rh-group-info-beacon-thr *rh-state*) (1+ grp-fails))
             ))
-        
+
         (let* ((xvals      (um:range 1 (1+ ngrp)))
                (q          (pbc:get-order))
                (coffs      (loop repeat share-thresh collect (random-between 1 q)))
