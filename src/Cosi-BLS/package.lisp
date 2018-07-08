@@ -298,6 +298,8 @@
    :node
    :node-pkey
    :node-skey
+   :node-short-pkey
+   :node-short-skey
    :node-stake
    :node-self
    :node-blockchain

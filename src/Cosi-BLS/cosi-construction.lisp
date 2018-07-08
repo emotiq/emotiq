@@ -82,6 +82,10 @@ THE SOFTWARE.
              :initarg  :skey)
    (pkey     :accessor node-pkey     ;; cached ECC point for public key
              :initarg  :pkey)
+   (short-pkey :accessor node-short-pkey ;; short/fast public key for Randhound
+               :initarg :short-pkey)
+   (short-skey :accessor node-short-skey ;; short/fast secret key for Randhound
+               :initarg :short-skey)
    (parent   :accessor node-parent   ;; points to node of group parent
              :initarg  :parent
              :initform nil)
@@ -200,8 +204,21 @@ THE SOFTWARE.
   (error "Need to specify..."))
 
 ;; new for Gossip support, and conceptually cleaner...
-(defmethod initialize-instance :around ((node node) &key &allow-other-keys)
+(defmethod initialize-instance :around ((node node) &key pkey skey &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
+  ;; -------------------------------------------------
+  ;; Set up some short keys for Randhound
+  ;;
+  ;; This should likely be changed for production. The code here is
+  ;; good'nuff for simulation
+  ;;
+  (let ((short-keys (pbc:with-curve :CURVE-FR256
+                      (pbc:make-key-pair (list :RANDHOUND pkey)))
+                    ;; will be the hash of pkey
+                    ))
+    (setf (node-short-pkey node) (pbc:keying-triple-pkey short-keys)
+          (node-short-skey node) (pbc:keying-triple-skey short-keys)))
+  ;; -------------------------------------------------
   (call-next-method))
 
 ;; --------------------------------------------------------------

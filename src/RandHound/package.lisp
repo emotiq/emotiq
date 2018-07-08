@@ -38,6 +38,8 @@ THE SOFTWARE.
    :current-node
    :node-pkey
    :node-skey
+   :node-short-pkey
+   :node-short-skey
    :node-stake
    :node-rh-state
    :get-witness-list

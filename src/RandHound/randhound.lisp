@@ -84,6 +84,16 @@ THE SOFTWARE.
       )))
 
 ;; ------------------------------------------------------------------
+;; FOR SIM... Get associations between Node PKeys and their Short PKeys
+
+(defun get-witness-short-keys ()
+  (let* ((nodes  (coerce cosi-simgen:*node-bit-tbl* 'list)))
+    (mapcar (lambda (node)
+              (list (node-pkey node)
+                    (node-short-pkey node)))
+            nodes)))
+                              
+;; ------------------------------------------------------------------
 
 (defstruct rh-group-info
   session     ;; session ID for this round
@@ -150,21 +160,22 @@ THE SOFTWARE.
          (me   (node-pkey node)))
 
     (when (int= me *beacon*)
-      (let* ((witnesses (get-witness-list))
-             (session   (hash/256 *local-epoch* (uuid:make-v1-uuid) *beacon*))
-             (grpids    (mapcar (lambda (wit)
-                                  (list (first wit) (int (hash/256 session wit))))
-                                witnesses))
-             (sorted    (mapcar 'first
-                                (sort grpids '<
-                                      :key 'second)))
-             (twit      (min 1600 (length sorted)))  ;; total witness nodes
-             (tsqrt     (min   40 (isqrt twit)))     ;; their square root
-             (swits     (subseq sorted 0 twit))      ;; select out no more than 1600 nodes
-             (ngrp      (if (< tsqrt 6)  ;; nbr nodes per group
-                            twit
-                          tsqrt))
-             (grps      (nreverse (um:group swits ngrp)))) ;; actual groups
+      (let* ((witnesses  (get-witness-list))
+             (short-keys (get-witness-short-keys))
+             (session    (hash/256 *local-epoch* (uuid:make-v1-uuid) *beacon*))
+             (grpids     (mapcar (lambda (wit)
+                                   (list (first wit) (int (hash/256 session wit))))
+                                 witnesses))
+             (sorted     (mapcar 'first
+                                 (sort grpids '<
+                                       :key 'second)))
+             (twit       (min 1600 (length sorted)))  ;; total witness nodes
+             (tsqrt      (min   40 (isqrt twit)))     ;; their square root
+             (swits      (subseq sorted 0 twit))      ;; select out no more than 1600 nodes
+             (ngrp       (if (< tsqrt 6)  ;; nbr nodes per group
+                             twit
+                           tsqrt))
+             (grps       (nreverse (um:group swits ngrp)))) ;; actual groups
 
         (when (> (length grps) 1)
           ;; absorb short group into last group if fewer than 6 members

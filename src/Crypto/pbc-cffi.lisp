@@ -145,6 +145,7 @@ THE SOFTWARE.
 
    :*curve*
    :*curve-name*
+   :with-curve
    ))
 
 (in-package :pbc-interface)
@@ -831,6 +832,8 @@ comparison.")
 (define-symbol-macro *zr-size*       (full-curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
 (define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
 
+(defvar *contexts* (make-array 16)) ;; holds copies of *curve* parameters from init-pairing
+
 ;; -------------------------------------------------
 ;; Coercion functions in case we are dealing with a client that only
 ;; thinks in terms of bignums.
@@ -905,7 +908,8 @@ SMP access. Everything else should be SMP-safe."
                     *g2-size*  (cffi:mem-aref ansbuf :long 1)
                     *gt-size*  (cffi:mem-aref ansbuf :long 2)
                     *zr-size*  (cffi:mem-aref ansbuf :long 3)
-                    *curve-order* nil)
+                    *curve-order* nil
+                    (aref *contexts* context) *curve*)
               (get-order) ;; fills in *curve-order* cached value
               ;; A cryptosystem is specified by curve params and
               ;; specific values for the G1 and G2 generators.
@@ -918,6 +922,29 @@ SMP access. Everything else should be SMP-safe."
                 (get-g1)) ;; fill in cached value
               ))))
       prev))) ;; return previous *curve*
+
+;; -------------------------------------------------
+
+(defmethod locate-curve ((name symbol))
+  ;; if a symbol name is given - typically a keyword name, like
+  ;; :CURVE-FR449
+  (or (find-if (lambda (slot)
+                 (and slot
+                      (eq (curve-params-name slot) name)))
+               *contexts*)
+      (error "No curve named ~S in context cache" name)))
+
+(defmethod locate-curve ((curve full-curve-params))
+  ;; if *curve* was saved after an init-pairing call
+  curve)
+
+(defun do-with-curve (name fn)
+  (let ((*curve* (locate-curve name)))
+    (funcall fn)))
+
+(defmacro with-curve (curve-name &body body)
+  ;; use a name keyword like :CURVE-FR449 or :CURVE-FR256
+  `(do-with-curve ,curve-name (lambda () ,@body)))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
@@ -1728,7 +1755,11 @@ likely see an assertion failure"
 
 #-:lispworks
 (eval-when (:load-toplevel)
-  (init-pairing))
+  ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
+  ;; context slots available, (0 .. 15)
+  (init-pairing :params *curve-fr256-params* :context 0)
+  ;; do FR449 last so it becomes the default pairing
+  (init-pairing :params *curve-fr449-params* :context 1))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -1747,4 +1778,12 @@ likely see an assertion failure"
     
     (if building-binary-p
         nil                                          ;; do nothing, esp. don't try to init-pairing
-      (init-pairing))))                      ;; in all other cases, init-pairing at LOAD time.
+      (progn
+        ;; in all other cases, init-pairing at LOAD time.
+        ;;
+        ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
+        ;; context slots available, (0 .. 15)
+        (init-pairing :params *curve-fr256-params* :context 0)
+        ;; do FR449 last so it becomes the default pairing
+        (init-pairing :params *curve-fr449-params* :context 1)
+        ))))
