@@ -146,6 +146,8 @@ THE SOFTWARE.
    :*curve*
    :*curve-name*
    :with-curve
+   :set-curve
+   :list-all-curves
    ))
 
 (in-package :pbc-interface)
@@ -788,6 +790,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
   (make-curve-params
+   :name :curve-ar160
    :pairing-text
    (sbs
    #>.end
@@ -806,8 +809,7 @@ sign0 1
               :str "BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
    :g2  (make-instance 'g2-cmpr
          :pt (make-instance 'base58
-              :str
-"FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8")))
+              :str "FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8")))
 "Ben Lynn's favorite default - 160 bits symmetric pairing.
 Unfortunately, we are a decade later than when these curves were
 developed and 80-bit security is no longer sufficient. But this curve
@@ -815,7 +817,7 @@ serves as a check on our implementation with his pbc-calc for
 comparison.")
 
 (defparameter *chk-curve-default-ar160-params*
-  "16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38")
+  "FD0B8B456DB9C6DA1408D6DE0DCF3EEBDDBBC6D7AC99B3843188B01728833E29")
 
 ;; ---------------------------------------------------------------------------------------
 
@@ -863,10 +865,27 @@ comparison.")
 
 ;; -------------------------------------------------
 
+(defun list-all-curves ()
+  '(:curve-fr449 :curve-fr256 :curve-fr255 :curve-fr256 :curve-fr248 :curve-fr247 :curve-ar160))
+
+(defmethod %locate-raw-curve ((name symbol))
+  (ecase name
+    (:curve-fr449  *curve-fr449-params*)
+    (:curve-fr256  *curve-fr256-params*)
+    (:curve-fr255  *curve-fr255-params*)
+    (:curve-fr250  *curve-fr250-params*)
+    (:curve-fr248  *curve-fr248-params*)
+    (:curve-fr247  *curve-fr247-params*)
+    (:curve-ar160  *curve-default-ar160-params*)))
+
+(defmethod %locate-raw-curve ((curve curve-params))
+  curve)
+
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
 
-(defun init-pairing (&key (params nil params-supplied-p) (context 0))
+(defun init-pairing (&key (params nil params-supplied-p)
+                          (context (position nil *contexts*)))
   "Initialize the pairings lib.
 
   If params not specified and we haven't been called yet, or specified
@@ -881,9 +900,11 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
+  (check-type context (fixnum 0 15))
   (mpcompat:with-lock (*crypto-lock*)
     (let ((prev   *curve*)
-          (cparams (or params
+          (cparams (or (and params
+                            (%locate-raw-curve params))
                        *curve-fr449-params*)))
       ;; If params not specified, and we have already been called,
       ;; just skip doing anything.
@@ -925,26 +946,32 @@ SMP access. Everything else should be SMP-safe."
 
 ;; -------------------------------------------------
 
-(defmethod locate-curve ((name symbol))
+(defmethod %locate-curve ((name symbol))
   ;; if a symbol name is given - typically a keyword name, like
   ;; :CURVE-FR449
   (or (find-if (lambda (slot)
                  (and slot
                       (eq (curve-params-name slot) name)))
                *contexts*)
+      (let ((*curve* nil))
+        (init-pairing :params name)
+        *curve*)
       (error "No curve named ~S in context cache" name)))
 
-(defmethod locate-curve ((curve full-curve-params))
+(defmethod %locate-curve ((curve full-curve-params))
   ;; if *curve* was saved after an init-pairing call
   curve)
 
 (defun do-with-curve (name fn)
-  (let ((*curve* (locate-curve name)))
+  (let ((*curve* (%locate-curve name)))
     (funcall fn)))
 
 (defmacro with-curve (curve-name &body body)
   ;; use a name keyword like :CURVE-FR449 or :CURVE-FR256
   `(do-with-curve ,curve-name (lambda () ,@body)))
+
+(defun set-curve (curve)
+  (setf *curve* (%locate-curve curve)))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian

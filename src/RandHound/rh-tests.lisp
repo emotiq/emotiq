@@ -17,10 +17,8 @@
                     *beacon* (second pkeys)
                     *local-epoch* pi
                     *election-calls* nil)))
-      #|
       (with-current-node (second nodes)
         (start-randhound-round))
-      |#
       )))
 
         
