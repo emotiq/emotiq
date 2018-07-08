@@ -28,6 +28,7 @@
   (setf cosi-simgen::*use-real-gossip* t) ;; make sure code knows 
   (message-running-state how-started-message?)
   ;; Create a default wallet on disk if one doesn't already exist
+  (emotiq/config::genesis/create (emotiq/config::settings/read) :directory (emotiq/fs:etc/))
   (emotiq/wallet:create-wallet)
   ;; Start the websocket interface for the Electron wallet
   ;; listening <ws://localhost:3145/wallet> .

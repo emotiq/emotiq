@@ -61,6 +61,9 @@
                            (nodes-dns-ip *dns-ip-zt.emotiq.ch*)
                            (force nil)
                            (settings-key-value-alist nil))
+  ;;; WHAT DOES THIS RETURN? CLAIMS TO RETURN DIRECTORIES BUT ACTUALLY RETURNS GENESIS BLOCKS.
+  ;;; AND THEY'RE ALL IDENTICAL OF COURSE.
+  ;;; ARE THESE NECESSARY?
   "Generate a test network configuration"
   (let* ((nodes (keys/generate nodes-dns-ip))
          (stakes (stakes/generate (mapcar (lambda (plist)
@@ -132,7 +135,9 @@
                 :path (make-pathname :defaults directory
                                      :name "stakes"
                                      :type "conf"))
-  (genesis/create configuration :directory directory :force t))
+  #+IGNORE
+  (genesis/create configuration :directory directory :force t)
+  directory)
   
 (defun settings/read () 
   (unless (probe-file *emotiq-conf*)
