@@ -31,7 +31,7 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------------------
 
-(defvar *randhound-curve*  :curve-ar160)
+(defvar *randhound-curve*  :curve-fr256) ;; :curve-ar160
 
 (defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
