@@ -213,8 +213,8 @@ THE SOFTWARE.
   ;; good'nuff for simulation
   ;;
   (let ((short-keys (pbc:with-curve :CURVE-FR256
-                      (pbc:make-key-pair (list :RANDHOUND pkey)))
-                    ;; will be the hash of pkey
+                      (pbc:make-key-pair (list :RANDHOUND skey)))
+                    ;; will be the hash of skey
                     ))
     (setf (node-short-pkey node) (pbc:keying-triple-pkey short-keys)
           (node-short-skey node) (pbc:keying-triple-skey short-keys)))
