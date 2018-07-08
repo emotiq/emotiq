@@ -5,6 +5,7 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:gossip-handler-case
    #:cosi-loaded-p
    #:initialize-node
    #:*nominal-gossip-port*
@@ -63,7 +64,7 @@
 
 (defpackage :gossip/transport
   (:use :cl)
-  (:IMPORT-FROM :gossip :edebug :eripa)
+  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
   (:export
    #:start-transport
    #:stop-transport

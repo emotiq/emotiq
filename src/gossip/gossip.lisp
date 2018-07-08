@@ -74,6 +74,12 @@
 
 (defvar *ll-application-handler* nil "Set to a function to be called when the API methods reach their target.")
 
+(defmacro gossip-handler-case (form &rest clauses)
+  `(if *gossip-absorb-errors*
+       (handler-case ,form
+         ,@clauses)
+       ,form))
+
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
 ;; valid deserialization, check deserialization is a
@@ -1229,10 +1235,9 @@ dropped on the floor.
              (:final-reply-accepted 4)
              (t nil))
            node logsym msg (kind msg) :from srcuid (args msg))
-    (if *gossip-absorb-errors*
-        (handler-case (funcall kindsym msg node srcuid)
-          (error (c) (node-log node :ERROR msg c)))
-        (funcall kindsym msg node srcuid))))
+    (gossip-handler-case
+     (funcall kindsym msg node srcuid)
+     (error (c) (node-log node :ERROR msg c)))))
 
 (defmethod locally-receive-msg ((msg system-async) (node gossip-mixin) srcuid)
   (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
