@@ -283,10 +283,12 @@ THE SOFTWARE.
 ;; Curve math ops
 
 (cffi:defcfun ("add_G1_pts" _add-g1-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("sub_G1_pts" _sub-g1-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
@@ -296,20 +298,25 @@ THE SOFTWARE.
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("div_G1_pts" _div-g1-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("neg_G1_pt" _neg-g1-pt) :void
+  (context     :long)
   (p1    :pointer :unsigned-char))
 
 (cffi:defcfun ("inv_G1_pt" _inv-g1-pt) :void
+  (context     :long)
   (p1    :pointer :unsigned-char))
 
 (cffi:defcfun ("add_G2_pts" _add-g2-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("sub_G2_pts" _sub-g2-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
@@ -319,13 +326,16 @@ THE SOFTWARE.
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("div_G2_pts" _div-g2-pts) :void
+  (context     :long)
   (p1    :pointer :unsigned-char)
   (p2    :pointer :unsigned-char))
 
 (cffi:defcfun ("neg_G2_pt" _neg-g2-pt) :void
+  (context     :long)
   (p1    :pointer :unsigned-char))
 
 (cffi:defcfun ("inv_G2_pt" _inv-g2-pt) :void
+  (context     :long)
   (p1    :pointer :unsigned-char))
 
 (cffi:defcfun ("add_Zr_vals" _add-zr-vals) :void
@@ -334,22 +344,27 @@ THE SOFTWARE.
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("sub_Zr_vals" _sub-zr-vals) :void
+  (context     :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_Zr_vals" _mul-zr-vals) :void
+  (context     :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("div_Zr_vals" _div-zr-vals) :void
+  (context     :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("exp_Zr_vals" _exp-zr-vals) :void
+  (context     :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("neg_Zr_val" _neg-zr-val) :void
+  (context     :long)
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
@@ -357,6 +372,7 @@ THE SOFTWARE.
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_G1z" _mul-G1z) :void
+  (context :long)
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
@@ -381,18 +397,22 @@ THE SOFTWARE.
   (gbuf  :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_GT_vals" _mul-GT-vals) :void
+  (context :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("div_GT_vals" _div-GT-vals) :void
+  (context :long)
   (z1    :pointer :unsigned-char)
   (z2    :pointer :unsigned-char))
 
 (cffi:defcfun ("exp_GTz" _exp-GTz) :void
+  (context :long)
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("inv_GT_val" _inv-GT-val) :void
+  (context :long)
   (g     :pointer :unsigned-char))
 
 ;; ----------------------------------------------------
