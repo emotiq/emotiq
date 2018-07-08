@@ -145,8 +145,6 @@ THE SOFTWARE.
 
    :*curve*
    :*curve-name*
-   :*g1-zero*
-   :*g2-zero*
    ))
 
 (in-package :pbc-interface)
@@ -382,6 +380,7 @@ THE SOFTWARE.
   (z     :pointer :unsigned-char))
 
 (cffi:defcfun ("mul_G2z" _mul-G2z) :void
+  (context     :long)
   (g     :pointer :unsigned-char)
   (z     :pointer :unsigned-char))
 
@@ -1061,7 +1060,7 @@ library."
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
                        (hbuf   nb  hash))
-      (_get-zr-from-hash zbuf hbuf nb)
+      (_get-zr-from-hash *context* zbuf hbuf nb)
       (%zr (xfer-foreign-to-lisp zbuf *zr-size*))
       )))
                        
@@ -1319,7 +1318,7 @@ Certification includes a BLS Signature on the public key."
   ;; operate on operands a, b, returning in the buffer for a
   ;; it is assumed that the a-siz is also the size of result.
   (with-fli-buffers ((x-buf  x-siz  x))
-    (funcall op x-buf) ;; result returned in first arg buffer
+    (funcall op *context* x-buf) ;; result returned in first arg buffer
     (funcall final (xfer-foreign-to-lisp x-buf x-siz))))
 
 (defun binop (op a b a-siz b-siz final)
@@ -1383,7 +1382,7 @@ Certification includes a BLS Signature on the public key."
   ;; compute inverse of pt in group G1
   (unop '_inv-G1-pt pt *g1-size* 'make-g1-ans))
 
-;; ---------------------------
+;;; ---------------------------
 
 (defmethod add-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
   ;; add two elements from G2 field
@@ -1400,59 +1399,113 @@ Certification includes a BLS Signature on the public key."
   (binop '_mul-g2-pts pt1 pt2
          *g2-size* *g2-size* 'make-g2-ans))
         
-(defmethod add-zrs ((z1 zr) (z2 zr))
+(defmethod div-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; divide (bent nom) two elements from G2 field
+  (binop '_div-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+
+(defmethod neg-pt ((pt g2-cmpr))
+  ;; compute negation of pt in group G2
+  (unop '_neg-G2-pt pt *g2-size* 'make-g2-ans))
+
+(defmethod inv-pt ((pt g2-cmpr))
+  ;; compute inverse of pt in group G2
+  (unop '_inv-G2-pt pt *g2-size* 'make-g2-ans))
+
+;; ---------------------------
+
+(defmethod zr ((val zr))
+  val)
+
+(defmethod zr ((val integer))
+  ;; for ring Zr, any integer value (0 <= z < order) is valid
+  ;;
+  ;; Zr is the only group for which arbitrary integer values are
+  ;; valid. All others must be derived from extant group (subgroup)
+  ;; members.
+  (%zr (bev (mod val (get-order)))))
+
+(defmethod add-zrs (z1 z2)
   ;; add two elements from Zr ring
-  (binop '_add-zr-vals z1 z2
+  (binop '_add-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod add-zrs ((z1 integer) z2)
-  (add-zrs z2 (make-instance 'zr
-                             :val (mod z1 (get-order)))))
+(defmethod sub-zrs (z1 z2)
+  ;; add two elements from Zr ring
+  (binop '_sub-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod inv-zr ((z zr))
-  ;; compute inverse of z in ring Zr
-  (when (zerop (int z))
-    (error "Can't invert zero"))
-  (with-fli-buffers ((z-buf  *zr-size* z))
-    (_inv-zr-val *context* z-buf)
-    (make-instance 'zr
-                   :val (xfer-foreign-to-lisp z-buf *zr-size*))))
+(defmethod mul-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  (binop '_mul-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod inv-zr ((z integer))
-  (inv-zr (make-instance 'zr
-                         :val (mod z (get-order)))))
+(defmethod div-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  (binop '_div-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defvar *g1-zero*
-  (make-instance 'g1-cmpr
-                 :pt (bev 0)))
+(defmethod exp-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  ;; Careful here... z^(q-1) = 1, z^q = z
+  (binop '_exp-zr-vals
+         (zr z1)
+         (%zr (bev (mod (int z2) (1- (get-order)))))
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defvar *g2-zero*
-  (make-instance 'g2-cmpr
-                 :pt (bev 0)))
+(defmethod neg-zr (zr)
+  ;; compute negation of pt in group Zr
+  (unop '_neg-Zr-val zr *zr-size* 'make-zr-ans))
 
-(defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
+(defmethod inv-zr (zr)
+  ;; compute inverse of pt in group Zr
+  (unop '_inv-Zr-val zr *zr-size* 'make-zr-ans))
+
+;; --------------------------------------------------
+
+(defmethod mul-pt-zr ((g1 g1-cmpr) z)
   ;; exponentiate an element of G1 by element z of ring Zr
-  (cond ((zerop (int z)) *g1-zero*)
-        (t
-         (binop '_exp-G1z g1 z
-                *g1-size* *zr-size* 'make-g1-ans))
-        ))
+  (binop '_mul-G1z g1 (zr z)
+         *g1-size* *zr-size* 'make-g1-ans))
 
-(defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
+(defmethod expt-pt-zr ((g1 g1-cmpr) z)
+  ;; exponentiate an element of G1 by element z of ring Zr
+  (binop '_exp-G1z g1 (zr z)
+         *g1-size* *zr-size* 'make-g1-ans))
+
+
+(defmethod mul-pt-zr ((g2 g2-cmpr) z)
   ;; exponentiate an element of G2 by element z of ring Zr
-  (cond ((zerop (int z)) *g2-zero*)
-        (t 
-         (binop '_exp-G2z g2 z
-                *g2-size* *zr-size* 'make-g2-ans))
-        ))
+  (binop '_mul-G2z g2 (zr z)
+         *g2-size* *zr-size* 'make-g2-ans))
 
-(defmethod expt-pt-zr (g1 (z integer))
-  (expt-pt-zr g1 (make-instance 'zr
-                                :val (mod z (get-order)))))
+(defmethod expt-pt-zr ((g2 g2-cmpr) z)
+  ;; exponentiate an element of G2 by element z of ring Zr
+  (binop '_exp-G2z g2 (zr z)
+         *g2-size* *zr-size* 'make-g2-ans))
 
-(defun mul-pt-zr (pt z)
-  ;; for non-bent nomenclature
-  (expt-pt-zr pt z))
+;; --------------------------------------------------
+
+(defmethod expt-GT-zr ((gT gT) z)
+  ;; exponentiate an element of subgroup GT by element z of ring Zr
+  ;;
+  ;; Careful here... GT is a prime order subgroup of a large group of
+  ;; composite order. No reason to expect x^q = x, for x in GT, q =
+  ;; prime order.
+  (binop '_exp-GTz gT (zr z)
+         *gT-size* *zr-size* 'make-gT-ans))
+
+(defmethod mul-gts ((gt1 gt) (gt2 gt))
+  (binop '_mul-gt-vals gt1 gt2
+         *gt-size* *gt-size* 'make-gt-ans))
+  
+(defmethod div-gts ((gt1 gt) (gt2 gt))
+  (binop '_div-gt-vals gt1 gt2
+         *gt-size* *gt-size* 'make-gt-ans))
+
+(defmethod inv-GT ((gt gt))
+  ;; compute inverse of gt in group GT
+  (unop '_inv-GT-val gt *gt-size* 'make-gt-ans))
 
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
