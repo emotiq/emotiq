@@ -12,7 +12,7 @@
               "~&Failed to Quickload dependencies for system `~a`:~&~a~&" system e)
       (uiop:quit -1)))
   (handler-case
-      (if (asdf:test-system system)
+      (if (asdf-test-harness:run-suite system)
           (progn
             (format *standard-output* "~&Test-system succeeded for system: `~a`~&" system)
             (uiop:quit 0))

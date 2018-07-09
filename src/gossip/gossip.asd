@@ -14,7 +14,7 @@
                crypto-pairings
                usocket
                illogical-pathnames)
-  :in-order-to ((test-op (test-op "gossip-tests")))
+  :in-order-to ((test-op (test-op "gossip-test")))
   :serial t
   :components ((:file "package")
                #+OPENMCL

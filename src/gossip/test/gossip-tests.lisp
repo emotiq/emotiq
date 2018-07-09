@@ -1,6 +1,4 @@
-;;; gossip-tests.lisp
-
-(in-package :gossip-tests)
+(in-package :gossip-test)
 
 (defparameter *debug* nil
   "True if you want intermediate timings to print out and show inspector on failures")

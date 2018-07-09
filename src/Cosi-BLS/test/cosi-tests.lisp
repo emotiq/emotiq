@@ -1,5 +1,4 @@
-
-(in-package :cosi-tests)
+(in-package :cosi-bls-test)
 
 (define-test basis-consistency
   (assert-true (hash-check range-proofs::*digits-of-pi* range-proofs::*chk-digits-of-pi*))

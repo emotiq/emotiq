@@ -1,6 +1,6 @@
 ;;;; address-tests.lisp
 
-(in-package :cosi-tests)
+(in-package :cosi-bls-test)
 
 (define-test public-key-to-key-hash-as-address-test
   (let* ((public-key-as-hex-string
