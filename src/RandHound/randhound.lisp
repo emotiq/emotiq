@@ -31,7 +31,7 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------------------
 
-(defvar *randhound-curve*  :curve-fr256) ;; :curve-ar160
+(defvar *randhound-curve*  :curve-ar160)
 
 (defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
@@ -89,11 +89,16 @@ THE SOFTWARE.
 ;; FOR SIM... Get associations between Node PKeys and their Short PKeys
 
 (defun get-witness-short-keys ()
+  ;; NOTE: It is important that the list of witness keys be kept in
+  ;; consistent order among all nodes. Each node has its own local
+  ;; copy of this list. But unless the ordering is consistent between
+  ;; them, the election outcomes will be seen as different at each
+  ;; node.
   (map 'list
        (lambda (node)
          (list (node-pkey node)
                (node-short-pkey node)))
-       cosi-simgen:*node-bit-tbl*))
+       cosi-simgen:*node-bit-tbl*)) ;; <-- This is the table that should be in consistent sort order
                               
 ;; ------------------------------------------------------------------
 
