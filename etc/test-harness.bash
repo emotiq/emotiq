@@ -31,6 +31,7 @@ lisp=${lisp:-'ccl'}
 systems=${systems:-":emotiq-test \
                     :gossip-test \
                     :crypto-pairings-test \
+                    :emotiq-config-test \
                     :cosi-bls-test"}
 
 echo Test harness invoked using implementation: ${lisp}

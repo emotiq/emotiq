@@ -1,4 +1,4 @@
-(defsystem "emotiq-config-tests"
+(defsystem "emotiq-config-test"
   :version "0.1.0"
   :description "Emotiq"
   :author "Copyright (c) 2018 Emotiq AG"
