@@ -26,6 +26,7 @@ THE SOFTWARE.
   :description "crypto-pairings: bilinear pairings (PBC) functions"
   :version     "1.1.0"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
+  :in-order-to ((test-op (test-op "crypto-pairings-test")))
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
   :components  ((:file "pbc-cffi")
@@ -56,19 +57,6 @@ THE SOFTWARE.
                     :output :string :error :string)
        (format *standard-output* "~tWhew!  Finished.~&")))))
 
-(defsystem "crypto-pairings/t"
-  :depends-on (crypto-pairings
-               lisp-unit)
-  :perform (test-op (o s)
-             (symbol-call :lisp-unit :run-tests
-                          :all :pbc-test))
-  :components ((:module package
-                :pathname "tests/"
-                :components ((:file "package")))
-               (:module tests
-                :depends-on (package)
-                :pathname "tests/"
-                :components ((:file "crypto-tests")))))
 
 
 

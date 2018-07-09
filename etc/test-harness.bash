@@ -25,30 +25,41 @@
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The command to run a Lisp test form:
-lisp=${lisp:-'ros'}
+lisp=${lisp:-'ccl'}
 
-# The default whitespace list of systems to test
-systems=${systems:-":gossip-tests
-                    :crypto-pairings/t
-                    :core-crypto
-                    :emotiq/config
-                    :emotiq/wallet"}
+# systems=${systems:-$(${lisp} --noinit --load ${DIR}/parse-systems.lisp < /dev/null)}
+systems=${systems:-":emotiq-test \
+                    :gossip-test \
+                    :crypto-pairings-test \
+                    :cosi-bls-test"}
 
 echo Test harness invoked using implementation: ${lisp}
 echo $(${lisp} --eval '(format t "~&~a ~a~&" (lisp-implementation-type)(lisp-implementation-version))(uiop:quit 0)' < /dev/null)
-# Sneaky pete exception for PROVE which needs a special ASDF syntax definition
-echo $(${lisp} --eval '(ql:quickload :prove)(uiop:quit 0)' < /dev/null)
+
+# Collect whitespace list of failed systems
+failed=
 
 for system in ${systems}; do
     rm -rf ~/.cache/common-lisp/
     echo "==> ASDF:TEST-SYSTEM invoked on ${system}..."
     ${lisp} \
-        --load ${DIR}/test-harness.lisp \
-        --eval "(test-harness:test-system ${system})"
+        --eval "(ql:quickload :asdf-test-harness)" \
+        --eval "(ql:quickload ${system})" \
+        --eval "(asdf-test-harness:run-suite ${system})" < /dev/null
     status=$?
     if [[ $status -ne 0 ]] ; then
         echo "!== ASDF:TEST-SYSTEM failed for ${system}"
-        exit $status
+        failed="${failed} ${system}"
     fi
     echo "<== ASDF:TEST-SYSTEM on ${system} succeeded."
 done
+
+if [[ ! -z ${failed} ]]; then
+    echo === Tests failed for ${failed}
+    exit 1
+fi
+
+exit 0
+
+                                
+   

@@ -1,4 +1,4 @@
-(defpackage :cosi-tests
+(defpackage :cosi-bls-test
   (:use :cl
    :lisp-unit
    :cosi/proofs
