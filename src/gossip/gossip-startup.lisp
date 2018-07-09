@@ -5,11 +5,6 @@
 (in-package :gossip)
 
 (defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
-(defparameter *stakes* nil "Cached initial value of (pubkey stake) records")
-
-(defun get-stakes ()
-  "Returns cached initial value of (pubkey stake) records"
-  *stakes*)
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)

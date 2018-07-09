@@ -240,9 +240,10 @@ added to the blockchain."
                 (make-instance 'pbc:public-key :val general-public-key))
         collect `(,public-key . ,stake-info)))
 
-;; Currently, our gossip config system gives us public keys as bignums (function
-;; get-stakes in package gossip), while the simulator (function keys-and-stakes
-;; in package emotiq/sim) supplies them as instances.
+;; Currently, our config system gives us public keys as bignums
+;; (function get-stakes in package gossip), while the simulator
+;; (function keys-and-stakes in package emotiq/sim) supplies them as
+;; instances.
     
              
 
