@@ -208,15 +208,26 @@ are in place between nodes.
               (not (temporary-p node)))
     collect key))
 
+(defun remote-monads ()
+  "Returns augmented-data objects for remote UIDs"
+  (values (cdr *remote-uids*)
+          (car *remote-uids*)))
+
 (defun remote-real-uids ()
   "Returns a list of UIDs representing real (non-proxy) nodes resident on other machines.
   Second value returned is a universal-time of last time remotes were pinged."
-  (let* ((remote-monads (cdr *remote-uids*))
+  (let* ((remote-monads (remote-monads))
          (remote-uids (loop for item in remote-monads
                         when (typep item 'augmented-data) collect (unwrap item))))
     (setf remote-uids (apply 'append remote-uids)) ; because each is a list
     (values remote-uids
             (car *remote-uids*))))
+
+(defun monad-for-remote-uid (uid)
+  "Returns remote-monad that contains given uid, if any"
+  (find-if (lambda (monad)
+             (member uid (data monad) :test 'eql))
+           (remote-monads)))
 
 (defun uber-set ()
   "Returns a complete list of UIDs of real nodes (not proxies) known on both this machine and other machines.
@@ -2129,7 +2140,9 @@ gets sent back, and everything will be copacetic.
                                             :port port
                                             :message-received-hook 'transport-message-received
                                             :peer-up-hook 'transport-peer-up
-                                            :peer-down-hook 'transport-peer-down))))
+                                            :peer-down-hook 'transport-peer-down))
+    (setf *actual-tcp-gossip-port* port)
+    *transport*))
 
 (defun transport-message-received (message)
   "Callback for transport layer on incoming message from other node."
@@ -2139,12 +2152,13 @@ gets sent back, and everything will be copacetic.
     (destructuring-bind (destuid srcuid rem-address rem-port msg) packet
       (log-event "Gossip transport message received" rem-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
-      (let ((reply-to (reply-to message)))
-        (when (or (uid? reply-to) ; if reply-to is nil or not one of these, we don't need a proxy to reply to
-                  (eq :UPSTREAM reply-to))
-          (unless (lookup-node srcuid) ; never automatically replace a real node with a proxy here
-            (ensure-proxy-node :tcp rem-address rem-port srcuid)))
-        (incoming-message-handler msg srcuid destuid)))))
+      (when (typep msg 'solicitation) ; only make proxies for solicitations; never replies
+        (let ((reply-to (reply-to msg))) ; and even then, only make proxies for solicitations that expect replies
+          (when (or (uid? reply-to) ; if reply-to is nil or not one of these, we don't need a proxy to reply to
+                    (eq :UPSTREAM reply-to))
+            (unless (lookup-node srcuid) ; never automatically replace a real node with a proxy here
+              (ensure-proxy-node :tcp rem-address rem-port srcuid)))))
+      (incoming-message-handler msg srcuid destuid))))
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
@@ -2210,7 +2224,7 @@ gets sent back, and everything will be copacetic.
                              (sign-message (list (real-uid node) ; destuid
                                                  srcuid          ; srcuid
                                                  (eripa)
-                                                 *nominal-gossip-port*
+                                                 *actual-tcp-gossip-port*
                                                  gossip-msg))))  ; message (payload)
 
 (defmethod deliver-gossip-msg (gossip-msg (node gossip-node) srcuid)
