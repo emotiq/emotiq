@@ -84,7 +84,8 @@
   "Announce the presence of pkey (node UID) at ipaddr and ipport to a graph. Nodes traversed will
    add the pkey/ipaddr pair to their knowledge of the :uber graph.
    graphID here is merely the graph traversed by this message; this does not connect nodes to any given
-   graph except for the :uber graph."
+   graph except for the :uber graph.
+   This is the 'push' equivalent of the 'pull' function #'ping-other-machines."
   (broadcast (list pkey ipaddr ipport) :style style :graphID graphID :startnodeID startnodeID :kind ':k-hello))
 
 ;;; NOT DONE YET
