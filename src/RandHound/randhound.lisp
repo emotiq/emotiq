@@ -218,7 +218,9 @@ THE SOFTWARE.
   encr-shares ;; list of encrypted shares
   proofs      ;; list of share proofs
   chks        ;; list of checks on proofs
-  rval)       ;; grand decryption check value
+  rval        ;; grand decryption check value
+  hran        ;; hash of the secret randomness
+  )
 
 (defmethod rh-dispatcher ((msg-sym (eql :start)) &key session epoch from groups sig)
   ;; Every node runs this startup code.
@@ -278,6 +280,9 @@ THE SOFTWARE.
                (msg   (pbc:with-curve *randhound-curve*
                         (let* ((q          (pbc:get-order))
                                (coffs      (loop repeat share-thresh collect (random-between 1 q)))
+                               (secret     (um:last1 coffs))
+                               (g          (compute-pairing (get-g1) (get-g2)))
+                               (hran       (hash/256 (expt-gt-zr g secret)))
                                (krand      (random-between 1 q))
                                (shares     (mapcar (um:curry 'poly q coffs) xvals))
                                (proofs     (mapcar (um:compose
@@ -305,7 +310,8 @@ THE SOFTWARE.
                                        :encr-shares enc-shares
                                        :proofs      proofs
                                        :chks        chks
-                                       :rval        rval))
+                                       :rval        rval
+                                       :hran        hran))
                           ))))
           
           (broadcast-grp+me msg :graphID graph)
@@ -530,6 +536,7 @@ THE SOFTWARE.
                    (my-session      rh-group-info-session)
                    (my-rands        rh-group-info-rands)
                    (my-entropy      rh-group-info-entropy)
+                   (my-commits      rh-group-info-commits)
                    (share-thresh    rh-group-info-share-thr)) *rh-state*
     (let* ((node  (current-node))
            (me    (node-pkey node)))
@@ -538,6 +545,8 @@ THE SOFTWARE.
              (int= session my-session)                         ;; correct session?
              (find for  my-group :test 'int= :key 'first)      ;; for commitment in my group
              (find from my-group :test 'int= :key 'first)      ;; from witness in my group
+             (let ((commit (second (find for my-commits :test 'int= :key 'first))))
+               (hash= (hash/256 rand) (subgroup-commit-hran commit))) ;; valid randomness extraction?
              (validate-signed-subgroup-randomness-message session for from rand sig)) ;; valid message?
 
         (let* ((for-key   (int for))
