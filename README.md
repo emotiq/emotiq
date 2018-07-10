@@ -9,7 +9,7 @@ to this repository.
 We assert an MIT license over this source aggregation; see
 <https://github.com/emotiq/emotiq/blob/master/LICENSE.txt>.
 
-## Developer installation instructions to test the basic EMOTIQ-TESTS system
+## Developer installation instructions to run the software
 
 This is a predominantly Common Lisp code base.
 
@@ -26,10 +26,10 @@ extent we have the resources for such an effort.
 ### Tell ASDF where to find the Emotiq systems
 
 First, place a copy of this repository somewhere locally on your
-machine.
-We refer to that location as `~/work/emotiq/` in the
-following instructions, so, please, adjust location of the source tree in the `emotiq.conf` if you have your local copy
-of the repository in a different location.
+machine.  We refer to that location as `~/work/emotiq/` in the
+following instructions, so, please, adjust location of the source tree
+in the `emotiq.conf` if you have your local copy of the repository in
+a different location.
 
 Configure ASDF to search `~/work/emotiq/` at Lisp boot by copying
 `etc/emotiq.conf` (adjusting path to the source tree, if needed) to
@@ -98,20 +98,39 @@ To effect the configuration of this setup, execute the forms in
 
 After Quicklisp has been installed and configured, then issuing
 ```lisp
-(ql:quickload :emotiq/sim)
+(ql:quickload :emotiq/startup)
 ```
-will download all the dependencies needed by the tests gathered into
-the `emotiq/sim` ASDF system.
+will download all the dependencies needed to run the `emotiq:main` loop.
+
 
 ### Test
 
-To evaluate form to test, which also loads, the system:
+We write a variety of tests, differentiated into those which don't
+depend on dynamic system state for their execution ("Unit tests") and
+those that do ("system integration tests").  
+
+We collect our unit tests in suites by defining `lisp-unit` test
+packaged into discrete ASDF systems.  For a given ASDF system, its
+unit tests will be defined in in a system suffixed with `-test`.  
+To test, say `cosi-bls`, one may interactively run the suite in `cosi-bls-test` 
+via:
+
 ```lisp
-(ql:quickload :lisp-unit)       ;;; this requirement will be removed soon
-(asdf:test-system :emotiq)
+(ql:quickload :cosi-bls-test)       
+(asdf:test-system :cosi-bls-test)
 ```
 
-At end you should see a result like
+For convenience of running all the tests for our software, we have
+factored the necessary generalizations into `asdf-test-harness`,
+introducing the `run-suite` and `run-all-suite` methods.
+
+```lisp
+(ql:quickload :asdf-test-harness)
+(harness:run-all-suites)
+```
+
+
+For each test suite, you will see a result like:
 ```
     Unit Test Summary
      | 12 assertions total
@@ -120,8 +139,12 @@ At end you should see a result like
      | 0 execution errors
      | 0 missing tests
 ```
+
 The counts of assertions/passed should go up over time, and should
 stay equal, with other counts staying zero.
+
+Both `harness:run-suite` and `harness:run-all-suites` return nil if
+any of the `lisp-unit` tests fail.
 
 ### Running
 
@@ -136,19 +159,26 @@ dependencies may need to be satisfied by via `ql:quickload`.
 Currently we are working on many systems simultaneously, most noteworthy
 among them being the work in the `cosi-bls` system.
 
-If in exploring the code one finds a missing dependency, say for the
-system `cosi-bls`, a simple
+If in exploring the code one finds system that can't resolve its ASDF
+defpendencies, then an invocation of `ql:quickload` for that system
+will resolve these dependencies.  We will eventually provide an
+interfactive `cl:restart that does the network dependency loading more
+conveniently.
+
+If say `cosi-bls` complains about not finding `ironclad`, a simple
 ```lisp
 (ql:quickload :cosi-bls)
 ```
 
-should satisfy the dependencies.  (TODO: `cl:restart` for missing
-dependencies).
+will satisfy the dependencies by necessary network loads from the
+Quicklisp distributions.
+
 
 #### Notes on building the native libraries required by CRYPTO-PAIRINGS
 
 Currently, we have a dependency on a C library to do our pair based
-curve (PBC) cryptography, which in turn depends on GMP library.
+curve (PBC) cryptography, which in turn depends on the GNU GMP
+library.
 
 We have a separate repository
 [emotiq-external-libs](https://github.com/emotiq/emotiq-external-libs),
@@ -179,11 +209,11 @@ All these compilations and linking are done transparently during normal systems 
 As a convenience, loading the ASDF definition for `crypto-pairings`
 will attempt to run the script to create the native libraries.  If one
 is updating this tree from a previous version, one may explicitly have
-to force the asdf `prepare-op` via so:
+to force the asdf 
 :bangbang: Not needed during normal workflow
 
 ```lisp
-(asdf:make :crypto-pairings)
+(asdf:make :crypto-pairings :force :all)
 ```
 :bangbang: Not needed during normal workflow
 
@@ -198,4 +228,5 @@ artifact at <https://github.com/emotiq/emotiq/blob/dev/.gitlab-ci.yml>.
 
     Copyright (c) 2018 Emotiq AG
     Created: 20-FEB-2018
-    Revised: <2018-06-11T07:06:50Z>
+    Revised: <2018-07-10 Tue 14:31Z>
+    
