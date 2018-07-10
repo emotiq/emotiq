@@ -64,13 +64,3 @@
    #:initialize 
    #:get-values))
 
-(defpackage :gossip/transport
-  (:use :cl)
-  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
-  (:export
-   #:start-transport
-   #:stop-transport
-   #:status
-   #:transmit))
-
-
