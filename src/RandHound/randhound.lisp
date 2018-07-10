@@ -340,6 +340,7 @@ THE SOFTWARE.
   (with-accessors ((my-session  rh-group-info-session)
                    (my-group    rh-group-info-group)
                    (my-commits  rh-group-info-commits)
+                   (share-thr   rh-group-info-share-thr)
                    (my-graph    rh-group-info-graph)) *rh-state*
     (with-accessors ((proofs       subgroup-commit-proofs)
                      (chks         subgroup-commit-chks)
@@ -348,9 +349,12 @@ THE SOFTWARE.
       (let* ((node      (current-node))
              (me        (node-pkey node))
              (ngrp      (length my-group))
+             ;; (share-thr (- ngrp (floor (1- ngrp) 3))) ;; use the 2/3 criteria here
+             (ncomms    (length my-commits))
              (from-pair nil))  ;; long and short pkeys
             
         (when (and
+               (< ncomms share-thr)             ;; still awaiting commits?
                (int= session my-session)        ;; correct session?
                (setf from-pair
                      (find from my-group        ;; from someone in my group?
@@ -361,7 +365,6 @@ THE SOFTWARE.
                           :key  'first))
                (chk-proofs proofs chks (second from-pair)))   ;; valid collection of proofs?
 
-          (push (list from commit) my-commits)
           (let ((decr-share
                  (pbc:with-curve *randhound-curve*
                    ;; verify consistency of polynomial shares
@@ -401,32 +404,34 @@ THE SOFTWARE.
                              my-share))
                           )))))
             (when decr-share
-              ;; send my decrypted share to all group members
-              (broadcast-grp+me (make-signed-decr-share-message
-                                 session me from decr-share (node-skey node))
-                                :graphID my-graph))
+              (push (list from decr-share commit) my-commits)
+              (when (= (1+ ncomms) share-thr)
+                (let ((shares (mapcar (um:rcurry 'subseq 0 2) my-commits)))
+                  ;; send my decrypted share to all group members
+                  (broadcast-grp+me (make-signed-decr-share-message
+                                     session me shares (node-skey node))
+                                    :graphID my-graph))))
             ))))))
 
 ;; ----------------------------------------------------------------------------
 
-(defun make-decr-share-message-skeleton (session from for decr-share)
+(defun make-decr-share-message-skeleton (session from shares)
   `(:randhound :subgroup-decrypted-share
     :from       ,from
-    :for        ,for
     :session    ,session
-    :decr-share ,decr-share
+    :shares     ,shares
     :sig))
 
-(defun make-signed-decr-share-message (session from for decr-share skey)
-  (let ((skel (make-decr-share-message-skeleton session from for decr-share)))
+(defun make-signed-decr-share-message (session from shares skey)
+  (let ((skel (make-decr-share-message-skeleton session from shares)))
     (um:append1 skel (pbc:sign-hash skel skey))))
 
-(defun validate-signed-decr-share-message (session from for decr-share sig)
-  (let ((skel (make-decr-share-message-skeleton session from for decr-share)))
+(defun validate-signed-decr-share-message (session from shares sig)
+  (let ((skel (make-decr-share-message-skeleton session from shares)))
     (pbc:check-hash skel sig from)))
 
 
-(defun reduce-lagrange-interpolate (xy-pairs q)
+(defun reduce-lagrange-interpolate (xy-pairs)
   ;; xy-pairs is a list of (x y) pairs, where x's are cardinal indexes 1, 2, ...
   ;; and y is a GT field subgroup value computed from some Tate pairing operation.
   ;;
@@ -434,7 +439,8 @@ THE SOFTWARE.
   ;; interpolation weight for the x value, and multiply them all
   ;; together to derive a final randomness value.
   ;;;
-  (let ((xs (mapcar 'first xy-pairs)))
+  (let ((xs (mapcar 'first xy-pairs))
+        (q  (get-order)))
     (labels ((rand-gt (x y)
                (expt-gt-zr y (lagrange-wt q xs x)))
              (rand-gt-pair (pair)
@@ -445,7 +451,7 @@ THE SOFTWARE.
               :initial-value (rand-gt-pair (car xy-pairs))
               ))))
 
-(defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from for decr-share sig)
+(defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from shares sig)
   ;; Each node gets this message from other nodes in the group, and
   ;; from themself. Collect the decrypted shares into lists per the
   ;; "for" node which constructed the corresponding commitment.
@@ -457,68 +463,57 @@ THE SOFTWARE.
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-group-leader rh-group-info-leader)
                    (my-group        rh-group-info-group)
+                   (share-thr       rh-group-info-share-thr)
                    (my-session      rh-group-info-session)
                    (share-thresh    rh-group-info-share-thr)) *rh-state*
     (when (and
            (int= session my-session)              ;; correct session?
            (find from my-group :test 'int= :key 'first)       ;; from member of my group?
-           (find for  my-group :test 'int= :key 'first)       ;; for member of my group?
-           (validate-signed-decr-share-message session from for decr-share sig))
+           (validate-signed-decr-share-message session from shares sig))
       
       (let* ((node         (current-node))
              (me           (node-pkey node))
-             (for-key      (int for))
-             (for-shares   (gethash for-key my-shares))
-             (for-count    (length for-shares)))
-        (when (and (< for-count share-thresh)
-                   (not (find from for-shares
-                              :key  'first
-                              :test 'int=)))
-          (let ((from-index (1+ (position from my-group :test 'int= :key 'first))))
-            (push (list from from-index decr-share) for-shares)
-            (if (= (1+ for-count) share-thresh)
-                (let ((rand (pbc:with-curve *randhound-curve*
-                              (let* ((q       (pbc:get-order))
-                                     ;; since share-thresh = byz-fail + 1, any
-                                     ;; collection of share-thresh values will
-                                     ;; include at least one honest random
-                                     ;; contribution. So just take the first of them
-                                     ;; in the list.
-                                     (xypairs (mapcar 'cdr for-shares)))
-                                (reduce-lagrange-interpolate xypairs q)))
-                            ))
-                  ;; send decoded randomness to group leader
-                  (apply 'send my-group-leader
-                         (make-signed-subgroup-randomness-message session for me rand
-                                                                  (node-skey node))))
-              ;; else
-              (setf (gethash for-key my-shares) for-shares))
-            ))
+             (share-index  (1+ (position me my-group :test 'int= :key 'first)))
+             (rands        nil))
+        (pbc:with-curve *randhound-curve*
+          (loop for (poly share) in shares do
+                (let* ((key  (int poly))
+                       (rec  (gethash key my-shares))
+                       (nel  (length rec)))
+                  (when (< nel share-thr)
+                    (setf (gethash key my-shares) (cons (list share-index share) rec))
+                    (when (= (1+ nel) share-thr)
+                      (push (list poly (reduce-lagrange-interpolate rec)) rands)
+                      )))))
+        (when rands
+          ;; send decoded randomness to group leader
+          (apply 'send my-group-leader
+                 (make-signed-subgroup-randomness-message session me rands
+                                                          (node-skey node))))
         ))))
 
 ;; ----------------------------------------------------------------------------
 
-(defun make-subgroup-randomness-message-skeleton (session for from rand)
+(defun make-subgroup-randomness-message-skeleton (session from rands)
   `(:randhound :subgroup-randomness
     :session ,session
-    :for     ,for
     :from    ,from
-    :rand    ,rand
+    :rands   ,rands
     :sig))
 
-(defun make-signed-subgroup-randomness-message (session for from rand skey)
-  (let ((skel (make-subgroup-randomness-message-skeleton session for from rand)))
+(defun make-signed-subgroup-randomness-message (session from rands skey)
+  (let ((skel (make-subgroup-randomness-message-skeleton session from rands)))
     (um:append1 skel (pbc:sign-hash skel skey))))
 
-(defun validate-signed-subgroup-randomness-message (session for from rand sig)
-  (let ((skel (make-subgroup-randomness-message-skeleton session for from rand)))
+(defun validate-signed-subgroup-randomness-message (session from rands sig)
+  (let ((skel (make-subgroup-randomness-message-skeleton session from rands)))
     (pbc:check-hash skel sig from)))
 
 (defstruct rand-entry
   froms  ;; holds list of contributor pkeys
   rand)  ;; holds accumulating randomness
 
-(defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session for from rand sig)
+(defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session from rands sig)
   ;; Group leaders perform this code.
   ;;
   ;; Collect a BFT Threshold number of decoded secret random values
@@ -538,55 +533,57 @@ THE SOFTWARE.
                    (my-entropy      rh-group-info-entropy)
                    (my-commits      rh-group-info-commits)
                    (share-thresh    rh-group-info-share-thr)) *rh-state*
-    (let* ((node  (current-node))
-           (me    (node-pkey node)))
+    (let* ((node     (current-node))
+           (me       (node-pkey node))
+           (finished (and my-entropy
+                          (>= (length (rand-entry-froms my-entropy))
+                              share-thresh))))
       (when (and
              my-super                                          ;; I'm a group leader?
+             (not finished)
              (int= session my-session)                         ;; correct session?
-             (find for  my-group :test 'int= :key 'first)      ;; for commitment in my group
              (find from my-group :test 'int= :key 'first)      ;; from witness in my group
-             (let ((commit (second (find for my-commits :test 'int= :key 'first))))
-               (hash= (hash/256 rand) (subgroup-commit-hran commit))) ;; valid randomness extraction?
-             (validate-signed-subgroup-randomness-message session for from rand sig)) ;; valid message?
+             (validate-signed-subgroup-randomness-message session from rands sig)) ;; valid message?
 
-        (let* ((for-key   (int for))
-               (for-rands (gethash for-key my-rands)))
-          (cond (for-rands
-                 (with-accessors ((for-froms  rand-entry-froms)
-                                  (for-rand   rand-entry-rand)) for-rands
-                   (let ((for-count (length for-froms)))
-                     (unless (or (find from for-froms :test 'int=) ;; ignore duplicates
-                                 (>= for-count share-thresh))
-                       (push from for-froms)
-                       (pbc:with-curve *randhound-curve*
-                         (setf for-rand (mul-gts rand for-rand)))
-                       (when (= (1+ for-count) share-thresh)
-                         (cond (my-entropy
-                                (with-accessors ((entropy-froms  rand-entry-froms)
-                                                 (entropy-rand   rand-entry-rand)) my-entropy
-                                  (let ((entropy-count (length entropy-froms)))
-                                    (when (< entropy-count share-thresh)
-                                      (push for entropy-froms)
-                                      (pbc:with-curve *randhound-curve*
-                                        (setf entropy-rand (mul-gts entropy-rand for-rand)))
-                                      (when (= (1+ entropy-count) share-thresh)
-                                        (apply 'send my-super   ;; send to beacon
-                                               (make-signed-group-randomness-message session me entropy-rand
-                                                                                     (node-skey node))))
-                                      ))))
-                               (t
-                                (setf my-entropy
-                                      (make-rand-entry
-                                       :froms (list for)
-                                       :rand  for-rand)))
-                               ))))))
-                
-                (t
-                 (setf (gethash for-key my-rands)
-                       (make-rand-entry
-                        :froms (list from)
-                        :rand  rand)))
-                ))))))
+        (loop for (poly rand) in rands do
+              (let* ((key   (int poly))
+                     (rec   (gethash key my-rands)))
+                (cond (rec
+                       (let ((nel (length (rand-entry-froms rec))))
+                         (when (< nel share-thresh)
+                           (push me (rand-entry-froms rec))
+                           (with-curve *randhound-curve*
+                             (setf (rand-entry-rand rec)
+                                   (mul-gts (rand-entry-rand rec) rand)))
+                           (when (= (1+ nel) share-thresh)
+                             (if my-entropy
+                                 (let ((nel (length (rand-entry-froms my-entropy))))
+                                   (when (< nel share-thresh)
+                                     (push poly (rand-entry-froms my-entropy))
+                                     (with-curve *randhound-curve*
+                                       (setf (rand-entry-rand my-entropy)
+                                             (mul-gts (rand-entry-rand my-entropy)
+                                                      (rand-entry-rand rec))))
+                                     (when (= (1+ nel) share-thresh)
+                                       (apply 'send my-super   ;; send to beacon
+                                              (make-signed-group-randomness-message session me
+                                                                                    (rand-entry-rand my-entropy)
+                                                                                    (node-skey node))))
+                                     ))
+                               ;; haven't started group entropy accum yet
+                               (setf my-entropy
+                                     (make-rand-entry
+                                      :froms (list poly)
+                                      :rand  rand))
+                               )))))
+                      
+                      (t
+                       ;; haven't seen anything for this polynomial yet
+                       (setf (gethash key my-rands)
+                             (make-rand-entry
+                              :froms (list poly)
+                              :rand  rand)))
+                      )))))))
 
 ;; ------------------------------------------------------------------
 
