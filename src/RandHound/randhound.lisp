@@ -37,11 +37,13 @@ THE SOFTWARE.
 
 (defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
-  ;; too easy to goof up if you have to recompute them
+  ;; too easy to goof up if you have to recompute manually
   (floor (1- ngrp) 2))
 
 ;; ----------------------------------------------------------------
 (defun poly (q coffs x)
+  ;; Horner's method for computing polynomials
+  ;; Note: coffs in descending order
   (with-mod q
     (um:nlet-tail iter ((cs  coffs)
                         (ans 0))
@@ -53,6 +55,7 @@ THE SOFTWARE.
     ))
 
 (defun invwt (q n xj)
+  ;; used in computing Reed-Solomon check vectors
   (with-mod q
     (um:nlet-tail iter ((ix   1)
                         (prod 1))
@@ -65,6 +68,7 @@ THE SOFTWARE.
         ))))
 
 (defun lagrange-wt (q ns xj)
+  ;; used in performing Lagrange interpolation of shares
   (with-mod q
     (let ((num  1)
           (den  1))
@@ -75,6 +79,9 @@ THE SOFTWARE.
       (m/ num den))))
 
 (defun dotprod-g1-zr (pts zrs)
+  ;; form the dot producct between a list of G_1 points and a list of
+  ;; Z_r vals. Used to perform the Reed-Solomon check on the
+  ;; commitment proofs vector
   (um:nlet-tail iter ((pts  pts)
                       (zrs  zrs)
                       (ans  nil))
@@ -229,15 +236,16 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------------------------------
 
+(defun make-signed-message (msg)
+  (append msg (list :sig (pbc:sign-hash msg (node-skey (current-node))))))
+
+
 (defun make-start-message-skeleton (session epoch pkey groups)
   `(:randhound :start
     :session ,session
     :epoch   ,epoch
     :from    ,pkey
     :groups  ,groups))
-
-(defun make-signed-message (msg)
-  (append msg (list :sig (pbc:sign-hash msg (node-skey (current-node))))))
 
 (defun make-signed-start-message (session epoch pkey groups)
   (let ((skel (make-start-message-skeleton session epoch pkey groups)))
