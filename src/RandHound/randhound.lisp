@@ -180,6 +180,8 @@ THE SOFTWARE.
   (send *watcher* :tally kwsym))
 
 ;; ------------------------------------------------------------------
+;; STAGE 1 - Startup
+;; ------------------------------------------------------------------
 ;; Start up a Randhound round - called from election central when node is *BEACON*
 
 (defvar *rh-start*  nil) ;; record time of start so we can report run times.
@@ -234,6 +236,8 @@ THE SOFTWARE.
         (broadcast+me (make-signed-start-message session *local-epoch* me grps))
         ))))
 
+;; ----------------------------------------------------------------------------------
+;; STAGE 2 -- Generate Shared Secret Randomness
 ;; ----------------------------------------------------------------------------------
 
 (defun make-signed-message (msg)
@@ -364,6 +368,9 @@ THE SOFTWARE.
         ))))
 
 ;; ----------------------------------------------------------------------------
+;; STAGE 3 -- Accumulate Commitments until a super-majority, then show
+;; all the decrypted shares
+;; ----------------------------------------------------------------------------
 
 (defun make-subgroup-commit-message-skeleton (session from commit)
   `(:randhound :subgroup-commit
@@ -461,6 +468,9 @@ THE SOFTWARE.
       )))
 
 ;; ----------------------------------------------------------------------------
+;; STAGE 4 -- Accumulate decrypted shares until we can perform
+;; Lagrange interpolation to unwrap the hidden randomness
+;; ----------------------------------------------------------------------------
 
 (defun make-decr-share-message-skeleton (session from shares)
   `(:randhound :subgroup-decrypted-share
@@ -555,6 +565,8 @@ THE SOFTWARE.
                  (make-signed-subgroup-randomness-message session me rands)))
         ))))
 
+;; ----------------------------------------------------------------------------
+;; STAGE 6 -- Group Leader accumulates incoming randomness
 ;; ----------------------------------------------------------------------------
 
 (defun make-subgroup-randomness-message-skeleton (session from rands)
@@ -666,6 +678,8 @@ THE SOFTWARE.
                               :rand  rand)))
                       )))))))
 
+;; ------------------------------------------------------------------
+;; STAGE 7 -- Beacon node accumulates group-leader randomness
 ;; ------------------------------------------------------------------
 
 (defun make-group-randomness-message-skeleton (session from rand)
