@@ -33,8 +33,6 @@
 
 (defparameter *eripa* nil "Externally-routable IP address (or domain name) for this machine, if known")
 
-(defparameter *gossip-absorb-errors* nil "True for normal use; nil for debugging")
-
 (defvar *last-uid* 0 "Simple counter for making UIDs. Only used for :short style UIDs.")
 (defvar *last-tiny-uid* 0 "Simple counter for making UIDs")
 
@@ -70,11 +68,7 @@
 
 (defvar *ll-application-handler* nil "Set to a function to be called when the API methods reach their target.")
 
-(defmacro gossip-handler-case (form &rest clauses)
-  `(if *gossip-absorb-errors*
-       (handler-case ,form
-         ,@clauses)
-       ,form))
+
 
 ;; ------------------------------------------------------------------------------
 ;; Generic handling for expected authenticated messages. Check for
