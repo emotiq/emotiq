@@ -309,7 +309,7 @@ THE SOFTWARE.
                (grp-fails     (um:nlet-tail iter ((grps   groups)
                                                   (fails  tfails)
                                                   (gfails 0))
-                                
+                                ;; count up number of groups that could fail
                                 (let* ((grp       (car grps))
                                        (byz-fails (1+ (max-byz-fails (length grp)))))
                                   (if (>= fails byz-fails)
