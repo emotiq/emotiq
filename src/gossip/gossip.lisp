@@ -1942,7 +1942,9 @@ gets sent back, and everything will be copacetic.
   Returns newly-created or old proxy-gossip-node, if any.
   This is very conservative: It will never replace an existing real node of a given UID with a proxy node,
     and it will never replace an existing proxy node of a given UID with a new one.
-  Newly-created proxy (if any) will be added to *nodes* database for this process."
+  Newly-created proxy (if any) will be added to *nodes* database for this process.
+  If successful, proxy (new or existing) will be returned.
+  If proxy could not be found nor made for some reason, returns NIL."
   (check-type real-port integer) ; might want to support lookup of port-name to port-number eventually
   (let* ((oldnode (lookup-node real-uid)) ; proxy uids should match their real-uids
          (proxy nil))
@@ -2025,12 +2027,16 @@ gets sent back, and everything will be copacetic.
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
       (when (typep msg 'solicitation) ; only make proxies for solicitations; never replies
         (let ((reply-to (reply-to msg))) ; and even then, only make proxies for solicitations that expect replies,
-                                         ;  and even then, make the proxy be temporary so it won't be found by
-                                         ;  e.g. #'uber-set
+          ;  and even then, make the proxy be temporary so it won't be found by
+          ;  e.g. #'uber-set
           (when (or (uid? reply-to) ; if reply-to is nil or not one of these, we don't need a proxy to reply to
                     (eq :UPSTREAM reply-to))
-            (unless (lookup-node srcuid) ; never automatically replace a real node with a proxy here
-              (ensure-proxy-node :tcp rem-address rem-port srcuid t)))))
+            (let ((proxy (ensure-proxy-node :tcp rem-address rem-port srcuid t)))
+              ; if we needed a proxy for replies and failed to make one (or find one), then
+              ;   an error happened, so drop the whole message on the floor.
+              (unless proxy
+                (edebug 1 :ERROR "Dropped message because proxy for reply couldn't be made" msg)
+                (return-from transport-message-received nil))))))
       (incoming-message-handler msg srcuid destuid))))
 
 (defun transport-peer-up (peer-address peer-port)
