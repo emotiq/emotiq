@@ -191,11 +191,17 @@ are in place between nodes.
                (funcall fn node))
       collect node)))
 
+(defun real-node-p (node)
+  (and (typep node 'gossip-node)
+       (not (temporary-p node))))
+
+(defun proxy-node-p (node)
+  (and (typep node 'proxy-gossip-node)
+       (not (temporary-p node))))
+
 (defun local-real-nodes ()
   "Returns a list of nodes that are real (non-proxy), permanent and resident on this machine."
-  (local-nodes-matching (lambda (node) 
-                          (and (typep node 'gossip-node)
-                               (not (temporary-p node))))))
+  (local-nodes-matching 'real-node-p))
 
 (defun random-node ()
   "Only used for testing"
@@ -207,10 +213,8 @@ are in place between nodes.
   (mapcar 'uid (local-real-nodes)))
 
 (defun remote-real-uids ()
-  "Returns a list of UIDs representing real (non-proxy) nodes resident on other machines."
-  (mapcar 'uid (local-nodes-matching (lambda (node) 
-                          (and (typep node 'proxy-gossip-node)
-                               (not (temporary-p node)))))))
+  "Returns a list of UIDs representing real nodes known to be resident on other machines."
+  (mapcar 'uid (local-nodes-matching 'proxy-node-p)))
 
 (defun uber-set ()
   "Returns a complete list of UIDs of real nodes known on both this machine and other machines.
@@ -654,21 +658,21 @@ are in place between nodes.
       (set-uid node (real-uid node)))
     (memoize-node node)))
 
-(defgeneric locate-local-node-for-graph (graphID)
+(defgeneric locate-local-uid-for-graph (graphID)
   (:documentation "Returns UID of some local real node that's part of given graphID, if any"))
 
-(defmethod locate-local-node-for-graph ((graphID (eql :UBER)))
+(defmethod locate-local-uid-for-graph ((graphID (eql :UBER)))
   "Every local real node and every local permanent proxy is part of the :UBER set by definition.
    But here we only want to return a real node. No proxies allowed."
   ; This could be more efficient with proper short-circuiting. Fix it later.
   (let ((node (first (local-real-nodes))))
     (when node (uid node))))
 
-(defmethod locate-local-node-for-graph ((graphID t))
-  (let* ((localnodes (local-real-nodes))
-         (node (find-if (lambda (node)
-                          (kvs:lookup-key (neighbors node) graphID))
-                        localnodes)))
+(defmethod locate-local-uid-for-graph ((graphID t))
+  ; Again, not as efficient as it should be.
+  (let ((node (car (local-nodes-matching (lambda (node)
+                                           (and (real-node-p node)
+                                                (kvs:lookup-key (neighbors node) graphID)))))))
     (when node (uid node))))
 
 ;;;; Graph making routines. Mostly just for testing and simulation, because these only work on local machine.

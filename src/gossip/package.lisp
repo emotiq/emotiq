@@ -39,8 +39,10 @@
    #:deserialize-log
    #:visualize-nodes
    #:uid
+   #:gossip-init
 
    ; API
+   #:locate-local-uid-for-graph
    #:application-handler
    #:*ll-application-handler*
    #:get-live-uids
