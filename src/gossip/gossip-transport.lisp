@@ -187,9 +187,9 @@
   (gossip-handler-case
       (loop
          (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
+           (edebug 5 :transport "Received message apparently from" (usocket:get-peer-address socket) msg)
            (when (message-received-hook transport)
-             (funcall (message-received-hook transport) msg))
-           (edebug 5 :transport "Received message apparently from" (usocket:get-peer-address socket) msg)))
+             (funcall (message-received-hook transport) msg))))
     (error (err)
       (edebug 5 :error "Read thread error" err)
       (usocket:socket-close socket))))
