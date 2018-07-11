@@ -137,7 +137,7 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
                                    (uiop:native-namestring svgpath))))
           (t (error "Cannot locate graphviz sfdp command. Please install graphviz first.")))))
 
-(defmethod visualize-nodes ((nodes hash-table) &optional (graphID *default-graphID*))
+(defmethod visualize-nodes ((nodes hash-table) &optional (graphID +default-graphID+))
   (visualize-nodes (listify-nodes nodes) graphID))
 
 (defparameter *html-header*
@@ -179,7 +179,7 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
     (convert-dotfile-to-svg dotpath svgpath)
     (values dotpath svgpath)))
 
-(defmethod visualize-nodes ((nodelist list) &optional (graphID *default-graphID*))
+(defmethod visualize-nodes ((nodelist list) &optional (graphID +default-graphID+))
   "Calls visualize-nodes-svg, then converts that file into an html file that automatically
   resizes the svg image as you resize your browser window. Opens html file in browser."
   (let ((len (length nodelist)))

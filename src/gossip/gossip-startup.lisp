@@ -51,7 +51,7 @@
    Stashes result along with time of acquisition at *live-uids*>"
   (when hosts
     (let ((others (multiple-list-uids hosts)))
-      (setf *remote-uids* (cons (get-universal-time) others)
+      (setf *remote-monads* (cons (get-universal-time) others)
             *uber-set-cache* nil) ; invalidate this cache
       others)))
 
