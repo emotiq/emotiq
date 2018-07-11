@@ -140,7 +140,7 @@ THE SOFTWARE.
         
         (t
          (let ((me (node-pkey (current-node))))
-           (dolist (pkey (cons me (remove me graphID :test 'int=)))
+           (dolist (pkey (cons me (remove me graphID :test 'pbc=)))
              (apply 'send pkey msg))))
         ))
 
@@ -198,7 +198,7 @@ THE SOFTWARE.
   (let* ((node (current-node))
          (me   (node-pkey node)))
 
-    (when (int= me *beacon*)
+    (when (pbc= me *beacon*)
       (let* ((witnesses  (get-witness-short-keys))
              (session    (hash/256 *local-epoch* (uuid:make-v1-uuid) *beacon*))
              (grpids     (mapcar (lambda (wit)
@@ -212,7 +212,7 @@ THE SOFTWARE.
              (twit       (min 1600 (length sorted)))  ;; total witness nodes
              (tsqrt      (min   40 (isqrt twit)))     ;; their square root
              (swits      (subseq sorted 0 twit))      ;; select out no more than 1600 nodes
-             (ngrp       (if (< tsqrt 6)  ;; nbr nodes per group
+             (ngrp       (if (< tsqrt 6)              ;; nbr nodes per group
                              twit
                            tsqrt))
              (grps       (nreverse (um:group swits ngrp)))) ;; actual groups
@@ -251,7 +251,7 @@ THE SOFTWARE.
 (defstruct subgroup-commit
   encr-shares ;; list of encrypted shares
   proofs      ;; list of share proofs
-  rpt)        ;; random generator
+  kpt)        ;; random generator
 
 
 (defmethod rh-dispatcher ((msg-sym (eql :start)) &key session epoch from groups sig)
@@ -263,19 +263,19 @@ THE SOFTWARE.
   ;; information to all other nodes in our group.
   ;;
   (when (and (= epoch *local-epoch*)
-             (int= from *beacon*)
+             (pbc= from *beacon*)
              (validate-signed-start-message session epoch from groups sig))
 
     (let* ((node           (current-node))
            (me             (node-pkey node))
            (my-group       (find-if (lambda (grp)
-                                      (find me grp :test 'int= :key 'first))
+                                      (find me grp :test 'pbc= :key 'first))
                                     groups))
            (graph-name     (format nil "beacon-~A" (1+ (position my-group groups))))
            (pkeys          (mapcar 'first my-group))
            (graph          (establish-broadcast-group pkeys :graphID graph-name))
            (group-leader   (caar my-group))
-           (group-leader-p (int= me group-leader))
+           (group-leader-p (pbc= me group-leader))
            (ngrp           (length my-group))
            (byz-fails      (max-byz-fails ngrp))
            (share-thresh   (1+ byz-fails)))
@@ -291,7 +291,7 @@ THE SOFTWARE.
                         :rands       (when group-leader-p
                                        (make-hash-table))))
 
-      (when (int= me *beacon*)
+      (when (pbc= me *beacon*)
         (let* ((tnodes        (loop for grp in groups sum (length grp)))
                (tfails        (floor (1- tnodes) 3))
                (grp-fails     (um:nlet-tail iter ((grps   groups)
@@ -313,9 +313,9 @@ THE SOFTWARE.
                               (xvals      (um:range 1 (1+ ngrp)))
                               (coffs      (loop repeat share-thresh collect (random-between 1 q)))
                               (krand      (random-between 1 q))
-                              (rpt        (mul-pt-zr (pbc:get-g1) krand))
+                              (kpt        (mul-pt-zr (pbc:get-g1) krand))
                               (shares     (mapcar (um:curry 'poly q coffs) xvals))
-                              (proofs     (mapcar (um:curry 'mul-pt-zr rpt) shares))
+                              (proofs     (mapcar (um:curry 'mul-pt-zr kpt) shares))
                               (pkeys      (mapcar 'second my-group))
                               (enc-shares (mapcar 'mul-pt-zr pkeys shares))
 
@@ -332,7 +332,7 @@ THE SOFTWARE.
                          (make-subgroup-commit
                           :encr-shares enc-shares
                           :proofs      proofs
-                          :rpt         rpt))))
+                          :kpt         kpt))))
 
              (msg (make-signed-subgroup-commit-message session me commit)))
 
@@ -357,8 +357,9 @@ THE SOFTWARE.
     (pbc:check-hash skel sig from)))
 
 
-(defun chk-proofs (commit pkeys rschkv)
-  (let ((rpt         (subgroup-commit-rpt         commit))
+(defun validate-commitment (commit pkeys rschkv)
+  ;; validate incoming commitment - returns decrypted share if okay
+  (let ((kpt         (subgroup-commit-kpt         commit))
         (eshares     (subgroup-commit-encr-shares commit))
         (proofs      (subgroup-commit-proofs      commit))
         (short-pkeys (mapcar 'second pkeys)))
@@ -366,30 +367,26 @@ THE SOFTWARE.
       (and (every (lambda (eshare proof pkey)
                     ;; check pairing relations between encrypted shares and proofs
                     (let ((p1  (compute-pairing proof pkey))
-                          (p2  (compute-pairing rpt   eshare)))
-                      (int= p1 p2)))
+                          (p2  (compute-pairing kpt   eshare)))
+                      (pbc= p1 p2)))
                   eshares proofs short-pkeys)
+           
            ;; check that we don't have a contstant share setxs
-           (not (every (um:curry 'int= (car proofs)) (cdr proofs)))
+           (not (every (um:curry 'pbc= (car proofs)) (cdr proofs)))
+           
            ;; verify consistency of polynomial shares
            (let* ((rschk  (dotprod-g1-zr proofs rschkv)))
              (when (zerop (int rschk))
                ;; provide decrypted-share
                (let ((my-index (position (node-pkey (current-node)) pkeys
-                                         :test 'int=
+                                         :test 'pbc=
                                          :key  'first)))
-                 (list (1+ my-index)
-                       #|
-                       (compute-pairing (mul-pt-zr (get-g1)
-                                                   (with-mod (get-order)
-                                                     (m/ (int (node-short-skey (current-node))))))
-                                        (elt eshares my-index))
-                       |#
-                       (mul-pt-zr (elt eshares my-index)
+                 (list (1+ my-index)                        ;; x index
+                       (mul-pt-zr (elt eshares my-index)    ;; y share val
                                   (with-mod (get-order)
                                     (m/ (int (node-short-skey (current-node))))))
-                       (elt proofs my-index)
-                       rpt
+                       (elt proofs my-index)                ;; proof
+                       kpt                                  ;; R pt in G_1
                        )
                  )))
            ))))
@@ -415,16 +412,16 @@ THE SOFTWARE.
            (ngrp        (length my-group))
            (barrier-thr (- ngrp (floor (1- ngrp) 3)))
            (decr-share (and
-                        (< ncomms barrier-thr)     ;; still awaiting commits?
-                        (int= session my-session)  ;; correct session?
-                        (find from my-group        ;; from someone in my group?
-                              :test 'int=
+                        (< ncomms barrier-thr)      ;; still awaiting commits?
+                        (hash= session my-session)  ;; correct session?
+                        (find from my-group         ;; from someone in my group?
+                              :test 'pbc=
                               :key  'first)
                         (not (find from my-commits ;; not-seen yet
-                                   :test 'int=
+                                   :test 'pbc=
                                    :key  'first))
                         (validate-signed-subgroup-commit-message session from commit sig) ;; valid message?
-                        (chk-proofs commit my-group rschkv))))  ;; valid collection of proofs?
+                        (validate-commitment commit my-group rschkv))))  ;; valid collection of proofs?
       
       (when decr-share
         (push (list from decr-share) my-commits)
@@ -477,11 +474,11 @@ THE SOFTWARE.
               ))))
 
 (defun validate-share (share)
-  (destructuring-bind (x y w r) share
+  (destructuring-bind (x y w kpt) share
     (declare (ignore x))
-    (let ((p1 (compute-pairing w (get-g2)))
-          (p2 (compute-pairing r y)))
-      (int= p1 p2))))
+    (let ((p1 (compute-pairing w   (get-g2)))
+          (p2 (compute-pairing kpt y)))
+      (pbc= p1 p2))))  ;; e(W, V) = e(K, D) ?
     
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from shares sig)
   ;; Each node gets this message from other nodes in the group, and
@@ -499,8 +496,8 @@ THE SOFTWARE.
                    (my-session      rh-group-info-session)
                    (share-thresh    rh-group-info-share-thr)) *rh-state*
     (when (and
-           (int= session my-session)              ;; correct session?
-           (find from my-group :test 'int= :key 'first)       ;; from member of my group?
+           (hash= session my-session)                         ;; correct session?
+           (find from my-group :test 'pbc= :key 'first)       ;; from member of my group?
            (validate-signed-decr-share-message session from shares sig))
       
       (let* ((node         (current-node))
@@ -508,7 +505,7 @@ THE SOFTWARE.
              (rands        nil))
         (pbc:with-curve *randhound-curve*
           (loop for (poly share) in shares do
-                (when (validate-share share)
+                (when (validate-share share) ;; refuse invalid decryptions
                   (let* ((key  (int poly))
                          (rec  (gethash key my-shares))
                          (nel  (length rec)))
@@ -572,8 +569,8 @@ THE SOFTWARE.
       (when (and
              my-super                                          ;; I'm a group leader?
              (not finished)
-             (int= session my-session)                         ;; correct session?
-             (find from my-group :test 'int= :key 'first)      ;; from witness in my group
+             (hash= session my-session)                        ;; correct session?
+             (find from my-group :test 'pbc= :key 'first)      ;; from witness in my group
              (validate-signed-subgroup-randomness-message session from rands sig)) ;; valid message?
 
         (loop for (poly rand) in rands do
@@ -583,7 +580,7 @@ THE SOFTWARE.
                 (cond (rec
                        
                        (assert (not (find from (rand-entry-froms rec)
-                                          :test 'int=)))
+                                          :test 'pbc=)))
 
                        (let ((npoly (length (rand-entry-froms rec))))
                          (when (< npoly share-thresh)
@@ -598,7 +595,7 @@ THE SOFTWARE.
                                  (let ((ngrpr (length (rand-entry-froms my-entropy))))
                                    
                                    (assert (not (find poly (rand-entry-froms my-entropy)
-                                                      :test 'int=)))
+                                                      :test 'pbc=)))
 
                                    (when (< ngrpr share-thresh)
                                      (tally :incr-group)
@@ -673,12 +670,12 @@ THE SOFTWARE.
                                 (length entropy-froms)
                               0)))
         (when (and
-               groups                            ;; only *BEACON* should have this
-               (< entropy-count beacon-thr)      ;; still awaiting contributions?
-               (int= session my-session)                         ;; correct session?
-               (find from (mapcar 'caar groups) :test 'int=) ;; should only arrive from group leaders
+               groups                                         ;; only *BEACON* should have this
+               (< entropy-count beacon-thr)                   ;; still awaiting contributions?
+               (hash= session my-session)                     ;; correct session?
+               (find from (mapcar 'caar groups) :test 'pbc=)  ;; should only arrive from group leaders
                (not (and tentropy                             ;; not already seen?
-                         (find from entropy-froms :test 'int=)))
+                         (find from entropy-froms :test 'pbc=)))
                (validate-signed-group-randomness-message session from rand sig)) ;; valid message?
 
           (if tentropy

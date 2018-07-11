@@ -76,6 +76,8 @@ THE SOFTWARE.
 
    :compute-pairing
 
+   :pbc=
+   
    :add-zrs
    :sub-zrs
    :mul-zrs
@@ -1398,6 +1400,14 @@ Certification includes a BLS Signature on the public key."
   (make-instance 'gt
                  :val ans))
 
+;; -------------------------------
+
+(defmethod pbc= ((a crypto-val) (b crypto-val))
+  (vec= a b))
+
+(defmethod pbc= (a b)
+  (int= a b))
+            
 ;; -------------------------------
 
 (defmethod add-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
