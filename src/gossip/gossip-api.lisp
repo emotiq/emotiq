@@ -20,7 +20,7 @@
    with some locally-known node that's part of that graph.
    If graphID is not supplied, a direct connection to nodeID will
    be attempted and used.
-   If you want to use the default graph, you must explicitly pass *default-graphID* in graphID.
+   If you want to use the default graph, you must explicitly pass +default-graphid+ in graphID.
    Howmany is only used if graphID is supplied."
   (let ((solicitation nil))
     (if graphID
@@ -50,7 +50,7 @@
                     nil)))))
 
 ; Normally you wouldn't call this as a high-level application programmer. Call broadcast instead.
-(defun gossipcast (message &key (graphID *default-graphID*) startnodeID (howmany 2) (kind ':k-multicast))
+(defun gossipcast (message &key (graphID +default-graphid+) startnodeID (howmany 2) (kind ':k-multicast))
   "Sends message via traditional gossip.
   Howmany determines whether traditional gossip or neighborcast is used."
   (let ((solicitation (make-solicitation
@@ -63,7 +63,7 @@
               startnodeID                   ; destination
               nil)))
 
-(defun broadcast (message &key (style ':neighborcast) (graphID *default-graphID*) startnodeID (kind ':k-multicast))
+(defun broadcast (message &key (style ':neighborcast) (graphID +default-graphid+) startnodeID (kind ':k-multicast))
   "High-level API for broadcasting a message along a graph.
    If startnodeID is provided, it will be used as the starting node.
    If startnodeID is not provided, we'll start at some locally-known node that's part of given graphID.
@@ -80,7 +80,7 @@
     ((integerp style)           (gossipcast message :graphID graphID :startnodeID startnodeID :howmany style :kind kind))
     (t (error "Invalid style ~S" style))))
 
-(defun hello (pkey ipaddr ipport &key (style ':neighborcast) (graphID *default-graphID*) startnodeID)
+(defun hello (pkey ipaddr ipport &key (style ':neighborcast) (graphID +default-graphid+) startnodeID)
   "Announce the presence of pkey (node UID) at ipaddr and ipport to a graph. Nodes traversed will
    add the pkey/ipaddr pair to their knowledge of the :uber graph.
    graphID here is merely the graph traversed by this message; this does not connect nodes to any given
