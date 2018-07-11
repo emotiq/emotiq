@@ -41,14 +41,7 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "filesystem")))))
-  
-(defsystem "emotiq/blockchain"
-  :depends-on (emotiq/utilities)
-  :components ((:module source
-                :pathname "./"
-                :serial t
-                :components ((:file "blockchain")))))
-                                       
+
 (defsystem "emotiq/startup"
   :depends-on (emotiq/node
                actors
