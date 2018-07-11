@@ -331,11 +331,24 @@ THE SOFTWARE.
                               (kcheck    (- ngrp share-thresh))
                               (coffs     (loop repeat kcheck collect (random-between 1 q)))
                               (rschks    (mapcar (um:curry 'poly q coffs) xvals))
-                              (invwts    (mapcar (um:curry 'invwt q ngrp) xvals)))
-                         
+                              (invwts    (mapcar (um:curry 'invwt q ngrp) xvals))
+
+                              (my-pos    (position me my-group :test 'pbc= :key 'first)))
+
+                         ;; cache the RS check vector
                          (setf (rh-group-info-rschkv *rh-state*)
                                (with-mod q
                                  (mapcar 'm/ rschks invwts)))
+
+                         ;; stuff our own decrypt in our list of commits
+                         (push
+                          (list me
+                                (list (1+ my-pos)
+                                      (mul-pt-zr (get-g2) (elt shares my-pos))
+                                      (elt proofs my-pos)
+                                      kpt))
+                          (rh-group-info-commits *rh-state*))
+                                                      
                          
                          (make-subgroup-commit
                           :encr-shares enc-shares
@@ -418,8 +431,9 @@ THE SOFTWARE.
            (me          (node-pkey node))
            (ncomms      (length my-commits))
            (ngrp        (length my-group))
-           (barrier-thr (- ngrp (floor (1- ngrp) 3)))
+           (barrier-thr (- (1- ngrp) (floor (1- ngrp) 3))) ;; account for me already in commits
            (decr-share (and
+                        (not (pbc= from me))        ;; don't process our own commitment
                         (< ncomms barrier-thr)      ;; still awaiting commits?
                         (hash= session my-session)  ;; correct session?
                         (find from my-group         ;; from someone in my group?
