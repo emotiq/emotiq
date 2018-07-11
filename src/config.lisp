@@ -134,13 +134,15 @@
                                      :type "conf"))
   (genesis/create configuration :directory directory :force t))
   
-(defun settings/read () 
+(defun settings/read (&optional key) 
   (unless (probe-file *emotiq-conf*)
     (emotiq:note "No configuration able to be read from '~a'" *emotiq-conf*)
     (return-from settings/read nil))
   ;;; TODO: do gossip/configuration sequence
-  (cl-json:decode-json-from-source *emotiq-conf*))
-
+  (let ((c (cl-json:decode-json-from-source *emotiq-conf*)))
+    (if key
+        (alexandria:assoc-value c key)
+        c)))
 
 (defun ensure-defaults (&key
                           (c (copy-alist +default-configuration+))
