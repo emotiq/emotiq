@@ -137,8 +137,8 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
                                    (uiop:native-namestring svgpath))))
           (t (error "Cannot locate graphviz sfdp command. Please install graphviz first.")))))
 
-(defmethod visualize-nodes ((nodes hash-table) &optional (graphID +default-graphID+))
-  (visualize-nodes (listify-nodes nodes) graphID))
+(defun visualize-nodes (&optional (graphID +default-graphID+))
+  (%visualize-nodes (listify-nodes) graphID))
 
 (defparameter *html-header*
   "<!DOCTYPE html>
@@ -179,7 +179,7 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
     (convert-dotfile-to-svg dotpath svgpath)
     (values dotpath svgpath)))
 
-(defmethod visualize-nodes ((nodelist list) &optional (graphID +default-graphID+))
+(defmethod %visualize-nodes ((nodelist list) &optional (graphID +default-graphID+))
   "Calls visualize-nodes-svg, then converts that file into an html file that automatically
   resizes the svg image as you resize your browser window. Opens html file in browser."
   (let ((len (length nodelist)))
@@ -200,4 +200,4 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
           (uiop:run-program (list "xdg-open" urlstring))
           (values dotpath htmlpath))))))
     
-; (gossip:visualize-nodes gossip::*nodes* :uber) ; should draw a fully-connected graph of all known real nodes. Not terribly useful, but a good test.
+; (gossip:visualize-nodes :uber) ; should draw a fully-connected graph of all known real nodes. Not terribly useful, but a good test.

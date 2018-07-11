@@ -25,7 +25,7 @@
   "Syntactic sugar for wrapping debug-level around a log-event call"
   `(when (debug-level ,level)
      (typecase ,tag 
-       (gossip-mixin (node-log ,tag ,@args))
+       (abstract-gossip-node (node-log ,tag ,@args))
        (t (log-event ,tag ,@args)))))
 
 (defun log-exclude (&rest strings)
