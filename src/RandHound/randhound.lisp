@@ -33,7 +33,7 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------------------
 
-(defvar *randhound-curve*  :curve-ar160)
+(defvar *randhound-curve*  :curve-ar160) ;; fast 160-bit symmetric pairing
 
 (defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
@@ -421,8 +421,11 @@ THE SOFTWARE.
   ;;
   ;; This is the code that receives the commitments from other nodes
   ;; and validates them, and then decrypts its particular share of the
-  ;; secret. We forward that decrypted share to all other group
-  ;; members.
+  ;; secret.
+  ;;
+  ;; We stash that decrypted share, and after seeing a super-majority
+  ;; of other commitments, we send the whole stash to all other nodes
+  ;; in the group.
   ;;
   (with-accessors ((my-session  rh-group-info-session)
                    (my-group    rh-group-info-group)
@@ -498,6 +501,7 @@ THE SOFTWARE.
               ))))
 
 (defun validate-share (share)
+  ;; validate a decrypted share
   (destructuring-bind (x y w kpt) share
     (declare (ignore x))
     (let ((p1 (compute-pairing w   (get-g2)))
@@ -507,11 +511,17 @@ THE SOFTWARE.
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-decrypted-share)) &key session from shares sig)
   ;; Each node gets this message from other nodes in the group, and
   ;; from themself. Collect the decrypted shares into lists per the
-  ;; "for" node which constructed the corresponding commitment.
+  ;; poynomial identity.
   ;;
   ;; After a BFT threshold number of decrypted shares for any one
-  ;; commitment, combine them using Lagrange interpolation to find the
-  ;; secret random value.
+  ;; polynomial, combine the hidden randomness at p(0) them using
+  ;; Lagrange interpolation.
+  ;;
+  ;; Shares arrive in batches. As we find polynomials to decode, we
+  ;; stash their results until the end of batch processing. Then we
+  ;; forward any decoded randomness to the group leader node,
+  ;; identifying the polynomial from which the randomness was
+  ;; obtained.
   ;;
   (with-accessors ((my-shares       rh-group-info-decr-shares)
                    (my-group-leader rh-group-info-leader)
@@ -568,15 +578,17 @@ THE SOFTWARE.
 (defmethod rh-dispatcher ((msg-sym (eql :subgroup-randomness)) &key session from rands sig)
   ;; Group leaders perform this code.
   ;;
-  ;; Collect a BFT Threshold number of decoded secret random values
-  ;; for each commitment. We combine that incoming randomness as an
-  ;; accumulating product of randomness.
+  ;; Decoded randomness arrives in batches, identified by polynomial.
+  ;; For each polynomial we accumulate the incoming randomness until a
+  ;; sharing threshold of accumulations has occured.
   ;;
-  ;; Once a BFT threshold number have been received and accumulated,
-  ;; we accumulate that product randomness into another accumulating
-  ;; group randomness.  And once a BFT threshold of contributions has
-  ;; been made to the group randomness, we send that off to the Beacon
-  ;; node.
+  ;; At that point we stop accepting new randomness for the polynomial
+  ;; and accumulate its accumulated randomness into a group randomness
+  ;; bucket.
+  ;;
+  ;; After a sharing threshold of group randomness accumulation, we
+  ;; stop accepting any more incoming batches of randomness, and
+  ;; forward the accumulated group randomness to the Beacon node.
   ;;
   (with-accessors ((my-super        rh-group-info-super)
                    (my-group        rh-group-info-group)
@@ -674,14 +686,14 @@ THE SOFTWARE.
   ;; this message should only arrive at *BEACON*, as group leaders
   ;; forward their composite group randomness
   ;;
-  ;; Collectc a BFT Threshold number of group-random values from the
-  ;; group-leaders, then fold them into one grand randomness by
-  ;; multiplication.
-  ;;
-  ;; Convert the grand randomness by hash to a shorter value, then
-  ;; normalize to a double-precision float value to be used as an
-  ;; election seed. Call for an election among all witnesses with that
-  ;; seed.
+  ;; Collect incoming group randomness into a bucket for Randhound.
+  ;; After we accumulate a sharing threshold number of group-random
+  ;; values from the group leaders, we stop accepting any more
+  ;; randomness, and compute an election seed.
+  ;
+  ;; Then we broadcast a HOLD-ELECTION message to all witness nodes in
+  ;; the blockchain system, supplying that seed. We are finished at
+  ;; that point.
   ;;
   (with-accessors ((groups      rh-group-info-groups)
                    (beacon-thr  rh-group-info-beacon-thr)
