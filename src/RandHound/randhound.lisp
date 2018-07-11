@@ -341,6 +341,8 @@ THE SOFTWARE.
                                  (mapcar 'm/ rschks invwts)))
 
                          ;; stuff our own decrypt in our list of commits
+                         ;; this saves about 20% of processing time, since
+                         ;; every node does this
                          (push
                           (list me
                                 (list (1+ my-pos)
