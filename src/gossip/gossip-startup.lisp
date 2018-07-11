@@ -50,10 +50,7 @@
    You can map unwrap on these things to get at the real data.
    Stashes result along with time of acquisition at *live-uids*>"
   (when hosts
-    (let ((others (multiple-list-uids hosts)))
-      (setf *remote-monads* (cons (get-universal-time) others)
-            *uber-set-cache* nil) ; invalidate this cache
-      others)))
+    (multiple-list-uids hosts)))
 
 (defun gossip-startup (&key root-path (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test

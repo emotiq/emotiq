@@ -116,25 +116,25 @@
   )
 
 (defun dissolve-graph (graphID &key startnodeID)
-  "Dissolves all connections associated with graphID.
+  "Dissolves all connections (arcs) associated with graphID.
   Starts at startnodeID if given; otherswise it finds one to start with."
   ; Note that it makes no sense to dissolve the :uber graph, because the nodes
-  ;  themselves don't even know about the uber graph. Dissolving the :uber graph is a no-op.
-  ;  (Or should it mean "dissolve all graphs"?)
-  (unless startnodeID
-    (setf startnodeID (locate-local-node-for-graph graphID)))
-  (when startnodeID
-    (let ((solicitation (make-solicitation
-                         :reply-to nil
-                         :kind :k-dissolve
-                         :forward-to t ; neighborcast, although dissolve handler will enforce this regardless
-                         :graphID graphID 
-                         :args nil)))
-      ; must also destroy entry in locate-local-node-for-graph table (if any) for this graphID
-      (send-msg solicitation
-                startnodeID                   ; destination
-                nil)
-      t)))
+  ; themselves don't even know about the uber graph.
+  ; The :UBER network contains no explicit arcs, so there's nothing to dissolve.
+  (unless (eql :UBER graphID)
+    (unless startnodeID
+      (setf startnodeID (locate-local-node-for-graph graphID)))
+    (when startnodeID
+      (let ((solicitation (make-solicitation
+                           :reply-to nil
+                           :kind :k-dissolve
+                           :forward-to t ; neighborcast, although dissolve handler will enforce this regardless
+                           :graphID graphID 
+                           :args nil)))
+        (send-msg solicitation
+                  startnodeID                   ; destination
+                  nil)
+        t))))
 
 ; (setf localnode (car (gossip::local-real-uids)))
 ; (hello localnode (eripa) 65002 :graphid ':uber :startnodeid (car (remote-real-uids)))

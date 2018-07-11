@@ -234,7 +234,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 9
-   :ADDRESS 'NIL
    :neighborhood '(2 4)
    :local-kvs (as-hash-table
                'EQUAL
@@ -243,7 +242,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 4
-   :ADDRESS 'NIL
    :neighborhood '(8 3 5 9)
    :local-kvs (as-hash-table
                'EQUAL
@@ -252,7 +250,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 5
-   :ADDRESS 'NIL
    :neighborhood '(6 8 4)
    :local-kvs (as-hash-table
                'EQUAL
@@ -261,7 +258,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 8
-   :ADDRESS 'NIL
    :neighborhood '(4 3 5)
    :local-kvs (as-hash-table
                'EQUAL
@@ -270,7 +266,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 3
-   :ADDRESS 'NIL
    :neighborhood '(4 1 8)
    :local-kvs (as-hash-table
                'EQUAL
@@ -279,7 +274,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 1
-   :ADDRESS 'NIL
    :neighborhood '(2 6 3)
    :local-kvs (as-hash-table
                'EQUAL
@@ -288,7 +282,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 6
-   :ADDRESS 'NIL
    :neighborhood '(5 2 1)
    :local-kvs (as-hash-table
                'EQUAL
@@ -297,7 +290,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 2
-   :ADDRESS 'NIL
    :neighborhood '(9 1 7 6)
    :local-kvs (as-hash-table
                'EQUAL
@@ -306,7 +298,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 7
-   :ADDRESS 'NIL
    :neighborhood '(10 2)
    :local-kvs (as-hash-table
                'EQUAL
@@ -315,7 +306,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 10
-   :ADDRESS 'NIL
    :neighborhood '(7)
    :local-kvs (as-hash-table
                'EQUAL
