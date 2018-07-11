@@ -30,11 +30,16 @@
   ;; Create a default wallet on disk if one doesn't already exist
   (emotiq/wallet:create-wallet)
   ;; Start the websocket interface for the Electron wallet
-  ;; listening <ws://localhost:3145/wallet> .
-  (websocket/wallet:start-server :port 3145)
+  ;; listening <ws://localhost:PORT/wallet> .
+  (when (string-equal "true"
+                      (emotiq/config:settings/read :websocket-server))
+    (websocket/wallet:start-server :port (emotiq/config:settings/read :websocket-server-port)))
   ;; Start the REST server which provides support for testing the
-  ;; WebSocket implementation at <http://localhost:3140/client/>
-  (emotiq-rest:start-server :port 3140)
+  ;; WebSocket implementation at <http://localhost:PORT/client/>
+  (when (string-equal "true"
+                      (emotiq/config:settings/read :rest-server))
+    (emotiq-rest:start-server :port (emotiq/config:settings/read :rest-server-port)))
+
   (emotiq/tracker:start-tracker)
   (emotiq:start-node)
   (cosi-simgen:startup-elections))
