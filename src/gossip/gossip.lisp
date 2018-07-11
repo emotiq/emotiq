@@ -1947,11 +1947,17 @@ gets sent back, and everything will be copacetic.
   (let* ((oldnode (lookup-node real-uid)) ; proxy uids should match their real-uids
          (proxy nil))
     (flet ((make-proxy ()
-             (setf proxy (make-proxy-node mode
-                                          :real-address real-address
-                                          :real-port real-port
-                                          :real-uid real-uid
-                                          :temporary-p temporary-p))))
+             (if (and (eql real-port *actual-tcp-gossip-port*)
+                      (or (usocket:ip= real-address (eripa))
+                          (usocket:ip= real-address #(127 0 0 1))
+                          (usocket:ip= real-address "localhost")))
+                 (edebug 1 :ERROR "Incoming IP address and port match those of this process. Remote machine may be misconfigured."
+                         real-address real-port)
+                 (setf proxy (make-proxy-node mode
+                                              :real-address real-address
+                                              :real-port real-port
+                                              :real-uid real-uid
+                                              :temporary-p temporary-p)))))
       (cond ((and oldnode
                   (not (typep oldnode 'proxy-gossip-node)))
              (edebug 1 :WARN oldnode "Expected proxy; found real node. Doing nothing." real-uid))

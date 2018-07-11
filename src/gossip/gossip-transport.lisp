@@ -189,7 +189,7 @@
          (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
            (when (message-received-hook transport)
              (funcall (message-received-hook transport) msg))
-           (edebug 5 :transport "Received message from" socket msg)))
+           (edebug 5 :transport "Received message apparently from" (usocket:get-peer-address socket) msg)))
     (error (err)
       (edebug 5 :error "Read thread error" err)
       (usocket:socket-close socket))))
