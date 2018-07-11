@@ -606,6 +606,7 @@ THE SOFTWARE.
                                      (with-curve *randhound-curve*
                                        (setf (rand-entry-rand my-entropy)
                                              ;; (mul-gts (rand-entry-rand my-entropy)
+                                             ;;          (rand-entry-rand rec))
                                              (add-pts (rand-entry-rand my-entropy)
                                                       (rand-entry-rand rec))))
                                      (when (= (1+ ngrpr) share-thresh)
