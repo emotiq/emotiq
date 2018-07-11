@@ -13,10 +13,10 @@
      (teardown-fixture)))
                                       
 (defun build-fixture ()
-  (gossip::gossip-init ':maybe))
+  (gossip:gossip-init ':maybe))
 
 (defun teardown-fixture ()
-  (gossip::gossip-init ':uninit)
+  (gossip:gossip-init ':uninit)
   )
 
 (defun %aliveness (uid)
@@ -34,7 +34,7 @@
   (assert-equal
    '((:BAR . 10))
    (unwrap (solicit-wait uid :gossip-lookup-key :foo)))
-  (when *debug* (inspect gossip::*log*))
+  (when *debug* (inspect gossip:*log*))
   (gossip:archive-log)
   (solicit uid :gossip-remove-key :foo)
   (sleep .1)
@@ -51,7 +51,7 @@
   (assert-equal
    '((1 . 10))
    (unwrap (solicit-wait uid :gossip-lookup-key :foo)))
-  (when *debug* (inspect gossip::*log*))
+  (when *debug* (inspect gossip:*log*))
   (gossip:archive-log)
   (solicit uid :gossip-tally :foo 1)
   (sleep .1)
@@ -60,7 +60,7 @@
   (assert-equal
    '((2 . 10))
    (unwrap (solicit-wait uid :gossip-lookup-key :foo)))
-  (when *debug* (inspect gossip::*log*)))
+  (when *debug* (inspect gossip:*log*)))
 
 ; (let ((*print-failures* t)) (run-tests '(aliveness)))
 (define-test aliveness
@@ -160,7 +160,7 @@
               (ac::kill-executives)
               (assert-eql numnodes (length (get-live-uids)))
               (assert-eql numnodes (run-gossip))
-              (let* ((somelocal (gossip::locate-local-node-for-graph :uber))
+              (let* ((somelocal (gossip:locate-local-uid-for-graph :uber))
                      (sometarget (random-choice (remove somelocal (gossip::local-real-uids)))))
                 (assert-true (member somelocal (get-live-uids)))
                 (singlecast msg sometarget :startnodeID somelocal :howmany t
@@ -207,7 +207,7 @@
               (ac::kill-executives)
               (assert-eql numnodes (length (get-live-uids)))
               (assert-eql numnodes (run-gossip))
-              (let* ((somelocal (gossip::locate-local-node-for-graph :uber)))
+              (let* ((somelocal (gossip:locate-local-uid-for-graph :uber)))
                 (assert-true (member somelocal (get-live-uids)))
                 (broadcast msg :style ':neighborcast :graphID ':uber :startnodeID somelocal)
                 ; wait until over half of nodes have seen the message, or 5 seconds, whichever comes first

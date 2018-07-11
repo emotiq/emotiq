@@ -26,7 +26,7 @@
     (if graphID
         (progn
           (unless startnodeID
-            (setf startnodeID (locate-local-node-for-graph graphID)))
+            (setf startnodeID (locate-local-uid-for-graph graphID)))
           (when startnodeID
             (setf solicitation (make-solicitation
                                 :reply-to nil
@@ -73,7 +73,7 @@
     :neighborcast means 'use all the neighbors'. :gossip means 'use up to 2 neighbors'.)
    Normally an API programmer should let :kind default."
   (unless startnodeID
-      (setf startnodeID (locate-local-node-for-graph graphID)))
+      (setf startnodeID (locate-local-uid-for-graph graphID)))
   (cond
     ((eql ':neighborcast style) (gossipcast message :graphID graphID :startnodeID startnodeID :howmany t :kind kind))
     ((eql ':gossip style)       (gossipcast message :graphID graphID :startnodeID startnodeID :howmany 2 :kind kind))
@@ -87,6 +87,12 @@
    graph except for the :uber graph.
    This is the 'push' equivalent of the 'pull' function #'ping-other-machines."
   (broadcast (list pkey ipaddr ipport) :style style :graphID graphID :startnodeID startnodeID :kind ':k-hello))
+
+; Example:
+; Assume (locate-local-uid-for-graph ':uber) on this machine returns X.
+; <on some remote machine that doesn't know about this one>: (get-live-uids)
+; <on this machine>: (hello (locate-local-uid-for-graph ':uber) (eripa) *actual-tcp-gossip-port* :graphid ':uber)
+; <on the remote machine>: (get-live-uids) ; --> now includes X in results
 
 ;;; NOT DONE YET
 (defun establish-star-broadcast-group (list-of-nodeIDs &key graphID center-nodeID)
@@ -123,7 +129,7 @@
   ; The :UBER network contains no explicit arcs, so there's nothing to dissolve.
   (unless (eql :UBER graphID)
     (unless startnodeID
-      (setf startnodeID (locate-local-node-for-graph graphID)))
+      (setf startnodeID (locate-local-uid-for-graph graphID)))
     (when startnodeID
       (let ((solicitation (make-solicitation
                            :reply-to nil
@@ -136,6 +142,3 @@
                   nil)
         t))))
 
-; (setf localnode (car (gossip::local-real-uids)))
-; (hello localnode (eripa) 65002 :graphid ':uber :startnodeid (car (remote-real-uids)))
-; (hello (locate-local-node-for-graph ':uber) (eripa) 65002 :graphid ':uber)
