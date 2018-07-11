@@ -1601,7 +1601,7 @@ dropped on the floor.
   datum)
 
 (defmethod maybe-augment-datum (datum kind)
-  (augment datum `((:kind . ,kind) (:timestamp ,(get-universal-time)) (:eripa . ,(eripa)) (:port . ,*actual-tcp-gossip-port*))))
+  (augment datum `((:kind . ,kind) (:eripa . ,(eripa)) (:port . ,*actual-tcp-gossip-port*))))
 
 (defmethod initial-reply-value :around (kind thisnode msgargs)
   "Ensure an augmented-data object is getting returned."
