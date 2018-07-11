@@ -12,11 +12,11 @@
              (symbol-call :lisp-unit :run-tests
                           :all :emotiq-test))
   :components ((:module package
-                        :pathname "tests/"
+                        :pathname "test/"
                         :components ((:file "package")))
                (:module tests
                         :depends-on (package)
-                        :pathname "tests/"
+                        :pathname "test/"
                         :components ((:file "emotiq-test")
                                      (:file "blockchain-test")))))
 

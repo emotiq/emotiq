@@ -1,4 +1,4 @@
-(in-package :emotiq/config/t)
+(in-package :emotiq-config-test)
 
 ;;;; INTERNAL testing 
 

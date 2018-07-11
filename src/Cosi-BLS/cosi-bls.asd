@@ -40,7 +40,7 @@ THE SOFTWARE.
                trivial-garbage
                ads-clos
                gossip)
-  :in-order-to ((test-op (test-op "cosi-bls-tests")))
+  :in-order-to ((test-op (test-op "cosi-bls-test")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
