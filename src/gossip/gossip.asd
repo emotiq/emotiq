@@ -13,7 +13,8 @@
                actors
                crypto-pairings
                usocket
-               illogical-pathnames)
+               illogical-pathnames
+               transport)
   :in-order-to ((test-op (test-op "gossip-tests")))
   :serial t
   :components ((:file "package")
@@ -21,7 +22,6 @@
                (:file "ccl-sockets-patch")
                ;; #+(and OPENMCL EASYGUI) (:file "hemlock-log-streams")
                (:file "logging")
-               (:file "gossip-transport")
                (:file "monads")
                (:file "gossip")
                (:file "gossip-api")

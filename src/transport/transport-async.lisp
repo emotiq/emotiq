@@ -1,8 +1,10 @@
+;; transport-async.lisp
+
 ;;;
 ;;; Asychronous event loop TCP transport implementation based on cl-async.
 ;;;
 
-(in-package :gossip/transport)
+(in-package :transport/async)
 
 (defclass tcp-async-transport ()
   (;; Operational state
@@ -12,64 +14,62 @@
    (outbox :initform (mpcompat:make-mailbox) :accessor outbox)
    (outbound-connections :initform (make-hash-table :test 'equal) :accessor outbound-connections)
    ;; Configuration state.
-   (message-received-hook :initarg :message-received-hook :initform nil :accessor message-received-hook)
-   (peer-up-hook :initarg :peer-up-hook :initform nil :accessor peer-up-hook)
-   (peer-down-hook :initarg :peer-down-hook :initform nil :accessor peer-down-hook)))
+   (config :initarg :config :accessor config)))
 
-(defmethod start (address port msg peer-up peer-down
-                  (backend (eql :tcp-async)) backend-parameters)
-  (declare (ignore backend-parameters))
-  (let ((transport (make-instance 'tcp-async-transport
-                                  :message-received-hook msg
-                                  :peer-up-hook peer-up
-                                  :peer-down-hook peer-down))
-        ;; Mailbox for communicating success or failure of initialization.
-        (start-mailbox (mpcompat:make-mailbox)))
-    (flet ((start-event-loop ()
-             ;; Initialization code to run inside the cl-async event loop in a separate thread.
-             (handler-case (cl-async:dns-lookup address
-                                                (lambda (host family)
-                                                  (declare (ignore family))
-                                                  (setf (doorbell transport)
-                                                        (cl-async:make-notifier (lambda () (process-outbox transport))))
-                                                  (setf (shutdown-notifier transport)
-                                                        (cl-async:make-notifier #'as:exit-event-loop))
-                                                  (cl-async:tcp-server host port 'inbound-data
-                                                                       :connect-cb (lambda (socket)
-                                                                                     (setf (cl-async:socket-data socket)
-                                                                                           (list transport))))
-                                                  ;; Report that event loop has started.
-                                                  (mpcompat:mailbox-send start-mailbox :ok)))
-               (error (err)
-                 ;; Report that event loop has failed to start.
-                 (mpcompat:mailbox-send start-mailbox err)
-                 (error err)))))
-      ;; Start a separate thread to initialize and run the event loop.
-      (mpcompat:process-run-function "gossip/transport async event loop"
-                                     nil
-                                     (lambda ()
-                                       (cl-async:start-event-loop #'start-event-loop
-                                                                  :catch-app-errors t)))
-      ;; Wait for the initialization code to report success or failure to this thread.
-      (let ((status (mpcompat:mailbox-read start-mailbox)))
-        (unless (eq status :ok)
-          ;; Take the error from the event loop and signal it on the calling thread.
-          (error status)))
-      transport)))
+(defmethod start ((backend (eql :tcp-async)) config)
+  (multiple-value-bind (address port) (my-endpoint config)
+    (log-event config "Starting async transport on" address :port port)
+    (let ((transport (make-instance 'tcp-async-transport :config config))
+          ;; Mailbox for communicating success or failure of initialization.
+          (start-mailbox (mpcompat:make-mailbox)))
+      (flet ((start-event-loop ()
+               ;; Initialization code to run inside the cl-async event loop in a separate thread.
+               (log-event config "Started cl-async event loop" transport)
+               (handler-case (cl-async:dns-lookup address
+                                                  (lambda (host family)
+                                                    (declare (ignore family))
+                                                    (setf (doorbell transport)
+                                                          (cl-async:make-notifier (lambda () (process-outbox transport))))
+                                                    (setf (shutdown-notifier transport)
+                                                          (cl-async:make-notifier #'as:exit-event-loop))
+                                                    (cl-async:tcp-server host port 'inbound-data
+                                                                         :event-cb (lambda (err) (inbound-error transport err))
+                                                                         :connect-cb (lambda (socket)
+                                                                                       (setf (cl-async:socket-data socket)
+                                                                                             (list transport))))
+                                                    ;; Report that event loop has started.
+                                                    (mpcompat:mailbox-send start-mailbox :ok)))
+                 (error (err)
+                   ;; Report that event loop has failed to start.
+                   (log-event config "Handling error in cl-async event loop" err)
+                   (mpcompat:mailbox-send start-mailbox err)
+                   (error err)))))
+        ;; Start a separate thread to initialize and run the event loop.
+        (mpcompat:process-run-function "gossip/transport async event loop"
+                                       nil
+                                       (lambda ()
+                                         (cl-async:start-event-loop #'start-event-loop
+                                                                    
+                                                                    :catch-app-errors t)))
+        ;; Wait for the initialization code to report success or failure to this thread.
+        (let ((status (mpcompat:mailbox-read start-mailbox)))
+          (log-event config "Received init status from async thread" status)
+          (unless (eq status :ok)
+            ;; Take the error from the event loop and signal it on the calling thread.
+            (error status)))
+        transport))))
 
 (defmethod stop ((transport tcp-async-transport))
+  (log-event (config transport) "Stopping transport" transport)
   (cl-async:trigger-notifier (shutdown-notifier transport))
   (mpcompat:process-wait-with-timeout "stopping event loop"
                                       1.0
-                                      (lambda () (closed transport))))
+                                      (lambda () (closed transport)))
+  (log-event (config transport) "Stopped transport" transport))
 
 ;;; ------------------------------------------------------------
 ;;; Inbound messages.
 ;;; ------------------------------------------------------------
-
-(defparameter *magic* (coerce #(#x43 #xa9 #xe1 0) '(simple-array (unsigned-byte 8) (*)))
-  "Protocol magic number.
-  The last byte represents the protocol version number.")
 
 (defun inbound-data (socket data)
   ;; Unpack state from socket object.
@@ -82,6 +82,7 @@
                        position         ; Position of next input byte.
                        buffer)          ; Buffer where message is stored.
       (cl-async:socket-data socket)
+    (log-event (config transport) "Received data on socket" socket :transport transport :data data)
     ;;
     ;; Helper functions for state transitions.
     ;;
@@ -116,7 +117,7 @@
               ;; check for a compatible transport protocol version.
               ;;
               (:read-magic
-               (assert (= byte (aref *magic* position)))
+               (assert (= byte (aref +magic+ position)))
                (incf position)
                (when (= position 4)
                  (transition-to-read-length)))
@@ -144,47 +145,46 @@
       (setf (cl-async:socket-data socket)
             (list state length position buffer)))))
 
+(defun inbound-error (transport err)
+  (log-event (config transport) "Error on inbound connection" err))
+
 (defun deliver-input-message (transport message)
-  (when (message-received-hook transport)
-    (funcall (message-received-hook transport) message)))
+  (run-message-received-hook (config transport) message))
 
 ;;; ------------------------------------------------------------
 ;;; Outbound messages.
 ;;; ------------------------------------------------------------
 
 ;;;
-;;; Top half that runs outside the event loop.
+;;; Transmit a message by adding it to the "outbox" (message queue
+;;; mailbox) and "ringing the doorbell" (notifying the event loop to
+;;; asynchronously wake up and process the outbox.)
 ;;;
-;;; Transmit message algorithm:
-;;;
-;;; - Establish the outbound connection if one does not already exist.
-;;; - Enqueue the message in the per-connection mailbox.
-;;; - Trigger the per-connection notifier to wake up the event loop thread.
-;;;
-;;; The outbound connection is represented by a socket object. The
-;;; mailbox and notifier objects are associated with the socket as
-;;; a list value for CL-ASYNC:SOCKET-DATA.
 
 (defmethod transmit-message ((transport tcp-async-transport) address port message)
   "Transmit a message to a remote peer."
+  (log-event (config transport) "Transmitting message" message :address address :port port)
   (with-slots (outbox doorbell) transport
     (mpcompat:mailbox-send outbox (list address port message))
-    (cl-async:trigger-notifier doorbell)))
+    (handler-case (cl-async:trigger-notifier doorbell)
+      (cl-async:event-error (err)
+        (error "Transport backend failed: ~A" err)))))
 
 ;;;
-;;; Bottom half that runs inside the event loop.
+;;; Code below runs inside the cl-async event loop and makes the
+;;; connections.
 ;;;
-;;; Wake up via the event loop notifier and send all queues messages
-;;; to the socket. Output buffering is handled by cl-async.
 
 (defun process-outbox (transport)
   "Send all messages queued in outbox to sockets."
+  (log-event (config transport) "Processing outbox" transport)
   (with-slots (outbox) transport
     (loop until (mpcompat:mailbox-empty? outbox)
          do (apply #'send-outbound-message transport (mpcompat:mailbox-read outbox)))))
 
 (defun send-outbound-message (transport address port message)
   "Send MESSAGE to the remote peer at ADDRESS:PORT."
+  (log-event (config transport) "Transmitting message to " address :port port)
   (with-slots (outbound-connections) transport
     (let ((stream (get-outbound-stream transport address port)))
       ;; Send length header.
@@ -204,20 +204,22 @@
                                              (outbound-socket-read transport address port socket data))
                                            :event-cb (lambda (err)
                                                        (outbound-socket-event transport address port err))
-                                           :data *magic*)))
+                                           :connect-cb (lambda (socket)
+                                                         (declare (ignore socket))
+                                                         (run-peer-up-hook (config transport) address port))
+                                           :data +magic+)))
         (setf (gethash (list address port) (outbound-connections transport))
               (make-instance 'cl-async:async-output-stream :socket socket)))))
 
 (defun outbound-socket-read (transport address port socket data)
-  (declare (ignore data))
-  ;; LOG: Unexpected input on outbound socket.
+  (log-event (config transport) "Closing outbound socket due to unexpected input" socket :data data)
   (cl-async:close-socket socket)
   (drop-outbound-connection transport address port))
 
 (defun outbound-socket-event (transport address port err)
-  (declare (ignore err))
-  ;; LOG: outbound connection closed
-  (drop-outbound-connection transport address port))
+  (log-event (config transport) "Outbound socket closed" err)
+  (drop-outbound-connection transport address port)
+  (run-peer-down-hook (config transport) address port (prin1-to-string err)))
 
 (defun drop-outbound-connection (transport address port)
   (remhash (list address port) (outbound-connections transport)))
