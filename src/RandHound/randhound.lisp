@@ -716,7 +716,8 @@ THE SOFTWARE.
                    :rand  rand)))
 
           (when (= (1+ entropy-count) beacon-thr)
-            (let* ((seed  (float (/ (int (hash/256 (rand-entry-rand tentropy)))
+            (let* ((rand  (compute-pairing (get-g1) (rand-entry-rand tentropy))) ;; just to be proper
+                   (seed  (float (/ (int (hash/256 rand))
                                     #.(ash 1 256))
                                  1d0)))
               ;; ------------------------------------------------------------------
