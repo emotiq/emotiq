@@ -150,13 +150,11 @@
   (with-networking
       (let ((oldnodes *nodes*)
             (numnodes 100)
-            (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*))
+            (old-application-handler *ll-application-handler*))
         (unwind-protect
             (let ((results nil)
                   (*log-filter* nil)
                   (msg '(foo message)))
-              (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
               (setf *ll-application-handler* (lambda (node full-msg) (setf results (list (gossip::hopcount full-msg) node full-msg))))
               (clear-local-nodes)
@@ -179,8 +177,7 @@
                 ; (print results) contains hopcount, node, and full message
                 ))
           (setf *nodes* oldnodes
-                *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes)))))
+                *ll-application-handler* old-application-handler)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-local)))
 
@@ -195,14 +192,12 @@
   (with-networking
       (let ((oldnodes *nodes*)
             (numnodes 100)
-            (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*))
+            (old-application-handler *ll-application-handler*))
         (unwind-protect
             (let ((results nil)
                   (resultlock (mpcompat:make-lock))
                   (*log-filter* nil)
                   (msg '(foo message)))
-              (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
               ; every node that receives the message will push its id onto results
               (setf *ll-application-handler* (lambda (node full-msg)
@@ -224,8 +219,7 @@
                 (sleep 1) ; just to allow the remainder of nodes to see the message
                 (assert-true (= (length results) numnodes))))
           (setf *nodes* oldnodes
-                *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes)))))
+                *ll-application-handler* old-application-handler)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(broadcast-local)))
 
