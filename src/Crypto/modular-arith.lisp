@@ -189,8 +189,10 @@ THE SOFTWARE.
               do
               (setf (aref prec ix) xx))
         (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
-              (setf ans (m* ans ans ans ans)
-                    ans (m* ans ans ans ans))
+              (setf ans (m* ans ans)
+                    ans (m* ans ans)
+                    ans (m* ans ans)
+                    ans (m* ans ans))
               (let ((bits (ldb (byte 4 pos) exp)))
                 (declare (fixnum bits))
                 (unless (zerop bits)
