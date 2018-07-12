@@ -60,14 +60,20 @@ THE SOFTWARE.
                    (base   moddescr-base)) *fastmod*
     (declare (integer base rem)
              (fixnum nbits))
-    (if (< x base)
-        x
-      ;; else
-      (let ((xe (ash x (- nbits)))
-            (xf (ldb (byte nbits 0) x)))
-        (declare (integer xe xf))
-        (+ xf (* rem xe))))
-    ))
+    (let ((xx (abs x)))
+      (declare (integer xx))
+      (if (< xx base)
+          x
+        ;; else
+        (let* ((sgn (minusp x))
+               (xe  (ash xx (- nbits)))
+               (xf  (ldb (byte nbits 0) xx))
+               (ans (+ xf (* rem xe))))
+          (declare (integer xe xf ans))
+          (if sgn
+              (- ans)
+            ans)))
+      )))
 
 (defun fastmod (x)
   ;; full mod
@@ -77,20 +83,27 @@ THE SOFTWARE.
                    (base   moddescr-base)) *fastmod*
     (declare (integer base rem)
              (fixnum nbits))
-    (um:nlet-tail iter ((v x))
-      (declare (integer v))
-      (if (< v base)
-          v
-        ;; else
-        (let ((ve (ash v (- nbits))))
-          (declare (integer ve))
-          (if (zerop ve)
-              (- v base)
-            (let ((vf (ldb (byte nbits 0) v)))
-              (declare (integer vf))
-              (iter (+ vf (* rem ve)))
-              ))))
-      )))
+    (let ((sgn  (minusp x))
+          (xx   (abs x)))
+      (um:nlet-tail iter ((v xx))
+        (declare (integer v))
+        (if (< v base)
+            (if sgn
+                (- base v)
+              v)
+          ;; else
+          (let ((ve (ash v (- nbits))))
+            (declare (integer ve))
+            (if (zerop ve)
+                (let ((ans (- v base)))
+                  (if sgn
+                      (- base ans)
+                    ans))
+              (let ((vf (ldb (byte nbits 0) v)))
+                (declare (integer vf))
+                (iter (+ vf (* rem ve)))
+                ))))
+        ))))
 
 (defun get-fastmod (base)
   (let ((recs (get '*m* :fastmod)))
@@ -103,6 +116,12 @@ THE SOFTWARE.
   `(let* ((*m*       ,base)
           (*fastmod* (get-fastmod *m*)))
      ,@body))
+
+#|
+(with-mod 13
+  (print (fastmod 43))
+  (print (fastmod -43)))
+ |#
 
 #+:LISPWORKS
 (editor:setup-indent "with-mod" 1)
