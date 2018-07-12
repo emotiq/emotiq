@@ -213,6 +213,28 @@ THE SOFTWARE.
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
+     (make-ed-proj-pt
+      :x x
+      :y y
+      :z 1))
+    ((ed-proj-pt-)
+     pt)
+    ))
+
+(defun ed-random-projective (pt)
+  (optima:ematch pt
+    ((ecc-pt- :x x :y y)
+     (make-ed-proj-pt
+      :x x
+      :y y
+      :z 1))
+    ((ed-proj-pt- )
+     pt)
+    ))
+#|
+(defun ed-projective (pt)
+  (optima:ematch pt
+    ((ecc-pt- :x x :y y)
      (let* ((alpha (random-between 1 *ed-q*)))
          (with-mod *ed-q*
            (make-ed-proj-pt
@@ -239,6 +261,7 @@ THE SOFTWARE.
           :y (m* alpha y)
           :z (m* alpha z)))
         ))))
+|#
 
 (defun ed-unify-pair-type (pt1 pt2)
   ;; contageon to projective coords
@@ -367,6 +390,68 @@ THE SOFTWARE.
 (defun ed-sub (pt1 pt2)
   (ed-add pt1 (ed-negate pt2)))
 
+;; ----------------------------------------------------------------
+;; NAF multiplication, 4 bits at a time...
+
+(defun naf4 (k)
+  (declare (integer k))
+  (labels ((mods (x)
+             (declare (integer x))
+             (let ((xm (ldb (byte 4 0) x)))
+               (declare (fixnum xm))
+               (if (>= xm 8)
+                   (- xm 16)
+                 xm))))
+    (um:nlet-tail iter ((k   k)
+                        (ans nil))
+      (declare (integer k)
+               (list ans))
+      (if (zerop k)
+          ans
+        (if (oddp k)
+            (let ((di (mods k)))
+              (declare (fixnum di))
+              (iter (ash (- k di) -4) (cons di ans)))
+          ;; else
+          (iter (ash k -1) (cons 0 ans)))
+        ))))
+        
+(defun ed-basic-mul (pt n)
+  (declare (integer n))
+  (cond ((zerop n) (ed-projective
+                    (ed-neutral-point)))
+        
+        ((or (= n 1)
+             (ed-neutral-point-p pt)) pt)
+        
+        (t (let* ((r0   (ed-projective pt))
+                  (r0x2 (ed-add r0 r0))
+                  (precomp (loop for ix from 1 below 8 by 2
+                                 for r1 = r0 then (ed-add r1 r0x2)
+                                 collect (cons ix r1)
+                                 collect (cons (- ix) (ed-negate r1))))
+                  (nns   (naf4 n)))
+             
+             (um:nlet-tail iter ((nns  nns)
+                                 (qans nil))
+               (if (endp nns)
+                   (or qans (ed-neutral-point))
+                 (let ((qsum  (and qans (ed-add qans qans)))
+                       (nnhd  (car nns)))
+                   (declare (fixnum nnhd))
+                   (unless (zerop nnhd)
+                     (let ((kpt (cdr (assoc nnhd precomp))))
+                       (if qsum
+                           (setf qsum (ed-add qsum qsum)
+                                 qsum (ed-add qsum qsum)
+                                 qsum (ed-add qsum qsum)
+                                 qsum (ed-add qsum kpt))
+                         ;; else
+                         (setf qsum kpt))))
+                   (iter (cdr nns) qsum))))
+             ))
+        ))
+#|
 (defun naf (k)
   (declare (integer k))
   ;; non-adjacent form encoding of integers
@@ -401,6 +486,7 @@ THE SOFTWARE.
                       ))
               v))
         ))
+|#
 
 (defun ed-mul (pt n)
   #|
