@@ -591,7 +591,7 @@ THE SOFTWARE.
                                     :element-type '(unsigned-byte 8)))
                   (ptyv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                                     :element-type '(unsigned-byte 8)))
-                  (wv   (make-array 84 ;; 84 cells of 4-bit window vector, in little-endian order
+                  (wv   (make-array 84 ;; 84 cells of 4-bit bipolar window vector, in little-endian order
                                     :element-type '(signed-byte 8)
                                     :initial-element 0)))
 
