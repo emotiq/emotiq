@@ -13,10 +13,10 @@
      (teardown-fixture)))
                                       
 (defun build-fixture ()
-  (gossip::gossip-init ':maybe))
+  (gossip:gossip-init ':maybe))
 
 (defun teardown-fixture ()
-  (gossip::gossip-init ':uninit)
+  (gossip:gossip-init ':uninit)
   )
 
 (defun %aliveness (uid)
@@ -34,7 +34,7 @@
   (assert-equal
    '((:BAR . 10))
    (unwrap (solicit-wait uid :gossip-lookup-key :foo)))
-  (when *debug* (inspect gossip::*log*))
+  (when *debug* (inspect gossip:*log*))
   (gossip:archive-log)
   (solicit uid :gossip-remove-key :foo)
   (sleep .1)
@@ -51,7 +51,7 @@
   (assert-equal
    '((1 . 10))
    (unwrap (solicit-wait uid :gossip-lookup-key :foo)))
-  (when *debug* (inspect gossip::*log*))
+  (when *debug* (inspect gossip:*log*))
   (gossip:archive-log)
   (solicit uid :gossip-tally :foo 1)
   (sleep .1)
@@ -60,7 +60,7 @@
   (assert-equal
    '((2 . 10))
    (unwrap (solicit-wait uid :gossip-lookup-key :foo)))
-  (when *debug* (inspect gossip::*log*)))
+  (when *debug* (inspect gossip:*log*)))
 
 ; (let ((*print-failures* t)) (run-tests '(aliveness)))
 (define-test aliveness
@@ -148,13 +148,11 @@
   (with-networking
       (let ((oldnodes *nodes*)
             (numnodes 100)
-            (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*))
+            (old-application-handler *ll-application-handler*))
         (unwind-protect
             (let ((results nil)
                   (*log-filter* nil)
                   (msg '(foo message)))
-              (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
               (setf *ll-application-handler* (lambda (node full-msg) (setf results (list (gossip::hopcount full-msg) node full-msg))))
               (clear-local-nodes)
@@ -162,7 +160,7 @@
               (ac::kill-executives)
               (assert-eql numnodes (length (get-live-uids)))
               (assert-eql numnodes (run-gossip))
-              (let* ((somelocal (gossip::locate-local-node-for-graph :uber))
+              (let* ((somelocal (gossip:locate-local-uid-for-graph :uber))
                      (sometarget (random-choice (remove somelocal (gossip::local-real-uids)))))
                 (assert-true (member somelocal (get-live-uids)))
                 (singlecast msg sometarget :startnodeID somelocal :howmany t
@@ -177,8 +175,7 @@
                 ; (print results) contains hopcount, node, and full message
                 ))
           (setf *nodes* oldnodes
-                *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes)))))
+                *ll-application-handler* old-application-handler)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(singlecast-local)))
 
@@ -193,14 +190,12 @@
   (with-networking
       (let ((oldnodes *nodes*)
             (numnodes 100)
-            (old-application-handler *ll-application-handler*)
-            (old-remotes gossip::*remote-uids*))
+            (old-application-handler *ll-application-handler*))
         (unwind-protect
             (let ((results nil)
                   (resultlock (mpcompat:make-lock))
                   (*log-filter* nil)
                   (msg '(foo message)))
-              (setf gossip::*remote-uids* nil) ; limit it to local nodes for this test
               (setf *nodes* (gossip::make-uid-mapper))
               ; every node that receives the message will push its id onto results
               (setf *ll-application-handler* (lambda (node full-msg)
@@ -212,7 +207,7 @@
               (ac::kill-executives)
               (assert-eql numnodes (length (get-live-uids)))
               (assert-eql numnodes (run-gossip))
-              (let* ((somelocal (gossip::locate-local-node-for-graph :uber)))
+              (let* ((somelocal (gossip:locate-local-uid-for-graph :uber)))
                 (assert-true (member somelocal (get-live-uids)))
                 (broadcast msg :style ':neighborcast :graphID ':uber :startnodeID somelocal)
                 ; wait until over half of nodes have seen the message, or 5 seconds, whichever comes first
@@ -222,8 +217,7 @@
                 (sleep 1) ; just to allow the remainder of nodes to see the message
                 (assert-true (= (length results) numnodes))))
           (setf *nodes* oldnodes
-                *ll-application-handler* old-application-handler
-                gossip::*remote-uids* old-remotes)))))
+                *ll-application-handler* old-application-handler)))))
 
 ; (let ((lisp-unit::*use-debugger* t)(*print-failures* t)) (run-tests '(broadcast-local)))
 
@@ -234,7 +228,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 9
-   :ADDRESS 'NIL
    :neighborhood '(2 4)
    :local-kvs (as-hash-table
                'EQUAL
@@ -243,7 +236,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 4
-   :ADDRESS 'NIL
    :neighborhood '(8 3 5 9)
    :local-kvs (as-hash-table
                'EQUAL
@@ -252,7 +244,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 5
-   :ADDRESS 'NIL
    :neighborhood '(6 8 4)
    :local-kvs (as-hash-table
                'EQUAL
@@ -261,7 +252,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 8
-   :ADDRESS 'NIL
    :neighborhood '(4 3 5)
    :local-kvs (as-hash-table
                'EQUAL
@@ -270,7 +260,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 3
-   :ADDRESS 'NIL
    :neighborhood '(4 1 8)
    :local-kvs (as-hash-table
                'EQUAL
@@ -279,7 +268,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 1
-   :ADDRESS 'NIL
    :neighborhood '(2 6 3)
    :local-kvs (as-hash-table
                'EQUAL
@@ -288,7 +276,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 6
-   :ADDRESS 'NIL
    :neighborhood '(5 2 1)
    :local-kvs (as-hash-table
                'EQUAL
@@ -297,7 +284,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 2
-   :ADDRESS 'NIL
    :neighborhood '(9 1 7 6)
    :local-kvs (as-hash-table
                'EQUAL
@@ -306,7 +292,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 7
-   :ADDRESS 'NIL
    :neighborhood '(10 2)
    :local-kvs (as-hash-table
                'EQUAL
@@ -315,7 +300,6 @@
   (make-node ':gossip
    :temporary-p t
    :UID 10
-   :ADDRESS 'NIL
    :neighborhood '(7)
    :local-kvs (as-hash-table
                'EQUAL

@@ -50,10 +50,7 @@
    You can map unwrap on these things to get at the real data.
    Stashes result along with time of acquisition at *live-uids*>"
   (when hosts
-    (let ((others (multiple-list-uids hosts)))
-      (setf *remote-uids* (cons (get-universal-time) others)
-            *uber-set-cache* nil) ; invalidate this cache
-      others)))
+    (multiple-list-uids hosts)))
 
 (defun gossip-startup (&key root-path (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test
@@ -77,7 +74,7 @@
     (when root-path 
       (gossip/config:initialize :root-path root-path))
     (gossip-init ':maybe)
-    (multiple-value-bind (keypairs hosts local-machine stakes)
+    (multiple-value-bind (keypairs hosts local-machine)
                          (gossip/config:get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
@@ -86,9 +83,9 @@
             (loop with eripa-host-hbo = (host-to-hbo (eripa))
                   for host-pair in hosts
                   as host-hbo = (host-to-hbo (first host-pair))
-                  when (not (= eripa-host-hbo host-hbo))
+                  when (not (and (= eripa-host-hbo host-hbo)
+                                 (= *nominal-gossip-port* (second host-pair))))
                     collect host-pair))
-      (setf *stakes* stakes)
       (emotiq:note "Gossip init finished.")
       (if ping-others
           (handler-bind 
