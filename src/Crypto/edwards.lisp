@@ -30,6 +30,36 @@ THE SOFTWARE.
 ;; equiv to #F
 (declaim  (OPTIMIZE (SPEED 3) #|(SAFETY 0)|# #+:LISPWORKS (FLOAT 0)))
 
+;; ------------------------------------------------------------------
+;; Debug Instrumentation
+#|
+(defvar *watcher*
+  (ac:make-actor
+   (let ((counts (make-hash-table)))
+     (lambda (&rest msg)
+       (um:dcase msg
+         (:reset ()
+          (clrhash counts))
+         (:read ()
+          (um:accum acc
+            (maphash (lambda (k v)
+                       (acc (list k v)))
+                     counts)))
+         (:tally (kwsym)
+          (let ((ct (gethash kwsym counts 0)))
+            (setf (gethash kwsym counts) (1+ ct))))
+         )))))
+
+(defun clear-counters ()
+  (ac:send *watcher* :reset))
+
+(defun read-counters ()
+  (ac:ask *watcher* :read))
+
+(defun tally (kwsym)
+  (ac:send *watcher* :tally kwsym))
+|#
+;; ------------------------------------------------------------------
 ;; Curve1174:  x^2 + y^2 = 1 + d*x^2*y^2
 ;; curve has order 4 * *ed-r* for field arithmetic over prime field *ed-q*
 ;;    (ed-mul *ed-gen* (* 4 *ed-r*)) -> (0, *ed-c*)
@@ -420,6 +450,7 @@ THE SOFTWARE.
 (defun ed-add (pt1 pt2)
   ;; contageon to randomized projective coords for added security
   ;; (reset-blinders)
+  ;; (tally :ecadd)
   (multiple-value-bind (upt1 upt2)
       (ed-unify-pair-type pt1 pt2)
     (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))
@@ -575,6 +606,7 @@ THE SOFTWARE.
 
 (defun fast-ed3363-mul (pt n)
   (declare (integer n))
+  ;; (tally :ecmul)
   (let ((nn  (with-mod *ed-r*
                (mmod n))))
     (declare (integer nn))
