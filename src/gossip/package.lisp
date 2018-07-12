@@ -5,6 +5,7 @@
 (defpackage :gossip
   (:use :cl)
   (:export
+   #:gossip-handler-case
    #:cosi-loaded-p
    #:initialize-node
    #:*nominal-gossip-port*
@@ -38,8 +39,10 @@
    #:deserialize-log
    #:visualize-nodes
    #:uid
+   #:gossip-init
 
    ; API
+   #:locate-local-uid-for-graph
    #:application-handler
    #:*ll-application-handler*
    #:get-live-uids
@@ -63,7 +66,7 @@
 
 (defpackage :gossip/transport
   (:use :cl)
-  (:IMPORT-FROM :gossip :edebug :eripa)
+  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
   (:export
    #:start-transport
    #:stop-transport

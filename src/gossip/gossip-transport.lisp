@@ -165,7 +165,7 @@
 
 (defun run-tcp-listen-thread (transport)
   (with-slots (listen-socket readers lock peer-down-hook sockets) transport
-    (handler-case
+    (gossip-handler-case
         (loop
           (let ((socket (usocket:socket-accept listen-socket)))
             (mpcompat:with-lock (lock) (push socket sockets))
@@ -184,12 +184,12 @@
 
 (defun run-tcp-read-thread (transport socket)
   "Transfer objects from SOCKET to MESSAGE-RECEIVED-HOOK."
-  (handler-case
+  (gossip-handler-case
       (loop
          (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
+           (edebug 5 :transport "Received message apparently from" (usocket:get-peer-address socket) msg)
            (when (message-received-hook transport)
-             (funcall (message-received-hook transport) msg))
-           (edebug 5 :transport "Received message from" socket msg)))
+             (funcall (message-received-hook transport) msg))))
     (error (err)
       (edebug 5 :error "Read thread error" err)
       (usocket:socket-close socket))))
@@ -199,7 +199,7 @@
 (defun run-tcp-write-thread (transport address port mailbox)
   "Transfer objects from MAILBOX to the remote endpoint ADDRESS:PORT."
   (with-slots (lock message-queues peer-down-hook sockets) transport
-    (handler-case
+    (gossip-handler-case
         ;; Establish new connection.
         (let ((socket (connect-to address port (eripa))))
           (edebug 5 :transport "Ready to write to" address :PORT port)

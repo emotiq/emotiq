@@ -20,13 +20,13 @@
    with some locally-known node that's part of that graph.
    If graphID is not supplied, a direct connection to nodeID will
    be attempted and used.
-   If you want to use the default graph, you must explicitly pass *default-graphID* in graphID.
+   If you want to use the default graph, you must explicitly pass +default-graphid+ in graphID.
    Howmany is only used if graphID is supplied."
   (let ((solicitation nil))
     (if graphID
         (progn
           (unless startnodeID
-            (setf startnodeID (locate-local-node-for-graph graphID)))
+            (setf startnodeID (locate-local-uid-for-graph graphID)))
           (when startnodeID
             (setf solicitation (make-solicitation
                                 :reply-to nil
@@ -50,7 +50,7 @@
                     nil)))))
 
 ; Normally you wouldn't call this as a high-level application programmer. Call broadcast instead.
-(defun gossipcast (message &key (graphID *default-graphID*) startnodeID (howmany 2) (kind ':k-multicast))
+(defun gossipcast (message &key (graphID +default-graphid+) startnodeID (howmany 2) (kind ':k-multicast))
   "Sends message via traditional gossip.
   Howmany determines whether traditional gossip or neighborcast is used."
   (let ((solicitation (make-solicitation
@@ -63,7 +63,7 @@
               startnodeID                   ; destination
               nil)))
 
-(defun broadcast (message &key (style ':neighborcast) (graphID *default-graphID*) startnodeID (kind ':k-multicast))
+(defun broadcast (message &key (style ':neighborcast) (graphID +default-graphid+) startnodeID (kind ':k-multicast))
   "High-level API for broadcasting a message along a graph.
    If startnodeID is provided, it will be used as the starting node.
    If startnodeID is not provided, we'll start at some locally-known node that's part of given graphID.
@@ -73,19 +73,26 @@
     :neighborcast means 'use all the neighbors'. :gossip means 'use up to 2 neighbors'.)
    Normally an API programmer should let :kind default."
   (unless startnodeID
-      (setf startnodeID (locate-local-node-for-graph graphID)))
+      (setf startnodeID (locate-local-uid-for-graph graphID)))
   (cond
     ((eql ':neighborcast style) (gossipcast message :graphID graphID :startnodeID startnodeID :howmany t :kind kind))
     ((eql ':gossip style)       (gossipcast message :graphID graphID :startnodeID startnodeID :howmany 2 :kind kind))
     ((integerp style)           (gossipcast message :graphID graphID :startnodeID startnodeID :howmany style :kind kind))
     (t (error "Invalid style ~S" style))))
 
-(defun hello (pkey ipaddr ipport &key (style ':neighborcast) (graphID *default-graphID*) startnodeID)
+(defun hello (pkey ipaddr ipport &key (style ':neighborcast) (graphID +default-graphid+) startnodeID)
   "Announce the presence of pkey (node UID) at ipaddr and ipport to a graph. Nodes traversed will
    add the pkey/ipaddr pair to their knowledge of the :uber graph.
    graphID here is merely the graph traversed by this message; this does not connect nodes to any given
-   graph except for the :uber graph."
+   graph except for the :uber graph.
+   This is the 'push' equivalent of the 'pull' function #'ping-other-machines."
   (broadcast (list pkey ipaddr ipport) :style style :graphID graphID :startnodeID startnodeID :kind ':k-hello))
+
+; Example:
+; Assume (locate-local-uid-for-graph ':uber) on this machine returns X.
+; <on some remote machine that doesn't know about this one>: (get-live-uids)
+; <on this machine>: (hello (locate-local-uid-for-graph ':uber) (eripa) *actual-tcp-gossip-port* :graphid ':uber)
+; <on the remote machine>: (get-live-uids) ; --> now includes X in results
 
 ;;; NOT DONE YET
 (defun establish-star-broadcast-group (list-of-nodeIDs &key graphID center-nodeID)
@@ -115,22 +122,23 @@
   )
 
 (defun dissolve-graph (graphID &key startnodeID)
-  "Dissolves all connections associated with graphID.
+  "Dissolves all connections (arcs) associated with graphID.
   Starts at startnodeID if given; otherswise it finds one to start with."
   ; Note that it makes no sense to dissolve the :uber graph, because the nodes
-  ;  themselves don't even know about the uber graph. Dissolving the :uber graph is a no-op.
-  ;  (Or should it mean "dissolve all graphs"?)
-  (unless startnodeID
-    (setf startnodeID (locate-local-node-for-graph graphID)))
-  (when startnodeID
-    (let ((solicitation (make-solicitation
-                         :reply-to nil
-                         :kind :k-dissolve
-                         :forward-to t ; neighborcast, although dissolve handler will enforce this regardless
-                         :graphID graphID 
-                         :args nil)))
-      ; must also destroy entry in locate-local-node-for-graph table (if any) for this graphID
-      (send-msg solicitation
-                startnodeID                   ; destination
-                nil)
-      t)))
+  ; themselves don't even know about the uber graph.
+  ; The :UBER network contains no explicit arcs, so there's nothing to dissolve.
+  (unless (eql :UBER graphID)
+    (unless startnodeID
+      (setf startnodeID (locate-local-uid-for-graph graphID)))
+    (when startnodeID
+      (let ((solicitation (make-solicitation
+                           :reply-to nil
+                           :kind :k-dissolve
+                           :forward-to t ; neighborcast, although dissolve handler will enforce this regardless
+                           :graphID graphID 
+                           :args nil)))
+        (send-msg solicitation
+                  startnodeID                   ; destination
+                  nil)
+        t))))
+
