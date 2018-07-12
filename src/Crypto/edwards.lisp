@@ -541,8 +541,9 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------
 
-(defun xfer-foreign-to-lisp (fbuf nel)
-  (let ((lbuf (make-ub8-vector nel)))
+(defun xfer-foreign-to-lisp (fbuf nel &optional lbuf)
+  (let ((lbuf (or lbuf
+                  (make-ub8-vector nel))))
     (dotimes (ix nel)
       (setf (aref lbuf ix) (cffi:mem-aref fbuf :unsigned-char ix)))
     lbuf))
@@ -619,25 +620,26 @@ THE SOFTWARE.
                                 (cwv  84 wv))
                (_Ed3363-mul cptx cpty cwv)
                
-               (let ((ansxv (xfer-foreign-to-lisp cptx 48))
-                     (ansyv (xfer-foreign-to-lisp cpty 48)))
-                 (labels ((to-int (vec)
-                            (um:nlet-tail iter ((ix  0)
-                                                (pos 0)
-                                                (val 0))
-                              (declare (fixnum ix pos)
-                                       (integer val))
-                              (cond ((>= ix 48)  val)
-                                    ((= 7 (mod ix 8))
-                                     (iter (1+ ix) pos val))
-                                    (t
-                                     (iter (1+ ix) (+ pos 8)
-                                           (dpb (aref vec ix) (byte 8 pos) val)))
-                                    ))))
-                   (make-ecc-pt
-                    :x (to-int ansxv)
-                    :y (to-int ansyv))
-                   )))))
+               (xfer-foreign-to-lisp cptx 48 ptxv)
+               (xfer-foreign-to-lisp cpty 48 ptyv))
+             
+             (labels ((to-int (vec)
+                        (um:nlet-tail iter ((ix  0)
+                                            (pos 0)
+                                            (val 0))
+                          (declare (fixnum ix pos)
+                                   (integer val))
+                          (cond ((>= ix 48)  val)
+                                ((= 7 (mod ix 8))
+                                 (iter (1+ ix) pos val))
+                                (t
+                                 (iter (1+ ix) (+ pos 8)
+                                       (dpb (aref vec ix) (byte 8 pos) val)))
+                                ))))
+               (make-ecc-pt
+                :x (to-int ptxv)
+                :y (to-int ptyv))
+               )))
           )))
 
 ;; -------------------------------------------------------------------
