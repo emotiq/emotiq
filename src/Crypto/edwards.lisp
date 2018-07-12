@@ -507,9 +507,12 @@ THE SOFTWARE.
         ))
 |#
 
+;; -------------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
 ;; |r|/4 terms
+
 (defun nibbles (n)
+  ;; for debug display to compare with windows4 output
   (let* ((nbits (integer-length n))
          (limt  (* 4 (floor nbits 4))))
     (loop for pos fixnum from limt downto 0 by 4 collect
@@ -591,22 +594,26 @@ THE SOFTWARE.
                   (wv   (make-array 84 ;; 84 cells of 4-bit window vector, in little-endian order
                                     :element-type '(signed-byte 8)
                                     :initial-element 0)))
-             
+
+             ;; The C-code requires the point coordinates in
+             ;; little-endian order, and split into 56-bit components,
+             ;; per 64-bit cell
              (labels ((to-vec56 (val vec)
                         (um:nlet-tail iter ((ix  0)
                                             (pos 0))
                           (declare (fixnum ix pos))
-                          (cond ((>= ix 48))
-                                ((= 7 (mod ix 8))
+                          (cond ((>= ix 48)) ;; we're done here
+                                ((= 7 (mod ix 8)) ;; skip every 7th byte, filling with zero
                                  (setf (aref vec ix) 0)
                                  (iter (1+ ix) pos))
-                                (t
+                                (t           ;; stuff the byte vector in little-endian order
                                  (setf (aref vec ix) (ldb (byte 8 pos) val))
                                  (iter (1+ ix) (+ pos 8)))
                                 ))))
                (to-vec56 (ecc-pt-x pta) ptxv)
                (to-vec56 (ecc-pt-y pta) ptyv))
-             
+
+             ;; C-code requires the window4 vector in little endian order
              (let ((ws  (nreverse (windows4 nn))))
                (loop for w  fixnum in ws
                      for ix fixnum from 0 below 84
@@ -620,17 +627,18 @@ THE SOFTWARE.
                
                (xfer-foreign-to-lisp cptx 48 ptxv)
                (xfer-foreign-to-lisp cpty 48 ptyv))
-             
+
+             ;; C-code returns 56-bit coords in the original output vectors
              (labels ((to-int (vec)
                         (um:nlet-tail iter ((ix  0)
                                             (pos 0)
                                             (val 0))
                           (declare (fixnum ix pos)
                                    (integer val))
-                          (cond ((>= ix 48)  val)
-                                ((= 7 (mod ix 8))
+                          (cond ((>= ix 48)  val) ;; we're done here
+                                ((= 7 (mod ix 8)) ;; skip every 7th byte
                                  (iter (1+ ix) pos val))
-                                (t
+                                (t                ;; accum bytes in little-endian order
                                  (iter (1+ ix) (+ pos 8)
                                        (dpb (aref vec ix) (byte 8 pos) val)))
                                 ))))
@@ -641,6 +649,8 @@ THE SOFTWARE.
           )))
 
 ;; -------------------------------------------------------------------
+;; 4-bit fixed window method - decent performance, and never more than
+;; |r|/4 terms
 
 (defun ed-basic-mul (pt n)
   (declare (integer n))
@@ -689,41 +699,8 @@ THE SOFTWARE.
                (or ans (ed-neutral-point))
                ))
           )))
-#|
-  ;; 4-bit window method -- the worst performer by 3x
-(defun ed-basic-mul (pt n)
-  (declare (integer n))
-  (cond ((zerop n) (ed-projective
-                    (ed-neutral-point)))
-        
-        ((or (= n 1)
-             (ed-neutral-point-p pt)) pt)
-        
-        (t (let* ((r0   (ed-projective pt))
-                  (prec (make-array 16))
-                  (ans  nil))
-             (loop for ix from 1 below 16
-                   for p = r0 then (ed-add r0 p)
-                   do
-                   (setf (aref prec ix) p))
-             (loop for pos fixnum from (* 4 (floor (integer-length n) 4)) downto 0 do
-                   (when ans
-                     (setf ans (ed-add ans ans)
-                           ans (ed-add ans ans)
-                           ans (ed-add ans ans)
-                           ans (ed-add ans ans)))
-                   (let ((bits (ldb (byte 4 pos) n)))
-                     (declare (fixnum bits))
-                     (unless (zerop bits)
-                       (let ((p  (aref prec bits)))
-                         (setf ans (if ans
-                                       (ed-add ans p)
-                                     p))))
-                     ))
-             (or ans (ed-neutral-point))
-             ))
-        ))
-|#
+
+;; --------------------------------------------------------------------------------
 #|
 ;; 1-bit NAF form
 (defun naf (k)
@@ -761,6 +738,8 @@ THE SOFTWARE.
               v))
         ))
 |#
+
+;; --------------------------------------------------------------------------------
 
 (defun ed-mul (pt n)
   #|
