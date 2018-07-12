@@ -38,13 +38,12 @@ THE SOFTWARE.
          (inline mmod m-1 m/2l m+1 m/2u))
 
 (defstruct moddescr
-  base nbits rem)
+  nbits rem)
 
 (defun make-mod-descr (base)
   (let* ((nbits  (integer-length base))
          (rem    (- (ash 1 nbits) base)))
     (make-moddescr
-     :base  base
      :nbits nbits
      :rem   rem)))
 
@@ -54,24 +53,23 @@ THE SOFTWARE.
   ;; full mod
   (declare (integer x))
   (with-accessors ((nbits  moddescr-nbits)
-                   (rem    moddescr-rem)
-                   (base   moddescr-base)) *fastmod*
-    (declare (integer base rem)
-             (fixnum nbits))
+                   (rem    moddescr-rem)) *fastmod*
+    (declare (integer rem)
+             (fixnum  nbits))
     (let ((sgn  (minusp x)))
       (um:nlet-tail iter ((v (abs x)))
         (declare (integer v))
-        (if (< v base)
+        (if (< v *m*)
             (if sgn
-                (- base v)
+                (- *m* v)
               v)
           ;; else
           (let ((ve (ash v (- nbits))))
             (declare (integer ve))
             (if (zerop ve)
-                (let ((ans (- v base)))
+                (let ((ans (- v *m*)))
                   (if sgn
-                      (- base ans)
+                      (- *m* ans)
                     ans))
               (let ((vf (ldb (byte nbits 0) v)))
                 (declare (integer vf))
@@ -80,11 +78,9 @@ THE SOFTWARE.
       )))
 
 (defun get-fastmod (base)
-  (let ((recs (get '*m* :fastmod)))
-    (or (find base recs :key 'moddescr-base)
-        (car (setf (get '*m* :fastmod)
-                   (cons (make-mod-descr base) recs))))
-    ))
+  (get-cached-symbol-data '*m* :fastmod base
+                          (lambda ()
+                            (make-mod-descr base))))
 
 (defmacro with-mod (base &body body)
   `(let* ((*m*       ,base)
@@ -309,11 +305,11 @@ THE SOFTWARE.
         (setf p (fq2* p b))))
     ))
 
-(defun get-msqrt-fn ()
-  (get-cached-symbol-data '*m* :msqrt *m*
+(defun get-msqrt-fn (base)
+  (get-cached-symbol-data '*m* :msqrt base
                           (lambda ()
                             (cond
-                             ((= 3 (ldb (byte 2 0) *m*))
+                             ((= 3 (ldb (byte 2 0) base))
                               (let ((p  (truncate (m+1) 4)))
                                 (um:rcurry 'm^ p)))
                              (t 'cipolla)))))
@@ -336,7 +332,7 @@ THE SOFTWARE.
         (declare (integer ix))
         (cond ((= xx (* ix ix)) ix)
               ((quadratic-residue-p xx)
-               (let* ((fn (get-msqrt-fn))
+               (let* ((fn (get-msqrt-fn *m*))
                       (xr (funcall fn xx)))
                  (declare (integer xr))
                  (assert (= xx (m* xr xr)))

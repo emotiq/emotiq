@@ -392,7 +392,7 @@ THE SOFTWARE.
 
 ;; ----------------------------------------------------------------
 ;; NAF multiplication, 4 bits at a time...
-
+#|
 (defun naf4 (k)
   (declare (integer k))
   (labels ((mods (x)
@@ -424,15 +424,16 @@ THE SOFTWARE.
         ((or (= n 1)
              (ed-neutral-point-p pt)) pt)
         
-        (t (let* ((r0   (ed-projective pt))
-                  (r0x2 (ed-add r0 r0))
-                  (precomp (loop for ix from 1 below 8 by 2
-                                 for r1 = r0 then (ed-add r1 r0x2)
-                                 collect (cons ix r1)
-                                 collect (cons (- ix) (ed-negate r1))))
-                  (nns   (naf4 n)))
+        (t (let ((precomp
+                  (let* ((r0   (ed-projective pt))
+                         (r0x2 (ed-add r0 r0)))
+                    (loop for ix fixnum from 1 below 8 by 2
+                          for r1 = r0 then (ed-add r1 r0x2)
+                          collect (cons ix r1)
+                          collect (cons (- ix) (ed-negate r1)))
+                    )))
              
-             (um:nlet-tail iter ((nns  nns)
+             (um:nlet-tail iter ((nns  (naf4 n))
                                  (qans nil))
                (if (endp nns)
                    (or qans (ed-neutral-point))
@@ -451,7 +452,86 @@ THE SOFTWARE.
                    (iter (cdr nns) qsum))))
              ))
         ))
+|#
 
+;; 4-bit fixed window method - decent performance, and never more than
+;; |r|/4 terms
+(defun nibbles (n)
+  (let* ((nbits (integer-length n))
+         (limt  (* 4 (floor nbits 4)))
+         (ans   nil))
+    (um:nlet-tail iter ((pos 0))
+      (let ((bits (ldb (byte 4 pos) n)))
+        (push bits ans)
+        (if (>= pos limt)
+            ans
+          (iter (+ pos 4)))))))
+  
+(defun windows4 (n)
+  (let* ((nbits (integer-length n))
+         (limt  (* 4 (floor nbits 4)))
+         (ans   nil))
+    (um:nlet-tail iter ((pos 0)
+                        (cy  0))
+      (let* ((byt (ldb (byte 4 pos) n))
+             (x   (+ byt cy)))
+        (multiple-value-bind (nxt nxtcy)
+            (cond ((> x  7) (values (- x 16)  1))
+                  ((> x -9) (values x         0))
+                  (t        (values (+ x 16) -1))
+                  )
+          (push nxt ans)
+          (if (< pos limt)
+              (iter (+ pos 4) nxtcy)
+            (cons nxtcy ans)))
+        ))))
+
+(defun ed-basic-mul (pt n)
+  (declare (integer n))
+  (let ((nn  (with-mod *ed-r*
+               (mmod n))))
+    (declare (integer nn))
+    
+    (cond ((zerop nn) (ed-projective
+                       (ed-neutral-point)))
+          
+          ((or (= nn 1)
+               (ed-neutral-point-p pt)) pt)
+          
+          (t (let ((ws   (windows4 nn))
+                   (ans  nil)
+                   (prec (let* ((p1 (ed-projective pt))
+                                (p2 (ed-add p1 p1))
+                                (p3 (ed-add p2 p1))
+                                (p4 (ed-add p3 p1))
+                                (p5 (ed-add p4 p1))
+                                (p6 (ed-add p5 p1))
+                                (p7 (ed-add p6 p1))
+                                (p8 (ed-add p7 p1)))
+                           (vector (ed-negate p8)
+                                   (ed-negate p7)
+                                   (ed-negate p6)
+                                   (ed-negate p5)
+                                   (ed-negate p4)
+                                   (ed-negate p3)
+                                   (ed-negate p2)
+                                   (ed-negate p1)
+                                   nil
+                                   p1 p2 p3 p4 p5 p6 p7))))
+               (loop for w fixnum in ws do
+                     (when ans
+                       (setf ans (ed-add ans ans)
+                             ans (ed-add ans ans)
+                             ans (ed-add ans ans)
+                             ans (ed-add ans ans)))
+                     (unless (zerop w)
+                       (let ((pw  (aref prec (+ w 8))))
+                         (setf ans (if ans
+                                       (ed-add ans pw)
+                                     pw)))))
+               (or ans (ed-neutral-point))
+               ))
+          )))
 #|
   ;; 4-bit window method -- the worst performer by 3x
 (defun ed-basic-mul (pt n)
