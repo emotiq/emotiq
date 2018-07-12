@@ -592,28 +592,22 @@ THE SOFTWARE.
                   (wv   (make-array 84
                                     :element-type '(signed-byte 8)
                                     :initial-element 0)))
-             (let ((x  (ecc-pt-x pta))
-                   (y  (ecc-pt-y pta)))
-               (labels ((xfer (from from-start to to-start)
-                          (declare (fixnum from-start to-start))
-                          (let* ((v  (ldb (byte 56 from-start) from))
-                                 (vv (lev-vec (levn v 8))))
-                            (declare (fixnum v))
-                            (replace to vv :start1 to-start))))
-                 (xfer x   0 ptxv  0)
-                 (xfer x  56 ptxv  8)
-                 (xfer x 112 ptxv 16)
-                 (xfer x 168 ptxv 24)
-                 (xfer x 224 ptxv 32)
-                 (xfer x 280 ptxv 40)
-
-                 (xfer y   0 ptyv  0)
-                 (xfer y  56 ptyv  8)
-                 (xfer y 112 ptyv 16)
-                 (xfer y 168 ptyv 24)
-                 (xfer y 224 ptyv 32)
-                 (xfer y 280 ptyv 40)))
-
+             
+             (labels ((to-vec56 (val vec)
+                        (um:nlet-tail iter ((ix  0)
+                                            (pos 0))
+                          (declare (fixnum ix pos))
+                          (cond ((>= ix 48))
+                                ((= 7 (mod ix 8))
+                                 (setf (aref vec ix) 0)
+                                 (iter (1+ ix) pos))
+                                (t
+                                 (setf (aref vec ix) (ldb (byte 8 pos) val))
+                                 (iter (1+ ix) (+ pos 8)))
+                                ))))
+               (to-vec56 (ecc-pt-x pta) ptxv)
+               (to-vec56 (ecc-pt-y pta) ptyv))
+             
              (let ((ws  (nreverse (windows4 nn))))
                (loop for w  fixnum in ws
                      for ix fixnum from 0 below 84
@@ -634,8 +628,11 @@ THE SOFTWARE.
                               (declare (fixnum ix pos)
                                        (integer val))
                               (cond ((>= ix 48)  val)
-                                    ((= 7 (mod ix 8)) (iter (1+ ix) pos val))
-                                    (t (iter (1+ ix) (+ pos 8) (dpb (aref vec ix) (byte 8 pos) val)))
+                                    ((= 7 (mod ix 8))
+                                     (iter (1+ ix) pos val))
+                                    (t
+                                     (iter (1+ ix) (+ pos 8)
+                                           (dpb (aref vec ix) (byte 8 pos) val)))
                                     ))))
                    (make-ecc-pt
                     :x (to-int ansxv)
