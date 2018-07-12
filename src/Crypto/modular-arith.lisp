@@ -37,8 +37,71 @@ THE SOFTWARE.
 (declaim (integer *m*)
          (inline mmod m-1 m/2l m+1 m/2u))
 
+(defstruct moddescr
+  base nbits nbins rem)
+
+(defun make-mod-descr (base)
+  (let* ((nbits  (integer-length base))
+         (rem    (- (ash 1 nbits) base))
+         (nbins  (ceiling nbits 64)))
+    (make-moddescr
+     :base  base
+     :nbits nbits
+     :nbins nbins
+     :rem   rem)))
+
+(defvar *fastmod*  nil)
+
+(defun %fastmod (x)
+  ;; quick one pass to limit growth
+  (declare (integer x))
+  (with-accessors ((nbits  moddescr-nbits)
+                   (rem    moddescr-rem)
+                   (base   moddescr-base)) *fastmod*
+    (declare (integer base rem)
+             (fixnum nbits))
+    (if (< x base)
+        x
+      ;; else
+      (let ((xe (ash x (- nbits)))
+            (xf (ldb (byte nbits 0) x)))
+        (declare (integer xe xf))
+        (+ xf (* rem xe))))
+    ))
+
+(defun fastmod (x)
+  ;; full mod
+  (declare (integer x))
+  (with-accessors ((nbits  moddescr-nbits)
+                   (rem    moddescr-rem)
+                   (base   moddescr-base)) *fastmod*
+    (declare (integer base rem)
+             (fixnum nbits))
+    (um:nlet-tail iter ((v x))
+      (declare (integer v))
+      (if (< v base)
+          v
+        ;; else
+        (let ((ve (ash v (- nbits))))
+          (declare (integer ve))
+          (if (zerop ve)
+              (- v base)
+            (let ((vf (ldb (byte nbits 0) v)))
+              (declare (integer vf))
+              (iter (+ vf (* rem ve)))
+              ))))
+      )))
+
+(defun get-fastmod (base)
+  (let ((recs (get '*m* :fastmod)))
+    (or (find base recs :key 'moddescr-base)
+        (car (setf (get '*m* :fastmod)
+                   (cons (make-mod-descr base) recs))))
+    ))
+
 (defmacro with-mod (base &body body)
-  `(let ((*m* ,base))
+  `(let* ((*m*       ,base)
+          (*fastmod* (get-fastmod *m*)))
      ,@body))
 
 #+:LISPWORKS
@@ -46,7 +109,8 @@ THE SOFTWARE.
 
 (defun mmod (x)
   (declare (integer x))
-  (mod x *m*))
+  ;; (mod x *m*)
+  (fastmod x))
 
 (defun m-1 ()
   (1- *m*))
@@ -63,10 +127,12 @@ THE SOFTWARE.
 (defun m! (m)
   ;; for REPL convenience, so we don't have to keep doing WITH-MOD
   (check-type m (integer 1))
-  (setf *m* m))
+  (setf *m*       m
+        *fastmod* (get-fastmod m)))
 
 ;; -----------------------------------------------------
 
+#|
 (defvar *blinders* (make-hash-table))
 
 (defun create-blinder (m)
@@ -81,31 +147,87 @@ THE SOFTWARE.
 
 (defun reset-blinders ()
   (clrhash *blinders*))
+|#
+
+;; ------------------------------------------------------------
+
+(defun %m* (arg &rest args)
+  (declare (integer arg))
+  (dolist (opnd args)
+    (declare (integer opnd))
+    (setf arg (%fastmod (* arg opnd))))
+  arg)
+    
+(defun m* (arg &rest args)
+  (fastmod (apply '%m* arg args)))
+    
+;; ------------------------------------------------------------
+
+(defun m+ (arg &rest args)
+  (declare (integer arg))
+  (dolist (opnd args)
+    (declare (integer opnd))
+    (incf arg opnd))
+  (fastmod arg))
+
+(defun m- (arg &rest args)
+  (declare (integer arg))
+  (if args
+      (dolist (opnd args)
+        (declare (integer opnd))
+        (decf arg opnd))
+    ;; else
+    (setf arg (- arg)))
+  (fastmod arg))
+
+;; ------------------------------------------------------------
+
+(defun minv (a)
+  (declare (integer a))
+  (let* ((u  (fastmod a))
+         (v  *m*)
+         (x1 1)
+         (x2 0))
+    (declare (integer u v x1 x2))
+    (do ()
+        ((= u 1) x1)
+      (multiple-value-bind (q r) (truncate v u)
+        (declare (integer q r))
+        (let ((x (m- x2 (m* q x1))))
+          (declare (integer x))
+          (shiftf v u r)
+          (shiftf x2 x1 x))
+        ))))
+
+
+(defun m/ (arg &rest args)
+  (declare (integer arg))
+  (if args
+      (m* arg (minv (apply '%m* args)))
+    (minv arg)))
 
 ;; -----------------------------------------------------
 ;; Prime-Field Arithmetic
 
-(defun m^ (base exponent)
+(defun m^ (base exp)
   ;; base^exponent mod modulus, for any modulus
-  (declare (integer base exponent))
-  (let ((x (mmod base)))
+  (declare (integer base exp))
+  (let ((x (fastmod base)))
     (declare (integer x))
     (if (< x 2)  ;; x = 0,1
         x
       ;; else
-      (let* ((exp (+ exponent (get-blinder (m-1))))
-             (n   (integer-length exp)))
+      (let* ((n  (integer-length exp)))
         (declare (fixnum n)
                  (integer exp))
-        (do ((b  (+ x (get-blinder))
-                 (m* b b))
+        (do ((b  x  (%m* b b))
              (p  1)
-             (ix 0    (1+ ix)))
-            ((>= ix n) p)
+             (ix 0  (1+ ix)))
+            ((>= ix n) (fastmod p))
           (declare (integer b p)
                    (fixnum ix))
           (when (logbitp ix exp)
-            (setf p (m* p b)))) ))
+            (setf p (%m* p b)))) ))
     ))
 
 ;; ------------------------------------------------------------
@@ -185,7 +307,7 @@ THE SOFTWARE.
   ;; 1/2 = 2/4 = 3/6 = 4/8 = 5/10 = 6/12 = 7/14 = 8/16
   ;; in general:  for m = (2k+1) mod 4k, use (m + (2k-1))/4k, k = 1,2,...
   (declare (integer x))
-  (let ((xx  (mmod x)))
+  (let ((xx  (fastmod x)))
     (declare (integer xx))
     (if (< xx 2)
         xx
@@ -203,67 +325,4 @@ THE SOFTWARE.
               (t (error "not a square"))
               )))
     ))
-
-;; ------------------------------------------------------------
-
-(defun m* (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder)))
-    (declare (integer blinder))
-    (dolist (opnd args)
-      (declare (integer opnd))
-      (setf arg (mmod (* arg (+ opnd blinder))))))
-  arg)
-    
-
-
-;; ------------------------------------------------------------
-
-(defun m+ (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (+ arg blinder)))
-    (declare (integer blinder ans))
-    (dolist (opnd args)
-      (declare (integer opnd))
-      (incf ans (+ opnd blinder)))
-    (mmod ans)))
-
-(defun m- (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (- arg blinder)))
-    (declare (integer blinder ans))
-    (if args
-        (dolist (opnd args)
-          (declare (integer opnd))
-          (decf ans (+ opnd blinder)))
-      (setf ans (- ans)))
-    (mmod ans)))
-
-;; ------------------------------------------------------------
-
-(defun minv (a)
-  (declare (integer a))
-  (let* ((u  (mmod a))
-         (v  *m*)
-         (x1 1)
-         (x2 0))
-    (declare (integer u v x1 x2))
-    (do ()
-        ((= u 1) x1)
-      (multiple-value-bind (q r) (truncate v u)
-        (declare (integer q r))
-        (let ((x (m- x2 (m* q x1))))
-          (declare (integer x))
-          (shiftf v u r)
-          (shiftf x2 x1 x)) ))))
-
-
-(defun m/ (arg &rest args)
-  (declare (integer arg))
-  (dolist (opnd args)
-    (declare (integer opnd))
-    (setf arg (m* arg (minv opnd))))
-  (if args arg (minv arg)))
 
