@@ -10,9 +10,11 @@ uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
         LIBUV_URL=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTERNAL_LIBS_VERSION}/emotiq-libuv-osx.tgz
+        SUDO=sudo
         ;;
     Darwin*)
         LIBUV_URL=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTERNAL_LIBS_VERSION}/emotiq-libuv-osx.tgz
+        SUDO=
         ;;
     *)
         echo Unknown OS \"$(uname_s)\"
@@ -20,4 +22,4 @@ case ${uname_s} in
         ;;
 esac
 
-(cd /usr/local && curl -L ${LIBUV_URL} | tar xvfz -)
+(cd /usr/local && curl -L ${LIBUV_URL} | ${SUDO} tar xvfz -)
