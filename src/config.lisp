@@ -14,7 +14,7 @@
     (:hostname "zt-emq-03.zt.emotiq.ch"
      :ip "10.178.15.71")))
 
-(defparameter *emotiq-conf*
+(defun emotiq-conf ()
   (make-pathname :defaults (emotiq/fs:etc/)
                  :name "emotiq-conf"
                  :type "json"))
@@ -123,7 +123,7 @@
    :private (alexandria:assoc-value configuration :private)
    :key-records key-records)
   (with-open-file (o (make-pathname :defaults directory
-                                    :name (pathname-name *emotiq-conf*)
+                                    :name (pathname-name (emotiq-conf))
                                     :type "json")
                      :if-exists :supersede
                      :direction :output)
@@ -135,11 +135,11 @@
   (genesis/create configuration :directory directory :force t))
   
 (defun settings/read (&optional key) 
-  (unless (probe-file *emotiq-conf*)
-    (emotiq:note "No configuration able to be read from '~a'" *emotiq-conf*)
+  (unless (probe-file (emotiq-conf))
+    (emotiq:note "No configuration able to be read from '~a'" (emotiq-conf))
     (return-from settings/read nil))
   ;;; TODO: do gossip/configuration sequence
-  (let ((c (cl-json:decode-json-from-source *emotiq-conf*)))
+  (let ((c (cl-json:decode-json-from-source (emotiq-conf))))
     (if key
         (alexandria:assoc-value c key)
         c)))
