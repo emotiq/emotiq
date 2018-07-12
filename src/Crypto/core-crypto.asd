@@ -55,5 +55,6 @@ THE SOFTWARE.
                  "s-base64"
                  "emotiq"
                  "emotiq/delivery"
+                 "cffi"
                  ))
 

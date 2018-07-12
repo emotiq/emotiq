@@ -152,9 +152,31 @@ THE SOFTWARE.
   ;; = (hex-str (hash/256 *curve-E521*))
   "689a5918f2d28f1d62965551d44c635a141b623ad672b464b21052b481a21420")
 
+;; ---------------------------
+
+(defvar *curve-Ed3363*  ;; the High-Five curve from MIRACL Labs
+  ;; y^2 + x^2 = 1 + 11111 x^2 y^2
+  ;; rho-security = 2^192 ?? just a guess
+  (make-ed-curve
+   :name :curve-Ed3363
+   :c    1
+   :d    11111  ;; the High-Five! 
+   :q    (- (ash 1 336) 3)
+   :r    #x200000000000000000000000000000000000000000071415FA9850C0BD6B87F93BAA7B2F95973E9FA805
+            ;; = 2^334 - 17498005798264095394980017816940970922825355447145689146224742567571548398315731775918023221343967227
+   :h    8
+   :gen  (make-ecc-pt
+          :x  #x0c
+          :y  #xC0DC616B56502E18E1C161D007853D1B14B46C3811C7EF435B6DB5D5650CA0365DB12BEC68505FE8632)
+   ))
+
+(defvar *chk-curve-Ed3363*
+  ;; = (hex-str (hash/256 *curve-Ed3363*))
+  "B997BCED2633F39C98EE33FD9B1861780035B93168A55583D4B87895BC270681")
+
 ;; ------------------------------------------------------
 
-(defvar *edcurve* *curve1174*)
+(defvar *edcurve* *curve-Ed3363*)
 
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
 (define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
@@ -167,7 +189,7 @@ THE SOFTWARE.
 ;; ------------------------------------------------------
 
 (defvar *known-curves*
-  (list *curve1174* *curve-e382* *curve41417* *curve-e521*))
+  (list *curve1174* *curve-e382* *curve41417* *curve-e521* *curve-Ed3363*))
 
 (defmethod select-curve ((curve ed-curve))
   curve)
@@ -184,6 +206,47 @@ THE SOFTWARE.
   ;; present caller with a list of symbols that can be used to select
   ;; a curve using WITH-ED-CURVE
   (mapcar 'ed-curve-name *known-curves*))
+
+;; -----------------------------------------------------------------------
+
+;; The Lisp runtime load might help us do this differently, but explicit
+;; initialization is much easier to understand
+
+(defun load-dev-dlls ()
+  "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
+  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
+           cffi:*foreign-library-directories*)
+  (cffi:define-foreign-library
+      libEd3363 
+    (:darwin "libLispEd3363.dylib")
+    (:linux "libLispEd3363.so")
+    (t (:default "libLispEd3363"))))
+
+(defun load-production-dlls ()
+  "loads the DLLs (.so and .dylib) at runtime, from the current directory"
+  (cffi:define-foreign-library
+   libEd3363
+   (:darwin "libLispEd3363.dylib")
+   (:linux  "./libLispEd3363.so")
+   (t (:default "libLispEd3363"))))
+
+(defun load-dlls()
+  "load the dev or production dlls at runtime"
+  (if (emotiq:production-p)
+      (load-production-dlls)
+      (load-dev-dlls))
+  (cffi:use-foreign-library libEd3363))
+
+(defun init-Ed3363 ()
+  (load-dlls))
+
+;; -----------------------------------------------------------------------
+;; Init interface - this must be performed first
+
+(cffi:defcfun ("Ed3363_mul" _Ed3363-mul) :void
+  (ptx         :pointer :unsigned-char)
+  (pty         :pointer :unsigned-char)
+  (wv          :pointer :signed-char))
 
 ;; ----------------------------------------------------------------
 
@@ -221,16 +284,6 @@ THE SOFTWARE.
      pt)
     ))
 
-(defun ed-random-projective (pt)
-  (optima:ematch pt
-    ((ecc-pt- :x x :y y)
-     (make-ed-proj-pt
-      :x x
-      :y y
-      :z 1))
-    ((ed-proj-pt- )
-     pt)
-    ))
 #|
 (defun ed-projective (pt)
   (optima:ematch pt
@@ -244,6 +297,7 @@ THE SOFTWARE.
            )))
     ((ed-proj-pt-) pt)
     ))
+|#
 
 (defun ed-random-projective (pt)
   (with-mod *ed-q*
@@ -261,7 +315,6 @@ THE SOFTWARE.
           :y (m* alpha y)
           :z (m* alpha z)))
         ))))
-|#
 
 (defun ed-unify-pair-type (pt1 pt2)
   ;; contageon to projective coords
@@ -486,6 +539,112 @@ THE SOFTWARE.
             (list* nxtcy nxt ans)))
         ))))
 
+;; -------------------------------------------------
+
+(defun xfer-foreign-to-lisp (fbuf nel)
+  (let ((lbuf (make-ub8-vector nel)))
+    (dotimes (ix nel)
+      (setf (aref lbuf ix) (cffi:mem-aref fbuf :unsigned-char ix)))
+    lbuf))
+
+(defun xfer-lisp-to-foreign (lbuf fbuf nel)
+  (dotimes (ix nel)
+    (setf (cffi:mem-aref fbuf :unsigned-char ix) (aref lbuf ix))))
+
+(defmacro with-fli-buffers (buffers &body body)
+  (if (endp buffers)
+      `(progn
+         ,@body)
+    (destructuring-bind (name size &optional lisp-buf) (car buffers)
+      (if lisp-buf
+          `(cffi:with-foreign-pointer (,name ,size)
+             (xfer-lisp-to-foreign ,lisp-buf ,name ,size)
+             (with-fli-buffers ,(cdr buffers) ,@body))
+        `(cffi:with-foreign-pointer (,name ,size)
+           (with-fli-buffers ,(cdr buffers) ,@body))
+        ))))
+
+#+:LISPWORKS
+(editor:setup-indent "with-fli-buffers" 1)
+
+;; -------------------------------------------------------------------
+
+(defun fast-ed3363-mul (pt n)
+  (declare (integer n))
+  (let ((nn  (with-mod *ed-r*
+               (mmod n))))
+    (declare (integer nn))
+    
+    (cond ((zerop nn) (ed-neutral-point))
+
+          #||#
+          ((or (= nn 1)
+               (ed-neutral-point-p pt)) pt)
+          #||#
+          (t
+           (let* ((pta  (ed-affine pt))
+                  (ptxv (make-array 48
+                                    :element-type '(unsigned-byte 8)
+                                    :initial-element 0))
+                  (ptyv (make-array 48
+                                    :element-type '(unsigned-byte 8)
+                                    :initial-element 0))
+                  (wv   (make-array 84
+                                    :element-type '(signed-byte 8)
+                                    :initial-element 0)))
+             (let ((x  (ecc-pt-x pta))
+                   (y  (ecc-pt-y pta)))
+               (labels ((xfer (from from-start to to-start)
+                          (declare (fixnum from-start to-start))
+                          (let* ((v  (ldb (byte 56 from-start) from))
+                                 (vv (lev-vec (levn v 8))))
+                            (declare (fixnum v))
+                            (replace to vv :start1 to-start))))
+                 (xfer x   0 ptxv  0)
+                 (xfer x  56 ptxv  8)
+                 (xfer x 112 ptxv 16)
+                 (xfer x 168 ptxv 24)
+                 (xfer x 224 ptxv 32)
+                 (xfer x 280 ptxv 40)
+
+                 (xfer y   0 ptyv  0)
+                 (xfer y  56 ptyv  8)
+                 (xfer y 112 ptyv 16)
+                 (xfer y 168 ptyv 24)
+                 (xfer y 224 ptyv 32)
+                 (xfer y 280 ptyv 40)))
+
+             (let ((ws  (nreverse (windows4 nn))))
+               (loop for w  fixnum in ws
+                     for ix fixnum from 0 below 84
+                     do
+                     (setf (aref wv ix) w)))
+
+             (with-fli-buffers ((cptx 48 ptxv)
+                                (cpty 48 ptyv)
+                                (cwv  84 wv))
+               (_Ed3363-mul cptx cpty cwv)
+               
+               (let ((ansxv (xfer-foreign-to-lisp cptx 48))
+                     (ansyv (xfer-foreign-to-lisp cpty 48)))
+                 (labels ((to-int (vec)
+                            (um:nlet-tail iter ((ix  0)
+                                                (pos 0)
+                                                (val 0))
+                              (declare (fixnum ix pos)
+                                       (integer val))
+                              (cond ((>= ix 48)  val)
+                                    ((= 7 (mod ix 8)) (iter (1+ ix) pos val))
+                                    (t (iter (1+ ix) (+ pos 8) (dpb (aref vec ix) (byte 8 pos) val)))
+                                    ))))
+                   (make-ecc-pt
+                    :x (to-int ansxv)
+                    :y (to-int ansyv))
+                   )))))
+          )))
+
+;; -------------------------------------------------------------------
+
 (defun ed-basic-mul (pt n)
   (declare (integer n))
   (let ((nn  (with-mod *ed-r*
@@ -611,7 +770,9 @@ THE SOFTWARE.
   (let* ((alpha  (* *ed-r* *ed-h* (random-between 1 #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  (ed-basic-mul pt n))
+  (if (eq *edcurve* *curve-ed3363*)
+      (fast-ed3363-mul pt n)
+    (ed-basic-mul pt n)))
 
 (defun ed-div (pt n)
   (with-mod *ed-r*
@@ -1495,3 +1656,27 @@ we are done. Else re-probe with (X^2 + 1)."
   (/ cts 1000.0))
 |#
              
+;; ------------------------------------------------------------------------------
+
+#-:lispworks
+(eval-when (:load-toplevel)
+  (init-Ed3363))
+
+#+:lispworks
+(eval-when (:load-toplevel)
+  ;; 2 choices, if building-binary, don't init-pairing; else init-pairing
+  ;; Cannot init-pairing during DELIVERY (since, multitasking not allowed during DELIVERY), must init-pairing later.
+  ;; *performing-binary-build* is created in delivery.lisp, else it is not created and not BOUNDP
+
+  ;; Trying to avoid the use of *features*.  We use a special, cl-user::*performing-binary-build*, set up
+  ;; in emotiq/etc/deliver/deliver.lisp, then write Lisp code to decide which of the 2 cases to perform (at LOAD time).
+  ;; This special is UNINTERNED in emotiq/src/startup.lisp/START.
+
+  (let ((building-binary-p (boundp 'cl-user::*performing-binary-build*)))
+
+    (format *standard-output* "~&building-binary-p ~A~&"
+            building-binary-p)
+    
+    (if building-binary-p
+        nil                                          ;; do nothing, esp. don't try to init-pairing
+      (init-Ed3363))))                      ;; in all other cases, init-pairing at LOAD time.
