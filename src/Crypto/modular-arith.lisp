@@ -38,42 +38,17 @@ THE SOFTWARE.
          (inline mmod m-1 m/2l m+1 m/2u))
 
 (defstruct moddescr
-  base nbits nbins rem)
+  base nbits rem)
 
 (defun make-mod-descr (base)
   (let* ((nbits  (integer-length base))
-         (rem    (- (ash 1 nbits) base))
-         (nbins  (ceiling nbits 64)))
+         (rem    (- (ash 1 nbits) base)))
     (make-moddescr
      :base  base
      :nbits nbits
-     :nbins nbins
      :rem   rem)))
 
 (defvar *fastmod*  nil)
-
-(defun %fastmod (x)
-  ;; quick one pass to limit growth
-  (declare (integer x))
-  (with-accessors ((nbits  moddescr-nbits)
-                   (rem    moddescr-rem)
-                   (base   moddescr-base)) *fastmod*
-    (declare (integer base rem)
-             (fixnum nbits))
-    (let ((xx (abs x)))
-      (declare (integer xx))
-      (if (< xx base)
-          x
-        ;; else
-        (let* ((sgn (minusp x))
-               (xe  (ash xx (- nbits)))
-               (xf  (ldb (byte nbits 0) xx))
-               (ans (+ xf (* rem xe))))
-          (declare (integer xe xf ans))
-          (if sgn
-              (- ans)
-            ans)))
-      )))
 
 (defun fastmod (x)
   ;; full mod
@@ -83,9 +58,8 @@ THE SOFTWARE.
                    (base   moddescr-base)) *fastmod*
     (declare (integer base rem)
              (fixnum nbits))
-    (let ((sgn  (minusp x))
-          (xx   (abs x)))
-      (um:nlet-tail iter ((v xx))
+    (let ((sgn  (minusp x)))
+      (um:nlet-tail iter ((v (abs x)))
         (declare (integer v))
         (if (< v base)
             (if sgn
@@ -102,8 +76,8 @@ THE SOFTWARE.
               (let ((vf (ldb (byte nbits 0) v)))
                 (declare (integer vf))
                 (iter (+ vf (* rem ve)))
-                ))))
-        ))))
+                )))))
+      )))
 
 (defun get-fastmod (base)
   (let ((recs (get '*m* :fastmod)))
@@ -170,15 +144,12 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------------
 
-(defun %m* (arg &rest args)
+(defun m* (arg &rest args)
   (declare (integer arg))
   (dolist (opnd args)
     (declare (integer opnd))
-    (setf arg (%fastmod (* arg opnd))))
+    (setf arg (fastmod (* arg opnd))))
   arg)
-    
-(defun m* (arg &rest args)
-  (fastmod (apply '%m* arg args)))
     
 ;; ------------------------------------------------------------
 
@@ -199,6 +170,61 @@ THE SOFTWARE.
     (setf arg (- arg)))
   (fastmod arg))
 
+;; -----------------------------------------------------
+;; Prime-Field Arithmetic
+
+(defun m^ (base exp)
+  ;; base^exponent mod modulus, for any modulus
+  (declare (integer base exp))
+  (let ((x (fastmod base)))
+    (declare (integer x))
+    (if (< x 2)  ;; x = 0,1
+        x
+      ;; else
+      (let* ((n     (integer-length exp))
+             (prec  (make-array 16
+                                :element-type 'integer))
+             (ans   1))
+        (declare (fixnum n)
+                 (integer ans)
+                 ((vector integer) prec))
+        (loop for ix fixnum from 0 below 16
+              for xx = 1 then (m* x xx)
+              do
+              (setf (aref prec ix) xx))
+        (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
+              (setf ans (m* ans ans ans ans)
+                    ans (m* ans ans ans ans))
+              (let ((bits (ldb (byte 4 pos) exp)))
+                (declare (fixnum bits))
+                (unless (zerop bits)
+                  (setf ans (m* ans (aref prec bits))))
+                ))
+        ans))))
+
+#|
+(defun m^ (base exp)
+  ;; base^exponent mod modulus, for any modulus
+  (declare (integer base exp))
+  (let ((x (fastmod base)))
+    (declare (integer x))
+    (if (< x 2)  ;; x = 0,1
+        x
+      ;; else
+      (let* ((n  (integer-length exp)))
+        (declare (fixnum n)
+                 (integer exp))
+        (do ((b  x  (m* b b))
+             (p  1)
+             (ix 0  (1+ ix)))
+            ((>= ix n) (fastmod p))
+          (declare (integer b p)
+                   (fixnum ix))
+          (when (logbitp ix exp)
+            (setf p (m* p b)))) ))
+    ))
+|#
+
 ;; ------------------------------------------------------------
 
 (defun minv (a)
@@ -218,36 +244,11 @@ THE SOFTWARE.
           (shiftf x2 x1 x))
         ))))
 
-
 (defun m/ (arg &rest args)
   (declare (integer arg))
   (if args
-      (m* arg (minv (apply '%m* args)))
+      (m* arg (minv (apply 'm* args)))
     (minv arg)))
-
-;; -----------------------------------------------------
-;; Prime-Field Arithmetic
-
-(defun m^ (base exp)
-  ;; base^exponent mod modulus, for any modulus
-  (declare (integer base exp))
-  (let ((x (fastmod base)))
-    (declare (integer x))
-    (if (< x 2)  ;; x = 0,1
-        x
-      ;; else
-      (let* ((n  (integer-length exp)))
-        (declare (fixnum n)
-                 (integer exp))
-        (do ((b  x  (%m* b b))
-             (p  1)
-             (ix 0  (1+ ix)))
-            ((>= ix n) (fastmod p))
-          (declare (integer b p)
-                   (fixnum ix))
-          (when (logbitp ix exp)
-            (setf p (%m* p b)))) ))
-    ))
 
 ;; ------------------------------------------------------------
 
@@ -312,7 +313,7 @@ THE SOFTWARE.
   (get-cached-symbol-data '*m* :msqrt *m*
                           (lambda ()
                             (cond
-                             ((= 3 (mod *m* 4))
+                             ((= 3 (ldb (byte 2 0) *m*))
                               (let ((p  (truncate (m+1) 4)))
                                 (um:rcurry 'm^ p)))
                              (t 'cipolla)))))

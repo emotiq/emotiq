@@ -366,7 +366,7 @@ THE SOFTWARE.
 
 (defun ed-add (pt1 pt2)
   ;; contageon to randomized projective coords for added security
-  (reset-blinders)
+  ;; (reset-blinders)
   (multiple-value-bind (upt1 upt2)
       (ed-unify-pair-type pt1 pt2)
     (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))
@@ -451,7 +451,44 @@ THE SOFTWARE.
                    (iter (cdr nns) qsum))))
              ))
         ))
+
 #|
+  ;; 4-bit window method -- the worst performer by 3x
+(defun ed-basic-mul (pt n)
+  (declare (integer n))
+  (cond ((zerop n) (ed-projective
+                    (ed-neutral-point)))
+        
+        ((or (= n 1)
+             (ed-neutral-point-p pt)) pt)
+        
+        (t (let* ((r0   (ed-projective pt))
+                  (prec (make-array 16))
+                  (ans  nil))
+             (loop for ix from 1 below 16
+                   for p = r0 then (ed-add r0 p)
+                   do
+                   (setf (aref prec ix) p))
+             (loop for pos fixnum from (* 4 (floor (integer-length n) 4)) downto 0 do
+                   (when ans
+                     (setf ans (ed-add ans ans)
+                           ans (ed-add ans ans)
+                           ans (ed-add ans ans)
+                           ans (ed-add ans ans)))
+                   (let ((bits (ldb (byte 4 pos) n)))
+                     (declare (fixnum bits))
+                     (unless (zerop bits)
+                       (let ((p  (aref prec bits)))
+                         (setf ans (if ans
+                                       (ed-add ans p)
+                                     p))))
+                     ))
+             (or ans (ed-neutral-point))
+             ))
+        ))
+|#
+#|
+;; 1-bit NAF form
 (defun naf (k)
   (declare (integer k))
   ;; non-adjacent form encoding of integers
