@@ -124,6 +124,7 @@
   (:nicknames #:emotiq/fs
               #:emotiq/path)
   (:export
+   #:*subpath*
    #:emotiq/user/root/
    #:emotiq/wallet/
    #:tmp/
