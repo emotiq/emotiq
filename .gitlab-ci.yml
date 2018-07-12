@@ -18,6 +18,7 @@ before_script:
   - export PATH="$HOME/bin:$PATH"
   - ci/install-lisp.bash
   - ci/lisp-wrapper.bash -l etc/setup-emotiq-quicklisp.lisp
+  - etc/install-libuv.bash
 
 .test: &test_definition
   stage: test
