@@ -2,7 +2,6 @@
 
 ;;;; INTERNAL testing 
 
-
 (define-test key-generation ()
   (let* ((devops-plist emotiq/config:*dns-ip-zt.emotiq.ch*)
          (nodes-dns-ip devops-plist)
@@ -14,14 +13,9 @@
 ;;;; EXTERNAL testing
 
 
-(define-test network-generation ()
-   (let* ((devops-plist emotiq/config:*dns-ip-zt.emotiq.ch*)
-          (directories (emotiq/config:network/generate :nodes-dns-ip devops-plist)))
-     (assert-eq (length devops-plist)
-                (length directories))))
 
-
-;;;; FIXME:  this test will fail unless `cosi-bls` is loaded.  How to test?
+;;;; FIXME: this test will fail unless `cosi-bls` is loaded, and there
+;;;; is an existing configuration
 #+(or)
 (define-test get-stakes ()
   (assert-true (emotiq/config:get-stakes)))           

@@ -54,48 +54,58 @@
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
                            (list host ip gossip-server-port rest-server-port websocket-server-port))))))
-    
+
+(defun make-configuration (node &key address-for-coins stakes public private)
+  (let ((configuration
+         (copy-alist +default-configuration+)))
+    (loop
+       :for (key . value) :in (alexandria:plist-alist node)
+       :doing (push (cons key value) configuration))
+    (when address-for-coins
+      (push (cons :address-for-coins
+                  address-for-coins)
+            configuration))
+    (when stakes
+      (push (cons :stakes
+                  stakes)
+            configuration))
+    (when public
+      (push (cons :public
+                  public)
+            configuration))
+    (when private
+      (push (cons :private
+                  private)
+            configuration))
+    configuration))
 
 (defun network/generate (&key
                            (root (emotiq/fs:tmp/))
                            (nodes-dns-ip *dns-ip-zt.emotiq.ch*)
                            (force nil)
                            (settings-key-value-alist nil))
-  "Generate a test network configuration"
+  "Generate a test network configuration
+
+Returns a list of directories in which configurations have been generated."
   (let* ((nodes (keys/generate nodes-dns-ip))
          (stakes (stakes/generate (mapcar (lambda (plist)
                                             (getf plist :public))
                                           nodes)))
-         directories)
+         directories
+         configurations)
     (dolist (node nodes)
       (let ((configuration
-             (copy-alist +default-configuration+))
-            (hostname
-             (getf node :hostname))
-            (ip
-             (getf node :ip)))
-        (push (cons :hostname hostname)
-              configuration)
-        (push (cons :ip ip)
-              configuration)
-        (push (cons :public
-                    (getf node :public))
-              configuration)
-        (push (cons :private
-                    (getf node :private))
-              configuration)
-        (push (cons :address-for-coins
-                    (getf (first nodes) :public))
-              configuration)
-        (push (cons :stakes
-                    stakes)
-              configuration)
+             (make-configuration
+              node
+              :address-for-coins (getf (first nodes) :public)
+              :public (getf node :public)
+              :private (getf node :private)
+              :stakes stakes)))
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
           (loop :for setting
              :in settings-key-value-alist
              :doing (push setting configuration)))
-
         (let ((relative-path (generated-directory configuration)))
           (let ((path (merge-pathnames relative-path root))
                 (configuration (copy-alist configuration)))
@@ -104,8 +114,11 @@
                             configuration
                             :force force
                             :key-records nodes)
-             directories)))))
-    directories))
+             directories)
+            (push configuration configurations)))))
+    (values
+     directories
+     configurations)))
 
 (defun node/generate (directory
                       configuration
@@ -132,7 +145,8 @@
                 :path (make-pathname :defaults directory
                                      :name "stakes"
                                      :type "conf"))
-  (genesis/create configuration :directory directory :force t))
+  (genesis/create configuration :directory directory :force t)
+  directory)
   
 (defun settings/read (&optional key) 
   (unless (probe-file *emotiq-conf*)
