@@ -128,6 +128,7 @@
               #:emotiq/path)
   (:export
    #:*subpath*
+   #:subpath
    #:emotiq/user/root/
    #:emotiq/wallet/
    #:tmp/
