@@ -26,13 +26,14 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <memory.h>
 
-#include <pbc/pbc.h>
-
 // ---------------------------------------------------
 // for initial interface testing...
 
 extern "C"
 void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv);
+void Ed3363_add(unsigned char* ptx, unsigned char* pty,
+		unsigned char* qtx, unsigned char* qty);
+void Ed3363_to_affine(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z);
 }
 
 // -- end of ed3363_intf.h -- //

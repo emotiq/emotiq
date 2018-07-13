@@ -713,7 +713,7 @@ void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv)
   
   int w[PANES];
   ECp P;
-  int ix, jx;
+  int ix;
   type64 *px, *py;
 
   for(ix = PANES; --ix >= 0; )
@@ -738,6 +738,117 @@ void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv)
   py[3] = P.y[3];
   py[4] = P.y[4];
   py[5] = P.y[5];
+}
+
+// Initialise P
+
+void init_proj(type64 *x,type64 *y,type64 *z, ECp *P)
+{
+  for (int i=0;i<=5;i++)
+    {
+      P->x[i]=x[i];
+      P->y[i]=y[i];
+      P->z[i]=z[i];
+      P->t[i]=0;
+    }
+}
+
+void add_proj(ECp *Q, ECp *P)
+{
+  type64 A[6], B[6], C[6], D[6], E[6], F[6], G[6], X3[6], Y3[6], Z3[6];
+  
+  gmul(Q->z, P->z, A);
+  gsqr(A,B);
+  gmul(Q->x, P->x, C);
+  gmul(Q->y, P->y, D);
+  gmul(C,D,E); gmuli(E, 11111);
+  gsub(B,E,F);
+  gadd(B,E,G);
+  gadd(Q->x, Q->y, X3);
+  gadd(P->x, P->y, Y3);
+  gmul(X3, Y3, Z3);
+  gsub(Z3, C, Y3);
+  gsub(Y3, D, X3);
+  gmul(F, X3, Y3);
+  gmul(A, Y3, X3);
+  gsub(D, C, Y3);
+  gmul(G, Y3, Z3);
+  gmul(A, Z3, Y3);
+  gmul(F, G, Z3); // c = 1
+  scr(X3);
+  scr(Y3);
+  scr(Z3);
+  init_proj(X3, Y3, Z3, P);
+}
+
+extern "C"
+void Ed3363_add(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z,
+		unsigned char* lp2x, unsigned char* lp2y, unsigned char* lp2z)
+{
+  // Add two Affine points returning result in first one (pt)
+  //
+  // lpx, lpy, and lpz are already split into 6 64-bit items, each of which
+  // is a 56-bit (7 byte) little-endian fragment of the coordinate
+  //
+  
+  ECp P, Q;
+  type64 *px, *py, *pz, *qx, *qy, *qz;
+
+  px = (type64*)lp1x;
+  py = (type64*)lp1y;
+  pz = (type64*)lp1z;
+  
+  qx = (type64*)lp2x;
+  qy = (type64*)lp2y;
+  qz = (type64*)lp2z;
+  
+  init_proj(px, py, pz, &P);
+  init_proj(qx, qy, qz, &Q);
+
+  add_proj(&Q, &P); // Q + P -> P
+  
+  px[0] = P.x[0];
+  px[1] = P.x[1];
+  px[2] = P.x[2];
+  px[3] = P.x[3];
+  px[4] = P.x[4];
+  px[5] = P.x[5];
+  
+  py[0] = P.y[0];
+  py[1] = P.y[1];
+  py[2] = P.y[2];
+  py[3] = P.y[3];
+  py[4] = P.y[4];
+  py[5] = P.y[5];
+
+  pz[0] = P.z[0];
+  pz[1] = P.z[1];
+  pz[2] = P.z[2];
+  pz[3] = P.z[3];
+  pz[4] = P.z[4];
+  pz[5] = P.z[5];
+}
+
+extern "C"
+void Ed3363_to_affine(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z)
+{
+  // Convert incoming projective coordinates to affine form. Return result in-place.
+  //
+  // lpx, lpy, and lpz are already split into 6 64-bit items, each of which
+  // is a 56-bit (7 byte) little-endian fragment of the coordinate
+  //
+  
+  type64 *px, *py, *pz;
+
+  px = (type64*)lp1x;
+  py = (type64*)lp1y;
+  pz = (type64*)lp1z;
+
+  ginv(pz);
+  gmul(px, pz, px);
+  gmul(py, pz, py);
+  scr(px);
+  scr(py);
 }
 
 // --- end of ed3363_intf.cpp --- //

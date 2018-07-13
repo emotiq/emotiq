@@ -163,6 +163,26 @@ THE SOFTWARE.
 
 ;; ---------------------------
 
+(defvar *curve-Ed448* ;; the Goldilocks curve
+  ;; rho-security = 2^222.8
+  (make-ed-curve
+   :name :Curve-Ed448
+   :c    1
+   :d    -39081
+   :q    (- (ash 1 448) (ash 1 224) 1)
+   :r    (- (ash 1 446) 13818066809895115352007386748515426880336692474882178609894547503885)
+   :h    4
+   :gen  (make-ecc-pt
+          :x  117812161263436946737282484343310064665180535357016373416879082147939404277809514858788439644911793978499419995990477371552926308078495
+          :y  19)
+   ))
+
+(defvar *chk-curve-Ed448*
+  ;; = (hex-str (hash/256 *curve-Ed448*))
+  "8D9F4601B3AE4451F6466904A51CF0EC1046FE2E0D65F5032DFBA5FA026FCBE8")
+
+;; ---------------------------
+
 (defvar *curve-E521*
   ;; rho-security = 2^259.3
   (make-ed-curve
@@ -219,7 +239,7 @@ THE SOFTWARE.
 ;; ------------------------------------------------------
 
 (defvar *known-curves*
-  (list *curve1174* *curve-e382* *curve41417* *curve-e521* *curve-Ed3363*))
+  (list *curve1174* *curve-e382* *curve41417* *curve-e521* *curve-Ed3363* *Curve-Ed448*))
 
 (defmethod select-curve ((curve ed-curve))
   curve)
@@ -278,6 +298,19 @@ THE SOFTWARE.
   (pty         :pointer :unsigned-char)
   (wv          :pointer :signed-char))
 
+(cffi:defcfun ("Ed3363_add" _Ed3363-add) :void
+  (pt1x         :pointer :unsigned-char)
+  (pt1y         :pointer :unsigned-char)
+  (pt1z         :pointer :unsigned-char)
+  (pt2x         :pointer :unsigned-char)
+  (pt2y         :pointer :unsigned-char)
+  (pt2z         :pointer :unsigned-char))
+
+(cffi:defcfun ("Ed3363_to_affine" _Ed3363-to-affine) :void
+  (pt1x         :pointer :unsigned-char)
+  (pt1y         :pointer :unsigned-char)
+  (pt1z         :pointer :unsigned-char))
+
 ;; ----------------------------------------------------------------
 
 (defun ed-neutral-point ()
@@ -295,13 +328,21 @@ THE SOFTWARE.
     ))
 
 (defun ed-affine (pt)
-  (optima:ematch pt
-    ((ecc-pt-) pt)
-    ((ed-proj-pt- :x x :y y :z z)
-     (with-mod *ed-q*
-       (make-ecc-pt
-        :x (m/ x z)
-        :y (m/ y z))))))
+  (if (AND T (eql *edcurve* *curve-ed3363*))
+      (fast-ed3363-to-affine pt)
+    ;; else
+    (optima:ematch pt
+      ((ecc-pt-) pt)
+      ((ed-proj-pt- :x x :y y :z z)
+       (if (= z 1)
+           (make-ecc-pt
+            :x x
+            :y y)
+         ;; else
+         (with-mod *ed-q*
+           (make-ecc-pt
+            :x (m/ x z)
+            :y (m/ y z))))))))
 
 (defun ed-projective (pt)
   (optima:ematch pt
@@ -451,11 +492,14 @@ THE SOFTWARE.
   ;; contageon to randomized projective coords for added security
   ;; (reset-blinders)
   ;; (tally :ecadd)
-  (multiple-value-bind (upt1 upt2)
-      (ed-unify-pair-type pt1 pt2)
-    (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))
-          (t               (ed-projective-add upt1 upt2))
-          )))
+  (if (and nil (eq *edcurve* *curve-ed3363*)) ;; looks like it is faster to stay in Lisp for the Adds.
+      (fast-ed3363-add pt1 pt2)
+    ;; else
+    (multiple-value-bind (upt1 upt2)
+        (ed-unify-pair-type pt1 pt2)
+      (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))
+            (t               (ed-projective-add upt1 upt2))
+            ))))
 
 (defun ed-negate (pt)
   (with-mod *ed-q*
@@ -604,6 +648,64 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
+(defun ed3363-pt-to-c (pt vecx vecy &optional vecz)
+  ;; pt should be Affine
+  ;;
+  ;; The C-code requires the point coordinates in little-endian order,
+  ;; and split into 56-bit components, per 64-bit cell
+  (multiple-value-bind (x y z)
+      (optima:ematch pt
+        ((ecc-pt- :x x :y y)
+         (assert (not vecz))
+         (values x y))
+        ((ed-proj-pt- :x x :y y :z z)
+         (assert vecz)
+         (values x y z)))
+    
+    (labels ((to-vec56 (val vec)
+               (declare (integer val)
+                        ((vector (unsigned-byte 8)) vec))
+               (um:nlet-tail iter ((ix  0)
+                                   (pos 0))
+                 (declare (fixnum ix pos))
+                 (cond ((>= ix 48)) ;; we're done here
+                       ((= 7 (mod ix 8)) ;; skip every 7th byte, filling with zero
+                        (setf (aref vec ix) 0)
+                        (iter (1+ ix) pos))
+                       (t
+                        ;; stuff the byte vector in little-endian order
+                        (setf (aref vec ix) (ldb (byte 8 pos) val))
+                        (iter (1+ ix) (+ pos 8)))
+                       ))))
+      (to-vec56 x vecx)
+      (to-vec56 y vecy)
+      (when z
+        (to-vec56 z vecz))
+      )))
+  
+
+(defun ed3363-pt-from-c (vecx vecy &optional vecz)
+  (labels ((to-int (vec)
+             (um:nlet-tail iter ((ix  0)
+                                 (pos 0)
+                                 (val 0))
+               (declare (fixnum ix pos)
+                        (integer val))
+               (cond ((>= ix 48)  val) ;; we're done here
+                     ((= 7 (mod ix 8)) ;; skip every 7th byte
+                      (iter (1+ ix) pos val))
+                     (t                ;; accum bytes in little-endian order
+                                       (iter (1+ ix) (+ pos 8)
+                                             (dpb (aref vec ix) (byte 8 pos) val)))
+                     ))))
+    (make-ed-proj-pt
+     :x  (to-int vecx)
+     :y  (to-int vecy)
+     :z  (if vecz
+             (to-int vecz)
+           1))
+    ))
+
 (defun fast-ed3363-mul (pt n)
   (declare (integer n))
   ;; (tally :ecmul)
@@ -627,23 +729,7 @@ THE SOFTWARE.
                                     :element-type '(signed-byte 8)
                                     :initial-element 0)))
 
-             ;; The C-code requires the point coordinates in
-             ;; little-endian order, and split into 56-bit components,
-             ;; per 64-bit cell
-             (labels ((to-vec56 (val vec)
-                        (um:nlet-tail iter ((ix  0)
-                                            (pos 0))
-                          (declare (fixnum ix pos))
-                          (cond ((>= ix 48)) ;; we're done here
-                                ((= 7 (mod ix 8)) ;; skip every 7th byte, filling with zero
-                                 (setf (aref vec ix) 0)
-                                 (iter (1+ ix) pos))
-                                (t           ;; stuff the byte vector in little-endian order
-                                 (setf (aref vec ix) (ldb (byte 8 pos) val))
-                                 (iter (1+ ix) (+ pos 8)))
-                                ))))
-               (to-vec56 (ecc-pt-x pta) ptxv)
-               (to-vec56 (ecc-pt-y pta) ptyv))
+             (ed3363-pt-to-c pta ptxv ptyv)
 
              ;; C-code requires the window4 vector in little endian order
              (let ((ws  (nreverse (windows4 nn))))
@@ -659,27 +745,75 @@ THE SOFTWARE.
                
                (xfer-foreign-to-lisp cptx 48 ptxv)
                (xfer-foreign-to-lisp cpty 48 ptyv))
-
-             ;; C-code returns 56-bit coords in the original output vectors
-             (labels ((to-int (vec)
-                        (um:nlet-tail iter ((ix  0)
-                                            (pos 0)
-                                            (val 0))
-                          (declare (fixnum ix pos)
-                                   (integer val))
-                          (cond ((>= ix 48)  val) ;; we're done here
-                                ((= 7 (mod ix 8)) ;; skip every 7th byte
-                                 (iter (1+ ix) pos val))
-                                (t                ;; accum bytes in little-endian order
-                                 (iter (1+ ix) (+ pos 8)
-                                       (dpb (aref vec ix) (byte 8 pos) val)))
-                                ))))
-               (make-ecc-pt
-                :x (to-int ptxv)
-                :y (to-int ptyv))
-               )))
+             
+             (ed3363-pt-from-c ptxv ptyv)))
           )))
 
+(defun fast-ed3363-add (pt1 pt2)
+  ;; Okay to use, but about 3-4x slower than just staying in Lisp to do projective adding
+  (let* ((pt1p (ed-projective pt1))
+         (pt2p (ed-projective pt2))
+         (pt1xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                            :element-type '(unsigned-byte 8)))
+         (pt1yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                            :element-type '(unsigned-byte 8)))
+         (pt1zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                            :element-type '(unsigned-byte 8)))
+         (pt2xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                            :element-type '(unsigned-byte 8)))
+         (pt2yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                            :element-type '(unsigned-byte 8)))
+         (pt2zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                            :element-type '(unsigned-byte 8))))
+    
+    (ed3363-pt-to-c pt1p pt1xv pt1yv pt1zv)
+    (ed3363-pt-to-c pt2p pt2xv pt2yv pt2zv)
+
+    (with-fli-buffers ((cpt1x 48 pt1xv)
+                       (cpt1y 48 pt1yv)
+                       (cpt1z 48 pt1zv)
+                       (cpt2x 48 pt2xv)
+                       (cpt2y 48 pt2yv)
+                       (cpt2z 48 pt2zv))
+      
+      (_Ed3363-add cpt1x cpt1y cpt1z cpt2x cpt2y cpt2z)
+               
+      (xfer-foreign-to-lisp cpt1x 48 pt1xv)
+      (xfer-foreign-to-lisp cpt1y 48 pt1yv)
+      (xfer-foreign-to-lisp cpt1z 48 pt1zv))
+             
+    (ed3363-pt-from-c pt1xv pt1yv pt1zv)
+    ))
+
+(defun fast-ed3363-to-affine (pt)
+  (if (ecc-pt-p pt)
+      pt
+    ;; else
+    (let* ((pt1xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                              :element-type '(unsigned-byte 8)))
+           (pt1yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                              :element-type '(unsigned-byte 8)))
+           (pt1zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                              :element-type '(unsigned-byte 8))))
+      
+      (ed3363-pt-to-c pt pt1xv pt1yv pt1zv)
+      
+      (with-fli-buffers ((cpt1x 48 pt1xv)
+                         (cpt1y 48 pt1yv)
+                         (cpt1z 48 pt1zv))
+        
+        (_Ed3363-to-affine cpt1x cpt1y cpt1z)
+        
+        (xfer-foreign-to-lisp cpt1x 48 pt1xv)
+        (xfer-foreign-to-lisp cpt1y 48 pt1yv))
+      
+      (let ((pt (ed3363-pt-from-c pt1xv pt1yv)))
+        (make-ecc-pt
+         :x (ed-proj-pt-x pt)
+         :y (ed-proj-pt-y pt))
+        ))))
+
+  
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
 ;; |r|/4 terms
@@ -867,7 +1001,7 @@ THE SOFTWARE.
 (defun ed-valid-point-p (pt)
   (and (not (ed-neutral-point-p pt))
        (ed-satisfies-curve pt)
-       (not (ed-neutral-point-p (ed-basic-mul pt *ed-h*)))
+       (not (ed-neutral-point-p (ed-mul pt *ed-h*)))
        pt))
 
 (defun ed-validate-point (pt)
@@ -934,15 +1068,20 @@ we are done. Else re-probe with (X^2 + 1)."
                      (y  (if (eql sgn (ldb (byte 1 0) y))
                              y
                            (m- y))))
-                (or (ed-valid-point-p
-                     ;; Watch out! This multiply by cofactor is necessary
-                     ;; to prevent winding up in a small subgroup.
-                     (ed-basic-mul (make-ecc-pt
-                                    :x x
-                                    :y y)
-                                   *ed-h*))
-                    (iter (m+ 1 (m* x x)))))
-            ;; else 
+                (let ((pt (ed-mul (make-ecc-pt
+                                   :x x
+                                   :y y)
+                                  *ed-h*)))
+                  ;; Watch out! This multiply by cofactor is necessary
+                  ;; to prevent winding up in a small subgroup.
+                  (if (or (ed-neutral-point-p pt)
+                          (ed-neutral-point-p (ed-mul pt *ed-h*)))
+                      ;; we already know the point sits on the curve,
+                      ;; but it could be the neutral point, or belong
+                      ;; in a small subgroup.
+                      (iter (m+ 1 (m* x x)))
+                    pt)))
+            ;; else - non-quadratic residut
             (iter (m+ 1 (m* x x)))
             ))))))
 

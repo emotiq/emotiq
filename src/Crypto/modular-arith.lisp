@@ -171,6 +171,7 @@ THE SOFTWARE.
 
 (defun m^ (base exp)
   ;; base^exponent mod modulus, for any modulus
+  ;; use a 4-bit fixed window algorithm
   (declare (integer base exp))
   (let ((x (fastmod base)))
     (declare (integer x))
