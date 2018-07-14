@@ -328,7 +328,7 @@ THE SOFTWARE.
     ))
 
 (defun ed-affine (pt)
-  (if (AND T (eql *edcurve* *curve-ed3363*))
+  (if (eql *edcurve* *curve-ed3363*)
       (fast-ed3363-to-affine pt)
     ;; else
     (optima:ematch pt
@@ -407,23 +407,31 @@ THE SOFTWARE.
     ))
 
 (defun ed-pt= (pt1 pt2)
-  (multiple-value-bind (upt1 upt2)
-      (ed-unify-pair-type pt1 pt2)
-    (optima:match upt1
+  (with-mod *ed-q*
+    (optima:ematch pt1
       ((ecc-pt- :x x1 :y y1)
-       (optima:match upt2
+       (optima:ematch pt2
          ((ecc-pt- :x x2 :y y2)
-            (and (= x1 x2)
-                 (= y1 y2)))
+          (and (= x1 x2)
+               (= y1 y2)))
+         ((ed-proj-pt- :x x2 :y y2 :z z2)
+          (and (= (m* x1 z2)
+                  x2)
+               (= (m* y1 z2)
+                  y2)))
          ))
       ((ed-proj-pt- :x x1 :y y1 :z z1)
-       (optima:match upt2
+       (optima:ematch pt2
+         ((ecc-pt- :x x2 :y y2)
+          (and (= (m* x2 z1)
+                  x1)
+               (= (m* y2 z1)
+                  y1)))
          ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (with-mod *ed-q*
-            (and (= (m* x1 z2)
-                    (m* x2 z1))
-                 (= (m* y1 z2)
-                    (m* y2 z1)))))
+          (and (= (m* x1 z2)
+                  (m* x2 z1))
+               (= (m* y1 z2)
+                  (m* y2 z1))))
          ))
       )))
 
@@ -495,11 +503,17 @@ THE SOFTWARE.
   (if (and nil (eq *edcurve* *curve-ed3363*)) ;; looks like it is faster to stay in Lisp for the Adds.
       (fast-ed3363-add pt1 pt2)
     ;; else
+    #|
     (multiple-value-bind (upt1 upt2)
         (ed-unify-pair-type pt1 pt2)
       (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))
             (t               (ed-projective-add upt1 upt2))
-            ))))
+            ))
+    |#
+    ;; since projective add takes about 6 usec, and affine add takes
+    ;; about 40 usec, it pays to always convert to projective coords,
+    ;; especially since it is so cheap to do so.
+    (ed-projective-add (ed-projective pt1) (ed-projective pt2))))
 
 (defun ed-negate (pt)
   (with-mod *ed-q*
@@ -656,8 +670,7 @@ THE SOFTWARE.
   (multiple-value-bind (x y z)
       (optima:ematch pt
         ((ecc-pt- :x x :y y)
-         (assert (not vecz))
-         (values x y))
+         (values x y 1))
         ((ed-proj-pt- :x x :y y :z z)
          (assert vecz)
          (values x y z)))
@@ -679,7 +692,7 @@ THE SOFTWARE.
                        ))))
       (to-vec56 x vecx)
       (to-vec56 y vecy)
-      (when z
+      (when vecz
         (to-vec56 z vecz))
       )))
   
@@ -751,9 +764,7 @@ THE SOFTWARE.
 
 (defun fast-ed3363-add (pt1 pt2)
   ;; Okay to use, but about 3-4x slower than just staying in Lisp to do projective adding
-  (let* ((pt1p (ed-projective pt1))
-         (pt2p (ed-projective pt2))
-         (pt1xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+  (let* ((pt1xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                             :element-type '(unsigned-byte 8)))
          (pt1yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                             :element-type '(unsigned-byte 8)))
@@ -766,8 +777,8 @@ THE SOFTWARE.
          (pt2zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                             :element-type '(unsigned-byte 8))))
     
-    (ed3363-pt-to-c pt1p pt1xv pt1yv pt1zv)
-    (ed3363-pt-to-c pt2p pt2xv pt2yv pt2zv)
+    (ed3363-pt-to-c pt1 pt1xv pt1yv pt1zv)
+    (ed3363-pt-to-c pt2 pt2xv pt2yv pt2zv)
 
     (with-fli-buffers ((cpt1x 48 pt1xv)
                        (cpt1y 48 pt1yv)
@@ -1580,8 +1591,9 @@ we are done. Else re-probe with (X^2 + 1)."
   ;; must have: A*B*(A^2 - 4*B) != 0
   (with-mod *ed-q*
     (let* ((c4d        (m* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
-           (sqrt-c4dm1 (msqrt (m- c4d 1))) ;; used during coord conversion
-           (a          (m/ (m* 2 (m+ c4d 1)) (m- c4d 1)))
+           (c4dm1      (m- c4d 1))
+           (sqrt-c4dm1 (msqrt c4dm1)) ;; used during coord conversion
+           (a          (m/ (m* 2 (m+ c4d 1)) c4dm1))
            (b          1)
            (u          (find-quadratic-nonresidue))
            (dscr       (m- (m* a a) (m* 4 b))))
@@ -1724,35 +1736,61 @@ we are done. Else re-probe with (X^2 + 1)."
                       (yw   (m/ yv sqrt-c4dm1))
                       (xu+a (m+ xu a)))
              ;; now we have (x,y) --> (xu,yw) for:  yw^2 = xu^3 + A*xu^2 + B*xu
-             (when (and (not (zerop xu+a))
-                        (or (not (zerop yw))
-                            (zerop xu))
-                        (quadratic-residue-p (m- (m* u xu xu+a))))
-               (let* ((e2    (if (quadratic-residue-p yw)
-                                 (m/ xu xu+a)
-                               (m/ xu+a xu)))
-                      (enc   (msqrt (m/ e2 (m- u))))
-                      (tau   (min enc (m- enc)))
-                      ;; (ur2   (m* u tau tau))
-                      ;; (1pur2 (m+ 1 ur2))
-                      )
-                 
-                 ;; (assert (< tau (elligator-limit)))
-                 #|
-                  (when (zerop 1pur2) ;; never happens, by construction
-                    (format t "~%Hit magic #1: tau = ~A" tau))
-                  (when (= (m* a a ur2) ;; never happens, by construction
-                           (m* b 1pur2 1pur2))
-                    (format t "~%Hit magic #2: tau = ~A" tau))
-                  
-                  (unless (or (zerop 1pur2) ;; never happens, by construction
-                              (= (m* a a ur2)
-                                 (m* b 1pur2 1pur2)))
-                    tau)
-                  |#
-                 (logior tau (elligator-int-padding))
-                 )))))
-        ))
+             #|
+             (labels ((esqrt (x)
+                        (cond ((= 3 (mod *ed-q* 4))
+                               (m^ x (floor (1+ *ed-q*) 4)))
+                              ((= 5 (mod *ed-q* 8))
+                               (m^ x (floor (+ 3 *ed-q*) 8)))
+                              (t
+                               (error "NYI"))
+                              )))
+               (cond ((zerop xu)
+                      (elligator-int-padding))
+                     ((zerop yw)
+                      (elligator-int-padding))
+                     ((zerop xu+a)
+                      (elligator-int-padding))
+                     ((quadratic-residue-p yw)
+                      (let ((r (esqrt (m- (m/ xu xu+a u)))))
+                        (logior (min r (m- r))
+                                (elligator-int-padding))))
+                     (t
+                      (let ((r (esqrt (m- (m/ xu+a xu u)))))
+                        (logior (min r (m- r))
+                                (elligator-int-padding))))
+                     |#
+                     #||#
+                  (when (and (not (zerop xu+a))
+                             (or (not (zerop yw))
+                                 (zerop xu))
+                             (quadratic-residue-p (m- (m* u xu xu+a))))
+                    (let* ((e2    (if (quadratic-residue-p yw)
+                                      (m/ xu xu+a)
+                                    (m/ xu+a xu)))
+                           (enc   (msqrt (m/ e2 (m- u))))
+                           (tau   (min enc (m- enc)))
+                           ;; (ur2   (m* u tau tau))
+                           ;; (1pur2 (m+ 1 ur2))
+                           )
+                      
+                      ;; (assert (< tau (elligator-limit)))
+                      #|
+                     (when (zerop 1pur2) ;; never happens, by construction
+                       (format t "~%Hit magic #1: tau = ~A" tau))
+                     (when (= (m* a a ur2) ;; never happens, by construction
+                              (m* b 1pur2 1pur2))
+                       (format t "~%Hit magic #2: tau = ~A" tau))
+                     
+                     (unless (or (zerop 1pur2) ;; never happens, by construction
+                                 (= (m* a a ur2)
+                                    (m* b 1pur2 1pur2)))
+                       tau)
+                     |#
+                      (logior tau (elligator-int-padding))
+                      ))
+                  #||#
+                  )))))
                 
 (defun elli2-random-pt ()
   (do-elligator-random-pt #'elli2-encode))

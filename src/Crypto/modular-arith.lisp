@@ -252,20 +252,79 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------
 
 (defun mchi (x)
-  ;; chi(x) -> {-1,+1}
+  ;; chi(x) -> {-1,0,+1}
   ;; = +1 when x is square residue
+  ;; =  0 when x = 0
+  ;; = -1 when x is non-square
   (m^ x (m/2l)))
 
 (defun quadratic-residue-p (x)
   ;; aka Legendre Symbol (x|m)
   (= 1 (mchi x)))
 
+(defun fast-cipolla (x)
+  ;; Cipolla method for finding square root of x over prime field m
+  ;; use fixed 4-bit window evaluation
+  (declare (integer x))
+  (multiple-value-bind (re im^2)
+      (um:nlet-tail iter ((a  2))
+        ;; look for quadratic nonresidue (the imaginary base)
+        ;; where we already know that x must be a quadratic residue
+        (declare (integer a))
+        (let ((v  (m- (m* a a) x)))
+          (declare (integer v))
+          (if (quadratic-residue-p v)
+              (iter (1+ a))
+            (values a v))
+          ))
+    (labels ((fq2* (a b)
+               ;; complex multiplication over the field q^2
+               (destructuring-bind (are aim) a
+                 (destructuring-bind (bre bim) b
+                   (list
+                    (m+ (m* are bre)
+                        (m* aim bim im^2))
+                    (m+ (m* are bim)
+                        (m* aim bre)))
+                   ))))
+      
+      ;; exponentiation in Fq^2: (a, sqrt(a^2 - x))^((q-1)/2)
+      (let* ((xx   (list re 1))  ;; generator for Fq^2
+             (exp  (m/2u))
+             (n    (integer-length exp))
+             (prec (coerce
+                    (cons nil
+                          (loop for ix from 1 below 16
+                                for v = xx then (fq2* xx v)
+                                collect v))
+                    'vector))
+             (ans   nil))
+        
+        (loop for pos from (* 4 (floor n 4)) downto 0 by 4 do
+              (when ans
+                (setf ans (fq2* ans ans)
+                      ans (fq2* ans ans)
+                      ans (fq2* ans ans)
+                      ans (fq2* ans ans)))
+              (let ((ix (ldb (byte 4 pos) exp)))
+                (declare (fixnum ix))
+                (unless (zerop ix)
+                  (let ((v  (aref prec ix)))
+                    (setf ans (if ans
+                                  (fq2* ans v)
+                                v))))
+                ))
+        (car ans)
+        ))))
+
+#|
 (defvar *fq2-red*)
 
 (defstruct fq2
   x y)
 
 (defun fq2* (a b)
+  ;; complex multiplication over the field q^2
   (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
              (declare (integer ax ay))
              (:struct-accessors fq2 ((bx x) (by y)) b)
@@ -281,6 +340,8 @@ THE SOFTWARE.
   (declare (integer x))
   ;; Cipolla method for finding square root of x over prime field m
   (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
+                      ;; look for quadratic nonresidue (the imaginary base)
+                      ;; where we already know that x must be a quadratic residue
                       (declare (integer a))
                       (let ((v  (m- (m* a a) x)))
                         (declare (integer v))
@@ -298,7 +359,7 @@ THE SOFTWARE.
              (integer exp))
     (do ((b  xx
              (fq2* b b))
-         (p  (make-fq2
+         (p  (make-fq2 ;; start with complex unity
               :x 1
               :y 0))
          (ix 0    (1+ ix)))
@@ -307,15 +368,21 @@ THE SOFTWARE.
       (when (logbitp ix exp)
         (setf p (fq2* p b))))
     ))
+|#
 
 (defun get-msqrt-fn (base)
   (get-cached-symbol-data '*m* :msqrt base
                           (lambda ()
                             (cond
-                             ((= 3 (ldb (byte 2 0) base))
-                              (let ((p  (truncate (m+1) 4)))
+                             ((= 3 (mod base 4))
+                              (let ((p (truncate (m+1) 4)))
                                 (um:rcurry 'm^ p)))
-                             (t 'cipolla)))))
+                             #|
+                             ((= 5 (mod base 8))
+                              (let ((p (truncate (+ base 3) 8)))
+                                  (um:rcurry 'm^ p)))
+                             |#
+                             (t 'fast-cipolla)))))
 
 (defun msqrt (x)
   ;; assumes m is prime
@@ -331,17 +398,15 @@ THE SOFTWARE.
     (if (< xx 2)
         xx
       ;; else
-      (let ((ix (isqrt xx)))
-        (declare (integer ix))
-        (cond ((= xx (* ix ix)) ix)
-              ((quadratic-residue-p xx)
-               (let* ((fn (get-msqrt-fn *m*))
-                      (xr (funcall fn xx)))
-                 (declare (integer xr))
-                 (assert (= xx (m* xr xr)))
-                 xr))
-              
-              (t (error "not a square"))
-              )))
+      (cond ((let ((ix (isqrt xx)))
+               (declare (integer ix))
+               (and (= xx (* ix ix))
+                    ix)))
+
+            ((quadratic-residue-p xx)
+             (funcall (get-msqrt-fn *m*) xx))
+            
+            (t (error "not a square"))
+            ))
     ))
 

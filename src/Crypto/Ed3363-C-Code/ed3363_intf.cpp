@@ -717,7 +717,7 @@ void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv)
   type64 *px, *py;
 
   for(ix = PANES; --ix >= 0; )
-    w[ix] = wv[ix];
+    w[ix] = wv[ix]; // integer format conversion
 
   px = (type64*)ptx;
   py = (type64*)pty;
@@ -725,19 +725,8 @@ void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv)
   init(px, py, &P);
   mul(w, &P);
 
-  px[0] = P.x[0];
-  px[1] = P.x[1];
-  px[2] = P.x[2];
-  px[3] = P.x[3];
-  px[4] = P.x[4];
-  px[5] = P.x[5];
-  
-  py[0] = P.y[0];
-  py[1] = P.y[1];
-  py[2] = P.y[2];
-  py[3] = P.y[3];
-  py[4] = P.y[4];
-  py[5] = P.y[5];
+  gcopy(P.x, px);
+  gcopy(P.y, py);
 }
 
 // Initialise P
@@ -806,27 +795,10 @@ void Ed3363_add(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z,
   init_proj(qx, qy, qz, &Q);
 
   add_proj(&Q, &P); // Q + P -> P
-  
-  px[0] = P.x[0];
-  px[1] = P.x[1];
-  px[2] = P.x[2];
-  px[3] = P.x[3];
-  px[4] = P.x[4];
-  px[5] = P.x[5];
-  
-  py[0] = P.y[0];
-  py[1] = P.y[1];
-  py[2] = P.y[2];
-  py[3] = P.y[3];
-  py[4] = P.y[4];
-  py[5] = P.y[5];
 
-  pz[0] = P.z[0];
-  pz[1] = P.z[1];
-  pz[2] = P.z[2];
-  pz[3] = P.z[3];
-  pz[4] = P.z[4];
-  pz[5] = P.z[5];
+  gcopy(P.x, px);
+  gcopy(P.y, py);
+  gcopy(P.z, pz);
 }
 
 extern "C"
@@ -838,17 +810,20 @@ void Ed3363_to_affine(unsigned char* lp1x, unsigned char* lp1y, unsigned char* l
   // is a 56-bit (7 byte) little-endian fragment of the coordinate
   //
   
-  type64 *px, *py, *pz;
+  type64 *px, *py, *pz, t[6];
 
   px = (type64*)lp1x;
   py = (type64*)lp1y;
   pz = (type64*)lp1z;
 
   ginv(pz);
-  gmul(px, pz, px);
-  gmul(py, pz, py);
+  gmul(px, pz, t);
+  gcopy(t, px);
+  gmul(py, pz, t);
+  gcopy(t, py);
   scr(px);
   scr(py);
+  scr(pz); // in case someone wants the inverse of z
 }
 
 // --- end of ed3363_intf.cpp --- //
