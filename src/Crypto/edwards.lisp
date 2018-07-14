@@ -293,12 +293,13 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("Ed3363_mul" _Ed3363-mul) :void
+(cffi:defcfun ("Ed3363_affine_mul" _Ed3363-mul) :void
   (ptx         :pointer :unsigned-char)
   (pty         :pointer :unsigned-char)
+  (ptz         :pointer :unsigned-char)
   (wv          :pointer :signed-char))
 
-(cffi:defcfun ("Ed3363_add" _Ed3363-add) :void
+(cffi:defcfun ("Ed3363_projective_add" _Ed3363-add) :void
   (pt1x         :pointer :unsigned-char)
   (pt1y         :pointer :unsigned-char)
   (pt1z         :pointer :unsigned-char)
@@ -443,28 +444,37 @@ THE SOFTWARE.
        (= (m+ (m* x x)
               (m* y y))
           (m* *ed-c* *ed-c*
-              (m+ 1 (m* *ed-d* x x y y)))
+              (1+ (m* *ed-d* x x y y)))
           ))
       ((ed-proj-pt- :x x :y y :z z)
-       (= (m* z z (m+ (m* x x) (m* y y)))
+       (= (m* z z (+ (m* x x) (m* y y)))
           (m* *ed-c* *ed-c*
-              (m+ (m* z z z z)
-                  (m* *ed-d* x x y y)))))
+              (+ (m* z z z z)
+                 (m* *ed-d* x x y y)))))
       )))
 
 (defun ed-affine-add (pt1 pt2)
   ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
   (with-mod *ed-q*
     (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y)) pt1)
+               (declare (integer x1 y1))
                (:struct-accessors ecc-pt ((x2 x) (y2 y)) pt2)
+               (declare (integer x2 y2))
                (y1y2  (m* y1 y2))
+               (declare (integer y1y2))
                (x1x2  (m* x1 x2))
+               (declare (integer x1x2))
                (x1x2y1y2 (m* *ed-d* x1x2 y1y2))
-               (denx  (m* *ed-c* (m+ 1 x1x2y1y2)))
-               (deny  (m* *ed-c* (m- 1 x1x2y1y2)))
-               (numx  (m+ (m* x1 y2)
-                          (m* y1 x2)))
-               (numy  (m- y1y2 x1x2)))
+               (declare (integer x1x2y1y2))
+               (denx  (m* *ed-c* (1+ x1x2y1y2)))
+               (declare (integer denx))
+               (deny  (m* *ed-c* (- 1 x1x2y1y2)))
+               (declare (integer deny))
+               (numx  (+ (m* x1 y2)
+                         (m* y1 x2)))
+               (declare (integer numx))
+               (numy  (- y1y2 x1x2))
+               (declare (integer numy)))
       (make-ecc-pt
        :x  (m/ numx denx)
        :y  (m/ numy deny))
@@ -475,20 +485,29 @@ THE SOFTWARE.
     (um:bind* ((:struct-accessors ed-proj-pt ((x1 x)
                                               (y1 y)
                                               (z1 z)) pt1)
+               (declare (integer x1 y1 z1))
                (:struct-accessors ed-proj-pt ((x2 x)
                                               (y2 y)
                                               (z2 z)) pt2)
+               (declare (integer x2 y2 z2))
                (a  (m* z1 z2))
+               (declare (integer a))
                (b  (m* a a))
+               (declare (integer b))
                (c  (m* x1 x2))
+               (declare (integer c))
                (d  (m* y1 y2))
+               (declare (integer d))
                (e  (m* *ed-d* c d))
-               (f  (m- b e))
-               (g  (m+ b e))
-               (x3 (m* a f (m- (m* (m+ x1 y1)
-                                   (m+ x2 y2))
+               (declare (integer e))
+               (f  (- b e))
+               (declare (integer f))
+               (g  (+ b e))
+               (declare (integer g))
+               (x3 (m* a f (- (m* (+ x1 y1)
+                                  (+ x2 y2))
                                c d)))
-               (y3 (m* a g (m- d c)))
+               (y3 (m* a g (- d c)))
                (z3 (m* *ed-c* f g)))
       (make-ed-proj-pt
        :x  x3
@@ -738,11 +757,13 @@ THE SOFTWARE.
                                     :element-type '(unsigned-byte 8)))
                   (ptyv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                                     :element-type '(unsigned-byte 8)))
+                  (ptzv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
+                                    :element-type '(unsigned-byte 8)))
                   (wv   (make-array 84 ;; 84 cells of 4-bit bipolar window vector, in little-endian order
                                     :element-type '(signed-byte 8)
                                     :initial-element 0)))
 
-             (ed3363-pt-to-c pta ptxv ptyv)
+             (ed3363-pt-to-c pta ptxv ptyv) ;; affine in...
 
              ;; C-code requires the window4 vector in little endian order
              (let ((ws  (nreverse (windows4 nn))))
@@ -753,13 +774,15 @@ THE SOFTWARE.
 
              (with-fli-buffers ((cptx 48 ptxv)
                                 (cpty 48 ptyv)
+                                (cptz 48)
                                 (cwv  84 wv))
-               (_Ed3363-mul cptx cpty cwv)
+               (_Ed3363-mul cptx cpty cptz cwv)
                
-               (xfer-foreign-to-lisp cptx 48 ptxv)
-               (xfer-foreign-to-lisp cpty 48 ptyv))
+               (xfer-foreign-to-lisp cptx 48 ptxv) ;; projective out...
+               (xfer-foreign-to-lisp cpty 48 ptyv)
+               (xfer-foreign-to-lisp cptz 48 ptzv))
              
-             (ed3363-pt-from-c ptxv ptyv)))
+             (ed3363-pt-from-c ptxv ptyv ptzv)))
           )))
 
 (defun fast-ed3363-add (pt1 pt2)
@@ -777,7 +800,7 @@ THE SOFTWARE.
          (pt2zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                             :element-type '(unsigned-byte 8))))
     
-    (ed3363-pt-to-c pt1 pt1xv pt1yv pt1zv)
+    (ed3363-pt-to-c pt1 pt1xv pt1yv pt1zv) ;; projective in...
     (ed3363-pt-to-c pt2 pt2xv pt2yv pt2zv)
 
     (with-fli-buffers ((cpt1x 48 pt1xv)
@@ -789,7 +812,7 @@ THE SOFTWARE.
       
       (_Ed3363-add cpt1x cpt1y cpt1z cpt2x cpt2y cpt2z)
                
-      (xfer-foreign-to-lisp cpt1x 48 pt1xv)
+      (xfer-foreign-to-lisp cpt1x 48 pt1xv) ;; projective out...
       (xfer-foreign-to-lisp cpt1y 48 pt1yv)
       (xfer-foreign-to-lisp cpt1z 48 pt1zv))
              
@@ -807,7 +830,7 @@ THE SOFTWARE.
            (pt1zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                               :element-type '(unsigned-byte 8))))
       
-      (ed3363-pt-to-c pt pt1xv pt1yv pt1zv)
+      (ed3363-pt-to-c pt pt1xv pt1yv pt1zv) ;; projective in...
       
       (with-fli-buffers ((cpt1x 48 pt1xv)
                          (cpt1y 48 pt1yv)
@@ -815,7 +838,7 @@ THE SOFTWARE.
         
         (_Ed3363-to-affine cpt1x cpt1y cpt1z)
         
-        (xfer-foreign-to-lisp cpt1x 48 pt1xv)
+        (xfer-foreign-to-lisp cpt1x 48 pt1xv) ;; affine out...
         (xfer-foreign-to-lisp cpt1y 48 pt1yv))
       
       (let ((pt (ed3363-pt-from-c pt1xv pt1yv)))
@@ -841,7 +864,7 @@ THE SOFTWARE.
           ((or (= nn 1)
                (ed-neutral-point-p pt)) pt)
           
-          (t (let ((ws   (windows4 nn))
+          (t (let ((ws   (windows4 nn))  ;; projective in...
                    (ans  nil)
                    (prec (let* ((p1 (ed-projective pt))
                                 (p2 (ed-add p1 p1))
@@ -873,7 +896,7 @@ THE SOFTWARE.
                          (setf ans (if ans
                                        (ed-add ans pw)
                                      pw)))))
-               (or ans (ed-neutral-point))
+               (or ans (ed-neutral-point)) ;; projective out...
                ))
           )))
 
@@ -991,9 +1014,9 @@ THE SOFTWARE.
     (let* ((nbits (ed-nbits))
            (sgn   (ldb (byte 1 nbits) v))
            (x     (dpb 0 (byte 1 nbits) v))
-           (yy    (m/ (m* (m+ *ed-c* x)
-                          (m- *ed-c* x))
-                      (m* (m- 1 (m* x x *ed-c* *ed-c* *ed-d*)))))
+           (yy    (m/ (m* (+ *ed-c* x)
+                          (- *ed-c* x))
+                      (- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
            (y     (msqrt yy))
            (y     (if (eql sgn (ldb (byte 1 0) y))
                       y
@@ -1001,10 +1024,10 @@ THE SOFTWARE.
       (assert (= yy (m* y y))) ;; check that yy was a square
       ;; if yy was not a square then y^2 will equal -yy, not yy.
       (ed-validate-point
-       (ed-projective
-        (make-ecc-pt
-         :x  x
-         :y  y)))
+       (make-ed-proj-pt
+        :x  x
+        :y  y
+        :z  1))
       )))
 
 ;; -----------------------------------------------------------------
@@ -1070,9 +1093,9 @@ we are done. Else re-probe with (X^2 + 1)."
            (sgn   (ldb (byte 1 nbits) v))
            (x     (mmod (ldb (byte nbits 0) v))))
       (um:nlet-tail iter ((x x))
-        (let ((yy (m/ (m* (m+ *ed-c* x)
-                          (m- *ed-c* x))
-                      (m* (m- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
+        (let ((yy (m/ (m* (+ *ed-c* x)
+                          (- *ed-c* x))
+                      (m* (- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
                   ))
           (if (quadratic-residue-p yy)
               (let* ((y  (msqrt yy))
@@ -1090,10 +1113,10 @@ we are done. Else re-probe with (X^2 + 1)."
                       ;; we already know the point sits on the curve,
                       ;; but it could be the neutral point, or belong
                       ;; in a small subgroup.
-                      (iter (m+ 1 (m* x x)))
+                      (iter (1+ (m* x x)))
                     pt)))
             ;; else - non-quadratic residut
-            (iter (m+ 1 (m* x x)))
+            (iter (1+ (m* x x)))
             ))))))
 
 (defun ed-random-generator ()
@@ -1232,13 +1255,13 @@ we are done. Else re-probe with (X^2 + 1)."
 (defun compute-csr ()
   ;; from Bernstein -- correct only for isomorph curve *ed-c* = 1
   (with-mod *ed-q*
-    (let* ((dp1  (m+ *ed-d* 1))
-           (dm1  (m- *ed-d* 1))
-           (dsqrt (m* 2 (msqrt (m- *ed-d*))))
-           (c    (m/ (m+ dsqrt dm1) dp1))
+    (let* ((dp1  (+ *ed-d* 1))
+           (dm1  (- *ed-d* 1))
+           (dsqrt (m* 2 (msqrt (- *ed-d*))))
+           (c    (m/ (+ dsqrt dm1) dp1))
            (c    (if (quadratic-residue-p c)
                      c
-                   (m/ (m- dsqrt dm1) dp1)))
+                   (m/ (- dsqrt dm1) dp1)))
            (r    (m+ c (m/ c)))
            (s    (msqrt (m/ 2 c))))
       (list c s r ))))
@@ -1269,31 +1292,31 @@ we are done. Else re-probe with (X^2 + 1)."
           (t
            (with-mod *ed-q*
              (um:bind* (((c s r) (csr))
-                        (u     (m/ (m- 1 z) (m+ 1 z)))
+                        (u     (m/ (- 1 z) (1+ z)))
                         (u^2   (m* u u))
                         (c^2   (m* c c))
-                        (u2c2  (m+ u^2 c^2))
-                        (u2cm2 (m+ u^2 (m/ c^2)))
+                        (u2c2  (+ u^2 c^2))
+                        (u2cm2 (+ u^2 (m/ c^2)))
                         (v     (m* u u2c2 u2cm2))
                         (chiv  (mchi v))
                         (xx    (m* chiv u))
                         (yy    (m* (m^ (m* chiv v) (truncate (1+ *ed-q*) 4))
                                    chiv
                                    (mchi u2cm2)))
-                        (1+xx  (m+ xx 1))
-                        (x     (m/ (m* (m- c 1)
+                        (1+xx  (1+ xx))
+                        (x     (m/ (m* (- c 1)
                                        s
                                        xx
                                        1+xx)
                                    yy))
-                        (y     (m/ (m- (m* r xx)
-                                       (m* 1+xx 1+xx))
-                                   (m+ (m* r xx)
-                                       (m* 1+xx 1+xx))))
-                        (pt    (ed-projective
-                                (make-ecc-pt
-                                 :x  x
-                                 :y  y))))
+                        (y     (m/ (- (m* r xx)
+                                      (m* 1+xx 1+xx))
+                                   (+ (m* r xx)
+                                      (m* 1+xx 1+xx))))
+                        (pt    (make-ed-proj-pt
+                                :x  x
+                                :y  y
+                                :z  1)))
                ;; (assert (ed-satisfies-curve pt))
                pt
                )))
@@ -1307,26 +1330,26 @@ we are done. Else re-probe with (X^2 + 1)."
     ;; else
     (with-mod *ed-q*
       (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
-                 (yp1  (m+ y 1)))
+                 (yp1  (1+ y)))
         (unless (zerop yp1)
           (um:bind* (((c s r) (csr))
-                     (etar       (m* r (m/ (m- y 1) (m* 2 yp1))))
-                     (etarp1     (m+ 1 etar))
-                     (etarp1sqm1 (m- (m* etarp1 etarp1) 1))
-                     (scm1       (m* s (m- c 1))))
+                     (etar       (m* r (m/ (- y 1) (m* 2 yp1))))
+                     (etarp1     (+ 1 etar))
+                     (etarp1sqm1 (- (m* etarp1 etarp1) 1))
+                     (scm1       (m* s (- c 1))))
             (when (and (quadratic-residue-p etarp1sqm1)
                        (or (not (zerop (m+ etar 2)))
                            (= x (m/ (m* 2 scm1 (mchi c))
                                     r))))
-              (um:bind* ((xx    (m- (m^ etarp1sqm1 (floor (1+ *ed-q*) 4))
+              (um:bind* ((xx    (- (m^ etarp1sqm1 (floor (1+ *ed-q*) 4))
                                     etarp1))
                          (z     (mchi (m* scm1
                                           xx
-                                          (m+ xx 1)
+                                          (1+ xx)
                                           x
-                                          (m+ (m* xx xx) (m/ (m* c c))))))
+                                          (+ (m* xx xx) (m/ (m* c c))))))
                          (u     (m* z xx))
-                         (enc   (m/ (m- 1 u) (m+ 1 u)))
+                         (enc   (m/ (- 1 u) (1+ u)))
                          (tau   (min enc (m- enc))))
                 ;; (assert (ed-pt= pt (elligator-decode enc))) ;; check that pt is in the Elligator set
                 ;; (assert (< tau (elligator-limit)))
@@ -1567,9 +1590,9 @@ we are done. Else re-probe with (X^2 + 1)."
 #|
 (with-mod *ed-q*
   (let* ((c4d  (m* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
-         (a    (m/ (m* 2 (m+ c4d 1)) (m- c4d 1)))
+         (a    (m/ (m* 2 (1+ c4d)) (- c4d 1)))
          (b    1))
-    (m* a b (m- (m* a a) (m* 4 b))))) ;; must not be zero
+    (m* a b (- (m* a a) (m* 4 b))))) ;; must not be zero
 |#
 
 ;; --------------------------------------------------------
@@ -1591,12 +1614,12 @@ we are done. Else re-probe with (X^2 + 1)."
   ;; must have: A*B*(A^2 - 4*B) != 0
   (with-mod *ed-q*
     (let* ((c4d        (m* *ed-c* *ed-c* *ed-c* *ed-c* *ed-d*))
-           (c4dm1      (m- c4d 1))
+           (c4dm1      (- c4d 1))
            (sqrt-c4dm1 (msqrt c4dm1)) ;; used during coord conversion
-           (a          (m/ (m* 2 (m+ c4d 1)) c4dm1))
+           (a          (m/ (m* 2 (+ c4d 1)) c4dm1))
            (b          1)
            (u          (find-quadratic-nonresidue))
-           (dscr       (m- (m* a a) (m* 4 b))))
+           (dscr       (- (m* a a) (m* 4 b))))
       ;; (assert (not (quadratic-residue-p *ed-q* dscr)))
       (assert (not (zerop (m* a b dscr))))
       (list sqrt-c4dm1 a b u))))
@@ -1625,7 +1648,7 @@ we are done. Else re-probe with (X^2 + 1)."
         (with-mod *ed-q*
           (let* ((yv   (m* sqrt-c4dm1 yw))
                  (x    (m/ (m* -2 *ed-c* xu) yv))
-                 (y    (m/ (m* *ed-c* (m+ 1 xu)) (m- 1 xu)))
+                 (y    (m/ (m* *ed-c* (1+ xu)) (- 1 xu)))
                  (pt   (make-ecc-pt
                         :x  x
                         :y  y)))
@@ -1653,7 +1676,7 @@ we are done. Else re-probe with (X^2 + 1)."
             (with-mod *ed-q*
               (um:bind* (((sqrt-c4dm1 a b u) (elli2-ab))
                          (u*r^2   (m* u r r))
-                         (1+u*r^2 (m+ 1 u*r^2)))
+                         (1+u*r^2 (1+ u*r^2)))
                 
                 ;; the following error can never trigger when fed with
                 ;; r from elli2-encode. But random values fed to us
@@ -1664,27 +1687,27 @@ we are done. Else re-probe with (X^2 + 1)."
                              (m* b 1+u*r^2 1+u*r^2)))  ;; and LHS is not square.
                   (error "invalid argument"))
                 
-                (let* ((v    (m- (m/ a 1+u*r^2)))
-                       (eps  (mchi (m+ (m* v v v)
-                                       (m* a v v)
-                                       (m* b v))))
-                       (xu   (m- (m* eps v)
-                                 (m/ (m* (m- 1 eps) a) 2)))
+                (let* ((v    (- (m/ a 1+u*r^2)))
+                       (eps  (mchi (+ (m* v v v)
+                                      (m* a v v)
+                                      (m* b v))))
+                       (xu   (- (m* eps v)
+                                (m/ (m* (- 1 eps) a) 2)))
                        (rhs  (m* xu
-                                 (m+ (m* xu xu)
-                                     (m* a xu)
-                                     b)))
-                       (yw   (m- (m* eps (msqrt rhs))))
+                                 (+ (m* xu xu)
+                                    (m* a xu)
+                                    b)))
+                       (yw   (- (m* eps (msqrt rhs))))
                        ;; now we have (xu, yw) as per Bernstein: yw^2 = xu^3 + A*xu^2 + B*xu
                        ;; Now convert- to our Edwards coordinates:
                        ;;   (xu,yw) --> (x,y): x^2 + y^2 = c^2*(1 + d*x^2*y^2)
                        (yv   (m* sqrt-c4dm1 yw))
                        (x    (m/ (m* -2 *ed-c* xu) yv))
-                       (y    (m/ (m* *ed-c* (m+ 1 xu)) (m- 1 xu)))
-                       (pt   (ed-projective
-                              (make-ecc-pt
-                               :x  x
-                               :y  y))))
+                       (y    (m/ (m* *ed-c* (1+ xu)) (- 1 xu)))
+                       (pt   (make-ed-proj-pt
+                              :x  x
+                              :y  y
+                              :z  1)))
                   #|
                   (assert (ed-satisfies-curve pt)) ;; true by construction
                   (assert (not (zerop (m* v eps xu yw)))) ;; true by construction
@@ -1708,7 +1731,7 @@ we are done. Else re-probe with (X^2 + 1)."
       (um:bind* ((:struct-accessors ecc-pt (x y) (ed-affine pt))
                  ((sqrt-c4dm1 a b u) (elli2-ab))
                  (declare (ignore u))
-                 (xu   (m/ (m- y *ed-c*) (m+ y *ed-c*)))
+                 (xu   (m/ (- y *ed-c*) (+ y *ed-c*)))
                  (yv   (m/ (m* -2 *ed-c* xu) x ))
                  (yw   (m/ yv sqrt-c4dm1)))
         (assert (= (m* yw yw)
@@ -1731,10 +1754,10 @@ we are done. Else re-probe with (X^2 + 1)."
                       (declare (ignore b))
                       ;; convert our Edwards coords to the form needed by Elligator-2
                       ;; for Montgomery curves
-                      (xu   (m/ (m- y *ed-c*) (m+ y *ed-c*)))
+                      (xu   (m/ (- y *ed-c*) (+ y *ed-c*)))
                       (yv   (m/ (m* -2 *ed-c* xu) x ))
                       (yw   (m/ yv sqrt-c4dm1))
-                      (xu+a (m+ xu a)))
+                      (xu+a (+ xu a)))
              ;; now we have (x,y) --> (xu,yw) for:  yw^2 = xu^3 + A*xu^2 + B*xu
              #|
              (labels ((esqrt (x)
@@ -1752,11 +1775,11 @@ we are done. Else re-probe with (X^2 + 1)."
                      ((zerop xu+a)
                       (elligator-int-padding))
                      ((quadratic-residue-p yw)
-                      (let ((r (esqrt (m- (m/ xu xu+a u)))))
+                      (let ((r (esqrt (- (m/ xu xu+a u)))))
                         (logior (min r (m- r))
                                 (elligator-int-padding))))
                      (t
-                      (let ((r (esqrt (m- (m/ xu+a xu u)))))
+                      (let ((r (esqrt (- (m/ xu+a xu u)))))
                         (logior (min r (m- r))
                                 (elligator-int-padding))))
                      |#
@@ -1764,14 +1787,14 @@ we are done. Else re-probe with (X^2 + 1)."
                   (when (and (not (zerop xu+a))
                              (or (not (zerop yw))
                                  (zerop xu))
-                             (quadratic-residue-p (m- (m* u xu xu+a))))
+                             (quadratic-residue-p (- (m* u xu xu+a))))
                     (let* ((e2    (if (quadratic-residue-p yw)
                                       (m/ xu xu+a)
                                     (m/ xu+a xu)))
-                           (enc   (msqrt (m/ e2 (m- u))))
+                           (enc   (msqrt (m/ e2 (- u))))
                            (tau   (min enc (m- enc)))
                            ;; (ur2   (m* u tau tau))
-                           ;; (1pur2 (m+ 1 ur2))
+                           ;; (1pur2 (1+ ur2))
                            )
                       
                       ;; (assert (< tau (elligator-limit)))

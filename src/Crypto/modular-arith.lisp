@@ -37,6 +37,9 @@ THE SOFTWARE.
 (declaim (integer *m*)
          (inline mmod m-1 m/2l m+1 m/2u))
 
+#|
+;; this is not faster than the built-in MOD function...
+
 (defstruct moddescr
   nbits rem)
 
@@ -52,25 +55,26 @@ THE SOFTWARE.
 (defun fastmod (x)
   ;; full mod
   (declare (integer x))
-  (with-accessors ((nbits  moddescr-nbits)
-                   (rem    moddescr-rem)) *fastmod*
+  (let* ((nbits  (moddescr-nbits *fastmod*))
+         (rem    (moddescr-rem   *fastmod*))
+         (mnbits (- nbits))
+         (sgn    (minusp x)))
     (declare (integer rem)
-             (fixnum  nbits))
-    (let ((sgn  (minusp x)))
+             (fixnum  nbits mnbits))
+    (labels ((ret (x)
+               (declare (integer x))
+               (cond ((zerop x) 0)
+                     (sgn       (- *m* x))
+                     (t         x))))
       (um:nlet-tail iter ((v (abs x)))
         (declare (integer v))
         (if (< v *m*)
-            (if sgn
-                (- *m* v)
-              v)
+            (ret v)
           ;; else
-          (let ((ve (ash v (- nbits))))
+          (let ((ve (ash v mnbits)))
             (declare (integer ve))
             (if (zerop ve)
-                (let ((ans (- v *m*)))
-                  (if sgn
-                      (- *m* ans)
-                    ans))
+                (ret (- v *m*))
               (let ((vf (ldb (byte nbits 0) v)))
                 (declare (integer vf))
                 (iter (+ vf (* rem ve)))
@@ -87,6 +91,22 @@ THE SOFTWARE.
           (*fastmod* (get-fastmod *m*)))
      ,@body))
 
+(defun mmod (x)
+  (declare (integer x))
+  ;; (mod x *m*)
+  (fastmod x))
+
+(defun m! (m)
+  ;; for REPL convenience, so we don't have to keep doing WITH-MOD
+  (check-type m (integer 1))
+  (setf *m*       m
+        *fastmod* (get-fastmod m)))
+|#
+
+(defmacro with-mod (base &body body)
+  `(let ((*m*  ,base))
+     ,@body))
+
 #|
 (with-mod 13
   (print (fastmod 43))
@@ -98,8 +118,7 @@ THE SOFTWARE.
 
 (defun mmod (x)
   (declare (integer x))
-  ;; (mod x *m*)
-  (fastmod x))
+  (mod x *m*))
 
 (defun m-1 ()
   (1- *m*))
@@ -116,8 +135,7 @@ THE SOFTWARE.
 (defun m! (m)
   ;; for REPL convenience, so we don't have to keep doing WITH-MOD
   (check-type m (integer 1))
-  (setf *m*       m
-        *fastmod* (get-fastmod m)))
+  (setf *m* m))
 
 ;; -----------------------------------------------------
 
@@ -144,16 +162,16 @@ THE SOFTWARE.
   (declare (integer arg))
   (dolist (opnd args)
     (declare (integer opnd))
-    (setf arg (fastmod (* arg opnd))))
+    (setf arg (mmod (* arg opnd))))
   arg)
     
 ;; ------------------------------------------------------------
 
 (defun m+ (&rest args)
-  (fastmod (apply '+ args)))
+  (mmod (apply '+ args)))
 
 (defun m- (&rest args)
-  (fastmod (apply '- args)))
+  (mmod (apply '- args)))
 
 ;; -----------------------------------------------------
 ;; Prime-Field Arithmetic
@@ -162,22 +180,21 @@ THE SOFTWARE.
   ;; base^exponent mod modulus, for any modulus
   ;; use a 4-bit fixed window algorithm
   (declare (integer base exp))
-  (let ((x (fastmod base)))
+  (let ((x (mmod base)))
     (declare (integer x))
     (if (< x 2)  ;; x = 0,1
         x
       ;; else
       (let* ((n     (integer-length exp))
-             (prec  (make-array 16
-                                :element-type 'integer))
+             (prec  (coerce
+                     (loop for ix fixnum from 0 below 16
+                           for xx = 1 then (m* x xx)
+                           collect xx)
+                     'vector))
              (ans   1))
         (declare (fixnum n)
                  (integer ans)
                  ((vector integer) prec))
-        (loop for ix fixnum from 0 below 16
-              for xx = 1 then (m* x xx)
-              do
-              (setf (aref prec ix) xx))
         (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
               (setf ans (m* ans ans)
                     ans (m* ans ans)
@@ -194,7 +211,7 @@ THE SOFTWARE.
 (defun m^ (base exp)
   ;; base^exponent mod modulus, for any modulus
   (declare (integer base exp))
-  (let ((x (fastmod base)))
+  (let ((x (mmod base)))
     (declare (integer x))
     (if (< x 2)  ;; x = 0,1
         x
@@ -205,7 +222,7 @@ THE SOFTWARE.
         (do ((b  x  (m* b b))
              (p  1)
              (ix 0  (1+ ix)))
-            ((>= ix n) (fastmod p))
+            ((>= ix n) (mmod p))
           (declare (integer b p)
                    (fixnum ix))
           (when (logbitp ix exp)
@@ -216,14 +233,34 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------
 
 (defun minv (a)
+  ;; modular inverse by Extended Euclidean algorithm
   (declare (integer a))
-  (let* ((u  (fastmod a))
+  (let* ((u  (mmod a))
          (v  *m*)
          (x1 1)
          (x2 0))
     (declare (integer u v x1 x2))
-    (do ()
-        ((= u 1) x1)
+    (do ((ct 1 (1+ ct)))
+        ((= u 1) (values (mmod x1) ct))
+      (multiple-value-bind (q r) (truncate v u)
+        (declare (integer q r))
+        (let ((x (- x2 (* q x1))))
+          (declare (integer x))
+          (shiftf v u r)
+          (shiftf x2 x1 x))
+        ))))
+
+#|
+(defun minv (a)
+  ;; modular inverse by Extended Euclidean algorithm
+  (declare (integer a))
+  (let* ((u  (mmod a))
+         (v  *m*)
+         (x1 1)
+         (x2 0))
+    (declare (integer u v x1 x2))
+    (do ((ct 1 (1+ ct)))
+        ((= u 1) (values x1 ct))
       (multiple-value-bind (q r) (truncate v u)
         (declare (integer q r))
         (let ((x (m- x2 (m* q x1))))
@@ -231,6 +268,7 @@ THE SOFTWARE.
           (shiftf v u r)
           (shiftf x2 x1 x))
         ))))
+|#
 
 (defun m/ (arg &rest args)
   (declare (integer arg))
@@ -387,7 +425,7 @@ THE SOFTWARE.
   ;; 1/2 = 2/4 = 3/6 = 4/8 = 5/10 = 6/12 = 7/14 = 8/16
   ;; in general:  for m = (2k+1) mod 4k, use (m + (2k-1))/4k, k = 1,2,...
   (declare (integer x))
-  (let ((xx  (fastmod x)))
+  (let ((xx  (mmod x)))
     (declare (integer xx))
     (if (< xx 2)
         xx

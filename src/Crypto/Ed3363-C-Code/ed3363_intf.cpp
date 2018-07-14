@@ -700,10 +700,33 @@ w[80]= 0; w[81]= 0; w[82]= 0; w[83]= 2;
 }
 #endif // testing
 
-extern "C"
-void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv)
+// -------------------------------------------------------------
+// Lisp Interface
+
+/* Point Multiplication - exponent is 333 bits */
+
+void mul_to_proj(int *w,ECp *P)
 {
-  // Multiplies point pt by scalar w and returns in pt.
+	ECp W[1+(1<<(WINDOW-1))],S[2],Q;
+	int j,m;
+	precomp(P,W);
+
+	copy(&W[w[PANES-1]],P);  
+	for (int i=PANES-2;i>=0;i--)
+	{
+		select(&Q,W,w[i]);
+		window(&Q,P);
+	}
+	scr(P->x);
+	scr(P->y);
+	scr(P->z);
+}
+
+extern "C"
+void Ed3363_affine_mul(unsigned char* ptx, unsigned char* pty, unsigned char* ptz,
+		       signed char* wv)
+{
+  // Multiplies point pt by scalar w and returns in pt as projective coords
   //
   // ptx and pty are already split into 6 64-bit items, each of which
   // is a 56-bit (7 byte) little-endian fragment of the coordinate
@@ -714,19 +737,21 @@ void Ed3363_mul(unsigned char* ptx, unsigned char* pty, signed char* wv)
   int w[PANES];
   ECp P;
   int ix;
-  type64 *px, *py;
+  type64 *px, *py, *pz;
 
   for(ix = PANES; --ix >= 0; )
     w[ix] = wv[ix]; // integer format conversion
 
   px = (type64*)ptx;
   py = (type64*)pty;
+  pz = (type64*)ptz;
   
   init(px, py, &P);
-  mul(w, &P);
+  mul_to_proj(w, &P);
 
   gcopy(P.x, px);
   gcopy(P.y, py);
+  gcopy(P.z, pz);
 }
 
 // Initialise P
@@ -771,8 +796,8 @@ void add_proj(ECp *Q, ECp *P)
 }
 
 extern "C"
-void Ed3363_add(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z,
-		unsigned char* lp2x, unsigned char* lp2y, unsigned char* lp2z)
+void Ed3363_projective_add(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z,
+			   unsigned char* lp2x, unsigned char* lp2y, unsigned char* lp2z)
 {
   // Add two Affine points returning result in first one (pt)
   //
