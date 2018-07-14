@@ -717,31 +717,50 @@ void mul_to_proj(int *w,ECp *P)
 		select(&Q,W,w[i]);
 		window(&Q,P);
 	}
-	scr(P->x);
-	scr(P->y);
-	scr(P->z);
 }
 
 extern "C"
 void Ed3363_affine_mul(unsigned char* ptx, unsigned char* pty, unsigned char* ptz,
-		       signed char* wv)
+		       unsigned char* nv)
 {
-  // Multiplies point pt by scalar w and returns in pt as projective coords
+  // Multiplies point pt by scalar n and returns in pt as projective coords
   //
   // ptx and pty are already split into 6 64-bit items, each of which
   // is a 56-bit (7 byte) little-endian fragment of the coordinate
   //
-  // wv should be a bipolar 4-bit window vector, in little-endian order,
-  // sent along as a byte vector containing each nibble value.
+  // nv should be a little-endian encoding of scalar n. n should be
+  // mod q. (0 <= n < q)
   
   int w[PANES];
   ECp P;
-  int ix;
+  int ix, jx;
   type64 *px, *py, *pz;
 
-  for(ix = PANES; --ix >= 0; )
-    w[ix] = wv[ix]; // integer format conversion
-
+  // convert incoming N to bipolar 4-bit window vector
+  int cy = 0; // carry bit
+  for(ix = 0, jx = 0; ix < PANES;)
+    {
+      unsigned int byt = nv[jx++];
+      int v = cy + (byt & 15);
+      if(v > 7)
+	{
+	  cy = 1;
+	  v -= 16;
+	}
+      else
+	cy = 0;
+      w[ix++] = v;
+      v = cy + (byt >> 4);
+      if(v > 7)
+	{
+	  cy = 1;
+	  v -= 16;
+	}
+      else
+	cy = 0;
+      w[ix++] = v;
+    }
+  
   px = (type64*)ptx;
   py = (type64*)pty;
   pz = (type64*)ptz;
@@ -789,9 +808,6 @@ void add_proj(ECp *Q, ECp *P)
   gmul(G, Y3, Z3);
   gmul(A, Z3, Y3);
   gmul(F, G, Z3); // c = 1
-  scr(X3);
-  scr(Y3);
-  scr(Z3);
   init_proj(X3, Y3, Z3, P);
 }
 
@@ -846,9 +862,6 @@ void Ed3363_to_affine(unsigned char* lp1x, unsigned char* lp1y, unsigned char* l
   gcopy(t, px);
   gmul(py, pz, t);
   gcopy(t, py);
-  scr(px);
-  scr(py);
-  scr(pz); // in case someone wants the inverse of z
 }
 
 // --- end of ed3363_intf.cpp --- //

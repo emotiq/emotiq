@@ -293,13 +293,13 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("Ed3363_affine_mul" _Ed3363-mul) :void
+(cffi:defcfun ("Ed3363_affine_mul" _Ed3363-affine-mul) :void
   (ptx         :pointer :unsigned-char)
   (pty         :pointer :unsigned-char)
   (ptz         :pointer :unsigned-char)
-  (wv          :pointer :signed-char))
+  (nv          :pointer :unsigned-char))
 
-(cffi:defcfun ("Ed3363_projective_add" _Ed3363-add) :void
+(cffi:defcfun ("Ed3363_projective_add" _Ed3363-projective-add) :void
   (pt1x         :pointer :unsigned-char)
   (pt1y         :pointer :unsigned-char)
   (pt1z         :pointer :unsigned-char)
@@ -717,19 +717,28 @@ THE SOFTWARE.
   
 
 (defun ed3363-pt-from-c (vecx vecy &optional vecz)
-  (labels ((to-int (vec)
-             (um:nlet-tail iter ((ix  0)
-                                 (pos 0)
-                                 (val 0))
-               (declare (fixnum ix pos)
-                        (integer val))
-               (cond ((>= ix 48)  val) ;; we're done here
-                     ((= 7 (mod ix 8)) ;; skip every 7th byte
-                      (iter (1+ ix) pos val))
-                     (t                ;; accum bytes in little-endian order
-                                       (iter (1+ ix) (+ pos 8)
-                                             (dpb (aref vec ix) (byte 8 pos) val)))
-                     ))))
+  (labels ((rd64 (vec start)
+             (declare ((array (unsigned-byte 8)) vec)
+                      (fixnum start))
+             (let ((val 0))
+               (declare (integer val))
+               (loop for ix fixnum from start below (+ start 8)
+                     for pos fixnum from 0 by 8
+                     do
+                     (setf val (dpb (aref vec ix) (byte 8 pos) val)))
+               (if (logbitp 63 val)
+                   (- val #.(ash 1 64))
+                 val)))
+
+           (to-int (vec)
+             (with-mod *ed-q*
+               (m+ (rd64 vec 0)
+                   (ash (rd64 vec  8)  56)
+                   (ash (rd64 vec 16) 112)
+                   (ash (rd64 vec 24) 168)
+                   (ash (rd64 vec 32) 224)
+                   (ash (rd64 vec 40) 280)))))
+    
     (make-ed-proj-pt
      :x  (to-int vecx)
      :y  (to-int vecy)
@@ -759,24 +768,22 @@ THE SOFTWARE.
                                     :element-type '(unsigned-byte 8)))
                   (ptzv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
                                     :element-type '(unsigned-byte 8)))
-                  (wv   (make-array 84 ;; 84 cells of 4-bit bipolar window vector, in little-endian order
-                                    :element-type '(signed-byte 8)
-                                    :initial-element 0)))
+                  (wv   (make-array 42 ;; 42 bytes of little-endian encoded 336-bit integer
+                                    :element-type '(unsigned-byte 8))))
 
              (ed3363-pt-to-c pta ptxv ptyv) ;; affine in...
 
-             ;; C-code requires the window4 vector in little endian order
-             (let ((ws  (nreverse (windows4 nn))))
-               (loop for w  fixnum in ws
-                     for ix fixnum from 0 below 84
-                     do
-                     (setf (aref wv ix) w)))
-
+             ;; send in N as little-endian 42-byte encoding
+             (loop for ix  from 0 below 42
+                   for pos from 0 by 8
+                   do
+                   (setf (aref wv ix) (ldb (byte 8 pos) nn)))
+             
              (with-fli-buffers ((cptx 48 ptxv)
                                 (cpty 48 ptyv)
                                 (cptz 48)
-                                (cwv  84 wv))
-               (_Ed3363-mul cptx cpty cptz cwv)
+                                (cwv  42 wv))
+               (_Ed3363-affine-mul cptx cpty cptz cwv)
                
                (xfer-foreign-to-lisp cptx 48 ptxv) ;; projective out...
                (xfer-foreign-to-lisp cpty 48 ptyv)
@@ -810,7 +817,7 @@ THE SOFTWARE.
                        (cpt2y 48 pt2yv)
                        (cpt2z 48 pt2zv))
       
-      (_Ed3363-add cpt1x cpt1y cpt1z cpt2x cpt2y cpt2z)
+      (_Ed3363-projective-add cpt1x cpt1y cpt1z cpt2x cpt2y cpt2z)
                
       (xfer-foreign-to-lisp cpt1x 48 pt1xv) ;; projective out...
       (xfer-foreign-to-lisp cpt1y 48 pt1yv)

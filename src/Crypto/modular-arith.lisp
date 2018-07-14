@@ -292,6 +292,17 @@ THE SOFTWARE.
 (defun fast-cipolla (x)
   ;; Cipolla method for finding square root of x over prime field m
   ;; use fixed 4-bit window evaluation
+  ;;
+  ;; Cipolla defines a quadratic extnsion field, where every value in
+  ;; Fq^2 is a square, albeit possibly "imaginary". If a value is a
+  ;; square in Fq then it has zero imaginary component in its square
+  ;; root in Fq^2. Otherwise, it has zero real part and finite
+  ;; imaginary part.
+  ;;
+  ;; This routine will work happily on every field value in Fq, but it
+  ;; only returns the real part of the result, which will be zero for
+  ;; Fq non-squares.
+  ;;
   (declare (integer x))
   (multiple-value-bind (re im^2)
       (um:nlet-tail iter ((a  2))
