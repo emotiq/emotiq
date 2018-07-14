@@ -149,22 +149,11 @@ THE SOFTWARE.
     
 ;; ------------------------------------------------------------
 
-(defun m+ (arg &rest args)
-  (declare (integer arg))
-  (dolist (opnd args)
-    (declare (integer opnd))
-    (incf arg opnd))
-  (fastmod arg))
+(defun m+ (&rest args)
+  (fastmod (apply '+ args)))
 
-(defun m- (arg &rest args)
-  (declare (integer arg))
-  (if args
-      (dolist (opnd args)
-        (declare (integer opnd))
-        (decf arg opnd))
-    ;; else
-    (setf arg (- arg)))
-  (fastmod arg))
+(defun m- (&rest args)
+  (fastmod (apply '- args)))
 
 ;; -----------------------------------------------------
 ;; Prime-Field Arithmetic
@@ -286,7 +275,12 @@ THE SOFTWARE.
                         (m* aim bim im^2))
                     (m+ (m* are bim)
                         (m* aim bre)))
-                   ))))
+                   )))
+             (fq2sqr (a)
+               (destructuring-bind (are aim) a
+                 (list
+                  (m+ (m* are are) (m* aim aim im^2))
+                  (m* 2 are aim)))))
       
       ;; exponentiation in Fq^2: (a, sqrt(a^2 - x))^((q-1)/2)
       (let* ((xx   (list re 1))  ;; generator for Fq^2
@@ -302,10 +296,10 @@ THE SOFTWARE.
         
         (loop for pos from (* 4 (floor n 4)) downto 0 by 4 do
               (when ans
-                (setf ans (fq2* ans ans)
-                      ans (fq2* ans ans)
-                      ans (fq2* ans ans)
-                      ans (fq2* ans ans)))
+                (setf ans (fq2sqr ans)
+                      ans (fq2sqr ans)
+                      ans (fq2sqr ans)
+                      ans (fq2sqr ans)))
               (let ((ix (ldb (byte 4 pos) exp)))
                 (declare (fixnum ix))
                 (unless (zerop ix)
