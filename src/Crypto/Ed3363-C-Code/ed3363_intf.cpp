@@ -719,6 +719,32 @@ void mul_to_proj(int *w,ECp *P)
 	}
 }
 
+void win4(unsigned char* nv, int *w)
+{
+  // convert incoming N to bipolar 4-bit window vector - no branching
+  int ix, jx;
+  int cy = 0; // carry bit
+  for(ix = 0, jx = 0; ix < PANES;)
+    {
+      unsigned int byt;
+      int v;
+
+      byt = nv[jx++];
+      v = cy + (byt & 15);
+      cy = (v >> 3);
+      cy |= (cy >> 1);
+      cy &= 1;
+      v -= (cy << 4);
+      w[ix++] = v;
+      v = cy + (byt >> 4);
+      cy = (v >> 3);
+      cy |= (cy >> 1);
+      cy &= 1;
+      v -= (cy << 4);
+      w[ix++] = v;
+    }
+}
+
 extern "C"
 void Ed3363_affine_mul(unsigned char* ptx, unsigned char* pty, unsigned char* ptz,
 		       unsigned char* nv)
@@ -733,33 +759,9 @@ void Ed3363_affine_mul(unsigned char* ptx, unsigned char* pty, unsigned char* pt
   
   int w[PANES];
   ECp P;
-  int ix, jx;
   type64 *px, *py, *pz;
 
-  // convert incoming N to bipolar 4-bit window vector
-  int cy = 0; // carry bit
-  for(ix = 0, jx = 0; ix < PANES;)
-    {
-      unsigned int byt = nv[jx++];
-      int v = cy + (byt & 15);
-      if(v > 7)
-	{
-	  cy = 1;
-	  v -= 16;
-	}
-      else
-	cy = 0;
-      w[ix++] = v;
-      v = cy + (byt >> 4);
-      if(v > 7)
-	{
-	  cy = 1;
-	  v -= 16;
-	}
-      else
-	cy = 0;
-      w[ix++] = v;
-    }
+  win4(nv, w);
   
   px = (type64*)ptx;
   py = (type64*)pty;
@@ -788,6 +790,9 @@ void init_proj(type64 *x,type64 *y,type64 *z, ECp *P)
 
 void add_proj(ECp *Q, ECp *P)
 {
+  // Add Q to P, both in projective (X,Y,Z) coordinates. We don't use T here.
+  //
+  // careful here... the 3-address code cannot share output with input
   type64 A[6], B[6], C[6], D[6], E[6], F[6], G[6], X3[6], Y3[6], Z3[6];
   
   gmul(Q->z, P->z, A);

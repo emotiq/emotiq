@@ -35,6 +35,7 @@ THE SOFTWARE.
 (defpackage :crypto/modular-arith
   (:use :common-lisp
    :cached-var)
+  (:nicknames :modmath)
   (:export
    :with-mod
    :reset-blinders
@@ -126,6 +127,7 @@ THE SOFTWARE.
    :basic-random
    :basic-random-between
    :random-between
+   :field-random
    
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
@@ -211,6 +213,7 @@ THE SOFTWARE.
    :ed-mul
    :ed-div
    :ed-nth-pt
+   :ed-nth-proj-pt
    :ed-compress-pt
    :ed-decompress-pt
    :ed-validate-point

@@ -360,7 +360,7 @@ THE SOFTWARE.
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
-     (let* ((alpha (random-between 1 *ed-q*)))
+     (let* ((alpha (field-between *ed-q*)))
          (with-mod *ed-q*
            (make-ed-proj-pt
             :x (m* alpha x)
@@ -373,7 +373,7 @@ THE SOFTWARE.
 
 (defun ed-random-projective (pt)
   (with-mod *ed-q*
-    (let* ((alpha (random-between 1 *ed-q*)))
+    (let* ((alpha (field-random *ed-q*)))
       (declare (integer alpha))
       (optima:ematch pt
         ((ecc-pt- :x x :y y)
@@ -615,42 +615,8 @@ THE SOFTWARE.
         ))
 |#
 
-;; -------------------------------------------------------------------------
-;; 4-bit fixed window method - decent performance, and never more than
-;; |r|/4 terms
-
-(defun nibbles (n)
-  ;; for debug display to compare with windows4 output
-  (let* ((nbits (integer-length n))
-         (limt  (* 4 (floor nbits 4))))
-    (loop for pos fixnum from limt downto 0 by 4 collect
-          (ldb (byte 4 pos) n))))
-  
-(defun windows4 (n)
-  ;; return a big-endian list of balanced bipolar window values for
-  ;; each nibble in the number. E.g., 123 -> (1 -8 -5), where each
-  ;; value is in the set (-8, -7, ..., 7)
-  (declare (integer n))
-  (let* ((nbits (integer-length n))
-         (limt  (* 4 (floor nbits 4))))
-    (declare (fixnum nbits limt))
-    (um:nlet-tail iter ((pos 0)
-                        (ans nil)
-                        (cy  0))
-      (declare (fixnum pos cy))
-      (let* ((byt (ldb (byte 4 pos) n))
-             (x   (+ byt cy)))
-        (declare (fixnum byt x))
-        (multiple-value-bind (nxt nxtcy)
-            (if (> x 7)
-                (values (- x 16) 1)
-              (values x 0))
-          (if (< pos limt)
-              (iter (+ pos 4) (cons nxt ans) nxtcy)
-            (list* nxtcy nxt ans)))
-        ))))
-
 ;; -------------------------------------------------
+;; Support for C-level Ed3363 curve
 
 (defun xfer-foreign-to-lisp (fbuf nel &optional lbuf)
   (let ((lbuf (or lbuf
@@ -770,7 +736,7 @@ THE SOFTWARE.
                                     :element-type '(unsigned-byte 8)))
                   (wv   (make-array 42 ;; 42 bytes of little-endian encoded 336-bit integer
                                     :element-type '(unsigned-byte 8))))
-
+             
              (ed3363-pt-to-c pta ptxv ptyv) ;; affine in...
 
              ;; send in N as little-endian 42-byte encoding
@@ -854,10 +820,40 @@ THE SOFTWARE.
          :y (ed-proj-pt-y pt))
         ))))
 
-  
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
 ;; |r|/4 terms
+
+(defun nibbles (n)
+  ;; for debug display to compare with windows4 output
+  (let* ((nbits (integer-length n))
+         (limt  (* 4 (floor nbits 4))))
+    (loop for pos fixnum from limt downto 0 by 4 collect
+          (ldb (byte 4 pos) n))))
+  
+(defun windows4 (n)
+  ;; return a big-endian list of balanced bipolar window values for
+  ;; each nibble in the number. E.g., 123 -> (1 -8 -5), where each
+  ;; value is in the set (-8, -7, ..., 7)
+  (declare (integer n))
+  (let* ((nbits (integer-length n))
+         (limt  (* 4 (floor nbits 4))))
+    (declare (fixnum nbits limt))
+    (um:nlet-tail iter ((pos 0)
+                        (ans nil)
+                        (cy  0))
+      (declare (fixnum pos cy))
+      (let* ((byt (ldb (byte 4 pos) n))
+             (x   (+ byt cy)))
+        (declare (fixnum byt x))
+        (multiple-value-bind (nxt nxtcy)
+            (if (> x 7)
+                (values (- x 16) 1)
+              (values x 0))
+          (if (< pos limt)
+              (iter (+ pos 4) (cons nxt ans) nxtcy)
+            (list* nxtcy nxt ans)))
+        ))))
 
 (defun ed-basic-mul (pt n)
   (declare (integer n))
@@ -950,7 +946,7 @@ THE SOFTWARE.
 
 (defun ed-mul (pt n)
   #|
-  (let* ((alpha  (* *ed-r* *ed-h* (random-between 1 #.(ash 1 48)))))
+  (let* ((alpha  (* *ed-r* *ed-h* (field-random #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
   (if (eq *edcurve* *curve-ed3363*)
@@ -961,8 +957,11 @@ THE SOFTWARE.
   (with-mod *ed-r*
     (ed-mul pt (m/ n))))
 
+(defun ed-nth-proj-pt (n)
+  (ed-mul *ed-gen* n))
+
 (defun ed-nth-pt (n)
-  (ed-affine (ed-mul *ed-gen* n)))
+  (ed-affine (ed-nth-proj-pt n)))
 
 ;; ---------------------------------------------------------------
 ;; conversion between integers and little-endian UB8 vectors
@@ -1128,7 +1127,7 @@ we are done. Else re-probe with (X^2 + 1)."
 
 (defun ed-random-generator ()
   (ed-from-hash (get-hash-nbits (1+ (ed-nbits))
-                                (random-between 1 *ed-q*))))
+                                (field-random *ed-q*))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
@@ -1215,7 +1214,7 @@ we are done. Else re-probe with (X^2 + 1)."
                  :cum t))
 
 (loop repeat 1000 do
-      (let* ((x   (random-between 1 (* *ed-h* *ed-r*)))
+      (let* ((x   (field-random (* *ed-h* *ed-r*)))
              (pt  (ed-mul *ed-gen* x))
              (ptc (ed-compress-pt pt))
              (pt2 (ed-decompress-pt ptc)))
@@ -1864,7 +1863,7 @@ we are done. Else re-probe with (X^2 + 1)."
 ;; result in successful Elligator-2 encodings
 (let ((cts 0))
   (loop repeat 1000 do
-        (let* ((ix (random-between 1 (* *ed-h* *ed-r*)))
+        (let* ((ix (field-random (* *ed-h* *ed-r*)))
                (pt (ed-mul *ed-gen* ix)))
           (when (elli2-encode pt)
             (incf cts))))
