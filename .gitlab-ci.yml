@@ -23,7 +23,7 @@ before_script:
   stage: test
   retry: 1
   script:
-    - lisp=$LISP ci/with-timeout.sh etc/test-harness.bash
+    - . ci/lisp-wrapper-location.bash && lisp=$(lisp_for_ci $LISP) ci/with-timeout.sh etc/test-harness.bash
 
 test:linux:lispworks:
   <<: *test_definition
