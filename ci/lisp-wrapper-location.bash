@@ -1,7 +1,7 @@
 function lisp_for_ci () {
     implementation=$1
     lisp_cli=
-    case ${keyword} in
+    case ${implementation} in
         lispworks*)
             lisp_cli="$HOME/bin/lwpro"
             ;;
