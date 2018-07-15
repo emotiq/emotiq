@@ -522,8 +522,10 @@ THE SOFTWARE.
   ;; contageon to randomized projective coords for added security
   ;; (reset-blinders)
   ;; (tally :ecadd)
-  (if (eq *edcurve* *curve-ed3363*) ;; looks like it is faster to stay in Lisp for the Adds.
-      (fast-ed3363-add pt1 pt2)
+  (let ((ppt1 (ed-projective pt1))  ;; projective add is so much faster than affine add
+        (ppt2 (ed-projective pt2))) ;; so it pays to make the conversion
+    (if (eq *edcurve* *curve-ed3363*)
+        (fast-ed3363-add ppt1 ppt2)
     ;; else
     #|
     (multiple-value-bind (upt1 upt2)
@@ -535,7 +537,7 @@ THE SOFTWARE.
     ;; since projective add takes about 6 usec, and affine add takes
     ;; about 40 usec, it pays to always convert to projective coords,
     ;; especially since it is so cheap to do so.
-    (ed-projective-add (ed-projective pt1) (ed-projective pt2))))
+    (ed-projective-add ppt1 ppt2))))
 
 (defun ed-negate (pt)
   (with-mod *ed-q*
@@ -691,25 +693,21 @@ THE SOFTWARE.
           )))
 
 (defun fast-ed3363-add (pt1 pt2)
-  ;; Okay to use, but about 3-4x slower than just staying in Lisp to do projective adding
-  (let ((pt1 (ed-projective pt1))
-        (pt2 (ed-projective pt2)))
-         
-    (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1))
-                       (cpt1yv (ed-proj-pt-y pt1))
-                       (cpt1zv (ed-proj-pt-z pt1))
-                       (cpt2xv (ed-proj-pt-x pt2))
-                       (cpt2yv (ed-proj-pt-y pt2))
-                       (cpt2zv (ed-proj-pt-z pt2)))
-      
-      (_Ed3363-projective-add cpt1xv cpt1yv cpt1zv
-                              cpt2xv cpt2yv cpt2zv)
-      
-      (make-ed-proj-pt
-       :x (xfer-from-c cpt1xv)
-       :y (xfer-from-c cpt1yv)
-       :z (xfer-from-c cpt1zv))
-      )))
+  (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1))
+                     (cpt1yv (ed-proj-pt-y pt1))
+                     (cpt1zv (ed-proj-pt-z pt1))
+                     (cpt2xv (ed-proj-pt-x pt2))
+                     (cpt2yv (ed-proj-pt-y pt2))
+                     (cpt2zv (ed-proj-pt-z pt2)))
+    
+    (_Ed3363-projective-add cpt1xv cpt1yv cpt1zv
+                            cpt2xv cpt2yv cpt2zv)
+    
+    (make-ed-proj-pt
+     :x (xfer-from-c cpt1xv)
+     :y (xfer-from-c cpt1yv)
+     :z (xfer-from-c cpt1zv))
+    ))
 
 (defun fast-ed3363-to-affine (pt)
   (if (ecc-pt-p pt)
