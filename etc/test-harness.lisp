@@ -5,12 +5,10 @@
 (in-package :test-harness)
 
 (defun test-system (system)
-  (handler-case
-      (ql:quickload system)
-    (error (e)
-      (format *standard-output*
-              "~&Failed to Quickload dependencies for system `~a`:~&~a~&" system e)
-      (uiop:quit -1)))
+  "Run the test suite for SYSTEM, then quit the Lisp process with status of those tests
+
+The Lisp process returns 0 on successful tests, -1 otherwise as per
+the usual process return semantics."
   (handler-case
       (if (asdf-test-harness:run-suite system)
           (progn
