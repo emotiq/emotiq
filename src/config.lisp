@@ -140,7 +140,13 @@ Returns a list of directories in which configurations have been generated."
                                     :type "json")
                      :if-exists :supersede
                      :direction :output)
-    (cl-json:encode-json configuration o))
+    (cl-json:encode-json
+     ;;; configuration is an alist with later values overriding
+     ;;; earlier ones.  The CL-JSON serialization will not add keys
+     ;;; that have already been seen, so by reversing the alist we
+     ;;; should get the correct JSON serialization
+     (reverse configuration)
+     o))
   (stakes/write (alexandria:assoc-value configuration :stakes)
                 :path (make-pathname :defaults directory
                                      :name "stakes"
