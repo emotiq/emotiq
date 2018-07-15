@@ -745,34 +745,84 @@ void win4(unsigned char* nv, int *w)
     }
 }
 
+void gfetch(unsigned char* v, type64 *w)
+{
+  // fetch 56-bit words from consecutively stored 64-bit words in v.
+  type64 *pv;
+  type64 t0, t1;
+  
+  pv = (type64*)v;
+  t0 = pv[0] & bot56bits;
+  pv = (type64*)&v[7];
+  w[1] = pv[0] & bot56bits;
+  pv = (type64*)&v[14];
+  w[2] = pv[0] & bot56bits;
+  pv = (type64*)&v[21];
+  w[3] = pv[0] & bot56bits;
+  pv = (type64*)&v[28];
+  w[4] = pv[0] & bot56bits;
+  pv = (type64*)&v[35];
+  t1 = pv[0];
+  w[5] = t1 & bot56bits;
+  w[0] = (t0 + (3 * (t1 >> 56)));
+}
+
+void scrn(type64 *w)
+{
+  do {
+    scr(w);
+  } while(w[0] & ~bot56bits);
+}
+
+void gstore(type64 *w, unsigned char* v)
+{
+  // store 56-bit words into consecutively stored 64-bit words in v.
+  type64 *pv;
+
+  scrn(w);
+  pv = (type64*)v;
+  pv[0] = w[0];
+  pv = (type64*)&v[7];
+  pv[0] = w[1];
+  pv = (type64*)&v[14];
+  pv[0] = w[2];
+  pv = (type64*)&v[21];
+  pv[0] = w[3];
+  pv = (type64*)&v[28];
+  pv[0] = w[4];
+  pv = (type64*)&v[35];
+  pv[0] = w[5];
+  v[42] = v[43] = v[44] = v[45] = v[46] = v[47] = 0;
+}
+
 extern "C"
-void Ed3363_affine_mul(unsigned char* ptx, unsigned char* pty, unsigned char* ptz,
+void Ed3363_affine_mul(unsigned char* ptx,
+		       unsigned char* pty,
+		       unsigned char* ptz,
 		       unsigned char* nv)
 {
   // Multiplies point pt by scalar n and returns in pt as projective coords
   //
-  // ptx and pty are already split into 6 64-bit items, each of which
-  // is a 56-bit (7 byte) little-endian fragment of the coordinate
+  // lpx, lpy, lpz, and nv are stored as consecutive 64-bit values
+  // in little-endian order (assumes Intel conventions)
   //
   // nv should be a little-endian encoding of scalar n. n should be
   // mod q. (0 <= n < q)
   
   int w[PANES];
   ECp P;
-  type64 *px, *py, *pz;
+  type64 px[6], py[6];
 
   win4(nv, w);
-  
-  px = (type64*)ptx;
-  py = (type64*)pty;
-  pz = (type64*)ptz;
+  gfetch(ptx, px);
+  gfetch(pty, py);
   
   init(px, py, &P);
   mul_to_proj(w, &P);
 
-  gcopy(P.x, px);
-  gcopy(P.y, py);
-  gcopy(P.z, pz);
+  gstore(P.x, ptx);
+  gstore(P.y, pty);
+  gstore(P.z, ptz);
 }
 
 // Initialise P
@@ -817,56 +867,64 @@ void add_proj(ECp *Q, ECp *P)
 }
 
 extern "C"
-void Ed3363_projective_add(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z,
-			   unsigned char* lp2x, unsigned char* lp2y, unsigned char* lp2z)
+void Ed3363_projective_add(unsigned char* lp1x,
+			   unsigned char* lp1y,
+			   unsigned char* lp1z,
+			   unsigned char* lp2x,
+			   unsigned char* lp2y,
+			   unsigned char* lp2z)
 {
-  // Add two Affine points returning result in first one (pt)
+  // Add two Projective points returning result in first one (pt)
   //
-  // lpx, lpy, and lpz are already split into 6 64-bit items, each of which
-  // is a 56-bit (7 byte) little-endian fragment of the coordinate
+  // lpx, lpy, and lpz are stored as consecutive 64-bit values
+  // in little-endian order (assumes Intel conventions)
   //
   
   ECp P, Q;
-  type64 *px, *py, *pz, *qx, *qy, *qz;
+  type64 px[6], py[6], pz[6], qx[6], qy[6], qz[6];
 
-  px = (type64*)lp1x;
-  py = (type64*)lp1y;
-  pz = (type64*)lp1z;
-  
-  qx = (type64*)lp2x;
-  qy = (type64*)lp2y;
-  qz = (type64*)lp2z;
+  gfetch(lp1x,px);
+  gfetch(lp1y,py);
+  gfetch(lp1z,pz);
+
+  gfetch(lp2x,qx);
+  gfetch(lp2y,qy);
+  gfetch(lp2z,qz);
   
   init_proj(px, py, pz, &P);
   init_proj(qx, qy, qz, &Q);
 
   add_proj(&Q, &P); // Q + P -> P
 
-  gcopy(P.x, px);
-  gcopy(P.y, py);
-  gcopy(P.z, pz);
+  gstore(P.x, lp1x);
+  gstore(P.y, lp1y);
+  gstore(P.z, lp1z);
 }
 
 extern "C"
-void Ed3363_to_affine(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z)
+void Ed3363_to_affine(unsigned char* lpx,
+		      unsigned char* lpy,
+		      unsigned char* lpz)
 {
-  // Convert incoming projective coordinates to affine form. Return result in-place.
+  // Convert incoming projective coordinates to affine form. Return
+  // result in-place.
   //
-  // lpx, lpy, and lpz are already split into 6 64-bit items, each of which
-  // is a 56-bit (7 byte) little-endian fragment of the coordinate
+  // lpx, lpy, and lpz are stored as consecutive 64-bit values
+  // in little-endian order (assumes Intel conventions)
   //
   
-  type64 *px, *py, *pz, t[6];
+  type64 px[6], py[6], pz[6], t[6];
 
-  px = (type64*)lp1x;
-  py = (type64*)lp1y;
-  pz = (type64*)lp1z;
+  gfetch(lpx, px);
+  gfetch(lpy, py);
+  gfetch(lpz, pz);
 
   ginv(pz);
-  gmul(px, pz, t);
-  gcopy(t, px);
-  gmul(py, pz, t);
-  gcopy(t, py);
+  gmul(pz, px, t);
+  gstore(t, lpx);
+  gmul(pz, py, t);
+  gstore(t, lpy);
+  gstore(pz, lpz); // in case anyone wants 1/z
 }
 
 // --- end of ed3363_intf.cpp --- //

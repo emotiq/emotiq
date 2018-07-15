@@ -328,22 +328,25 @@ THE SOFTWARE.
     ((ed-proj-pt- :x x) (zerop x))
     ))
 
+(defun slow-ed-affine (pt)
+  (optima:ematch pt
+    ((ecc-pt-) pt)
+    ((ed-proj-pt- :x x :y y :z z)
+     (if (= z 1)
+         (make-ecc-pt
+          :x x
+          :y y)
+       ;; else
+       (with-mod *ed-q*
+         (make-ecc-pt
+          :x (m/ x z)
+          :y (m/ y z)))))))
+
 (defun ed-affine (pt)
   (if (eql *edcurve* *curve-ed3363*)
       (fast-ed3363-to-affine pt)
     ;; else
-    (optima:ematch pt
-      ((ecc-pt-) pt)
-      ((ed-proj-pt- :x x :y y :z z)
-       (if (= z 1)
-           (make-ecc-pt
-            :x x
-            :y y)
-         ;; else
-         (with-mod *ed-q*
-           (make-ecc-pt
-            :x (m/ x z)
-            :y (m/ y z))))))))
+    (slow-ed-affine pt)))
 
 (defun ed-projective (pt)
   (optima:ematch pt
@@ -519,7 +522,7 @@ THE SOFTWARE.
   ;; contageon to randomized projective coords for added security
   ;; (reset-blinders)
   ;; (tally :ecadd)
-  (if (and nil (eq *edcurve* *curve-ed3363*)) ;; looks like it is faster to stay in Lisp for the Adds.
+  (if (eq *edcurve* *curve-ed3363*) ;; looks like it is faster to stay in Lisp for the Adds.
       (fast-ed3363-add pt1 pt2)
     ;; else
     #|
@@ -618,27 +621,38 @@ THE SOFTWARE.
 ;; -------------------------------------------------
 ;; Support for C-level Ed3363 curve
 
-(defun xfer-foreign-to-lisp (fbuf nel &optional lbuf)
-  (let ((lbuf (or lbuf
-                  (make-ub8-vector nel))))
-    (dotimes (ix nel)
-      (setf (aref lbuf ix) (cffi:mem-aref fbuf :unsigned-char ix)))
-    lbuf))
+(defun xfer-to-c (val cvec)
+  ;; transfer val to C vector in 6 8-byte words
+  (declare (integer val))
+  (setf (cffi:mem-aref cvec :uint64 0) (ldb (byte 64   0) val)
+        (cffi:mem-aref cvec :uint64 1) (ldb (byte 64  64) val)
+        (cffi:mem-aref cvec :uint64 2) (ldb (byte 64 128) val)
+        (cffi:mem-aref cvec :uint64 3) (ldb (byte 64 192) val)
+        (cffi:mem-aref cvec :uint64 4) (ldb (byte 64 256) val)
+        (cffi:mem-aref cvec :uint64 5) (ldb (byte 64 320) val)))
 
-(defun xfer-lisp-to-foreign (lbuf fbuf nel)
-  (dotimes (ix nel)
-    (setf (cffi:mem-aref fbuf :unsigned-char ix) (aref lbuf ix))))
+(defun xfer-from-c (cvec)
+  ;; retrieve val from C vector in 6 8-byte words
+  (let ((v 0))
+    (declare (integer v))
+    (setf v (dpb (cffi:mem-aref cvec :uint64 0) (byte 64   0) v)
+          v (dpb (cffi:mem-aref cvec :uint64 1) (byte 64  64) v)
+          v (dpb (cffi:mem-aref cvec :uint64 2) (byte 64 128) v)
+          v (dpb (cffi:mem-aref cvec :uint64 3) (byte 64 192) v)
+          v (dpb (cffi:mem-aref cvec :uint64 4) (byte 64 256) v)
+          v (dpb (cffi:mem-aref cvec :uint64 5) (byte 64 320) v))
+    v))
 
 (defmacro with-fli-buffers (buffers &body body)
   (if (endp buffers)
       `(progn
          ,@body)
-    (destructuring-bind (name size &optional lisp-buf) (car buffers)
-      (if lisp-buf
-          `(cffi:with-foreign-pointer (,name ,size)
-             (xfer-lisp-to-foreign ,lisp-buf ,name ,size)
+    (destructuring-bind (name &optional lisp-val) (car buffers)
+      (if lisp-val
+          `(cffi:with-foreign-pointer (,name 48)
+             (xfer-to-c ,lisp-val ,name)
              (with-fli-buffers ,(cdr buffers) ,@body))
-        `(cffi:with-foreign-pointer (,name ,size)
+        `(cffi:with-foreign-pointer (,name 48)
            (with-fli-buffers ,(cdr buffers) ,@body))
         ))))
 
@@ -646,72 +660,6 @@ THE SOFTWARE.
 (editor:setup-indent "with-fli-buffers" 1)
 
 ;; -------------------------------------------------------------------
-
-(defun ed3363-pt-to-c (pt vecx vecy &optional vecz)
-  ;; pt should be Affine
-  ;;
-  ;; The C-code requires the point coordinates in little-endian order,
-  ;; and split into 56-bit components, per 64-bit cell
-  (multiple-value-bind (x y z)
-      (optima:ematch pt
-        ((ecc-pt- :x x :y y)
-         (values x y 1))
-        ((ed-proj-pt- :x x :y y :z z)
-         (assert vecz)
-         (values x y z)))
-    
-    (labels ((to-vec56 (val vec)
-               (declare (integer val)
-                        ((vector (unsigned-byte 8)) vec))
-               (um:nlet-tail iter ((ix  0)
-                                   (pos 0))
-                 (declare (fixnum ix pos))
-                 (cond ((>= ix 48)) ;; we're done here
-                       ((= 7 (mod ix 8)) ;; skip every 7th byte, filling with zero
-                        (setf (aref vec ix) 0)
-                        (iter (1+ ix) pos))
-                       (t
-                        ;; stuff the byte vector in little-endian order
-                        (setf (aref vec ix) (ldb (byte 8 pos) val))
-                        (iter (1+ ix) (+ pos 8)))
-                       ))))
-      (to-vec56 x vecx)
-      (to-vec56 y vecy)
-      (when vecz
-        (to-vec56 z vecz))
-      )))
-  
-
-(defun ed3363-pt-from-c (vecx vecy &optional vecz)
-  (labels ((rd64 (vec start)
-             (declare ((array (unsigned-byte 8)) vec)
-                      (fixnum start))
-             (let ((val 0))
-               (declare (integer val))
-               (loop for ix fixnum from start below (+ start 8)
-                     for pos fixnum from 0 by 8
-                     do
-                     (setf val (dpb (aref vec ix) (byte 8 pos) val)))
-               (if (logbitp 63 val)
-                   (- val #.(ash 1 64))
-                 val)))
-
-           (to-int (vec)
-             (with-mod *ed-q*
-               (m+ (rd64 vec 0)
-                   (ash (rd64 vec  8)  56)
-                   (ash (rd64 vec 16) 112)
-                   (ash (rd64 vec 24) 168)
-                   (ash (rd64 vec 32) 224)
-                   (ash (rd64 vec 40) 280)))))
-    
-    (make-ed-proj-pt
-     :x  (to-int vecx)
-     :y  (to-int vecy)
-     :z  (if vecz
-             (to-int vecz)
-           1))
-    ))
 
 (defun fast-ed3363-mul (pt n)
   (declare (integer n))
@@ -727,98 +675,56 @@ THE SOFTWARE.
                (ed-neutral-point-p pt)) pt)
           #||#
           (t
-           (let* ((pta  (ed-affine pt))
-                  (ptxv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                                    :element-type '(unsigned-byte 8)))
-                  (ptyv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                                    :element-type '(unsigned-byte 8)))
-                  (ptzv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                                    :element-type '(unsigned-byte 8)))
-                  (wv   (make-array 42 ;; 42 bytes of little-endian encoded 336-bit integer
-                                    :element-type '(unsigned-byte 8))))
-             
-             (ed3363-pt-to-c pta ptxv ptyv) ;; affine in...
+           (let* ((pta  (ed-affine pt)))
+             (with-fli-buffers ((cptx (ecc-pt-x pta))
+                                (cpty (ecc-pt-y pta))
+                                (cptz)
+                                (cwv  nn))
 
-             ;; send in N as little-endian 42-byte encoding
-             (loop for ix  from 0 below 42
-                   for pos from 0 by 8
-                   do
-                   (setf (aref wv ix) (ldb (byte 8 pos) nn)))
-             
-             (with-fli-buffers ((cptx 48 ptxv)
-                                (cpty 48 ptyv)
-                                (cptz 48)
-                                (cwv  42 wv))
                (_Ed3363-affine-mul cptx cpty cptz cwv)
                
-               (xfer-foreign-to-lisp cptx 48 ptxv) ;; projective out...
-               (xfer-foreign-to-lisp cpty 48 ptyv)
-               (xfer-foreign-to-lisp cptz 48 ptzv))
-             
-             (ed3363-pt-from-c ptxv ptyv ptzv)))
+               (make-ed-proj-pt
+                :x (xfer-from-c cptx)
+                :y (xfer-from-c cpty)
+                :z (xfer-from-c cptz))
+               )))
           )))
 
 (defun fast-ed3363-add (pt1 pt2)
   ;; Okay to use, but about 3-4x slower than just staying in Lisp to do projective adding
-  (let* ((pt1xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                            :element-type '(unsigned-byte 8)))
-         (pt1yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                            :element-type '(unsigned-byte 8)))
-         (pt1zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                            :element-type '(unsigned-byte 8)))
-         (pt2xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                            :element-type '(unsigned-byte 8)))
-         (pt2yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                            :element-type '(unsigned-byte 8)))
-         (pt2zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                            :element-type '(unsigned-byte 8))))
-    
-    (ed3363-pt-to-c pt1 pt1xv pt1yv pt1zv) ;; projective in...
-    (ed3363-pt-to-c pt2 pt2xv pt2yv pt2zv)
-
-    (with-fli-buffers ((cpt1x 48 pt1xv)
-                       (cpt1y 48 pt1yv)
-                       (cpt1z 48 pt1zv)
-                       (cpt2x 48 pt2xv)
-                       (cpt2y 48 pt2yv)
-                       (cpt2z 48 pt2zv))
+  (let ((pt1 (ed-projective pt1))
+        (pt2 (ed-projective pt2)))
+         
+    (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1))
+                       (cpt1yv (ed-proj-pt-y pt1))
+                       (cpt1zv (ed-proj-pt-z pt1))
+                       (cpt2xv (ed-proj-pt-x pt2))
+                       (cpt2yv (ed-proj-pt-y pt2))
+                       (cpt2zv (ed-proj-pt-z pt2)))
       
-      (_Ed3363-projective-add cpt1x cpt1y cpt1z cpt2x cpt2y cpt2z)
-               
-      (xfer-foreign-to-lisp cpt1x 48 pt1xv) ;; projective out...
-      (xfer-foreign-to-lisp cpt1y 48 pt1yv)
-      (xfer-foreign-to-lisp cpt1z 48 pt1zv))
-             
-    (ed3363-pt-from-c pt1xv pt1yv pt1zv)
-    ))
+      (_Ed3363-projective-add cpt1xv cpt1yv cpt1zv
+                              cpt2xv cpt2yv cpt2zv)
+      
+      (make-ed-proj-pt
+       :x (xfer-from-c cpt1xv)
+       :y (xfer-from-c cpt1yv)
+       :z (xfer-from-c cpt1zv))
+      )))
 
 (defun fast-ed3363-to-affine (pt)
   (if (ecc-pt-p pt)
       pt
     ;; else
-    (let* ((pt1xv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                              :element-type '(unsigned-byte 8)))
-           (pt1yv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                              :element-type '(unsigned-byte 8)))
-           (pt1zv (make-array 48 ;; 6 groups of 56-bit ints in little-endian order for Intel
-                              :element-type '(unsigned-byte 8))))
+    (with-fli-buffers ((cptx (ed-proj-pt-x pt))
+                       (cpty (ed-proj-pt-y pt))
+                       (cptz (ed-proj-pt-z pt)))
+
+      (_Ed3363-to-affine cptx cpty cptz)
       
-      (ed3363-pt-to-c pt pt1xv pt1yv pt1zv) ;; projective in...
-      
-      (with-fli-buffers ((cpt1x 48 pt1xv)
-                         (cpt1y 48 pt1yv)
-                         (cpt1z 48 pt1zv))
-        
-        (_Ed3363-to-affine cpt1x cpt1y cpt1z)
-        
-        (xfer-foreign-to-lisp cpt1x 48 pt1xv) ;; affine out...
-        (xfer-foreign-to-lisp cpt1y 48 pt1yv))
-      
-      (let ((pt (ed3363-pt-from-c pt1xv pt1yv)))
-        (make-ecc-pt
-         :x (ed-proj-pt-x pt)
-         :y (ed-proj-pt-y pt))
-        ))))
+      (make-ecc-pt
+       :x (xfer-from-c cptx)
+       :y (xfer-from-c cpty))
+      )))
 
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than

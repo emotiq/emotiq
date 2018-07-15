@@ -30,11 +30,21 @@ THE SOFTWARE.
 // for initial interface testing...
 
 extern "C"
-void Ed3363_affine_mul(unsigned char* ptx, unsigned char* pty, unsigned-char* ptz,
+void Ed3363_affine_mul(unsigned char* ptx,
+		       unsigned char* pty,
+		       unsigned-char* ptz,
 		       unsigned char* nv);
-void Ed3363_projective_add(unsigned char* ptx, unsigned char* pty,
-			   unsigned char* qtx, unsigned char* qty);
-void Ed3363_to_affine(unsigned char* lp1x, unsigned char* lp1y, unsigned char* lp1z);
+
+void Ed3363_projective_add(unsigned char* lp1x,
+			   unsigned char* lp1y,
+			   unsigned char* lp1z,
+			   unsigned char* lp2x,
+			   unsigned char* lp2y,
+			   unsigned char* lp2z);
+
+void Ed3363_to_affine(unsigned char* lpx,
+		      unsigned char* lpy,
+		      unsigned char* lpz);
 }
 
 // -- end of ed3363_intf.h -- //
