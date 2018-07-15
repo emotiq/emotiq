@@ -792,7 +792,8 @@ void gstore(type64 *w, unsigned char* v)
   pv[0] = w[4];
   pv = (type64*)&v[35];
   pv[0] = w[5];
-  v[42] = v[43] = v[44] = v[45] = v[46] = v[47] = 0;
+  *(int32_t*)&v[42] = 0;
+  *(int16_t*)&v[46] = 0;
 }
 
 extern "C"
