@@ -677,7 +677,7 @@ THE SOFTWARE.
                (ed-neutral-point-p pt)) pt)
           #||#
           (t
-           (let* ((pta  (ed-affine pt)))
+           (let* ((pta  (ed-affine pt))) ;; affine in...
              (with-fli-buffers ((cptx (ecc-pt-x pta))
                                 (cpty (ecc-pt-y pta))
                                 (cptz)
@@ -685,7 +685,7 @@ THE SOFTWARE.
 
                (_Ed3363-affine-mul cptx cpty cptz cwv)
                
-               (make-ed-proj-pt
+               (make-ed-proj-pt ;; projective out...
                 :x (xfer-from-c cptx)
                 :y (xfer-from-c cpty)
                 :z (xfer-from-c cptz))
@@ -693,7 +693,7 @@ THE SOFTWARE.
           )))
 
 (defun fast-ed3363-add (pt1 pt2)
-  (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1))
+  (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1)) ;; projective in...
                      (cpt1yv (ed-proj-pt-y pt1))
                      (cpt1zv (ed-proj-pt-z pt1))
                      (cpt2xv (ed-proj-pt-x pt2))
@@ -703,7 +703,7 @@ THE SOFTWARE.
     (_Ed3363-projective-add cpt1xv cpt1yv cpt1zv
                             cpt2xv cpt2yv cpt2zv)
     
-    (make-ed-proj-pt
+    (make-ed-proj-pt ;; projective out...
      :x (xfer-from-c cpt1xv)
      :y (xfer-from-c cpt1yv)
      :z (xfer-from-c cpt1zv))
@@ -713,13 +713,13 @@ THE SOFTWARE.
   (if (ecc-pt-p pt)
       pt
     ;; else
-    (with-fli-buffers ((cptx (ed-proj-pt-x pt))
+    (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
                        (cpty (ed-proj-pt-y pt))
                        (cptz (ed-proj-pt-z pt)))
 
       (_Ed3363-to-affine cptx cpty cptz)
       
-      (make-ecc-pt
+      (make-ecc-pt ;; affine out...
        :x (xfer-from-c cptx)
        :y (xfer-from-c cpty))
       )))
