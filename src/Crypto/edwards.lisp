@@ -660,13 +660,11 @@ THE SOFTWARE.
       `(progn
          ,@body)
     (destructuring-bind (name &optional lisp-val) (car buffers)
-      (if lisp-val
-          `(cffi:with-foreign-pointer (,name 48)
-             (xfer-to-c ,lisp-val ,name)
-             (with-fli-buffers ,(cdr buffers) ,@body))
-        `(cffi:with-foreign-pointer (,name 48)
-           (with-fli-buffers ,(cdr buffers) ,@body))
-        ))))
+      `(cffi:with-foreign-pointer (,name 48)
+         ,@(when lisp-val
+             `((xfer-to-c ,lisp-val ,name)))
+         (with-fli-buffers ,(cdr buffers) ,@body))
+      )))
 
 #+:LISPWORKS
 (editor:setup-indent "with-fli-buffers" 1)
