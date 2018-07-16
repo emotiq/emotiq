@@ -992,13 +992,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defparameter *minimum-spend-amount* 0) ; ---!!! review!!
-(defparameter *maximmum-spend-amount* (initial-total-coin-amount))
+(defparameter *maximum-spend-amount* (initial-total-coin-amount))
 
 (defun in-legal-money-range-p (amount)
   (and (>= amount *minimum-spend-amount*)
-       (<= amount *maximmum-spend-amount*)))
+       (<= amount *maximum-spend-amount*)))
 
+(defun in-legal-stake-range-p (amount)
+  (in-legal-money-range-p amount))
 
+;; ---!!! Above forms need review!!  -mhd, 7/5/18
 
 
 ;;; The next two values to initialize the id and index of the input for a coinbase transaction
