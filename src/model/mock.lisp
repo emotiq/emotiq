@@ -18,13 +18,10 @@
              (setf i (1+ i))))
       (loop
          :do (let ((notification
-                    `(:object 
-                      (:method . "consensus")
-                      (:params .
-                               (:object
-                                (:epoch . ,epoch)
-                                (:local-epoch . ,local-epoch)
-                                (:synchronized . ,(cl-json:json-bool (= local-epoch epoch))))))))
+                    `(:object
+                      (:epoch . ,epoch)
+                      (:local-epoch . ,local-epoch)
+                      (:synchronized . ,(cl-json:json-bool (= local-epoch epoch))))))
                (funcall notify-hook notification))
          :do (sleep (random 5))
          :do (advance)))))

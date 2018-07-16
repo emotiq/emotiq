@@ -1,4 +1,5 @@
-(defsystem websocket)
+(defsystem websocket
+  :depends-on (websocket/wallet))
 
 (defsystem websocket/research/websocket-driver
   :depends-on (websocket-driver
@@ -25,7 +26,7 @@
                         :pathname "./"
                         :depends-on (package)
                         :components ((:file "async")))
-               (:module source
+               (:module serve
                         :pathname "./"
                         :depends-on (async)
                         :components ((:file "serve")))))
