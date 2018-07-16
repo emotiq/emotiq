@@ -31,6 +31,7 @@ THE SOFTWARE.
   :depends-on (emotiq/logging
                ironclad
                actors
+               emotiq/tracker
                emotiq/config
                core-crypto
                crypto-pairings
