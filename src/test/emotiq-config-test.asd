@@ -7,7 +7,7 @@
                emotiq/config)
   :perform (test-op (o s)
                     (symbol-call :lisp-unit :run-tests
-                                 :all :emotiq/config/t))
+                                 :all :emotiq-config-test))
   :components ((:module package
                 :pathname "./"
                 :components ((:file "package")))
