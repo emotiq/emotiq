@@ -42,7 +42,9 @@
             ((string= method "subscribe")
            ;;; FIXME: locking under load
              (if (find "consensus" (alexandria:assoc-value request :params) :test 'string=)
-                   (add-client client response)
+                 (progn
+                   (add-client client)
+                   (setf result '(:true)))
                  ;; error
                  (setf result nil
                        error `(:object (:code . -32602)
@@ -72,7 +74,7 @@
                (setf result
                      (emotiq/wallet:submit-transaction
                       transaction
-                      :name name
+                      :wallet-name name
                       :address address))))
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))

@@ -18,8 +18,10 @@
              (setf i (1+ i))))
       (loop
          :do (let ((notification
-                    `(:object 
+                    `(:object
+                      (:jsonrpc . "2.0")
                       (:method . "consensus")
+                      (:id . ,nil)
                       (:params .
                                (:object
                                 (:epoch . ,epoch)

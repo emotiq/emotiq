@@ -3,16 +3,13 @@
 (defvar *consensus-thread* nil)
 (defvar *consensus-clients*  nil)
 
-(defun add-client (client response)
-  "Add a new websocket CLIENT as a subscriber to the 'consensus' service
-
-Mutates RESPONSE to be an affirmative response to subscribing."
+(defun add-client (client)
+  "Add a new websocket CLIENT as a subscriber to the 'consensus' service"
   (pushnew client *consensus-clients*)
   (unless *consensus-thread*
     (emotiq:note "Spawning thread to mock consensus replies.")
     (bt:make-thread (lambda () (model/wallet:mock #'notify-clients)))
-    (setf *consensus-thread* t))
-  (setf response `(:true)))
+    (setf *consensus-thread* t)))
 
 (defun remove-client (client)
   "Removes the websocket CLIENT from the 'consensus' service"
@@ -32,8 +29,10 @@ Mutates RESPONSE to be an affirmative response to subscribing."
             #+(or)
             (note "~&Notifying client ~a with ~a~&"
                   client
-                  notification)
+                  message)
             (send-as-json client notification))))))
+
+
 
 
 
