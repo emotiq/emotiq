@@ -748,23 +748,24 @@ void win4(unsigned char* nv, int *w)
 void gfetch(unsigned char* v, type64 *w)
 {
   // fetch 56-bit words from consecutively stored 64-bit words in v.
+  // Assumes input value is < 2^336
+  
   type64 *pv;
-  type64 t0, t1;
+  uint64_t t1, t2;
   
   pv = (type64*)v;
-  t0 = pv[0] & bot56bits;
-  pv = (type64*)&v[7];
-  w[1] = pv[0] & bot56bits;
-  pv = (type64*)&v[14];
-  w[2] = pv[0] & bot56bits;
-  pv = (type64*)&v[21];
-  w[3] = pv[0] & bot56bits;
-  pv = (type64*)&v[28];
-  w[4] = pv[0] & bot56bits;
-  pv = (type64*)&v[35];
   t1 = pv[0];
-  w[5] = t1 & bot56bits;
-  w[0] = (t0 + (3 * (t1 >> 56)));
+  w[0] = t1 & bot56bits;
+  t2 = pv[1];
+  w[1] = ((t2 <<  8) | (t1 >> 56)) & bot56bits;
+  t1 = pv[2];
+  w[2] = ((t1 << 16) | (t2 >> 48)) & bot56bits;
+  t2 = pv[3];
+  w[3] = ((t2 << 24) | (t1 >> 40)) & bot56bits;
+  t1 = pv[4];
+  w[4] = ((t1 << 32) | (t2 >> 32)) & bot56bits;
+  t2 = pv[5];
+  w[5] = ((t2 << 40) | (t1 >> 24)) & bot56bits;
 }
 
 void scrn(type64 *w)
@@ -778,22 +779,22 @@ void gstore(type64 *w, unsigned char* v)
 {
   // store 56-bit words into consecutively stored 64-bit words in v.
   type64 *pv;
-
+  uint64_t t1,t2;
+  
   scrn(w);
+  t1 = w[0];
+  t2 = w[1];
   pv = (type64*)v;
-  pv[0] = w[0];
-  pv = (type64*)&v[7];
-  pv[0] = w[1];
-  pv = (type64*)&v[14];
-  pv[0] = w[2];
-  pv = (type64*)&v[21];
-  pv[0] = w[3];
-  pv = (type64*)&v[28];
-  pv[0] = w[4];
-  pv = (type64*)&v[35];
-  pv[0] = w[5];
-  *(int32_t*)&v[42] = 0;
-  *(int16_t*)&v[46] = 0;
+  pv[0] = t1 | (t2 << 56);
+  t1 = w[2];
+  pv[1] = (t2 >>  8) | (t1 << 48);
+  t2 = w[3];
+  pv[2] = (t1 >> 16) | (t2 << 40);
+  t1 = w[4];
+  pv[3] = (t2 >> 24) | (t1 << 32);
+  t2 = w[5];
+  pv[4] = (t1 >> 32) | (t2 << 24);
+  pv[5] = (t2 >> 40);
 }
 
 extern "C"
