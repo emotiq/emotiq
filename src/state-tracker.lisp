@@ -61,6 +61,12 @@
       (push (cons :leader (stringify-node (system-leader *state*))) result)
       result)))
 
-(defun stringify-node (n)
-  "return some string representation for given node"
-  (cosi-simgen::node-ip n)) ;; whatever is most appropriate - is node-ip is useful, then export it
+(defun stringify-node (node)
+  "Return some string representation for given NODE"
+  (let ((cosi-simgen-node-ip (and (find-package :cosi-simgen)
+                                  (intern "NODE-IP" :cosi-simgen))))
+    (if (not (functionp cosi-simgen-node-ip))
+        (format nil "~a" node)
+        ;; whatever is most appropriate - is node-ip is useful, then export it
+        (funcall cosi-simgen-node-ip node))))
+
