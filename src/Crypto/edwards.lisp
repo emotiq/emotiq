@@ -226,7 +226,7 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------
 
-(defvar *edcurve* *curve-Ed3363*)
+(defvar *edcurve* *curve1174*)
 
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
 (define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
@@ -270,7 +270,12 @@ THE SOFTWARE.
       libEd3363 
     (:darwin "libLispEd3363.dylib")
     (:linux "libLispEd3363.so")
-    (t (:default "libLispEd3363"))))
+    (t (:default "libLispEd3363")))
+  (cffi:define-foreign-library
+      libCurve1174
+    (:darwin "libLispCurve1174.dylib")
+    (:linux "libLispCurve1174.so")
+    (t (:default "libLispCurve1174"))))
 
 (defun load-production-dlls ()
   "loads the DLLs (.so and .dylib) at runtime, from the current directory"
@@ -278,20 +283,25 @@ THE SOFTWARE.
    libEd3363
    (:darwin "libLispEd3363.dylib")
    (:linux  "./libLispEd3363.so")
-   (t (:default "libLispEd3363"))))
+   (t (:default "libLispEd3363")))
+  (cffi:define-foreign-library
+   libCurve1174
+   (:darwin "libLispCurve1174.dylib")
+   (:linux  "./libLispCurve1174.so")
+   (t (:default "libLispCurve1174"))))
 
 (defun load-dlls()
   "load the dev or production dlls at runtime"
   (if (emotiq:production-p)
       (load-production-dlls)
       (load-dev-dlls))
-  (cffi:use-foreign-library libEd3363))
+  (cffi:use-foreign-library libEd3363)
+  (cffi:use-foreign-library libCurve1174))
 
 (defun init-Ed3363 ()
   (load-dlls))
 
 ;; -----------------------------------------------------------------------
-;; Init interface - this must be performed first
 
 (cffi:defcfun ("Ed3363_affine_mul" _Ed3363-affine-mul) :void
   (ptx         :pointer :unsigned-char)
@@ -314,6 +324,33 @@ THE SOFTWARE.
   (pt2z         :pointer :unsigned-char))
 
 (cffi:defcfun ("Ed3363_to_affine" _Ed3363-to-affine) :void
+  (pt1x         :pointer :unsigned-char)
+  (pt1y         :pointer :unsigned-char)
+  (pt1z         :pointer :unsigned-char))
+
+;; -----------------------------------------------------------------------
+
+(cffi:defcfun ("Curve1174_affine_mul" _Curve1174-affine-mul) :void
+  (ptx         :pointer :unsigned-char)
+  (pty         :pointer :unsigned-char)
+  (ptz         :pointer :unsigned-char)
+  (nv          :pointer :unsigned-char))
+
+(cffi:defcfun ("Curve1174_projective_mul" _Curve1174-projective-mul) :void
+  (ptx         :pointer :unsigned-char)
+  (pty         :pointer :unsigned-char)
+  (ptz         :pointer :unsigned-char)
+  (nv          :pointer :unsigned-char))
+
+(cffi:defcfun ("Curve1174_projective_add" _Curve1174-projective-add) :void
+  (pt1x         :pointer :unsigned-char)
+  (pt1y         :pointer :unsigned-char)
+  (pt1z         :pointer :unsigned-char)
+  (pt2x         :pointer :unsigned-char)
+  (pt2y         :pointer :unsigned-char)
+  (pt2z         :pointer :unsigned-char))
+
+(cffi:defcfun ("Curve1174_to_affine" _Curve1174-to-affine) :void
   (pt1x         :pointer :unsigned-char)
   (pt1y         :pointer :unsigned-char)
   (pt1z         :pointer :unsigned-char))
@@ -352,11 +389,12 @@ THE SOFTWARE.
   (optima:ematch pt
     ((ecc-pt-) pt)
     ((ed-proj-pt-)
-     (if (eql *edcurve* *curve-ed3363*)
-         (fast-ed3363-to-affine pt)
-       ;; else
-       (slow-to-affine pt)))
-    ))
+     (cond ((eql *edcurve* *curve-ed3363*)
+            (fast-ed3363-to-affine pt))
+           ((eql *edcurve* *curve1174*)
+            (fast-curve1174-to-affine pt))
+           (t  (slow-to-affine pt))
+           ))))
     
 (defun ed-projective (pt)
   (optima:ematch pt
@@ -534,20 +572,16 @@ THE SOFTWARE.
   ;; (tally :ecadd)
   (let ((ppt1 (ed-projective pt1))  ;; projective add is so much faster than affine add
         (ppt2 (ed-projective pt2))) ;; so it pays to make the conversion
-    (if (eq *edcurve* *curve-ed3363*)
-        (fast-ed3363-add ppt1 ppt2)
-    ;; else
-    #|
-    (multiple-value-bind (upt1 upt2)
-        (ed-unify-pair-type pt1 pt2)
-      (cond ((ecc-pt-p upt1) (ed-affine-add     upt1 upt2))
-            (t               (ed-projective-add upt1 upt2))
-            ))
-    |#
-    ;; since projective add takes about 6 usec, and affine add takes
-    ;; about 40 usec, it pays to always convert to projective coords,
-    ;; especially since it is so cheap to do so.
-    (ed-projective-add ppt1 ppt2))))
+    (cond ((eq *edcurve* *curve-ed3363*)
+           (fast-ed3363-add ppt1 ppt2))
+          ((eq *edcurve* *curve1174*)
+           (fast-curve1174-add ppt1 ppt2))
+          (t 
+           ;; since projective add takes about 6 usec, and affine add takes
+           ;; about 40 usec, it pays to always convert to projective coords,
+           ;; especially since it is so cheap to do so.
+           (ed-projective-add ppt1 ppt2))
+          )))
 
 (defun ed-negate (pt)
   (with-mod *ed-q*
@@ -636,23 +670,39 @@ THE SOFTWARE.
 (defun xfer-to-c (val cvec)
   ;; transfer val to C vector in 6 8-byte words
   (declare (integer val))
-  (setf (cffi:mem-aref cvec :uint64 0) (ldb (byte 64   0) val)
-        (cffi:mem-aref cvec :uint64 1) (ldb (byte 64  64) val)
-        (cffi:mem-aref cvec :uint64 2) (ldb (byte 64 128) val)
-        (cffi:mem-aref cvec :uint64 3) (ldb (byte 64 192) val)
-        (cffi:mem-aref cvec :uint64 4) (ldb (byte 64 256) val)
-        (cffi:mem-aref cvec :uint64 5) (ldb (byte 64 320) val)))
+  (cond ((eql *edcurve* *curve-ed3363*)
+         (setf (cffi:mem-aref cvec :uint64 0) (ldb (byte 64   0) val)
+               (cffi:mem-aref cvec :uint64 1) (ldb (byte 64  64) val)
+               (cffi:mem-aref cvec :uint64 2) (ldb (byte 64 128) val)
+               (cffi:mem-aref cvec :uint64 3) (ldb (byte 64 192) val)
+               (cffi:mem-aref cvec :uint64 4) (ldb (byte 64 256) val)
+               (cffi:mem-aref cvec :uint64 5) (ldb (byte 64 320) val)))
+        ((eql *edcurve* *curve1174*)
+         (setf (cffi:mem-aref cvec :uint64 0) (ldb (byte 64   0) val)
+               (cffi:mem-aref cvec :uint64 1) (ldb (byte 64  64) val)
+               (cffi:mem-aref cvec :uint64 2) (ldb (byte 64 128) val)
+               (cffi:mem-aref cvec :uint64 3) (ldb (byte 64 192) val)
+               (cffi:mem-aref cvec :uint64 4) (ldb (byte 64 256) val)))
+        ))
 
 (defun xfer-from-c (cvec)
   ;; retrieve val from C vector in 6 8-byte words
   (let ((v 0))
     (declare (integer v))
-    (setf v (dpb (cffi:mem-aref cvec :uint64 0) (byte 64   0) v)
-          v (dpb (cffi:mem-aref cvec :uint64 1) (byte 64  64) v)
-          v (dpb (cffi:mem-aref cvec :uint64 2) (byte 64 128) v)
-          v (dpb (cffi:mem-aref cvec :uint64 3) (byte 64 192) v)
-          v (dpb (cffi:mem-aref cvec :uint64 4) (byte 64 256) v)
-          v (dpb (cffi:mem-aref cvec :uint64 5) (byte 64 320) v))
+    (cond ((eql *edcurve* *curve-ed3363*)
+           (setf v (dpb (cffi:mem-aref cvec :uint64 0) (byte 64   0) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 1) (byte 64  64) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 2) (byte 64 128) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 3) (byte 64 192) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 4) (byte 64 256) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 5) (byte 64 320) v)))
+          ((eql *edcurve* *curve1174*)
+           (setf v (dpb (cffi:mem-aref cvec :uint64 0) (byte 64   0) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 1) (byte 64  64) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 2) (byte 64 128) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 3) (byte 64 192) v)
+                 v (dpb (cffi:mem-aref cvec :uint64 4) (byte 64 256) v)))
+          )
     (with-mod *ed-q*
       (mmod v))))
 
@@ -734,16 +784,103 @@ THE SOFTWARE.
     ))
 
 (defun fast-ed3363-to-affine (pt)
-  (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
-                     (cpty (ed-proj-pt-y pt))
-                     (cptz (ed-proj-pt-z pt)))
+  (cond ((= 1 (ed-proj-pt-z pt))
+         (make-ecc-pt
+          :x (ed-proj-pt-x pt)
+          :y (ed-proj-pt-y pt)))
+        (t 
+         (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
+                            (cpty (ed-proj-pt-y pt))
+                            (cptz (ed-proj-pt-z pt)))
+           
+           (_Ed3363-to-affine cptx cpty cptz)
+           
+           (make-ecc-pt
+            :x (xfer-from-c cptx) ;; affine out...
+            :y (xfer-from-c cpty))
+           ))
+        ))
+
+;; -------------------------------------------------------------------
+
+(defun fast-curve1174-mul (pt n)
+  (declare (integer n))
+  ;; (tally :ecmul)
+  (let ((nn  (with-mod *ed-r*
+               (mmod n))))
+    (declare (integer nn))
     
-    (_Ed3363-to-affine cptx cpty cptz)
+    (cond ((zerop nn) (ed-neutral-point))
+
+          #||#
+          ((or (= nn 1)
+               (ed-neutral-point-p pt)) pt)
+          #||#
+          
+          ((ecc-pt-p pt)
+           (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; affine in...
+                              (cpty (ecc-pt-y pt))
+                              (cptz)
+                              (cwv  nn))
+             
+             (_Curve1174-affine-mul cptx cpty cptz cwv)
+             
+             (make-ed-proj-pt
+              :x (xfer-from-c cptx) ;; projective out...
+              :y (xfer-from-c cpty)
+              :z (xfer-from-c cptz))
+             ))
+          
+          (t
+           ;; about a 10% speed penalty over using affine points
+           (with-fli-buffers ((cptx (ed-proj-pt-x pt))  ;; projective in...
+                              (cpty (ed-proj-pt-y pt))
+                              (cptz (ed-proj-pt-z pt))
+                              (cwv  nn))
+             
+             (_Curve1174-projective-mul cptx cpty cptz cwv)
+             
+             (make-ed-proj-pt
+              :x (xfer-from-c cptx) ;; projective out...
+              :y (xfer-from-c cpty)
+              :z (xfer-from-c cptz))
+             ))
+          )))
+
+(defun fast-curve1174-add (pt1 pt2)
+  (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1)) ;; projective in...
+                     (cpt1yv (ed-proj-pt-y pt1))
+                     (cpt1zv (ed-proj-pt-z pt1))
+                     (cpt2xv (ed-proj-pt-x pt2))
+                     (cpt2yv (ed-proj-pt-y pt2))
+                     (cpt2zv (ed-proj-pt-z pt2)))
     
-    (make-ecc-pt
-     :x (xfer-from-c cptx) ;; affine out...
-     :y (xfer-from-c cpty))
+    (_Curve1174-projective-add cpt1xv cpt1yv cpt1zv
+                               cpt2xv cpt2yv cpt2zv)
+    
+    (make-ed-proj-pt ;; projective out...
+     :x (xfer-from-c cpt1xv)
+     :y (xfer-from-c cpt1yv)
+     :z (xfer-from-c cpt1zv))
     ))
+
+(defun fast-curve1174-to-affine (pt)
+  (cond ((= 1 (ed-proj-pt-z pt))
+         (make-ecc-pt
+          :x (ed-proj-pt-x pt)
+          :y (ed-proj-pt-y pt)))
+        (t 
+         (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
+                            (cpty (ed-proj-pt-y pt))
+                            (cptz (ed-proj-pt-z pt)))
+           
+           (_Curve1174-to-affine cptx cpty cptz)
+           
+           (make-ecc-pt
+            :x (xfer-from-c cptx) ;; affine out...
+            :y (xfer-from-c cpty))
+           ))
+        ))
 
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
@@ -874,9 +1011,12 @@ THE SOFTWARE.
   (let* ((alpha  (* *ed-r* *ed-h* (field-random #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  (if (eq *edcurve* *curve-ed3363*)
-      (fast-ed3363-mul pt n)
-    (ed-basic-mul pt n)))
+  (cond ((eq *edcurve* *curve-ed3363*)
+         (fast-ed3363-mul pt n))
+        ((eq *edcurve* *curve1174*)
+         (fast-curve1174-mul pt n))
+        (t (ed-basic-mul pt n))
+        ))
 
 (defun ed-div (pt n)
   (with-mod *ed-r*

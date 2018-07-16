@@ -16,6 +16,7 @@
 #include <iostream>
 #include <ctime>
 #include <inttypes.h>
+#include "ed3363_intf.h"
 
 #define WINDOW 4
 #define PANES  84
