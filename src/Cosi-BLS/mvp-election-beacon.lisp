@@ -292,10 +292,22 @@ based on their relative stake"
       ;; *local-epoch* will also not have
       ;; changed
       (unless (get-witness-list)
-        (set-nodes (emotiq/config:get-stakes))
-        (setf (node-stake node) ;; probably never used elsewhere...
-              (second (assoc (node-pkey node) (get-witness-list)
-                             :test 'int=))))
+        (unless (node-blockchain node)
+          (error "There is no blockchain. Cannot continue."))
+        (let* ((genesis-block (first (node-blockchain node)))
+               (witnesses-and-stakes
+                 (cosi/proofs:block-witnesses-and-stakes genesis-block))
+               (node-stake
+                 (second (assoc (node-pkey node) witnesses-and-stakes
+                                :test 'int=))))
+
+          (when (null node-stake)
+            (error "Stake is nil for this node. Cannot continue."))
+          (when (cosi/proofs/newtx:in-legal-stake-range-p stake)
+            (error "Stake value ~s is not valid for a stake." stake))
+
+          (set-nodes witnesses-and-stakes)
+          (setf (node-stake node) node-stake)))
       
       (when (= *local-epoch* old-epoch) ;; anything changed?
         (call-for-new-election)))
