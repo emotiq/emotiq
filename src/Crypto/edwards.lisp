@@ -426,26 +426,26 @@ THE SOFTWARE.
       ((ecc-pt- :x x1 :y y1)
        (optima:ematch pt2
          ((ecc-pt- :x x2 :y y2)
-          (and (= x1 x2)
-               (= y1 y2)))
+          (and (m= x1 x2)
+               (m= y1 y2)))
          ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (and (= (m* x1 z2)
-                  x2)
-               (= (m* y1 z2)
-                  y2)))
+          (and (m= (* x1 z2)
+                   x2)
+               (m= (* y1 z2)
+                   y2)))
          ))
       ((ed-proj-pt- :x x1 :y y1 :z z1)
        (optima:ematch pt2
          ((ecc-pt- :x x2 :y y2)
-          (and (= (m* x2 z1)
-                  x1)
-               (= (m* y2 z1)
-                  y1)))
+          (and (m= (* x2 z1)
+                   x1)
+               (m= (* y2 z1)
+                   y1)))
          ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (and (= (m* x1 z2)
-                  (m* x2 z1))
-               (= (m* y1 z2)
-                  (m* y2 z1))))
+          (and (m= (* x1 z2)
+                   (* x2 z1))
+               (m= (* y1 z2)
+                   (* y2 z1))))
          ))
       )))
 
@@ -454,11 +454,11 @@ THE SOFTWARE.
     (optima:ematch pt
       ((ecc-pt- :x x :y y)
        ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
-       (= (m+ (m* x x)
-              (m* y y))
-          (m* *ed-c* *ed-c*
+       (m= (+ (* x x)
+              (* y y))
+           (* *ed-c* *ed-c*
               (1+ (m* *ed-d* x x y y)))
-          ))
+           ))
       ((ed-proj-pt- :x x :y y :z z)
        (= (m* z z (+ (m* x x) (m* y y)))
           (m* *ed-c* *ed-c*
@@ -653,7 +653,8 @@ THE SOFTWARE.
           v (dpb (cffi:mem-aref cvec :uint64 3) (byte 64 192) v)
           v (dpb (cffi:mem-aref cvec :uint64 4) (byte 64 256) v)
           v (dpb (cffi:mem-aref cvec :uint64 5) (byte 64 320) v))
-    v))
+    (with-mod *ed-q*
+      (mmod v))))
 
 (defmacro with-fli-buffers (buffers &body body)
   (if (endp buffers)
@@ -698,7 +699,8 @@ THE SOFTWARE.
               :z (xfer-from-c cptz))
              ))
           
-          (t 
+          (t
+           ;; about a 10% speed penalty over using affine points
            (with-fli-buffers ((cptx (ed-proj-pt-x pt))  ;; projective in...
                               (cpty (ed-proj-pt-y pt))
                               (cptz (ed-proj-pt-z pt))
@@ -949,7 +951,7 @@ THE SOFTWARE.
            (y     (if (eql sgn (ldb (byte 1 0) y))
                       y
                     (m- y))))
-      (assert (= yy (m* y y))) ;; check that yy was a square
+      (assert (m= yy (* y y))) ;; check that yy was a square
       ;; if yy was not a square then y^2 will equal -yy, not yy.
       (ed-validate-point
        (make-ed-proj-pt
@@ -1267,8 +1269,8 @@ we are done. Else re-probe with (X^2 + 1)."
                      (scm1       (m* s (- c 1))))
             (when (and (quadratic-residue-p etarp1sqm1)
                        (or (not (zerop (m+ etar 2)))
-                           (= x (m/ (m* 2 scm1 (mchi c))
-                                    r))))
+                           (m= x (m/ (m* 2 scm1 (mchi c))
+                                     r))))
               (um:bind* ((xx    (- (m^ etarp1sqm1 (floor (1+ *ed-q*) 4))
                                     etarp1))
                          (z     (mchi (m* scm1

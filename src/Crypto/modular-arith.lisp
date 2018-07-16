@@ -158,6 +158,11 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------------
 
+(defun m= (a b)
+  (= (mmod a) (mmod b)))
+
+;; ------------------------------------------------------------
+
 (defun m* (arg &rest args)
   (declare (integer arg))
   (dolist (opnd args)

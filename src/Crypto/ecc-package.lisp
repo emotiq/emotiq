@@ -39,6 +39,7 @@ THE SOFTWARE.
   (:export
    :with-mod
    :reset-blinders
+   :m=
    :m^
    :msqrt
    :m+
