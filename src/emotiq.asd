@@ -25,7 +25,7 @@
                 :pathname "./"
                 :components ((:file "production")))))
 
-(defsystem "emotiq/utilities"  
+(defsystem "emotiq/utilities"
   :depends-on (emotiq/delivery
                ironclad
                bordeaux-threads)
@@ -102,7 +102,7 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "state-tracker")))))
-                                       
+
 (defsystem "emotiq/ate"
   :depends-on (emotiq emotiq/tracker emotiq/sim emotiq/startup gossip)
   :components ((:module source
@@ -121,8 +121,7 @@
   :components ((:module source
                 :pathname "./"
                 :serial t
-                :components ((:file "keys")
-                             (:file "stakes")
+                :components ((:file "stakes")
                              (:file "genesis")
                              (:file "config")))))
 
@@ -135,6 +134,3 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "generate")))))
-
-
-

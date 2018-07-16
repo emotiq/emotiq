@@ -1,28 +1,9 @@
 (in-package :emotiq/config)
+
 (defun emotiq-conf ()
   (make-pathname :defaults (emotiq/fs:etc/)
                  :name "emotiq-conf"
                  :type "json"))
-
-(um:defconstant+ +default-configuration+
-    `((:hostname
-       . "localhost")
-      (:ip
-       . "127.0.0.1")
-      (:rest-server
-       . :true)
-      (:rest-server-port
-       . 3140)
-      (:websocket-server
-       . :true)
-      (:websocket-server-port
-       . 3145)
-      (:gossip-server
-       . :true)
-      (:gossip-server-port
-       . 65002)
-      (:genesis-block-file
-       . "emotiq-genesis-block.json")))
 
 (defun generated-directory (configuration)
   (let ((host
@@ -39,9 +20,9 @@
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
                            (list host ip gossip-server-port rest-server-port websocket-server-port))))))
-    
 
-(defun settings/read (&optional key) 
+
+(defun settings/read (&optional key)
   (unless (probe-file (emotiq-conf))
     (emotiq:note "No configuration able to be read from '~a'" (emotiq-conf))
     (return-from settings/read nil))
@@ -50,10 +31,3 @@
     (if key
         (alexandria:assoc-value c key)
         c)))
-
-
-  
-
-
-
-    
