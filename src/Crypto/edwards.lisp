@@ -685,6 +685,7 @@ THE SOFTWARE.
           ((or (= nn 1)
                (ed-neutral-point-p pt)) pt)
           #||#
+          
           ((ecc-pt-p pt)
            (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; affine in...
                               (cpty (ecc-pt-y pt))
