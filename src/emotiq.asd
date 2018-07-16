@@ -128,4 +128,14 @@
                              (:file "config")))))
 
 
+(defsystem "emotiq/config/generate"
+  :depends-on (emotiq/config
+               cosi-bls)
+  :in-order-to ((test-op (test-op "emotiq-config-tests")))
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "generate")))))
+
+
 
