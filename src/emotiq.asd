@@ -117,7 +117,7 @@
                lisp-object-encoder
                useful-macros
                gossip/config)
-  :in-order-to ((test-op (test-op "emotiq-config-tests")))
+  :in-order-to ((test-op (test-op "emotiq-config-test")))
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -125,11 +125,10 @@
                              (:file "genesis")
                              (:file "config")))))
 
-
 (defsystem "emotiq/config/generate"
   :depends-on (emotiq/config
                cosi-bls)
-  :in-order-to ((test-op (test-op "emotiq-config-tests")))
+  :in-order-to ((test-op (test-op "emotiq-config-test")))
   :components ((:module source
                 :pathname "./"
                 :serial t
