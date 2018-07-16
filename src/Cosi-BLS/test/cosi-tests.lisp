@@ -33,7 +33,8 @@
       (print "Find UTX for Mary")
       (let* ((utxm   (find-txout-for-pkey-hash (hash/256 pkeym) trans))
              (minfo  (decrypt-txout-info utxm skeym)))
-        
+        ;;; FIXME 
+        (assert-true (not (null minfo)))
         (print "Construct 2nd transaction")
         (let ((trans (make-transaction :ins `((:kind :cloaked
                                                :amount ,(txout-secr-amt minfo)
@@ -49,8 +50,7 @@
                                        :fee 10)))
           
           (print "Validate 2nd transaction")
-          (assert-true (validate-transaction trans))
-          )))))
+          (assert-true (validate-transaction trans)))))))
 
 (define-test uncloaked-transaction-consistency
   (let* ((k     (pbc:make-key-pair :dave)) ;; genesis keying
