@@ -827,6 +827,47 @@ void Ed3363_affine_mul(unsigned char* ptx,
   gstore(P.z, ptz);
 }
 
+void normz(type64 *px, type64 *py, type64 *pz)
+{
+  type64 t[6];
+  
+  ginv(pz);
+  gmul(px, pz, t); scr(t); gcopy(t, px);
+  gmul(py, pz, t); scr(t); gcopy(t, py);
+}
+
+extern "C"
+void Ed3363_projective_mul(unsigned char* ptx,
+		       unsigned char* pty,
+		       unsigned char* ptz,
+		       unsigned char* nv)
+{
+  // Multiplies point pt by scalar n and returns in pt as projective coords
+  //
+  // lpx, lpy, lpz, and nv are stored as consecutive 64-bit values
+  // in little-endian order (assumes Intel conventions)
+  //
+  // nv should be a little-endian encoding of scalar n. n should be
+  // mod q. (0 <= n < q)
+  
+  int w[PANES];
+  ECp P;
+  type64 px[6], py[6], pz[6];
+
+  win4(nv, w);
+  gfetch(ptx, px);
+  gfetch(pty, py);
+  gfetch(ptz, pz);
+  
+  normz(px, py, pz);
+  init(px, py, &P);
+  mul_to_proj(w, &P);
+
+  gstore(P.x, ptx);
+  gstore(P.y, pty);
+  gstore(P.z, ptz);
+}
+
 // Initialise P
 
 void init_proj(type64 *x,type64 *y,type64 *z, ECp *P)

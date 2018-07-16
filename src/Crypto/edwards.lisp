@@ -299,6 +299,12 @@ THE SOFTWARE.
   (ptz         :pointer :unsigned-char)
   (nv          :pointer :unsigned-char))
 
+(cffi:defcfun ("Ed3363_projective_mul" _Ed3363-projective-mul) :void
+  (ptx         :pointer :unsigned-char)
+  (pty         :pointer :unsigned-char)
+  (ptz         :pointer :unsigned-char)
+  (nv          :pointer :unsigned-char))
+
 (cffi:defcfun ("Ed3363_projective_add" _Ed3363-projective-add) :void
   (pt1x         :pointer :unsigned-char)
   (pt1y         :pointer :unsigned-char)
@@ -328,9 +334,8 @@ THE SOFTWARE.
     ((ed-proj-pt- :x x) (zerop x))
     ))
 
-(defun slow-ed-affine (pt)
+(defun slow-to-affine (pt)
   (optima:ematch pt
-    ((ecc-pt-) pt)
     ((ed-proj-pt- :x x :y y :z z)
      (if (= z 1)
          (make-ecc-pt
@@ -340,14 +345,19 @@ THE SOFTWARE.
        (with-mod *ed-q*
          (make-ecc-pt
           :x (m/ x z)
-          :y (m/ y z)))))))
+          :y (m/ y z)))
+       ))))
 
 (defun ed-affine (pt)
-  (if (eql *edcurve* *curve-ed3363*)
-      (fast-ed3363-to-affine pt)
-    ;; else
-    (slow-ed-affine pt)))
-
+  (optima:ematch pt
+    ((ecc-pt-) pt)
+    ((ed-proj-pt-)
+     (if (eql *edcurve* *curve-ed3363*)
+         (fast-ed3363-to-affine pt)
+       ;; else
+       (slow-to-affine pt)))
+    ))
+    
 (defun ed-projective (pt)
   (optima:ematch pt
     ((ecc-pt- :x x :y y)
@@ -676,20 +686,33 @@ THE SOFTWARE.
           ((or (= nn 1)
                (ed-neutral-point-p pt)) pt)
           #||#
-          (t
-           (let* ((pta  (ed-affine pt))) ;; affine in...
-             (with-fli-buffers ((cptx (ecc-pt-x pta))
-                                (cpty (ecc-pt-y pta))
-                                (cptz)
-                                (cwv  nn))
-
-               (_Ed3363-affine-mul cptx cpty cptz cwv)
-               
-               (make-ed-proj-pt ;; projective out...
-                :x (xfer-from-c cptx)
-                :y (xfer-from-c cpty)
-                :z (xfer-from-c cptz))
-               )))
+          ((ecc-pt-p pt)
+           (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; affine in...
+                              (cpty (ecc-pt-y pt))
+                              (cptz)
+                              (cwv  nn))
+             
+             (_Ed3363-affine-mul cptx cpty cptz cwv)
+             
+             (make-ed-proj-pt
+              :x (xfer-from-c cptx) ;; projective out...
+              :y (xfer-from-c cpty)
+              :z (xfer-from-c cptz))
+             ))
+          
+          (t 
+           (with-fli-buffers ((cptx (ed-proj-pt-x pt))  ;; projective in...
+                              (cpty (ed-proj-pt-y pt))
+                              (cptz (ed-proj-pt-z pt))
+                              (cwv  nn))
+             
+             (_Ed3363-projective-mul cptx cpty cptz cwv)
+             
+             (make-ed-proj-pt
+              :x (xfer-from-c cptx) ;; projective out...
+              :y (xfer-from-c cpty)
+              :z (xfer-from-c cptz))
+             ))
           )))
 
 (defun fast-ed3363-add (pt1 pt2)
@@ -710,19 +733,16 @@ THE SOFTWARE.
     ))
 
 (defun fast-ed3363-to-affine (pt)
-  (if (ecc-pt-p pt)
-      pt
-    ;; else
-    (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
-                       (cpty (ed-proj-pt-y pt))
-                       (cptz (ed-proj-pt-z pt)))
-
-      (_Ed3363-to-affine cptx cpty cptz)
-      
-      (make-ecc-pt ;; affine out...
-       :x (xfer-from-c cptx)
-       :y (xfer-from-c cpty))
-      )))
+  (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
+                     (cpty (ed-proj-pt-y pt))
+                     (cptz (ed-proj-pt-z pt)))
+    
+    (_Ed3363-to-affine cptx cpty cptz)
+    
+    (make-ecc-pt
+     :x (xfer-from-c cptx) ;; affine out...
+     :y (xfer-from-c cpty))
+    ))
 
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
