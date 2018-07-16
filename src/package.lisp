@@ -161,3 +161,6 @@
 
    #:*dns-ip-zt.emotiq.ch*
    #:settings/read))
+
+(defpackage emotiq/config/generate
+  ;;; FIXME: Karol)
