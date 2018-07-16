@@ -4,7 +4,7 @@
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
   :depends-on (lisp-unit
-               emotiq/config)
+               emotiq/config/generate)
   :perform (test-op (o s)
                     (symbol-call :lisp-unit :run-tests
                                  :all :emotiq-config-test))
@@ -15,4 +15,3 @@
                 :depends-on (package)
                 :pathname "./"
                 :components ((:file "emotiq-config")))))
-
