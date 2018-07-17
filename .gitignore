@@ -15,3 +15,4 @@ src/Crypto-writeup/Partial-Yellowpaper.pdf
 src/Crypto-writeup/Partial-Yellowpaper.synctex.gz
 scratch
 src/Cosi-BLS/config/**
+.ropeproject
