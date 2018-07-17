@@ -58,3 +58,22 @@ THE SOFTWARE.
                  "cffi"
                  ))
 
+(defsystem "core-crypto/libraries"
+  :perform
+  (prepare-op
+   :before (o c)
+   (let ((wildcard-for-libraries
+          (make-pathname :defaults 
+                         (asdf:system-relative-pathname
+                          :emotiq "../var/local/lib/libLispCurve1174")
+                         :type :wild)))
+     (unless (directory wildcard-for-libraries)
+       (format *standard-output*
+               "~&Failed to find libraries matching~&~t~a~&~
+~&Attempting to build native libraries... hang on for a minute, please..."
+               wildcard-for-libraries)
+       (run-program `("bash"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-ecc.bash")))
+                    :output :string :error :string)
+       (format *standard-output* "~tWhew!  Finished.~&")))))
