@@ -10,7 +10,7 @@ cp -r $DEVNET_CONFIGS_PATH/* $EMOTIQ_ETC_ROOT
 
 # Start the Emotiq blockchain
 for i in {1..3} ; do
-  if ./start-node.bash $i ; then
+  if $BASE/start-node.bash $i ; then
     echo Node ${i} started...
   else
     echo Failed to start Node ${i}. Exiting
@@ -20,7 +20,7 @@ done
 
 # Send pings to the nodes
 for i in {1..3} ; do
-  if python3 ws-rpcping.py $i ; then
+  if python3 $BASE/ws-rpcping.py $i ; then
     echo Node $i pong received
   else
     echo Failed to ping Node ${i}. Skipping following nodes.
