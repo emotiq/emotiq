@@ -89,6 +89,20 @@ test_chain:linux:lispworks:
   variables:
     LISP: lispworks
 
+test_chain:macos:ccl:
+  <<: *test_chain_definition
+  tags:
+    - macos
+  variables:
+    LISP: ccl
+
+test_chain:macos:lispworks:
+  <<: *test_chain_definition
+  tags:
+    - macos
+  variables:
+    LISP: lispworks
+
 .build_release: &build_release_definition
   stage: build_release
   variables:
