@@ -46,22 +46,22 @@ typedef struct pairing_context {
 
 pairing_context_t context[16];
 
-bool& IsInit(int ctxt)
+bool& IsInit(uint64_t ctxt)
 {
   return context[ctxt].init_flag;
 }
 
-pairing_t& Pairing(int ctxt)
+pairing_t& Pairing(uint64_t ctxt)
 {
   return context[ctxt].pairing;
 }
 
-element_t& G1_gen(int ctxt)
+element_t& G1_gen(uint64_t ctxt)
 {
    return context[ctxt].g1_gen;
 }
 
-element_t& G2_gen(int ctxt)
+element_t& G2_gen(uint64_t ctxt)
 {
   return context[ctxt].g2_gen;
 }
@@ -71,8 +71,8 @@ element_t& G2_gen(int ctxt)
 extern "C"
 int64_t init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize)
 {
-  int64_t ans;
-  
+  int64_t ans = -1;
+
   if(IsInit(ctxt))
     {
       element_clear(G1_gen(ctxt));
@@ -88,8 +88,8 @@ int64_t init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psi
       element_init_G1(G1_gen(ctxt), Pairing(ctxt));
       element_init_G2(G2_gen(ctxt), Pairing(ctxt));
       
-      element_init_GT(pair,    Pairing(ctxt)); // archetypes for sizing info
-      element_init_Zr(z,       Pairing(ctxt));
+      element_init_GT(pair, Pairing(ctxt)); // archetypes for sizing info
+      element_init_Zr(z,    Pairing(ctxt));
       
       element_random(G1_gen(ctxt)); // default random values
       element_random(G2_gen(ctxt));
