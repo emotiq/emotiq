@@ -1043,10 +1043,6 @@ THE SOFTWARE.
 (defmethod hashable ((x ed-proj-pt))
   (hashable (ed-affine x)))
 
-(defun get-hash-nbits (nbits seed)
-  "Concatenated SHA3 until we collect enough bits"
-  (get-hash-nbytes (ceiling nbits 8) seed))
-
 ;; -------------------------------------------------
 
 (defun compute-deterministic-skey (seed &optional (index 0))
