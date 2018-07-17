@@ -206,7 +206,7 @@ THE SOFTWARE.
 
 (defvar *curve-Ed3363*  ;; the High-Five curve from MIRACL Labs
   ;; y^2 + x^2 = 1 + 11111 x^2 y^2
-  ;; rho-security = 2^192 ?? just a guess
+  ;; rho-security = 2^168 to 2^192 ?? just a guess
   (make-ed-curve
    :name :curve-Ed3363
    :c    1
@@ -732,8 +732,7 @@ THE SOFTWARE.
 (defun fast-mul (pt n)
   (declare (integer n))
   ;; (tally :ecmul)
-  (let ((nn  (with-mod *ed-r*
-               (mmod n))))
+  (let ((nn  (mod n *ed-r*)))
     (declare (integer nn))
     
     (cond ((zerop nn) (ed-neutral-point))
@@ -794,23 +793,17 @@ THE SOFTWARE.
     ))
 
 (defun fast-to-affine (pt)
-  (cond ((= 1 (ed-proj-pt-z pt))
-         (make-ecc-pt
-          :x (ed-proj-pt-x pt)
-          :y (ed-proj-pt-y pt)))
-        (t 
-         (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
-                            (cpty (ed-proj-pt-y pt))
-                            (cptz (ed-proj-pt-z pt)))
-           
-             (funcall (get-fast-fn :fast-affine-fn)
-                      cptx cpty cptz)
-             
-           (make-ecc-pt
-            :x (xfer-from-c cptx) ;; affine out...
-            :y (xfer-from-c cpty))
-           ))
-        ))
+  (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
+                     (cpty (ed-proj-pt-y pt))
+                     (cptz (ed-proj-pt-z pt)))
+    
+    (funcall (get-fast-fn :fast-affine-fn)
+             cptx cpty cptz)
+    
+    (make-ecc-pt
+     :x (xfer-from-c cptx) ;; affine out...
+     :y (xfer-from-c cpty))
+    ))
 
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than

@@ -1,6 +1,6 @@
-// curve1174_intf.cpp -- Interface for Lisp to curve Ed1174 support
+// curve1174_intf.cpp -- Interface for Lisp to Curve1174 support
 //
-// Shamelessly lifted from MIRACL web pages
+// Shamelessly lifted from MIRACL web pages and adapted to Curve1174
 // DM/Emotiq  07/18
 // ----------------------------------------------------------------------
 // Based on...
