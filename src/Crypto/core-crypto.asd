@@ -22,8 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cl-user)
-
 (asdf:defsystem "core-crypto"
   :description "core-crypto: core cryptography functions"
   :version     "1.0"

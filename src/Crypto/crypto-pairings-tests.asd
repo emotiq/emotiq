@@ -4,12 +4,12 @@
                core-crypto)
   :perform  (test-op (o s)
                      (symbol-call :lisp-unit :run-tests
-                                  :all :crypto/test))
+                                  :all :crypto-pairings-test))
   :components ((:module package
                 :pathname "crypto-pairings-tests/"
                 :components ((:file "package")))
                (:module tests
-                :pathname "tests/"
+                :pathname "crypto-pairings-tests/"
                 :depends-on (package)
-                :components ((:file "test-pairings"))
+                :components ((:file "crypto-pairings-test"))
                 )))

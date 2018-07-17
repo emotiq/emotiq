@@ -9,7 +9,7 @@
                 :pathname "core-crypto-tests/"
                 :components ((:file "package")))
                (:module tests
-                :pathname "tests/"
+                :pathname "core-crypto-tests/"
                 :depends-on (package)
                 :components ((:file "test-modmath")
                              (:file "test-vecrepr")
