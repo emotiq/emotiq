@@ -1,5 +1,5 @@
 
-(in-package :crypto/test)
+(in-package :core-crypto-tests)
 
 (defun check-edwards-curves-fn ()
   (and

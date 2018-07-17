@@ -1,5 +1,5 @@
 
-(in-package :crypto/test)
+(in-package :core-crypto-tests)
 
 (defun mod-inv-test-fn ()
   (with-mod *ed-r*

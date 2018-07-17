@@ -1,5 +1,5 @@
 
-(defpackage :crypto-pairings-test
+(defpackage :crypto-pairings-tests
   (:nicknames :pbc-test)
   (:use :cl
    :vec-repr
