@@ -710,45 +710,22 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
-(defun fast-affine-fn ()
-  (get-cached-symbol-data '*edcurve*
-                          :fast-affine-fn *edcurve*
-                          (lambda ()
-                            (cond ((eql *edcurve* *curve1174*)
-                                   '_Curve1174-to-affine)
-                                  ((eql *edcurve* *curve-ed3363*)
-                                   '_Ed3363-to-affine)
-                                  ))))
+(defvar *fast-fns*
+  `((,*curve1174*
+     :fast-affine-fn         _Curve1174-to-affine
+     :fast-affine-mul-fn     _Curve1174-affine-mul
+     :fast-projective-mul-fn _Curve1174-projective-mul
+     :fast-projective-add-fn _Curve1174-projective-add)
+    
+    (,*curve-ed3363*
+     :fast-affine-fn         _Ed3363-to-affine
+     :fast-affine-mul-fn     _Ed3363-affine-mul
+     :fast-projective-mul-fn _Ed3363-projective-mul
+     :fast-projective-add-fn _Ed3363-projective-add)))
 
-(defun fast-affine-mul-fn ()
-  (get-cached-symbol-data '*edcurve*
-                          :fast-affine-mul-fn *edcurve*
-                          (lambda ()
-                            (cond ((eql *edcurve* *curve1174*)
-                                   '_curve1174-affine-mul)
-                                  ((eql *edcurve* *curve-ed3363*)
-                                   '_Ed3363-affine-mul)
-                                  ))))
-
-(defun fast-projective-mul-fn ()
-  (get-cached-symbol-data '*edcurve*
-                          :fast-projective-mul-fn *edcurve*
-                          (lambda ()
-                            (cond ((eql *edcurve* *curve1174*)
-                                   '_curve1174-projective-mul)
-                                  ((eql *edcurve* *curve-ed3363*)
-                                   '_Ed3363-projective-mul)
-                                  ))))
-
-(defun fast-projective-add-fn ()
-  (get-cached-symbol-data '*edcurve*
-                          :fast-projective-add-fn *edcurve*
-                          (lambda ()
-                            (cond ((eql *edcurve* *curve1174*)
-                                   '_curve1174-projective-add)
-                                  ((eql *edcurve* *curve-ed3363*)
-                                   '_ed3363-projective-add)
-                                  ))))
+(defun get-fast-fn (kw)
+  (let* ((lst (assoc *edcurve* *fast-fns* :test 'eq)))
+    (getf (cdr lst) kw)))
 
 ;; -------------------------------------------------------------------
 
@@ -772,7 +749,7 @@ THE SOFTWARE.
                               (cptz)
                               (cwv  nn))
 
-             (funcall (fast-affine-mul-fn)
+             (funcall (get-fast-fn :fast-affine-mul-fn)
                       cptx cpty cptz cwv)
              
              (make-ed-proj-pt
@@ -788,7 +765,7 @@ THE SOFTWARE.
                               (cptz (ed-proj-pt-z pt))
                               (cwv  nn))
              
-             (funcall (fast-projective-mul-fn)
+             (funcall (get-fast-fn :fast-projective-mul-fn)
                       cptx cpty cptz cwv)
              
              (make-ed-proj-pt
@@ -806,7 +783,7 @@ THE SOFTWARE.
                      (cpt2yv (ed-proj-pt-y pt2))
                      (cpt2zv (ed-proj-pt-z pt2)))
     
-             (funcall (fast-projective-add-fn)
+             (funcall (get-fast-fn :fast-projective-add-fn)
                       cpt1xv cpt1yv cpt1zv
                       cpt2xv cpt2yv cpt2zv)
     
@@ -826,7 +803,7 @@ THE SOFTWARE.
                             (cpty (ed-proj-pt-y pt))
                             (cptz (ed-proj-pt-z pt)))
            
-             (funcall (fast-affine-fn)
+             (funcall (get-fast-fn :fast-affine-fn)
                       cptx cpty cptz)
              
            (make-ecc-pt
