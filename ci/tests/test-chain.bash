@@ -8,6 +8,9 @@ EMOTIQ_ETC_ROOT=$BASE/../../var/etc
 mkdir -p $EMOTIQ_ETC_ROOT
 cp -r $DEVNET_CONFIGS_PATH/* $EMOTIQ_ETC_ROOT
 
+# Pull in all dependencies
+lisp-wrapper.sh -e '(ql:quickload :emotiq/startup)'
+
 # Start the Emotiq blockchain
 for i in {1..3} ; do
   if $BASE/start-node.bash $i ; then
