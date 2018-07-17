@@ -372,14 +372,13 @@ THE SOFTWARE.
     ))
 
 (defun slow-to-affine (pt)
-  (with-accessors ((x  ed-proj-pt-x)
-                   (y  ed-proj-pt-y)
-                   (z  ed-proj-pt-z)) pt
-    (with-mod *ed-q*
-      (make-ecc-pt
-       :x (m/ x z)
-       :y (m/ y z))
-      )))
+  (optima:ematch pt
+    ((ed-proj-pt- :x x :y y :z z)
+     (with-mod *ed-q*
+       (make-ecc-pt
+        :x (m/ x z)
+        :y (m/ y z))
+       ))))
 
 (defun have-fast-impl ()
   (or (eql *edcurve* *curve-ed3363*)
