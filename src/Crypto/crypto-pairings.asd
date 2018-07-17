@@ -26,7 +26,7 @@ THE SOFTWARE.
   :description "crypto-pairings: bilinear pairings (PBC) functions"
   :version     "1.1.0"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
-  :in-order-to ((test-op (test-op "crypto-pairings-test")))
+  :in-order-to ((test-op (test-op "crypto-pairings-tests")))
   :license     "Copyright (c) 2018 by Emotiq AG. All rights reserved."
   :serial       t
   :components  ((:file "pbc-cffi")

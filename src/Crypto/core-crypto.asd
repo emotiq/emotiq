@@ -28,7 +28,9 @@ THE SOFTWARE.
   :description "core-crypto: core cryptography functions"
   :version     "1.0"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
+  :in-order-to ((test-op (test-op "core-crypto-tests")))
   :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
+  :serial       t
   :components  ((:file "ecc-package")
                 (:file "cached-var")
                 (:file "modular-arith")
@@ -46,7 +48,6 @@ THE SOFTWARE.
                 (:file "crypto-environ")
                 #+:COM.RAL (:file "machine-id")
                 (:file "lagrange-4-square"))
-  :serial       t
   :depends-on   ("ironclad"
                  #+:COM.RAL "aesx"
                  "useful-macros"
