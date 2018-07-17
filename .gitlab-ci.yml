@@ -82,6 +82,13 @@ test_chain:linux:ccl:
   variables:
     LISP: ccl
 
+test_chain:linux:lispworks:
+  <<: *test_chain_definition
+  tags:
+    - linux
+  variables:
+    LISP: lispworks
+
 .build_release: &build_release_definition
   stage: build_release
   variables:
