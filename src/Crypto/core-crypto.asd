@@ -56,6 +56,7 @@ THE SOFTWARE.
                  "emotiq"
                  "emotiq/delivery"
                  "cffi"
+		 "core-crypto/libraries"
                  ))
 
 (defsystem "core-crypto/libraries"
