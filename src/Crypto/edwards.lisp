@@ -226,7 +226,7 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------
 
-(defvar *edcurve* *curve1174*)
+(defvar *edcurve* *Curve-Ed3363*)
 
 (define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
 (define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))

@@ -28,6 +28,9 @@ typedef int64_t type64;
 
 static const type64 bot51bits = 0x7ffffffffffff;
 static const type64 bot47bits =  0x7fffffffffff;
+static const int    kCurveD   = -1174;
+static const int    kBPW      = 51;
+static const int    kBPWFinal = 47;
 
 #include <stdint.h>
 
@@ -107,19 +110,19 @@ void scr(type64 *w)
 	type64 t0,t1,t2;
 	t0=w[0]&bot51bits;
 
-	t1=w[1]+(w[0]>>51);
+	t1=w[1]+(w[0]>>kBPW);
 	w[1]=t1&bot51bits;
 
-	t2=w[2]+(t1>>51);
+	t2=w[2]+(t1>>kBPW);
 	w[2]=t2&bot51bits;
 
-	t1=w[3]+(t2>>51);
+	t1=w[3]+(t2>>kBPW);
 	w[3]=t1&bot51bits;
 
-	t2=w[4]+(t1>>51);
+	t2=w[4]+(t1>>kBPW);
 	w[4]=t2&bot47bits;
 
-	w[0]=t0+9*(t2>>47);
+	w[0]=t0+9*(t2>>kBPWFinal);
 
 }
 
@@ -132,19 +135,19 @@ void gmuli(type64 *w,int i)
 	t=(type128)w[0]*i;
 	w[0]=((type64)t)&bot51bits;
 
-	t=(type128)w[1]*i+(t>>51);
+	t=(type128)w[1]*i+(t>>kBPW);
 	w[1]=((type64)t)&bot51bits;
 
-	t=(type128)w[2]*i+(t>>51);
+	t=(type128)w[2]*i+(t>>kBPW);
 	w[2]=((type64)t)&bot51bits;
 
-	t=(type128)w[3]*i+(t>>51);
+	t=(type128)w[3]*i+(t>>kBPW);
 	w[3]=((type64)t)&bot51bits;
 
-	t=(type128)w[4]*i+(t>>51);
+	t=(type128)w[4]*i+(t>>kBPW);
 	w[4]=((type64)t)&bot47bits;
 
-	w[0]+=9*(t>>47);
+	w[0]+=9*(t>>kBPWFinal);
 
 }
 
@@ -157,21 +160,21 @@ void gsqr(type64 *x,type64 *z)
 	t0=2*((type128)x[0]*x[4]+(type128)x[1]*x[3])+(type128)x[2]*x[2];
 	z[4]=((type64) t0)&bot47bits;
 
-	t1=(type128)x[0]*x[0]+288*((type128)x[1]*x[4]+(type128)x[2]*x[3])+9*(t0>>47);
+	t1=(type128)x[0]*x[0]+288*((type128)x[1]*x[4]+(type128)x[2]*x[3])+9*(t0>>kBPWFinal);
 	z[0]=((type64) t1)&bot51bits;
 
-        t0=2*(type128)x[0]*x[1]+288*(type128)x[2]*x[4]+144*(type128)x[3]*x[3]+(t1>>51);
+        t0=2*(type128)x[0]*x[1]+288*(type128)x[2]*x[4]+144*(type128)x[3]*x[3]+(t1>>kBPW);
 	z[1]=((type64) t0)&bot51bits;
 
-	t1=(type128)x[1]*x[1]+2*(type128)x[0]*x[2]+288*(type128)x[3]*x[4]+(t0>>51);
+	t1=(type128)x[1]*x[1]+2*(type128)x[0]*x[2]+288*(type128)x[3]*x[4]+(t0>>kBPW);
 	z[2]=((type64) t1)&bot51bits;
 
-	t0=144*(type128)x[4]*x[4]+2*((type128)x[0]*x[3]+(type128)x[1]*x[2])+(t1>>51);
+	t0=144*(type128)x[4]*x[4]+2*((type128)x[0]*x[3]+(type128)x[1]*x[2])+(t1>>kBPW);
 	z[3]=((type64) t0)&bot51bits;
 
-	t1=z[4]+(t0>>51);
+	t1=z[4]+(t0>>kBPW);
 	z[4]=((type64) t1)&bot47bits;
-	z[0]+=9*(t1>>47);
+	z[0]+=9*(t1>>kBPWFinal);
 }
 
 #if 1
@@ -184,25 +187,25 @@ void gmul(type64 *x,type64 *y,type64 *z)
 	z[4]=((type64) t0)&bot47bits;
 
 	// 7M + 5A
-	t1=(type128)x[0]*y[0]+144*((type128)x[1]*y[4]+(type128)x[4]*y[1]+(type128)x[2]*y[3]+(type128)x[3]*y[2])+9*(t0>>47);
+	t1=(type128)x[0]*y[0]+144*((type128)x[1]*y[4]+(type128)x[4]*y[1]+(type128)x[2]*y[3]+(type128)x[3]*y[2])+9*(t0>>kBPWFinal);
 	z[0]=((type64) t1)&bot51bits;
 
 	// 6M + 5A
-        t0=(type128)x[0]*y[1]+(type128)x[1]*y[0]+144*((type128)x[3]*y[3]+(type128)x[2]*y[4]+(type128)x[4]*y[2])+(t1>>51);
+        t0=(type128)x[0]*y[1]+(type128)x[1]*y[0]+144*((type128)x[3]*y[3]+(type128)x[2]*y[4]+(type128)x[4]*y[2])+(t1>>kBPW);
 	z[1]=((type64) t0)&bot51bits;
 
 	// 6M + 5A
-	t1=(type128)x[1]*y[1]+(type128)x[0]*y[2]+(type128)x[2]*y[0]+144*((type128)x[3]*y[4]+(type128)x[4]*y[3])+(t0>>51);
+	t1=(type128)x[1]*y[1]+(type128)x[0]*y[2]+(type128)x[2]*y[0]+144*((type128)x[3]*y[4]+(type128)x[4]*y[3])+(t0>>kBPW);
 	z[2]=((type64) t1)&bot51bits;
 
 	// 6M + 5A
-	t0=144*(type128)x[4]*y[4]+(type128)x[0]*y[3]+(type128)x[3]*y[0]+(type128)x[1]*y[2]+(type128)x[2]*y[1]+(t1>>51);
+	t0=144*(type128)x[4]*y[4]+(type128)x[0]*y[3]+(type128)x[3]*y[0]+(type128)x[1]*y[2]+(type128)x[2]*y[1]+(t1>>kBPW);
 	z[3]=((type64) t0)&bot51bits;
 
 	// -------- to this point = 30M + 24A => this clocks as faster than Granger's method for Curve1174
-	t1=z[4]+(t0>>51);
+	t1=z[4]+(t0>>kBPW);
 	z[4]=((type64) t1)&bot47bits;
-	z[0]+=9*(t1>>47);
+	z[0]+=9*(t1>>kBPWFinal);
 }
 
 #else
@@ -230,28 +233,28 @@ void gmul(type64 *x,type64 *y,type64 *z)
 	z[4]=((type64) t0)&bot47bits;
 
 	// 4M + 8A
-	t1=a0+144*(b1-(type128)(x[1]-x[4])*(y[1]-y[4])-(type128)(x[2]-x[3])*(y[2]-y[3]))+9*(t0>>47);
+	t1=a0+144*(b1-(type128)(x[1]-x[4])*(y[1]-y[4])-(type128)(x[2]-x[3])*(y[2]-y[3]))+9*(t0>>kBPWFinal);
 	z[0]=((type64) t1)&bot51bits;
 
 	// 3M + 9A
 	a0=a0+a1;
-	t0=a0-(type128)(x[0]-x[1])*(y[0]-y[1])+144*(b2-(type128)(x[2]-x[4])*(y[2]-y[4]))+(t1>>51);
+	t0=a0-(type128)(x[0]-x[1])*(y[0]-y[1])+144*(b2-(type128)(x[2]-x[4])*(y[2]-y[4]))+(t1>>kBPW);
 	z[1]=((type64) t0)&bot51bits;
 
 	// 3M + 9A
 	a0=a0+a2;
-	t1=a0-(type128)(x[0]-x[2])*(y[0]-y[2])+144*(b3-(type128)(x[3]-x[4])*(y[3]-y[4]))+(t0>>51);
+	t1=a0-(type128)(x[0]-x[2])*(y[0]-y[2])+144*(b3-(type128)(x[3]-x[4])*(y[3]-y[4]))+(t0>>kBPW);
 	z[2]=((type64) t1)&bot51bits;
 
 	// 3M + 9A
 	a0=a0+a3;
-	t0=144*a4 + a0-(type128)(x[0]-x[3])*(y[0]-y[3])-(type128)(x[1]-x[2])*(y[1]-y[2])+(t1>>51);
+	t0=144*a4 + a0-(type128)(x[0]-x[3])*(y[0]-y[3])-(type128)(x[1]-x[2])*(y[1]-y[2])+(t1>>kBPW);
 	z[3]=((type64) t0)&bot51bits;
 
 	// ---- to this point = 20M + 45A
-	t1=z[4]+(t0>>51);
+	t1=z[4]+(t0>>kBPW);
 	z[4]=((type64) t1)&bot47bits;
-	z[0]+=9*(t1>>47);
+	z[0]+=9*(t1>>kBPWFinal);
 
 }
 #endif
@@ -260,7 +263,7 @@ void gmul(type64 *x,type64 *y,type64 *z)
 
 void ginv(type64 *x)
 {
-  // the exponent (p-2) is "07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5"
+  // the exponent (p-2) = 07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5
 	int i;
 	type64 w[5],t[5],x5[5],x15[5];
 
@@ -457,7 +460,7 @@ void norm(ECp *P)
 void precomp(ECp *P,ECp W[])
 {
 	inf(&W[0]);
-	copy(P,&W[1]); gmuli(W[1].t,-1174);
+	copy(P,&W[1]); gmuli(W[1].t,kCurveD);
 	copy(P,&W[2]); double_1(&W[2]);
 	copy(&W[2],&W[3]); add_1(&W[1],&W[3]);
 
@@ -469,13 +472,13 @@ void precomp(ECp *P,ECp W[])
 
 /* premultiply t parameter by curve constant */
 
-	gmuli(W[2].t,-1174);
-	gmuli(W[3].t,-1174);
-	gmuli(W[4].t,-1174);
-	gmuli(W[5].t,-1174);
-	gmuli(W[6].t,-1174);
-	gmuli(W[7].t,-1174);
-	gmuli(W[8].t,-1174);
+	gmuli(W[2].t,kCurveD);
+	gmuli(W[3].t,kCurveD);
+	gmuli(W[4].t,kCurveD);
+	gmuli(W[5].t,kCurveD);
+	gmuli(W[6].t,kCurveD);
+	gmuli(W[7].t,kCurveD);
+	gmuli(W[8].t,kCurveD);
 }
 
 /* Window of width 4 */
@@ -852,7 +855,7 @@ void add_proj(ECp *Q, ECp *P)
   gsqr(A,B);
   gmul(Q->x, P->x, C);
   gmul(Q->y, P->y, D);
-  gmul(C,D,E); gmuli(E, -1174);
+  gmul(C,D,E); gmuli(E, kCurveD);
   gsub(B,E,F);
   gadd(B,E,G);
   gadd(Q->x, Q->y, X3);
