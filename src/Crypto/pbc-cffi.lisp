@@ -1812,9 +1812,9 @@ likely see an assertion failure"
 ;; ------------------------------------------------------------------------------
 
 (defun ccl-init ()
-  (init-pairing :params *curve-fr256-params* :context 0 :do-init t)
+  (init-pairing :params *curve-fr256-params* :context 0 :do-init nil)
   ;; do FR449 last so it becomes the default pairing
-  (init-pairing :params *curve-fr449-params* :context 1))
+  (init-pairing :params *curve-fr449-params* :context 1 :do-init t))
   
 #-:lispworks
 (eval-when (:load-toplevel)
