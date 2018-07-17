@@ -12,19 +12,19 @@
            #:normalize-to-simple-base-string #:copy-as-simple-base-string
            #:normalize-to-simple-string #:copy-as-simple-string)
   (:export #:hash-digest-vector-to-hex-string
-           #:sha-256-string #:sha-256-vector 
+           #:sha-256-string #:sha-256-vector
            #:sha3-512-string #:sha3-512-vector
            #:hash-160-string #:hash-160-vector
            #:hash-256-string #:hash-256-vector
            #:keygen #:sign-message #:verify-signature)
   (:export #:hash-digest-vector-to-hex-string
-           #:sha-256-string #:sha-256-vector 
+           #:sha-256-string #:sha-256-vector
            #:sha3-512-string #:sha3-512-vector
            #:hash-160-string #:hash-160-vector
            #:hash-256-string #:hash-256-vector
            #:keygen #:sign-message #:verify-signature)
   (:export
-   #:hash-pointer-of-previous-block 
+   #:hash-pointer-of-previous-block
    #:hash-pointer-item
    #:hash-pointer-of-transaction
    #:hash-pointer-item
@@ -43,7 +43,7 @@
 
   (:export
    #:emotiq/log/)
-  
+
   (:export
    #:start-node)
   (:export
@@ -53,7 +53,7 @@
    #:production-p
    #:main
    #:start))
-   
+
 (defpackage emotiq/cli
   (:use #:cl)
   (:export
@@ -75,12 +75,12 @@
    #:enumerate-wallets
 
    #:*default-wallet-name*
-   
+
    #:emotiq-wallet-path
 
    #:primary-address
    #:hexify
-   
+
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
 
@@ -89,30 +89,30 @@
 
   (:export
    #:initialize
-   
+
    #:run
    #:run-new-tx
 
    #:blocks
    #:nodes
    #:keys-and-stakes
-   
+
    #:create-transaction
    #:force-epoch-end
 
-   
+
    #:*user-1* #:*user-2* #:*user-3*
-   #:*tx-1* #:*tx-2* 
+   #:*tx-1* #:*tx-2*
 
    #:eassert
 
    #:prdebug
 
    #:node-repl))
-  
+
 (defpackage emotiq/elections
   (:use #:cl)
-  (:export 
+  (:export
    #:set-nodes
    #:make-election-beacon
    #:fire-election
@@ -151,13 +151,19 @@
   (:use #:cl)
   (:export
    #:*nodes-dns-ip*
-   #:network/generate
-   #:node/generate
-
-   #:ensure-defaults
-
+   #:*stakes-filename*
+   #:*max-stake*
+   #:emotiq-conf
+   #:generated-directory
    #:get-stakes
    #:get-genesis-block
-
-   #:*dns-ip-zt.emotiq.ch*
    #:settings/read))
+
+(defpackage emotiq/config/generate
+  (:use #:cl)
+  (:export
+   #:*dns-ip-zt.emotiq.ch*
+   #:keys/generate
+   #:stakes/generate
+   #:network/generate
+   #:ensure-defaults))
