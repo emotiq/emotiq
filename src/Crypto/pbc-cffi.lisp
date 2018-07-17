@@ -906,8 +906,7 @@ comparison.")
   "Used to protect internal startup routines from multiple access")
 
 (defun init-pairing (&key (params nil params-supplied-p)
-                          (context (position nil *contexts*))
-                          (do-init nil))
+                          (context (position nil *contexts*)))
   "Initialize the pairings lib.
 
   If params not specified and we haven't been called yet, or specified
@@ -934,7 +933,6 @@ SMP access. Everything else should be SMP-safe."
                 (null *curve*))
         (setf *curve* nil) ;; in case we fail
 	(load-dlls)
-        (when do-init
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
                          (g2   curve-params-g2)) cparams
@@ -964,7 +962,7 @@ SMP access. Everything else should be SMP-safe."
               (if g2
                   (set-generator g2)
                 (get-g1)) ;; fill in cached value
-              ))) ))
+              ))) )
       prev))) ;; return previous *curve*
 
 ;; -------------------------------------------------
@@ -1811,11 +1809,6 @@ likely see an assertion failure"
 |#
 ;; ------------------------------------------------------------------------------
 
-(defun ccl-init ()
-  (init-pairing :params *curve-fr256-params* :context 0 :do-init nil)
-  ;; do FR449 last so it becomes the default pairing
-  (init-pairing :params *curve-fr449-params* :context 1 :do-init t))
-  
 #-:lispworks
 (eval-when (:load-toplevel)
   ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
@@ -1846,7 +1839,7 @@ likely see an assertion failure"
         ;;
         ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
         ;; context slots available, (0 .. 15)
-        (init-pairing :params *curve-fr256-params* :context 0 :do-init t)
+        (init-pairing :params *curve-fr256-params* :context 0)
         ;; do FR449 last so it becomes the default pairing
-        (init-pairing :params *curve-fr449-params* :context 1 :do-init t)
+        (init-pairing :params *curve-fr449-params* :context 1)
         ))))

@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <strings.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <stdint.h>
 
 #include <pbc/pbc.h>
 
