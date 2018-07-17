@@ -29,7 +29,7 @@ THE SOFTWARE.
 // for initial interface testing...
 
 extern "C"
-long echo(long nel, char* msg_in, char* msg_out)
+uint64_t echo(uint64_t nel, char* msg_in, char* msg_out)
 {
   memcpy(msg_out, msg_in, nel);
   return nel;
@@ -69,9 +69,9 @@ element_t& G2_gen(int ctxt)
 // -------------------------------------------------
 
 extern "C"
-long init_pairing(long ctxt, char* param_str, long nel, long* psize)
+int64_t init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize)
 {
-  long ans;
+  int64_t ans;
   
   if(IsInit(ctxt))
     {
@@ -108,8 +108,8 @@ long init_pairing(long ctxt, char* param_str, long nel, long* psize)
 }
 
 extern "C"
-long set_g2(long ctxt,
-	    unsigned char* pbuf)
+int64_t set_g2(uint64_t ctxt,
+	    uint8_t* pbuf)
 {
   // Changing G2 generator invalidates all keying,
   // so remake default random key pair
@@ -117,8 +117,8 @@ long set_g2(long ctxt,
 }
 
 extern "C"
-long set_g1(long ctxt,
-	    unsigned char* pbuf)
+int64_t set_g1(uint64_t ctxt,
+	    uint8_t* pbuf)
 {
   return element_from_bytes_compressed(G1_gen(ctxt), pbuf);
 }
@@ -126,9 +126,9 @@ long set_g1(long ctxt,
 // --------------------------------------------
 
 extern "C"
-void make_key_pair(long ctxt,
-		   unsigned char *pskey, unsigned char* ppkey,
-		   unsigned char* phash, long nhash)
+void make_key_pair(uint64_t ctxt,
+		   uint8_t *pskey, uint8_t* ppkey,
+		   uint8_t* phash, uint64_t nhash)
 {
   element_t skey, pkey;
   element_init_Zr(skey, Pairing(ctxt));
@@ -144,9 +144,9 @@ void make_key_pair(long ctxt,
 }
  
 extern "C"
-void sign_hash(long ctxt,
-	       unsigned char* psig, unsigned char* pskey,
-	       unsigned char* phash, long nhash)
+void sign_hash(uint64_t ctxt,
+	       uint8_t* psig, uint8_t* pskey,
+	       uint8_t* phash, uint64_t nhash)
 {
   element_t sig, skey;
 
@@ -161,10 +161,10 @@ void sign_hash(long ctxt,
 }
 
 extern "C"
-void make_public_subkey(long ctxt,
-			unsigned char* abuf,
-			unsigned char* pkey,
-			unsigned char* phash_id, long nhash)
+void make_public_subkey(uint64_t ctxt,
+			uint8_t* abuf,
+			uint8_t* pkey,
+			uint8_t* phash_id, uint64_t nhash)
 {
   element_t z;
   element_t gx, gp;
@@ -183,10 +183,10 @@ void make_public_subkey(long ctxt,
 }
 
 extern "C"
-void make_secret_subkey(long ctxt,
-			unsigned char* abuf,
-			unsigned char* skey,
-			unsigned char* phash_id, long nhash)
+void make_secret_subkey(uint64_t ctxt,
+			uint8_t* abuf,
+			uint8_t* skey,
+			uint8_t* phash_id, uint64_t nhash)
 {
   element_t z, zs, s;
 
@@ -205,10 +205,10 @@ void make_secret_subkey(long ctxt,
 }
 
 extern "C"
-void compute_pairing(long ctxt,
-		     unsigned char* gtbuf,
-		     unsigned char* hbuf,
-		     unsigned char* gbuf)
+void compute_pairing(uint64_t ctxt,
+		     uint8_t* gtbuf,
+		     uint8_t* hbuf,
+		     uint8_t* gbuf)
 {
   element_t hh, gg, pair;
 
@@ -226,11 +226,11 @@ void compute_pairing(long ctxt,
 }
 
 extern "C"
-void sakai_kasahara_encrypt(long ctxt,
-			    unsigned char* rbuf, // R result in G2
-			    unsigned char* pbuf, // pairing result in GT
-			    unsigned char* pkey, // public subkey in G2
-			    unsigned char* phash, long nhash)
+void sakai_kasahara_encrypt(uint64_t ctxt,
+			    uint8_t* rbuf, // R result in G2
+			    uint8_t* pbuf, // pairing result in GT
+			    uint8_t* pkey, // public subkey in G2
+			    uint8_t* phash, uint64_t nhash)
 {
   element_t zr, gt, pk;
 
@@ -257,10 +257,10 @@ void sakai_kasahara_encrypt(long ctxt,
 }
 
 extern "C"
-void sakai_kasahara_decrypt(long ctxt,
-			    unsigned char* pbuf, // pairing result in GT
-			    unsigned char* rbuf, // R pt in G2
-			    unsigned char* sbuf) // secret subkey in G1
+void sakai_kasahara_decrypt(uint64_t ctxt,
+			    uint8_t* pbuf, // pairing result in GT
+			    uint8_t* rbuf, // R pt in G2
+			    uint8_t* sbuf) // secret subkey in G1
 {
   element_t gt, sk, rk;
 
@@ -280,13 +280,13 @@ void sakai_kasahara_decrypt(long ctxt,
 }
 			    
 extern "C"
-long sakai_kasahara_check(long ctxt,
-			  unsigned char* rkey, // R in G2
-			  unsigned char* pkey, // public subkey in G2
-			  unsigned char* phash, long nhash)
+int64_t sakai_kasahara_check(uint64_t ctxt,
+			  uint8_t* rkey, // R in G2
+			  uint8_t* pkey, // public subkey in G2
+			  uint8_t* phash, uint64_t nhash)
 {
   element_t zr, pk1, pk2;
-  long      ans;
+  int64_t      ans;
 
   /* rkey, pk2 is the R value from encryption */
   /* pkey, pk1 is the public_subkey */
@@ -308,9 +308,9 @@ long sakai_kasahara_check(long ctxt,
 
 // -----------------------------------------------------------------
 
-static long get_datum(element_t elt, unsigned char* pbuf, long buflen, bool cmpr = true)
+static uint64_t get_datum(element_t elt, uint8_t* pbuf, uint64_t buflen, bool cmpr = true)
 {
-  long len;
+  uint64_t len;
 
   if(cmpr)
     len = element_length_in_bytes_compressed(elt);
@@ -330,15 +330,15 @@ static long get_datum(element_t elt, unsigned char* pbuf, long buflen, bool cmpr
 }
 
 extern "C"
-long get_g2(long ctxt,
-	    unsigned char* pbuf, long buflen)
+uint64_t get_g2(uint64_t ctxt,
+	    uint8_t* pbuf, uint64_t buflen)
 {
   return get_datum(G2_gen(ctxt), pbuf, buflen);
 }
 
 extern "C"
-long get_g1(long ctxt,
-	    unsigned char* pbuf, long buflen)
+uint64_t get_g1(uint64_t ctxt,
+	    uint8_t* pbuf, uint64_t buflen)
 {
   return get_datum(G1_gen(ctxt), pbuf, buflen);
 }
@@ -346,13 +346,13 @@ long get_g1(long ctxt,
 // ------------------------------------------------
 
 extern "C"
-long check_signature(long ctxt,
-		     unsigned char* psig,
-		     unsigned char* phash, long nhash,
-		     unsigned char *pkey)
+int64_t check_signature(uint64_t ctxt,
+		     uint8_t* psig,
+		     uint8_t* phash, uint64_t nhash,
+		     uint8_t *pkey)
 {
   element_t ptHash, ptPKey, ptSig, pair1, pair2;
-  long      tf;
+  int64_t      tf;
   element_init_G1(ptHash, Pairing(ctxt));
   element_init_G1(ptSig,  Pairing(ctxt));
   element_init_G2(ptPKey, Pairing(ctxt));
@@ -380,7 +380,7 @@ long check_signature(long ctxt,
 // well, often returning total garbage in such cases. Instead, we must
 // take precautions ourselves.
 
-bool tst_nonzero (unsigned char* ptr, long nel)
+bool tst_nonzero (uint8_t* ptr, uint64_t nel)
 {
   // search operand for a non-zero byte
   // this version assumes at least 8 bytes of memory in buffer
@@ -414,11 +414,11 @@ bool tst_nonzero (unsigned char* ptr, long nel)
 // ----------------------------------------------
 
 extern "C"
-void add_G1_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void add_G1_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G1(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -442,11 +442,11 @@ void add_G1_pts(long ctxt,
 }
   
 extern "C"
-void sub_G1_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void sub_G1_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G1(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -474,11 +474,11 @@ void sub_G1_pts(long ctxt,
 }
   
 extern "C"
-void mul_G1_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void mul_G1_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G1(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -502,11 +502,11 @@ void mul_G1_pts(long ctxt,
 }
   
 extern "C"
-void div_G1_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void div_G1_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G1(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -534,11 +534,11 @@ void div_G1_pts(long ctxt,
 }
   
 extern "C"
-void neg_G1_pt(long ctxt,
-	       unsigned char* pt1)
+void neg_G1_pt(uint64_t ctxt,
+	       uint8_t* pt1)
 {
   element_t p1;
-  long      nel;
+  int      nel;
   element_init_G1(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -551,11 +551,11 @@ void neg_G1_pt(long ctxt,
 }
   
 extern "C"
-void inv_G1_pt(long ctxt,
-	       unsigned char* pt1)
+void inv_G1_pt(uint64_t ctxt,
+	       uint8_t* pt1)
 {
   element_t p1;
-  long      nel;
+  int       nel;
   element_init_G1(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -570,11 +570,11 @@ void inv_G1_pt(long ctxt,
 // ----------------------------------------------
 
 extern "C"
-void add_G2_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void add_G2_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G2(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -598,11 +598,11 @@ void add_G2_pts(long ctxt,
 }
   
 extern "C"
-void sub_G2_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void sub_G2_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G2(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -630,11 +630,11 @@ void sub_G2_pts(long ctxt,
 }
   
 extern "C"
-void mul_G2_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void mul_G2_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G2(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -658,11 +658,11 @@ void mul_G2_pts(long ctxt,
 }
   
 extern "C"
-void div_G2_pts(long ctxt,
-		unsigned char* pt1, unsigned char* pt2)
+void div_G2_pts(uint64_t ctxt,
+		uint8_t* pt1, uint8_t* pt2)
 {
   element_t p1, p2;
-  long      nel;
+  int       nel;
   element_init_G2(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -690,11 +690,11 @@ void div_G2_pts(long ctxt,
 }
   
 extern "C"
-void neg_G2_pt(long ctxt,
-	       unsigned char* pt1)
+void neg_G2_pt(uint64_t ctxt,
+	       uint8_t* pt1)
 {
   element_t p1;
-  long      nel;
+  int       nel;
   element_init_G2(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -707,11 +707,11 @@ void neg_G2_pt(long ctxt,
 }
   
 extern "C"
-void inv_G2_pt(long ctxt,
-	       unsigned char* pt1)
+void inv_G2_pt(uint64_t ctxt,
+	       uint8_t* pt1)
 {
   element_t p1;
-  long      nel;
+  int       nel;
   element_init_G2(p1, Pairing(ctxt));
   nel = element_length_in_bytes_compressed(p1);
   if(tst_nonzero(pt1, nel))
@@ -726,8 +726,8 @@ void inv_G2_pt(long ctxt,
 // ----------------------------------------------
 
 extern "C"
-void add_Zr_vals(long ctxt,
-		 unsigned char* zr1, unsigned char* zr2)
+void add_Zr_vals(uint64_t ctxt,
+		 uint8_t* zr1, uint8_t* zr2)
 {
   element_t z1, z2;
   element_init_Zr(z1, Pairing(ctxt));
@@ -741,8 +741,8 @@ void add_Zr_vals(long ctxt,
 }
   
 extern "C"
-void sub_Zr_vals(long ctxt,
-		 unsigned char* zr1, unsigned char* zr2)
+void sub_Zr_vals(uint64_t ctxt,
+		 uint8_t* zr1, uint8_t* zr2)
 {
   element_t z1, z2;
   element_init_Zr(z1, Pairing(ctxt));
@@ -756,8 +756,8 @@ void sub_Zr_vals(long ctxt,
 }
   
 extern "C"
-void mul_Zr_vals(long ctxt,
-		 unsigned char* zr1, unsigned char* zr2)
+void mul_Zr_vals(uint64_t ctxt,
+		 uint8_t* zr1, uint8_t* zr2)
 {
   element_t z1, z2;
   element_init_Zr(z1, Pairing(ctxt));
@@ -771,8 +771,8 @@ void mul_Zr_vals(long ctxt,
 }
   
 extern "C"
-void div_Zr_vals(long ctxt,
-		 unsigned char* zr1, unsigned char* zr2)
+void div_Zr_vals(uint64_t ctxt,
+		 uint8_t* zr1, uint8_t* zr2)
 {
   element_t z1, z2;
   element_init_Zr(z1, Pairing(ctxt));
@@ -786,8 +786,8 @@ void div_Zr_vals(long ctxt,
 }
 
 extern "C"
-void exp_Zr_vals(long ctxt,
-		 unsigned char* zr1, unsigned char* zr2)
+void exp_Zr_vals(uint64_t ctxt,
+		 uint8_t* zr1, uint8_t* zr2)
 {
   element_t z1, z2;
   element_init_Zr(z1, Pairing(ctxt));
@@ -801,11 +801,11 @@ void exp_Zr_vals(long ctxt,
 }
   
 extern "C"
-void inv_Zr_val(long ctxt,
-		unsigned char* zr)
+void inv_Zr_val(uint64_t ctxt,
+		uint8_t* zr)
 {
   element_t z;
-  long nel;
+  int       nel;
   element_init_Zr(z, Pairing(ctxt));
   nel = element_length_in_bytes(z);
   if(tst_nonzero(zr, nel))
@@ -818,11 +818,11 @@ void inv_Zr_val(long ctxt,
 }
 
 extern "C"
-void neg_Zr_val(long ctxt,
-		  unsigned char* zr)
+void neg_Zr_val(uint64_t ctxt,
+		  uint8_t* zr)
 {
   element_t z;
-  long nel;
+  int       nel;
   element_init_Zr(z, Pairing(ctxt));
   nel = element_length_in_bytes(z);
   if(tst_nonzero(zr, nel))
@@ -837,11 +837,11 @@ void neg_Zr_val(long ctxt,
 // ----------------------------------------------
 
 extern "C"
-void mul_G1z(long ctxt,
-	       unsigned char* g1, unsigned char* zr)
+void mul_G1z(uint64_t ctxt,
+	       uint8_t* g1, uint8_t* zr)
 {
   element_t z, g;
-  long nelg, nelz;
+  int nelg, nelz;
   
   element_init_G1(g, Pairing(ctxt));
   nelg = element_length_in_bytes_compressed(g);
@@ -867,11 +867,11 @@ void mul_G1z(long ctxt,
 }
   
 extern "C"
-void exp_G1z(long ctxt,
-	       unsigned char* g1, unsigned char* zr)
+void exp_G1z(uint64_t ctxt,
+	       uint8_t* g1, uint8_t* zr)
 {
   element_t z, g;
-  long nelg, nelz;
+  int nelg, nelz;
   
   element_init_G1(g, Pairing(ctxt));
   nelg = element_length_in_bytes_compressed(g);
@@ -899,11 +899,11 @@ void exp_G1z(long ctxt,
 // ----------------------------------------------
 
 extern "C"
-void mul_G2z(long ctxt,
-	       unsigned char* g1, unsigned char* zr)
+void mul_G2z(uint64_t ctxt,
+	       uint8_t* g1, uint8_t* zr)
 {
   element_t z, g;
-  long nelg, nelz;
+  int nelg, nelz;
   
   element_init_G2(g, Pairing(ctxt));
   nelg = element_length_in_bytes_compressed(g);
@@ -929,11 +929,11 @@ void mul_G2z(long ctxt,
 }
   
 extern "C"
-void exp_G2z(long ctxt,
-	       unsigned char* g1, unsigned char* zr)
+void exp_G2z(uint64_t ctxt,
+	       uint8_t* g1, uint8_t* zr)
 {
   element_t z, g;
-  long nelg, nelz;
+  int nelg, nelz;
   
   element_init_G2(g, Pairing(ctxt));
   nelg = element_length_in_bytes_compressed(g);
@@ -961,11 +961,11 @@ void exp_G2z(long ctxt,
 // ----------------------------------------------
 
 extern "C"
-void mul_GT_vals(long ctxt,
-		   unsigned char* gt1, unsigned char* gt2)
+void mul_GT_vals(uint64_t ctxt,
+		   uint8_t* gt1, uint8_t* gt2)
 {
   element_t z1, z2;
-  long nel;
+  int nel;
   element_init_GT(z1, Pairing(ctxt));
   nel = element_length_in_bytes(z1);
   if(tst_nonzero(gt1, nel))
@@ -989,11 +989,11 @@ void mul_GT_vals(long ctxt,
 }
   
 extern "C"
-void div_GT_vals(long ctxt,
-		   unsigned char* gt1, unsigned char* gt2)
+void div_GT_vals(uint64_t ctxt,
+		   uint8_t* gt1, uint8_t* gt2)
 {
   element_t z1, z2;
-  long nel;
+  int nel;
   
   element_init_GT(z1, Pairing(ctxt));
   nel = element_length_in_bytes(z1);
@@ -1018,11 +1018,11 @@ void div_GT_vals(long ctxt,
 }
   
 extern "C"
-void inv_GT_val(long ctxt,
-		unsigned char* gt)
+void inv_GT_val(uint64_t ctxt,
+		uint8_t* gt)
 {
   element_t z1;
-  long nel;
+  int nel;
   
   element_init_GT(z1, Pairing(ctxt));
   nel = element_length_in_bytes(z1);
@@ -1036,11 +1036,11 @@ void inv_GT_val(long ctxt,
 }
   
 extern "C"
-void exp_GTz(long ctxt,
-	     unsigned char* gt, unsigned char* zr)
+void exp_GTz(uint64_t ctxt,
+	     uint8_t* gt, uint8_t* zr)
 {
   element_t z1, z2;
-  long nelg, nelz;
+  int nelg, nelz;
   
   element_init_GT(z1, Pairing(ctxt));
   nelg = element_length_in_bytes(z1);
@@ -1068,8 +1068,8 @@ void exp_GTz(long ctxt,
 // ----------------------------------------------
 
 extern "C"
-void get_G1_from_hash(long ctxt,
-		      unsigned char *g1_pt, unsigned char *phash, long nhash)
+void get_G1_from_hash(uint64_t ctxt,
+		      uint8_t *g1_pt, uint8_t *phash, uint64_t nhash)
 {
   element_t g;
 
@@ -1080,8 +1080,8 @@ void get_G1_from_hash(long ctxt,
 }
 
 extern "C"
-void get_G2_from_hash(long ctxt,
-		      unsigned char *g2_pt, unsigned char *phash, long nhash)
+void get_G2_from_hash(uint64_t ctxt,
+		      uint8_t *g2_pt, uint8_t *phash, uint64_t nhash)
 {
   element_t g;
 
@@ -1092,8 +1092,8 @@ void get_G2_from_hash(long ctxt,
 }
 
 extern "C"
-void get_Zr_from_hash(long ctxt,
-		      unsigned char *zr_val, unsigned char *phash, long nhash)
+void get_Zr_from_hash(uint64_t ctxt,
+		      uint8_t *zr_val, uint8_t *phash, uint64_t nhash)
 {
   element_t z;
 

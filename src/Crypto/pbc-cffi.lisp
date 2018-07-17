@@ -185,259 +185,275 @@ THE SOFTWARE.
   (cffi:use-foreign-library libpbc))
 
 ;; -----------------------------------------------------------------------
+(cffi:defcfun ("echo" _echo) :uint64
+  (nel     :uint64)
+  (txt-out :pointer :char)
+  (txt-in  :pointer :char))
+
+(defun echo (&optional (str "Hello There!"))
+  (cffi:with-foreign-string ((ctxt-in ntxt) str
+                             :encoding :ASCII)
+    (cffi:with-foreign-pointer (ctxt-out 80)
+      (let ((ans (_echo ntxt ctxt-in ctxt-out))
+            (out (make-array 80 :element-type '(signed-byte 8))))
+        (loop for ix from 0 below 80 do
+              (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
+        (list ans out (map 'string 'code-char (subseq out 0 ans)))))))
+
+;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("init_pairing" _init-pairing) :long
-  (context     :long)
-  (param-text  :pointer :unsigned-char)
-  (ntext       :long)
-  (psizes      :pointer :long))
+(cffi:defcfun ("init_pairing" _init-pairing) :int64
+  (context     :uint64)
+  (param-text  :pointer :char)
+  (ntext       :uint64)
+  (psizes      :pointer :uint64))
 
 ;; -------------------------------------------------
 ;; Query interface
 
-(cffi:defcfun ("get_g2" _get-g2) :long
-  (context     :long)
+(cffi:defcfun ("get_g2" _get-g2) :uint64
+  (context     :uint64)
   (pbuf        :pointer :void)
-  (nbuf        :long))
+  (nbuf        :uint64))
 
-(cffi:defcfun ("get_g1" _get-g1) :long
-  (context     :long)
+(cffi:defcfun ("get_g1" _get-g1) :uint64
+  (context     :uint64)
   (pbuf        :pointer :void)
-  (nbuf        :long))
+  (nbuf        :uint64))
 
 ;; -------------------------------------------------
 ;; Setter interface
 
-(cffi:defcfun ("set_g2" _set-g2) :long
-  (context     :long)
-  (pbuf   :pointer :unsigned-char))
+(cffi:defcfun ("set_g2" _set-g2) :int64
+  (context   :uint64)
+  (pbuf      :pointer :uint8))
 
-(cffi:defcfun ("set_g1" _set-g1) :long
-  (context     :long)
-  (pbuf   :pointer :unsigned-char))
+(cffi:defcfun ("set_g1" _set-g1) :int64
+  (context   :uint64)
+  (pbuf      :pointer :uint8))
 
 ;; -------------------------------------------------
 ;; Keying interface
 
 (cffi:defcfun ("make_key_pair" _make-key-pair) :void
-  (context     :long)
-  (skbuf  :pointer :unsigned-char)
-  (pkbuf  :pointer :unsigned-char)
-  (hbuf   :pointer :unsigned-char)
-  (nhash  :long))
+  (context     :uint64)
+  (skbuf  :pointer :uint8)
+  (pkbuf  :pointer :uint8)
+  (hbuf   :pointer :uint8)
+  (nhash  :uint64))
 
 (cffi:defcfun ("make_public_subkey" _make-public-subkey) :void
-  (context     :long)
-  (abuf   :pointer :unsigned-char)
-  (pbuf   :pointer :unsigned-char)
-  (hbuf   :pointer :unsigned-char)
-  (hlen   :long))
+  (context     :uint64)
+  (abuf   :pointer :uint8)
+  (pbuf   :pointer :uint8)
+  (hbuf   :pointer :uint8)
+  (hlen   :uint64))
 
 (cffi:defcfun ("make_secret_subkey" _make-secret-subkey) :void
-  (context     :long)
-  (abuf   :pointer :unsigned-char)
-  (sbuf   :pointer :unsigned-char)
-  (hbuf   :pointer :unsigned-char)
-  (hlen   :long))
+  (context     :uint64)
+  (abuf   :pointer :uint8)
+  (sbuf   :pointer :uint8)
+  (hbuf   :pointer :uint8)
+  (hlen   :uint64))
 
 (cffi:defcfun ("sakai_kasahara_encrypt" _sakai-kasahara-encrypt) :void
   ;; aka SAKKE, IETF RFC 6508
-  (context     :long)
-  (rbuf   :pointer :unsigned-char) ;; returned R point in G2
-  (pbuf   :pointer :unsigned-char) ;; returned pairing for encryption in GT
-  (pkey   :pointer :unsigned-char) ;; public subkey in G2
-  (hbuf   :pointer :unsigned-char) ;; hash(ID, msg)
-  (hlen   :long))
+  (context     :uint64)
+  (rbuf   :pointer :uint8) ;; returned R point in G2
+  (pbuf   :pointer :uint8) ;; returned pairing for encryption in GT
+  (pkey   :pointer :uint8) ;; public subkey in G2
+  (hbuf   :pointer :uint8) ;; hash(ID, msg)
+  (hlen   :uint64))
 
 (cffi:defcfun ("sakai_kasahara_decrypt" _sakai-kasahara-decrypt) :void
   ;; aka SAKKE, IETF RFC 6508
-  (context     :long)
-  (pbuf   :pointer :unsigned-char)  ;; returned pairing for decryptin in GT
-  (rbuf   :pointer :unsigned-char)  ;; R point in G2
-  (skey   :pointer :unsigned-char)) ;; secret subkey in G1
+  (context     :uint64)
+  (pbuf   :pointer :uint8)  ;; returned pairing for decryptin in GT
+  (rbuf   :pointer :uint8)  ;; R point in G2
+  (skey   :pointer :uint8)) ;; secret subkey in G1
 
-(cffi:defcfun ("sakai_kasahara_check" _sakai-kasahara-check) :long
+(cffi:defcfun ("sakai_kasahara_check" _sakai-kasahara-check) :uint64
   ;; aka SAKKE, IETF RFC 6508
-  (context     :long)
-  (rbuf   :pointer :unsigned-char)  ;; R point in G2
-  (pkey   :pointer :unsigned-char)  ;; public subkey in G2
-  (hbuf   :pointer :unsigned-char)  ;; hash(ID, msg)
-  (hlen   :long))
+  (context     :uint64)
+  (rbuf   :pointer :uint8)  ;; R point in G2
+  (pkey   :pointer :uint8)  ;; public subkey in G2
+  (hbuf   :pointer :uint8)  ;; hash(ID, msg)
+  (hlen   :uint64))
 
 ;; -------------------------------------------------
 ;; BLS Signatures
 
 (cffi:defcfun ("sign_hash" _sign-hash) :void
-  (context     :long)
-  (sig    :pointer :unsigned-char)
-  (skbuf  :pointer :unsigned-char)
-  (pbuf   :pointer :unsigned-char)
-  (nbuf   :long))
+  (context     :uint64)
+  (sig    :pointer :uint8)
+  (skbuf  :pointer :uint8)
+  (pbuf   :pointer :uint8)
+  (nbuf   :uint64))
 
-(cffi:defcfun ("check_signature" _check-signature) :long
-  (context     :long)
-  (psig   :pointer :unsigned-char)
-  (phash  :pointer :unsigned-char)
-  (nhash  :long)
-  (pkey   :pointer :unsigned-char))
+(cffi:defcfun ("check_signature" _check-signature) :int64
+  (context     :uint64)
+  (psig   :pointer :uint8)
+  (phash  :pointer :uint8)
+  (nhash  :uint64)
+  (pkey   :pointer :uint8))
 
 ;; -------------------------------------------------
 ;; Curve math ops
 
 (cffi:defcfun ("add_G1_pts" _add-g1-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("sub_G1_pts" _sub-g1-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("mul_G1_pts" _mul-g1-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("div_G1_pts" _div-g1-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("neg_G1_pt" _neg-g1-pt) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8))
 
 (cffi:defcfun ("inv_G1_pt" _inv-g1-pt) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8))
 
 (cffi:defcfun ("add_G2_pts" _add-g2-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("sub_G2_pts" _sub-g2-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("mul_G2_pts" _mul-g2-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("div_G2_pts" _div-g2-pts) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("neg_G2_pt" _neg-g2-pt) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8))
 
 (cffi:defcfun ("inv_G2_pt" _inv-g2-pt) :void
-  (context     :long)
-  (p1    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8))
 
 (cffi:defcfun ("add_Zr_vals" _add-zr-vals) :void
-  (context     :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("sub_Zr_vals" _sub-zr-vals) :void
-  (context     :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("mul_Zr_vals" _mul-zr-vals) :void
-  (context     :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("div_Zr_vals" _div-zr-vals) :void
-  (context     :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("exp_Zr_vals" _exp-zr-vals) :void
-  (context     :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("neg_Zr_val" _neg-zr-val) :void
-  (context     :long)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
-  (context     :long)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("mul_G1z" _mul-G1z) :void
-  (context :long)
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("exp_G1z" _exp-G1z) :void
-  (context     :long)
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("mul_G2z" _mul-G2z) :void
-  (context     :long)
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("exp_G2z" _exp-G2z) :void
-  (context     :long)
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("compute_pairing" _compute-pairing) :void
-  (context     :long)
-  (gtbuf :pointer :unsigned-char)  ;; result returned here
-  (hbuf  :pointer :unsigned-char)
-  (gbuf  :pointer :unsigned-char))
+  (context     :uint64)
+  (gtbuf :pointer :uint8)  ;; result returned here
+  (hbuf  :pointer :uint8)
+  (gbuf  :pointer :uint8))
 
 (cffi:defcfun ("mul_GT_vals" _mul-GT-vals) :void
-  (context :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("div_GT_vals" _div-GT-vals) :void
-  (context :long)
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
 
 (cffi:defcfun ("exp_GTz" _exp-GTz) :void
-  (context :long)
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("inv_GT_val" _inv-GT-val) :void
-  (context :long)
-  (g     :pointer :unsigned-char))
+  (context :uint64)
+  (g     :pointer :uint8))
 
 ;; ----------------------------------------------------
 
 (cffi:defcfun ("get_G1_from_hash" _get-g1-from-hash) :void
-  (context     :long)
-  (g1buf :pointer :unsigned-char)
-  (hbuf  :pointer :unsigned-char)
-  (nhash :long))
+  (context     :uint64)
+  (g1buf :pointer :uint8)
+  (hbuf  :pointer :uint8)
+  (nhash :uint64))
 
 (cffi:defcfun ("get_G2_from_hash" _get-g2-from-hash) :void
-  (context     :long)
-  (g2buf :pointer :unsigned-char)
-  (hbuf  :pointer :unsigned-char)
-  (nhash :long))
+  (context     :uint64)
+  (g2buf :pointer :uint8)
+  (hbuf  :pointer :uint8)
+  (nhash :uint64))
 
 (cffi:defcfun ("get_Zr_from_hash" _get-zr-from-hash) :void
-  (context     :long)
-  (zrbuf :pointer :unsigned-char)
-  (hbuf  :pointer :unsigned-char)
-  (nhash :long))
+  (context     :uint64)
+  (zrbuf :pointer :uint8)
+  (hbuf  :pointer :uint8)
+  (nhash :uint64))
 
 ;; -------------------------------------------------
 ;; Abstract superclass for crypto objects. These are just wrappers
@@ -836,7 +852,8 @@ comparison.")
 (define-symbol-macro *zr-size*       (full-curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
 (define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
 
-(defvar *contexts* (make-array 16)) ;; holds copies of *curve* parameters from init-pairing
+(defvar *contexts* (make-array 16 ;; holds copies of *curve* parameters from init-pairing
+                               :initial-element nil))
 
 ;; -------------------------------------------------
 ;; Coercion functions in case we are dealing with a client that only
@@ -902,8 +919,7 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
-  (assert (and (integerp context)
-               (<= 0 context 15)))
+  (check-type context (integer 0 15))
   (mpcompat:with-lock (*crypto-lock*)
     (let ((prev   *curve*)
           (cparams (or (and params
@@ -918,7 +934,7 @@ SMP access. Everything else should be SMP-safe."
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
                          (g2   curve-params-g2)) cparams
-          (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
+          (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :uint64)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
               (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
@@ -928,10 +944,10 @@ SMP access. Everything else should be SMP-safe."
                              :g1            (curve-params-g1           cparams)
                              :g2            (curve-params-g2           cparams)
                              :context       context)
-                    *g1-size*  (cffi:mem-aref ansbuf :long 0)
-                    *g2-size*  (cffi:mem-aref ansbuf :long 1)
-                    *gt-size*  (cffi:mem-aref ansbuf :long 2)
-                    *zr-size*  (cffi:mem-aref ansbuf :long 3)
+                    *g1-size*  (cffi:mem-aref ansbuf :uint64 0)
+                    *g2-size*  (cffi:mem-aref ansbuf :uint64 1)
+                    *gt-size*  (cffi:mem-aref ansbuf :uint64 2)
+                    *zr-size*  (cffi:mem-aref ansbuf :uint64 3)
                     *curve-order* nil
                     (aref *contexts* context) *curve*)
               (get-order) ;; fills in *curve-order* cached value
@@ -944,7 +960,7 @@ SMP access. Everything else should be SMP-safe."
               (if g2
                   (set-generator g2)
                 (get-g1)) ;; fill in cached value
-              ))))
+              ))) )
       prev))) ;; return previous *curve*
 
 ;; -------------------------------------------------
@@ -993,7 +1009,7 @@ SMP access. Everything else should be SMP-safe."
 (defun xfer-foreign-to-lisp (fbuf nel)
   (let ((lbuf (make-ub8-vector nel)))
     (dotimes (ix nel)
-      (setf (aref lbuf ix) (cffi:mem-aref fbuf :unsigned-char ix)))
+      (setf (aref lbuf ix) (cffi:mem-aref fbuf :uint8 ix)))
     (construct-bev lbuf)))
 
 (defun ensure-bevn (buf nel)
@@ -1002,7 +1018,7 @@ SMP access. Everything else should be SMP-safe."
 (defun xfer-lisp-to-foreign (lbuf fbuf nel)
   (let ((llbuf  (ensure-bevn lbuf nel)))
     (dotimes (ix nel)
-      (setf (cffi:mem-aref fbuf :unsigned-char ix) (aref llbuf ix)))
+      (setf (cffi:mem-aref fbuf :uint8 ix) (aref llbuf ix)))
     ))
 
 (defmacro with-fli-buffers (buffers &body body)
