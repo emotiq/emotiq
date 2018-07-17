@@ -372,31 +372,31 @@ THE SOFTWARE.
     ))
 
 (defun slow-to-affine (pt)
-  (optima:ematch pt
-    ((ed-proj-pt- :x x :y y :z z)
-     (if (= z 1)
-         (make-ecc-pt
-          :x x
-          :y y)
-       ;; else
-       (with-mod *ed-q*
-         (make-ecc-pt
-          :x (m/ x z)
-          :y (m/ y z)))
-       ))))
+  (with-accessors ((x  ed-proj-pt-x)
+                   (y  ed-proj-pt-y)
+                   (z  ed-proj-pt-z)) pt
+    (with-mod *ed-q*
+      (make-ecc-pt
+       :x (m/ x z)
+       :y (m/ y z))
+      )))
 
+(defun have-fast-impl ()
+  (or (eql *edcurve* *curve-ed3363*)
+      (eql *edcurve* *curve1174*)))
+  
 (defun ed-affine (pt)
   (optima:ematch pt
     ((ecc-pt-) pt)
-    ((ed-proj-pt- :z z)
+    ((ed-proj-pt- :x x :y y :z z)
      (cond ((= 1 z)
             (make-ecc-pt
-             :x (ed-proj-pt-x pt)
-             :y (ed-proj-pt-y pt)))
-           ((or (eql *edcurve* *curve-ed3363*)
-                (eql *edcurve* *curve1174*))
+             :x x
+             :y y))
+           ((have-fast-impl)
             (fast-to-affine pt))
-           (t  (slow-to-affine pt))
+           (t
+            (slow-to-affine pt))
            ))))
     
 (defun ed-projective (pt)
@@ -575,8 +575,7 @@ THE SOFTWARE.
   ;; (tally :ecadd)
   (let ((ppt1 (ed-projective pt1))  ;; projective add is so much faster than affine add
         (ppt2 (ed-projective pt2))) ;; so it pays to make the conversion
-    (cond ((or (eq *edcurve* *curve-ed3363*)
-               (eq *edcurve* *curve1174*))
+    (cond ((have-fast-impl)
            (fast-add ppt1 ppt2))
           (t 
            ;; since projective add takes about 6 usec, and affine add takes
@@ -712,6 +711,48 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
+(defun fast-affine-fn ()
+  (get-cached-symbol-data '*edcurve*
+                          :fast-affine-fn *edcurve*
+                          (lambda ()
+                            (cond ((eql *edcurve* *curve1174*)
+                                   '_Curve1174-to-affine)
+                                  ((eql *edcurve* *curve-ed3363*)
+                                   '_Ed3363-to-affine)
+                                  ))))
+
+(defun fast-affine-mul-fn ()
+  (get-cached-symbol-data '*edcurve*
+                          :fast-affine-mul-fn *edcurve*
+                          (lambda ()
+                            (cond ((eql *edcurve* *curve1174*)
+                                   '_curve1174-affine-mul)
+                                  ((eql *edcurve* *curve-ed3363*)
+                                   '_Ed3363-affine-mul)
+                                  ))))
+
+(defun fast-projective-mul-fn ()
+  (get-cached-symbol-data '*edcurve*
+                          :fast-projective-mul-fn *edcurve*
+                          (lambda ()
+                            (cond ((eql *edcurve* *curve1174*)
+                                   '_curve1174-projective-mul)
+                                  ((eql *edcurve* *curve-ed3363*)
+                                   '_Ed3363-projective-mul)
+                                  ))))
+
+(defun fast-projective-add-fn ()
+  (get-cached-symbol-data '*edcurve*
+                          :fast-projective-add-fn *edcurve*
+                          (lambda ()
+                            (cond ((eql *edcurve* *curve1174*)
+                                   '_curve1174-projective-add)
+                                  ((eql *edcurve* *curve-ed3363*)
+                                   '_ed3363-projective-add)
+                                  ))))
+
+;; -------------------------------------------------------------------
+
 (defun fast-mul (pt n)
   (declare (integer n))
   ;; (tally :ecmul)
@@ -732,9 +773,7 @@ THE SOFTWARE.
                               (cptz)
                               (cwv  nn))
 
-             (funcall (if (eql *edcurve* *curve-ed3363*)
-                          '_Ed3363-affine-mul
-                        '_Curve1174-affine-mul)
+             (funcall (fast-affine-mul-fn)
                       cptx cpty cptz cwv)
              
              (make-ed-proj-pt
@@ -750,9 +789,7 @@ THE SOFTWARE.
                               (cptz (ed-proj-pt-z pt))
                               (cwv  nn))
              
-             (funcall (if (eql *edcurve* *curve-ed3363*)
-                          '_Ed3363-projective-mul
-                        '_Curve1174-projective-mul)
+             (funcall (fast-projective-mul-fn)
                       cptx cpty cptz cwv)
              
              (make-ed-proj-pt
@@ -770,9 +807,7 @@ THE SOFTWARE.
                      (cpt2yv (ed-proj-pt-y pt2))
                      (cpt2zv (ed-proj-pt-z pt2)))
     
-             (funcall (if (eql *edcurve* *curve-ed3363*)
-                          '_Ed3363-projective-add
-                        '_Curve1174-projective-add)
+             (funcall (fast-projective-add-fn)
                       cpt1xv cpt1yv cpt1zv
                       cpt2xv cpt2yv cpt2zv)
     
@@ -792,9 +827,7 @@ THE SOFTWARE.
                             (cpty (ed-proj-pt-y pt))
                             (cptz (ed-proj-pt-z pt)))
            
-             (funcall (if (eql *edcurve* *curve-ed3363*)
-                          '_Ed3363-to-affine
-                        '_Curve1174-to-affine)
+             (funcall (fast-affine-fn)
                       cptx cpty cptz)
              
            (make-ecc-pt
@@ -932,10 +965,10 @@ THE SOFTWARE.
   (let* ((alpha  (* *ed-r* *ed-h* (field-random #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  (cond ((or (eq *edcurve* *curve-ed3363*)
-             (eq *edcurve* *curve1174*))
+  (cond ((have-fast-impl)
          (fast-mul pt n))
-        (t (ed-basic-mul pt n))
+        (t
+         (ed-basic-mul pt n))
         ))
 
 (defun ed-div (pt n)
