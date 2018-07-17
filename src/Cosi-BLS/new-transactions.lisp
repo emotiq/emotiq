@@ -992,13 +992,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defparameter *minimum-spend-amount* 0) ; ---!!! review!!
-(defparameter *maximmum-spend-amount* (initial-total-coin-amount))
+(defparameter *maximum-spend-amount* (initial-total-coin-amount))
 
 (defun in-legal-money-range-p (amount)
   (and (>= amount *minimum-spend-amount*)
-       (<= amount *maximmum-spend-amount*)))
+       (<= amount *maximum-spend-amount*)))
 
+(defun in-legal-stake-range-p (amount)
+  (in-legal-money-range-p amount))
 
+;; ---!!! Above forms need review!!  -mhd, 7/5/18
 
 
 ;;; The next two values to initialize the id and index of the input for a coinbase transaction
@@ -1430,11 +1433,22 @@ of type TYPE."
 
 
 (defun get-utxos-per-account (address)
-  "Return the UTXOs for ADDRESS as list of n-tuples of the form
+  "Return the UTXOs for ADDRESS as a list of two elements of the form
 
-  (TXO PARENT-TX ...)
+     (TXO OUTPOINT AMT)
 
-ADDRESS here is taken to mean the same thing as the public key hash."
+   Here, TXO is a transaction-output instance that pays ADDRESS, and
+   OUTPOINT is a list of the form
+
+     (TxID INDEX)
+
+   where TxID is the transaction ID of the parent transaction, i.e.,
+   the transaction containing TXO, and INDEX is the zero-based index
+   of TXO in the sequence of the parent's transaction outputs. And
+   where AMT is an integer amount of coin subunits.
+
+   ADDRESS here is taken to mean the same thing as the public key
+   hash."
   (let ((utxos-so-far '()))
     (do-blockchain (block)
       (do-transactions (tx block)
@@ -1443,11 +1457,16 @@ ADDRESS here is taken to mean the same thing as the public key hash."
               as index from 0
               when (and (account-addresses= public-key-hash address)
                         (utxo-p tx index))
-                collect (list txo tx)   ; ... addition entries maybe later?
+                collect `(,txo (,(transaction-id tx) ,index) 
+                               ,(tx-out-amount txo))
                   into result
               finally (setq utxos-so-far
                             (nconc utxos-so-far result)))))
     utxos-so-far))
+
+;; Potential source of confusion: the above does not include the
+;; mempool. I.e., it considers a TXO that was spent in a transaction
+;; sitting in the mempool to be a UTXO.
 
 
 
@@ -1456,8 +1475,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
    value returned is a non-negative integer that indicates the number
    of UTXOs associated with the address."
   (let ((utxos (get-utxos-per-account address)))
-    (loop for (txo) in utxos
-          as amount = (tx-out-amount txo)
+    (loop for (nil nil amount) in utxos
           collect amount into amounts
           finally (return
                     (values

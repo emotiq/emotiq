@@ -2,7 +2,7 @@
 
 (defsystem "gossip-test"
   :version "0.1.0"
-  :description "Gossip Tests"
+  :description "Gossip Test"
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
   :depends-on (gossip lisp-unit)
@@ -16,4 +16,4 @@
                (:module tests
                         :depends-on (package)
                         :pathname "test/"
-                        :components ((:file "gossip-tests")))))
+                        :components ((:file "gossip-test")))))
