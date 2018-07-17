@@ -8,6 +8,7 @@ variables:
 
 stages:
   - test
+  - test_chain
   - build_test
   - test_binary
   - build_release
@@ -69,6 +70,17 @@ test:macos:ccl:
     LISP: sbcl
   allow_failure: true
 
+.test_chain: &test_chain_definition
+  stage: test_chain
+  script:
+    - ci/tests/test-chain.bash
+
+test_chain:linux:ccl:
+  <<: *test_chain_definition
+  tags:
+    - linux
+  variables:
+    LISP: ccl
 
 .build_release: &build_release_definition
   stage: build_release

@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 
-# Start the Emotiq blockchain
+BASE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEVNET_CONFIGS_PATH=$BASE/../node-configs
+EMOTIQ_ETC_ROOT=$BASE/../../var/etc
 
+# Copy testing config files
+mkdir -p $EMOTIQ_ETC_ROOT
+cp -r $DEVNET_CONFIGS_PATH/* $EMOTIQ_ETC_ROOT
+
+# Start the Emotiq blockchain
 for i in {1..3} ; do
   if ./start-node.bash $i ; then
     echo Node ${i} started...
@@ -12,18 +19,16 @@ for i in {1..3} ; do
 done
 
 # Send pings to the nodes
-
 for i in {1..3} ; do
-  if python3 ws-ping.py $i ; then
+  if python3 ws-rpcping.py $i ; then
     echo Node $i pong received
   else
-    echo Failed to ping Node ${i}. Exiting
-    exit 1
+    echo Failed to ping Node ${i}. Skipping following nodes.
+    break
   fi
 done
 
 # Stop all the nodes
-
 for i in {1..3} ; do
   echo Stopping Node ${i}
   tmux kill-session -t node${i}
