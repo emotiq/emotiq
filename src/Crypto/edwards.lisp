@@ -388,11 +388,14 @@ THE SOFTWARE.
 (defun ed-affine (pt)
   (optima:ematch pt
     ((ecc-pt-) pt)
-    ((ed-proj-pt-)
-     (cond ((eql *edcurve* *curve-ed3363*)
-            (fast-ed3363-to-affine pt))
-           ((eql *edcurve* *curve1174*)
-            (fast-curve1174-to-affine pt))
+    ((ed-proj-pt- :z z)
+     (cond ((= 1 z)
+            (make-ecc-pt
+             :x (ed-proj-pt-x pt)
+             :y (ed-proj-pt-y pt)))
+           ((or (eql *edcurve* *curve-ed3363*)
+                (eql *edcurve* *curve1174*))
+            (fast-to-affine pt))
            (t  (slow-to-affine pt))
            ))))
     
@@ -572,10 +575,9 @@ THE SOFTWARE.
   ;; (tally :ecadd)
   (let ((ppt1 (ed-projective pt1))  ;; projective add is so much faster than affine add
         (ppt2 (ed-projective pt2))) ;; so it pays to make the conversion
-    (cond ((eq *edcurve* *curve-ed3363*)
-           (fast-ed3363-add ppt1 ppt2))
-          ((eq *edcurve* *curve1174*)
-           (fast-curve1174-add ppt1 ppt2))
+    (cond ((or (eq *edcurve* *curve-ed3363*)
+               (eq *edcurve* *curve1174*))
+           (fast-add ppt1 ppt2))
           (t 
            ;; since projective add takes about 6 usec, and affine add takes
            ;; about 40 usec, it pays to always convert to projective coords,
@@ -710,7 +712,7 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
-(defun fast-ed3363-mul (pt n)
+(defun fast-mul (pt n)
   (declare (integer n))
   ;; (tally :ecmul)
   (let ((nn  (with-mod *ed-r*
@@ -729,8 +731,11 @@ THE SOFTWARE.
                               (cpty (ecc-pt-y pt))
                               (cptz)
                               (cwv  nn))
-             
-             (_Ed3363-affine-mul cptx cpty cptz cwv)
+
+             (funcall (if (eql *edcurve* *curve-ed3363*)
+                          '_Ed3363-affine-mul
+                        '_Curve1174-affine-mul)
+                      cptx cpty cptz cwv)
              
              (make-ed-proj-pt
               :x (xfer-from-c cptx) ;; projective out...
@@ -745,7 +750,10 @@ THE SOFTWARE.
                               (cptz (ed-proj-pt-z pt))
                               (cwv  nn))
              
-             (_Ed3363-projective-mul cptx cpty cptz cwv)
+             (funcall (if (eql *edcurve* *curve-ed3363*)
+                          '_Ed3363-projective-mul
+                        '_Curve1174-projective-mul)
+                      cptx cpty cptz cwv)
              
              (make-ed-proj-pt
               :x (xfer-from-c cptx) ;; projective out...
@@ -754,7 +762,7 @@ THE SOFTWARE.
              ))
           )))
 
-(defun fast-ed3363-add (pt1 pt2)
+(defun fast-add (pt1 pt2)
   (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1)) ;; projective in...
                      (cpt1yv (ed-proj-pt-y pt1))
                      (cpt1zv (ed-proj-pt-z pt1))
@@ -762,8 +770,11 @@ THE SOFTWARE.
                      (cpt2yv (ed-proj-pt-y pt2))
                      (cpt2zv (ed-proj-pt-z pt2)))
     
-    (_Ed3363-projective-add cpt1xv cpt1yv cpt1zv
-                            cpt2xv cpt2yv cpt2zv)
+             (funcall (if (eql *edcurve* *curve-ed3363*)
+                          '_Ed3363-projective-add
+                        '_Curve1174-projective-add)
+                      cpt1xv cpt1yv cpt1zv
+                      cpt2xv cpt2yv cpt2zv)
     
     (make-ed-proj-pt ;; projective out...
      :x (xfer-from-c cpt1xv)
@@ -771,7 +782,7 @@ THE SOFTWARE.
      :z (xfer-from-c cpt1zv))
     ))
 
-(defun fast-ed3363-to-affine (pt)
+(defun fast-to-affine (pt)
   (cond ((= 1 (ed-proj-pt-z pt))
          (make-ecc-pt
           :x (ed-proj-pt-x pt)
@@ -781,89 +792,11 @@ THE SOFTWARE.
                             (cpty (ed-proj-pt-y pt))
                             (cptz (ed-proj-pt-z pt)))
            
-           (_Ed3363-to-affine cptx cpty cptz)
-           
-           (make-ecc-pt
-            :x (xfer-from-c cptx) ;; affine out...
-            :y (xfer-from-c cpty))
-           ))
-        ))
-
-;; -------------------------------------------------------------------
-
-(defun fast-curve1174-mul (pt n)
-  (declare (integer n))
-  ;; (tally :ecmul)
-  (let ((nn  (with-mod *ed-r*
-               (mmod n))))
-    (declare (integer nn))
-    
-    (cond ((zerop nn) (ed-neutral-point))
-
-          #||#
-          ((or (= nn 1)
-               (ed-neutral-point-p pt)) pt)
-          #||#
-          
-          ((ecc-pt-p pt)
-           (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; affine in...
-                              (cpty (ecc-pt-y pt))
-                              (cptz)
-                              (cwv  nn))
+             (funcall (if (eql *edcurve* *curve-ed3363*)
+                          '_Ed3363-to-affine
+                        '_Curve1174-to-affine)
+                      cptx cpty cptz)
              
-             (_Curve1174-affine-mul cptx cpty cptz cwv)
-             
-             (make-ed-proj-pt
-              :x (xfer-from-c cptx) ;; projective out...
-              :y (xfer-from-c cpty)
-              :z (xfer-from-c cptz))
-             ))
-          
-          (t
-           ;; about a 10% speed penalty over using affine points
-           (with-fli-buffers ((cptx (ed-proj-pt-x pt))  ;; projective in...
-                              (cpty (ed-proj-pt-y pt))
-                              (cptz (ed-proj-pt-z pt))
-                              (cwv  nn))
-             
-             (_Curve1174-projective-mul cptx cpty cptz cwv)
-             
-             (make-ed-proj-pt
-              :x (xfer-from-c cptx) ;; projective out...
-              :y (xfer-from-c cpty)
-              :z (xfer-from-c cptz))
-             ))
-          )))
-
-(defun fast-curve1174-add (pt1 pt2)
-  (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1)) ;; projective in...
-                     (cpt1yv (ed-proj-pt-y pt1))
-                     (cpt1zv (ed-proj-pt-z pt1))
-                     (cpt2xv (ed-proj-pt-x pt2))
-                     (cpt2yv (ed-proj-pt-y pt2))
-                     (cpt2zv (ed-proj-pt-z pt2)))
-    
-    (_Curve1174-projective-add cpt1xv cpt1yv cpt1zv
-                               cpt2xv cpt2yv cpt2zv)
-    
-    (make-ed-proj-pt ;; projective out...
-     :x (xfer-from-c cpt1xv)
-     :y (xfer-from-c cpt1yv)
-     :z (xfer-from-c cpt1zv))
-    ))
-
-(defun fast-curve1174-to-affine (pt)
-  (cond ((= 1 (ed-proj-pt-z pt))
-         (make-ecc-pt
-          :x (ed-proj-pt-x pt)
-          :y (ed-proj-pt-y pt)))
-        (t 
-         (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
-                            (cpty (ed-proj-pt-y pt))
-                            (cptz (ed-proj-pt-z pt)))
-           
-           (_Curve1174-to-affine cptx cpty cptz)
-           
            (make-ecc-pt
             :x (xfer-from-c cptx) ;; affine out...
             :y (xfer-from-c cpty))
@@ -999,10 +932,9 @@ THE SOFTWARE.
   (let* ((alpha  (* *ed-r* *ed-h* (field-random #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  (cond ((eq *edcurve* *curve-ed3363*)
-         (fast-ed3363-mul pt n))
-        ((eq *edcurve* *curve1174*)
-         (fast-curve1174-mul pt n))
+  (cond ((or (eq *edcurve* *curve-ed3363*)
+             (eq *edcurve* *curve1174*))
+         (fast-mul pt n))
         (t (ed-basic-mul pt n))
         ))
 
