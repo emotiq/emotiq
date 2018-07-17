@@ -260,6 +260,7 @@ void gmul(type64 *x,type64 *y,type64 *z)
 
 void ginv(type64 *x)
 {
+  // the exponent (p-2) is "07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5"
 	int i;
 	type64 w[5],t[5],x5[5],x15[5];
 
@@ -727,8 +728,7 @@ void gfetch(unsigned char* v, type64 *w)
   w[2] = ((t1 << 26) | (t2 >> 38)) & bot51bits;
   t2 = pv[3];
   w[3] = ((t2 << 39) | (t1 >> 25)) & bot51bits;
-  t1 = pv[4];
-  w[4] = ((t1 << 52) | (t2 >> 12)) & bot47bits;
+  w[4] = (t2 >> 12) & bot47bits;
 }
 
 void scrn(type64 *w)
@@ -755,7 +755,6 @@ void gstore(type64 *w, unsigned char* v)
   pv[2] = (t1 >> 26) | (t2 << 25);
   t1 = w[4];
   pv[3] = (t2 >> 39) | (t1 << 12);
-  pv[4] = (t1 >> 52);
 }
 
 extern "C"
