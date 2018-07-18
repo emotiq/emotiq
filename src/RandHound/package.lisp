@@ -43,8 +43,8 @@ THE SOFTWARE.
    :node-stake
    :node-rh-state
    :get-witness-list
-   :broadcast+me
-   :broadcast-to-others
+   ;; :broadcast+me
+   ;; :broadcast-to-others
    :*leader*
    :*beacon*
    :*rh-state*
