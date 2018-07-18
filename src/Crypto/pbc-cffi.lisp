@@ -170,7 +170,8 @@ THE SOFTWARE.
             (out (make-array 80 :element-type '(signed-byte 8))))
         (loop for ix from 0 below 80 do
               (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
-        (list ans out (map 'string 'code-char (subseq out 0 ans)))))))
+        (print (list ans out (map 'string 'code-char (subseq out 0 ans))))
+        (force-output)))))
 #||#
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
@@ -1779,6 +1780,8 @@ likely see an assertion failure"
 |#
 ;; ------------------------------------------------------------------------------
 
+(echo)
+
 #-:lispworks
 (eval-when (:load-toplevel)
   ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
@@ -1813,3 +1816,4 @@ likely see an assertion failure"
         ;; do FR449 last so it becomes the default pairing
         (init-pairing :params *curve-fr449-params* :context 1)
         ))))
+
