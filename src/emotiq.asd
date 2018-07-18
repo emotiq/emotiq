@@ -85,10 +85,11 @@
                 :pathname "./"
                 :components ((:file "node")))))
 
-(defsystem "emotiq/sim"  ;; a simulated node
+(defsystem "emotiq/sim"  ;; a simulated network entirely within the local process
   :depends-on (emotiq/cli
                alexandria
 	       emotiq/tracker)
+  :in-order-to ((test-op (test-op "emotiq-sim-test")))
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
