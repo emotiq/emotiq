@@ -186,7 +186,7 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 ;; test the Lisp/C connection
-
+#|
 (cffi:defcfun ("echo" _echo) :uint64
   (nel     :uint64)
   (txt-out :pointer :char)
@@ -201,7 +201,7 @@ THE SOFTWARE.
         (loop for ix from 0 below 80 do
               (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
         (list ans out (map 'string 'code-char (subseq out 0 ans)))))))
-
+|#
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
