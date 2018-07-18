@@ -51,9 +51,10 @@
    #:establish-broadcast-group
    #:dissolve-graph
    #:memoize-node
+   #:hello
 
-   #:shutdown-gossip-server
-   ))
+   #:shutdown-gossip-server))
+
 
 (defpackage gossip/config
   (:use #:cl)
