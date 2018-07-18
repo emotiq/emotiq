@@ -79,6 +79,7 @@
 
 (defsystem "emotiq/node"  ;; a live node
   :depends-on (gossip
+               alexandria
                emotiq/logging)
   :components ((:module source
                 :pathname "./"
