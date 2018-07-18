@@ -1,7 +1,6 @@
 (:emotiq-test
  :gossip-test
- :core-crypto-tests
- :crypto-pairings-tests
+ :core-crypto-test
+ :crypto-pairings-test
  :emotiq-config-test
  :cosi-bls-test)
- 
