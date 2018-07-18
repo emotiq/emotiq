@@ -1,7 +1,8 @@
 
 (asdf:defsystem "crypto-pairings-tests"
   :depends-on (lisp-unit
-               core-crypto)
+               core-crypto
+               crypto-pairings)
   :perform  (test-op (o s)
                      (symbol-call :lisp-unit :run-tests
                                   :all :crypto-pairings-tests))
