@@ -156,7 +156,7 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 ;; Test the Lisp/C connection
-#||#
+#|
 (cffi:defcfun ("echo" _echo) :uint64
   (nel     :uint64)
   (txt-out :pointer :char)
@@ -172,7 +172,7 @@ THE SOFTWARE.
               (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
         (print (list ans out (map 'string 'code-char (subseq out 0 ans))))
         (force-output)))))
-#||#
+|#
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
@@ -1779,8 +1779,6 @@ likely see an assertion failure"
       (ac:pr :done ans))))
 |#
 ;; ------------------------------------------------------------------------------
-
-(echo)
 
 #-:lispworks
 (eval-when (:load-toplevel)
