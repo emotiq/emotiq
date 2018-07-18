@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
+#ifndef __pbc_intf_h__
+#define __pbc_intf_h__
+
 #include <strings.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -108,6 +111,8 @@ extern "C" {
   void get_G2_from_hash(uint64_t ctxt, uint8_t *g2_pt, uint8_t *phash, uint64_t nhash);
   void get_Zr_from_hash(uint64_t ctxt, uint8_t *zr_val, uint8_t *phash, uint64_t nhash);
 }
+
+#endif __pbc_intf_h__
 
 // -- end of pbc_intf.h -- //
 
