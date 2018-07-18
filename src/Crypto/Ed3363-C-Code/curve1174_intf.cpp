@@ -492,23 +492,6 @@ void window(ECp *Q,ECp *P)
 	add_2(Q,P);
 }
 
-void output(ECp *P)
-{
-	cout << "x[0]= " << hex << P->x[0] << endl;
-	cout << "x[1]= " << hex << P->x[1] << endl;
-	cout << "x[2]= " << hex << P->x[2] << endl;
-	cout << "x[3]= " << hex << P->x[3] << endl;
-	cout << "x[4]= " << hex << P->x[4] << endl;
-	cout << endl;
-
-	cout << "y[0]= " << hex << P->y[0] << endl;
-	cout << "y[1]= " << hex << P->y[1] << endl;
-	cout << "y[2]= " << hex << P->y[2] << endl;
-	cout << "y[3]= " << hex << P->y[3] << endl;
-	cout << "y[4]= " << hex << P->y[4] << endl;
-	cout << endl;
-}
-
 /*
 Constant time table look-up - borrowed from ed25519 
 */
@@ -578,6 +561,29 @@ void mul(int *w,ECp *P)
 }
 
 #ifdef testing
+extern "C"
+int64_t ccl_init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize)
+{
+  return init_pairing(ctxt, param_str, nel, psize);
+}
+
+void output(ECp *P)
+{
+	cout << "x[0]= " << hex << P->x[0] << endl;
+	cout << "x[1]= " << hex << P->x[1] << endl;
+	cout << "x[2]= " << hex << P->x[2] << endl;
+	cout << "x[3]= " << hex << P->x[3] << endl;
+	cout << "x[4]= " << hex << P->x[4] << endl;
+	cout << endl;
+
+	cout << "y[0]= " << hex << P->y[0] << endl;
+	cout << "y[1]= " << hex << P->y[1] << endl;
+	cout << "y[2]= " << hex << P->y[2] << endl;
+	cout << "y[3]= " << hex << P->y[3] << endl;
+	cout << "y[4]= " << hex << P->y[4] << endl;
+	cout << endl;
+}
+
 #define TEST  /* define to multiply by group order */
 
 int main()

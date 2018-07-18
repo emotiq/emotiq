@@ -68,12 +68,6 @@ element_t& G2_gen(uint64_t ctxt)
 // -------------------------------------------------
 
 extern "C"
-int64_t ccl_init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize)
-{
-  return init_pairing(ctxt, param_str, nel, psize);
-}
-
-extern "C"
 int64_t init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize)
 {
   int64_t ans = -1;

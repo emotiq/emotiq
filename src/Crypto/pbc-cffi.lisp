@@ -156,7 +156,7 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 ;; Test the Lisp/C connection
-#||#
+#|
 (cffi:defcfun ("echo" _echo) :uint64
   (nel     :uint64)
   (txt-out :pointer :char)
@@ -171,17 +171,11 @@ THE SOFTWARE.
         (loop for ix from 0 below 80 do
               (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
         (list ans out (map 'string 'code-char (subseq out 0 ans)))))))
-#||#
+|#
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
 (cffi:defcfun ("init_pairing" _init-pairing :library :libpbc) :int64
-  (context     :uint64)
-  (param-text  :pointer :char)
-  (ntext       :uint64)
-  (psizes      :pointer :uint64))
-
-(cffi:defcfun ("ccl_init_pairing" _ccl-init-pairing :library :libpbc) :int64
   (context     :uint64)
   (param-text  :pointer :char)
   (ntext       :uint64)
@@ -914,11 +908,9 @@ SMP access. Everything else should be SMP-safe."
           (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :uint64)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
-              ;; #-:CCL
-              ;; (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
-              ;; #+:CCL
-              (assert (zerop (_ccl-init-pairing context ctxt ntxt ansbuf)))
 
+              (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
+              
               (setf *curve* (make-full-curve-params
                              :name          (curve-params-name         cparams)
                              :pairing-text  (curve-params-pairing-text cparams)
