@@ -1,5 +1,5 @@
 
-(in-package :crypto-pairings-tests)
+(in-package :crypto-pairings-test)
 
 (define-test basis-consistency
   (assert-true (hash:hash-check edec::*curve1174*  edec::*chk-curve1174*))

@@ -40,6 +40,7 @@ THE SOFTWARE.
                 #+:COM.RAL (:file "crypto-le")
                 (:file "kdf")
                 (:file "gf-571")
+                (:file "lib-loads")
                 (:file "edwards")
                 (:file "ecc-B571")
                 (:file "curve-gen")
@@ -56,6 +57,7 @@ THE SOFTWARE.
                  "emotiq/delivery"
                  "cffi"
 		 "core-crypto/libraries"
+                 "crypto-pairings/libraries"
                  ))
 
 (defsystem "core-crypto/libraries"
@@ -77,3 +79,24 @@ THE SOFTWARE.
                                     :emotiq "../etc/build-crypto-ecc.bash")))
                     :output :string :error :string)
        (format *standard-output* "~tWhew!  Finished.~&")))))
+
+(defsystem "crypto-pairings/libraries"
+  :perform
+  (prepare-op
+   :before (o c)
+   (let ((wildcard-for-libraries
+          (make-pathname :defaults 
+                         (asdf:system-relative-pathname
+                          :emotiq "../var/local/lib/libLispPBCIntf")
+                         :type :wild)))
+     (unless (directory wildcard-for-libraries)
+       (format *standard-output*
+               "~&Failed to find libraries matching~&~t~a~&~
+~&Attempting to build native libraries... hang on for a minute, please..."
+               wildcard-for-libraries)
+       (run-program `("bash"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-pairings.bash")))
+                    :output :string :error :string)
+       (format *standard-output* "~tWhew!  Finished.~&")))))
+

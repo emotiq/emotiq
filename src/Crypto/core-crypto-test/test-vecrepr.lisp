@@ -1,5 +1,5 @@
 
-(in-package :core-crypto-tests)
+(in-package :core-crypto-test)
 
 (define-test conversions
   (let* ((n   (field-random *ed-r*))

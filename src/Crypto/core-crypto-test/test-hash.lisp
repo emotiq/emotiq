@@ -1,5 +1,5 @@
 
-(in-package :core-crypto-tests)
+(in-package :core-crypto-test)
 
 (define-test hashes
   (assert-true (and
