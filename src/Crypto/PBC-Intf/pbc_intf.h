@@ -35,7 +35,6 @@ THE SOFTWARE.
 extern "C" {
   uint64_t echo(uint64_t nel, char* msg_in, char* msg_out);
 
-  int64_t ccl_init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize);
   int64_t init_pairing(uint64_t ctxt, char* param_str, uint64_t nel, uint64_t* psize);
 		     
   int64_t set_g2(uint64_t ctxt, uint8_t* pbuf);

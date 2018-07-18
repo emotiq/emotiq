@@ -181,12 +181,6 @@ THE SOFTWARE.
   (ntext       :uint64)
   (psizes      :pointer :uint64))
 
-(cffi:defcfun ("ccl_init_pairing" _ccl-init-pairing :library :libpbc) :int64
-  (context     :uint64)
-  (param-text  :pointer :char)
-  (ntext       :uint64)
-  (psizes      :pointer :uint64))
-
 ;; -------------------------------------------------
 ;; Query interface
 
@@ -914,10 +908,7 @@ SMP access. Everything else should be SMP-safe."
           (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :uint64)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
-              ;; #-:CCL
-              ;; (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
-              ;; #+:CCL
-              (assert (zerop (_ccl-init-pairing context ctxt ntxt ansbuf)))
+              (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
 
               (setf *curve* (make-full-curve-params
                              :name          (curve-params-name         cparams)
