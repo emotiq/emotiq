@@ -56,8 +56,10 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (phony-up-nodes)
   (emotiq/elections:set-nodes (keys-and-stakes))
   (emotiq/tracker:start-tracker)
-  (when run-cli-p
-    (emotiq/cli:main)))
+  (if run-cli-p
+      (emotiq/cli:main)
+      ;;; FIXME:  return nil when initialization is not successful
+      t))
 
 (defvar *genesis-account*
   nil
@@ -191,7 +193,9 @@ This will spawn an actor which will asynchronously do the following:
               ;; allow leader elections to create this block
               (publish-transaction (setf *tx-2* trans) "tx-2"))))))
   (sleep 60)
-  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state)))
+  (let ((result (emotiq/tracker:query-current-state)))
+    (emotiq:note "current state = ~A" result)
+    result))   ;;; return non-nil if we are able to exit cleanly
 
 (defun run-new-tx ()
   "Using new tx feature, run the block chain simulation entirely within the current process.
@@ -359,8 +363,9 @@ This will spawn an actor which will asynchronously do the following:
             (format t "~3%Here's a dump of the whole blockchain currently:~%")
             (cosi/proofs/newtx:dump-txs :blockchain t)
             (format t "~2%Good-bye and good luck!~%"))))))
-  (emotiq:note "current state = ~A" (emotiq/tracker:query-current-state))
-  (values))
+  (let ((result (emotiq/tracker:query-current-state)))
+    (emotiq:note "current state = ~A" result)
+    result))  ;;; return non-nil if we are able to exit cleanly
 
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
