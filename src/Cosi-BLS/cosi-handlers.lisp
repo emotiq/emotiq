@@ -752,46 +752,18 @@ check that each TXIN and TXOUT is mathematically sound."
                            :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
         (t
-         (let ((me (node-pkey (current-node))))
-           (mapc (lambda (pair)
-                   (destructuring-bind (pkey _) pair
-                     (declare (ignore _))
-                     (unless (int= pkey me)
-                       (apply 'send pkey msg))))
-                 (get-witness-list))))
+         (loop for node across *node-bit-tbl* do
+               (unless (eql node my-node)
+                 (apply 'send (node-pkey node) msg))))
         ))
 
 (defun broadcast+me (msg)
-  (cond (*use-real-gossip*
-         ;; make sure our own Node gets the message too
-         (gossip:singlecast msg
-                            :graphID nil) ;; force send to ourselves
-         ;; this really should go to everyone
-         (gossip:broadcast msg
-                           :graphID :UBER))
-
-        (t
-         (mapc (lambda (pair)
-                 (destructuring-bind (pkey _) pair
-                   (declare (ignore _))
-                   (apply 'send pkey msg)))
-               (get-witness-list)))
-        ))
-
-(defun broadcast-to-others (msg)
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :graphID :UBER))
-
-        (t
-         (let ((me (node-pkey (current-node))))
-           (mapc (lambda (pair)
-                   (destructuring-bind (pkey _) pair
-                     (declare (ignore _))
-                     (unless (int= pkey me)
-                       (apply 'send pkey msg))))
-                 (get-witness-list))))
-        ))
+  ;; make sure our own Node gets the message too
+  (gossip:singlecast msg
+                     :graphID nil) ;; force send to ourselves
+  ;; this really should go to everyone
+  (gossip:broadcast msg
+                    :graphID :UBER))
 
 ;; -----------------------------------------------------------
 

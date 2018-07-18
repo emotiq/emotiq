@@ -132,6 +132,69 @@ THE SOFTWARE.
   groups      ;; Beacon has the list of groups
   grp-rands)  ;; and accumulates group randomness values
 
+;; ------------------------------------------------------------
+(defvar *cosi-gossip-neighborhood-graph* nil) ;; T if neighborhood graph has been established
+
+(defun ensure-cosi-gossip-neighborhood-graph (my-node)
+  (declare (ignore my-node))
+  (or *cosi-gossip-neighborhood-graph*
+      (setf *cosi-gossip-neighborhood-graph*
+            (or :UBER ;; for now while debugging
+                (gossip:establish-broadcast-group
+                 (mapcar 'first (get-witness-list))
+                 :graphID :cosi)))
+      ))
+
+(defun gossip-neighborcast (my-node &rest msg)
+  "Gossip-neighborcast - send message to all witness nodes."
+  (cond (*use-real-gossip*
+         (gossip:broadcast msg
+                           :style :neighborcast
+                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
+
+        (t
+         (let ((me (node-pkey (current-node))))
+           (mapc (lambda (pair)
+                   (destructuring-bind (pkey _) pair
+                     (declare (ignore _))
+                     (unless (int= pkey me)
+                       (apply 'send pkey msg))))
+                 (get-witness-list))))
+        ))
+
+(defun broadcast+me (msg)
+  (cond (*use-real-gossip*
+         ;; make sure our own Node gets the message too
+         (gossip:singlecast msg
+                            :graphID nil) ;; force send to ourselves
+         ;; this really should go to everyone
+         (gossip:broadcast msg
+                           :graphID :UBER))
+
+        (t
+         (mapc (lambda (pair)
+                 (destructuring-bind (pkey _) pair
+                   (declare (ignore _))
+                   (apply 'send pkey msg)))
+               (get-witness-list)))
+        ))
+
+(defun broadcast-to-others (msg)
+  (cond (*use-real-gossip*
+         (gossip:broadcast msg
+                           :graphID :UBER))
+
+        (t
+         (let ((me (node-pkey (current-node))))
+           (mapc (lambda (pair)
+                   (destructuring-bind (pkey _) pair
+                     (declare (ignore _))
+                     (unless (int= pkey me)
+                       (apply 'send pkey msg))))
+                 (get-witness-list))))
+        ))
+
+;; -------------------------------------------------------------------
 (defun establish-broadcast-group (pkeys &key graphID)
   (cond (*use-real-gossip*
          (or :UBER ;; for now...
