@@ -74,7 +74,7 @@ THE SOFTWARE.
                "~&Failed to find libraries matching~&~t~a~&~
 ~&Attempting to build native libraries... hang on for a minute, please..."
                wildcard-for-libraries)
-       (run-program `("bash"
+       (run-program `("bash" "--verbose"
                       ,(namestring (system-relative-pathname
                                     :emotiq "../etc/build-crypto-ecc.bash")))
                     :output :string :error :string)
