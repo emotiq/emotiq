@@ -259,50 +259,6 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------
 
-;; The Lisp runtime load might help us do this differently, but explicit
-;; initialization is much easier to understand
-
-(defun load-dev-dlls ()
-  "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
-  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
-           cffi:*foreign-library-directories*)
-  (cffi:define-foreign-library
-      libEd3363 
-    (:darwin "libLispEd3363.dylib")
-    (:linux "libLispEd3363.so")
-    (t (:default "libLispEd3363")))
-  (cffi:define-foreign-library
-      libCurve1174
-    (:darwin "libLispCurve1174.dylib")
-    (:linux "libLispCurve1174.so")
-    (t (:default "libLispCurve1174"))))
-
-(defun load-production-dlls ()
-  "loads the DLLs (.so and .dylib) at runtime, from the current directory"
-  (cffi:define-foreign-library
-   libEd3363
-   (:darwin "libLispEd3363.dylib")
-   (:linux  "./libLispEd3363.so")
-   (t (:default "libLispEd3363")))
-  (cffi:define-foreign-library
-   libCurve1174
-   (:darwin "libLispCurve1174.dylib")
-   (:linux  "./libLispCurve1174.so")
-   (t (:default "libLispCurve1174"))))
-
-(defun load-dlls()
-  "load the dev or production dlls at runtime"
-  (if (emotiq:production-p)
-      (load-production-dlls)
-      (load-dev-dlls))
-  (cffi:use-foreign-library libEd3363)
-  (cffi:use-foreign-library libCurve1174))
-
-(defun init-Ed3363 ()
-  (load-dlls))
-
-;; -----------------------------------------------------------------------
-
 (cffi:defcfun ("Ed3363_affine_mul" _Ed3363-affine-mul) :void
   (ptx         :pointer :unsigned-char)
   (pty         :pointer :unsigned-char)
@@ -1854,7 +1810,7 @@ we are done. Else re-probe with (X^2 + 1)."
 |#
              
 ;; ------------------------------------------------------------------------------
-
+#|
 #-:lispworks
 (eval-when (:load-toplevel)
   (init-Ed3363))
@@ -1877,3 +1833,4 @@ we are done. Else re-probe with (X^2 + 1)."
     (if building-binary-p
         nil                                          ;; do nothing, esp. don't try to init-pairing
       (init-Ed3363))))                      ;; in all other cases, init-pairing at LOAD time.
+|#

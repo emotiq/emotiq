@@ -155,38 +155,8 @@ THE SOFTWARE.
 (in-package :pbc-interface)
 
 ;; -----------------------------------------------------------------------
-
-;; The Lisp runtime load might help us do this differently, but explicit
-;; initialization is much easier to understand
-
-(defun load-dev-dlls ()
-  "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
-  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
-           cffi:*foreign-library-directories*)
-  (cffi:define-foreign-library
-      libpbc 
-    (:darwin "libLispPBCIntf.dylib")
-    (:linux "libLispPBCIntf.so")
-    (t (:default "libLispPBCIntf"))))
-
-(defun load-production-dlls ()
-  "loads the DLLs (.so and .dylib) at runtime, from the current directory"
-  (cffi:define-foreign-library
-   libpbc
-   (:darwin "libLispPBCIntf.dylib")
-   (:linux  "./libLispPBCIntf.so")
-   (t (:default "libLispPBCIntf"))))
-
-(defun load-dlls()
-  "load the dev or production dlls at runtime"
-  (if (emotiq:production-p)
-      (load-production-dlls)
-      (load-dev-dlls))
-  (cffi:use-foreign-library libpbc))
-
-;; -----------------------------------------------------------------------
-;; test the Lisp/C connection
-#|
+;; Test the Lisp/C connection
+#||#
 (cffi:defcfun ("echo" _echo) :uint64
   (nel     :uint64)
   (txt-out :pointer :char)
@@ -201,11 +171,17 @@ THE SOFTWARE.
         (loop for ix from 0 below 80 do
               (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
         (list ans out (map 'string 'code-char (subseq out 0 ans)))))))
-|#
+#||#
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("init_pairing" _init-pairing) :int64
+(cffi:defcfun ("init_pairing" _init-pairing :library :libpbc) :int64
+  (context     :uint64)
+  (param-text  :pointer :char)
+  (ntext       :uint64)
+  (psizes      :pointer :uint64))
+
+(cffi:defcfun ("ccl_init_pairing" _ccl-init-pairing :library :libpbc) :int64
   (context     :uint64)
   (param-text  :pointer :char)
   (ntext       :uint64)
@@ -932,14 +908,17 @@ SMP access. Everything else should be SMP-safe."
       (when (or params-supplied-p
                 (null *curve*))
         (setf *curve* nil) ;; in case we fail
-	(load-dlls)
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
                          (g2   curve-params-g2)) cparams
           (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :uint64)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
-              (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
+              ;; #-:CCL
+              ;; (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
+              ;; #+:CCL
+              (assert (zerop (_ccl-init-pairing context ctxt ntxt ansbuf)))
+
               (setf *curve* (make-full-curve-params
                              :name          (curve-params-name         cparams)
                              :pairing-text  (curve-params-pairing-text cparams)
