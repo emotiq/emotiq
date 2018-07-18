@@ -13,7 +13,7 @@
 # debug
 set -x
 
-EXTERNAL_LIBS_VERSION=release-0.1.8
+EXTERNAL_LIBS_VERSION=release-0.1.13
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
