@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if test $# -eq 0; then
-  echo "Usage: $0"
+  echo "Usage: $0 -l|--load file or -e|--eval s-exp"
   exit 1
 fi
 
@@ -16,11 +16,10 @@ case ${LISP} in
         lisp_cli="/usr/local/bin/sbcl --disable-debugger"
         ;;
     *)
-        echo "Unknown Lisp dialect: $LISP"
-        exit 126
+        echo "Unknown Lisp dialect: $LISP, falling back to CCL"
+        lisp_cli="$HOME/bin/ccl"
         ;;
 esac
-
 
 tmpfile=$(mktemp /tmp/lwpro-script.XXXXXX)
 
@@ -43,7 +42,8 @@ while test $# -gt 0; do
   esac
 done
 
-echo "(quit)" >> $tmpfile
+echo "(uiop:quit)" >> $tmpfile
+
 $lisp_cli $@ <$tmpfile
 EXIT_CODE=$?
 
