@@ -246,7 +246,7 @@ THE SOFTWARE.
               com-ral-p
               building-binary-p)
 
-      (if (or t com-ral-p)
+      (if com-ral-p
           (create-lispworks-action-to-install-actors)
         (if building-binary-p
 	    nil                                            ;; do nothing, esp. don't try to initialize actors
