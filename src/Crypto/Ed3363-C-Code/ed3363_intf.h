@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
+#ifndef __ed3363_intf_h__
+#define __ed3363_intf_h__
+
 #include <strings.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -51,6 +54,8 @@ extern "C" {
 			unsigned char* lpy,
 			unsigned char* lpz);
 }
+
+#endif __ed3363_intf_h__
 
 // -- end of ed3363_intf.h -- //
 

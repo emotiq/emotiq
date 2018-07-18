@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
+#ifndef __curve1174_intf_h__
+#define __curve1174_intf_h__
+
 #include <strings.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -51,6 +54,8 @@ extern "C" {
 			   unsigned char* lpy,
 			   unsigned char* lpz);
 }
+
+#endif __curve1174_intf_h__
 
 // -- end of curve1174_intf.h -- //
 
