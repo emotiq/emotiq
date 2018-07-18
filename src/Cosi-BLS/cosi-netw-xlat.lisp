@@ -38,7 +38,7 @@ THE SOFTWARE.
 (um:defmonitor
     ((associate-aid-with-actor (aid actor)
        (setf (gethash aid *aid-tbl*) actor))
-     
+
      (lookup-actor-for-aid (aid)
        (gethash aid *aid-tbl*))
      ))
@@ -124,7 +124,7 @@ THE SOFTWARE.
   ;; fail HMAC verification and just drop the incoming packet on the
   ;; floor. So MITM modifications become tantamount to a DOS attack.
   (pbc:sign-message msg pkey skey))
-    
+
 
 (defun verify-hmac (packet)
   (let ((decoded (ignore-errors
@@ -143,7 +143,9 @@ THE SOFTWARE.
 ;; -----------------------------------------------------
 
 (defvar *max-buffer-length* 65500)
-(defvar *socket-open*       nil)
+(defvar *server-process*    nil)
+(defvar *socket*            nil)
+(defvar *socket-local-port* nil)
 
 (defun port-routing-handler (buf)
   (let ((packet (verify-hmac buf)))
@@ -153,7 +155,7 @@ THE SOFTWARE.
       ;; Every incoming packet is scrutinized for a valid HMAC. If
       ;; it checks out then the packet is dispatched to an
       ;; operation.  Otherwise it is just dropped on the floor.
-    
+
       ;; we can only arrive here if the incoming buffer held a valid
       ;; packet
       (progn ;; ignore-errors
@@ -178,12 +180,12 @@ THE SOFTWARE.
                                (internal-send-socket ip port packet))))
 
 (defun shutdown-server (&optional (port *cosi-port*))
-  (when *socket-open*
-    (setf *socket-open* nil)
-    (send *sender* *local-ip* port "ShutDown")))
+  (when *socket-local-port*
+    (setf *socket-local-port* nil)
+    (send *sender* *local-ip* port (loenc:encode "ShutDown"))))
 
 ;;; For binary delivery, we need to allocate keypair memory at
-;;; runtime.  
+;;; runtime.
 (let ((hmac-keypair nil)
       (hmac-keypair-mutex (mpcompat:make-lock)))
   (defun hmac-keypair ()
@@ -220,7 +222,7 @@ THE SOFTWARE.
 
   ;; -------------
   ;; Server side
-  
+
   (defun forwarding (dest quad)
     ;; (format t "~%FORWARDING: ~A ~A" dest quad)
     (multiple-value-bind (msg t/f) (verify-hmac quad)
@@ -243,7 +245,7 @@ THE SOFTWARE.
 
   ;; -------------------
   ;; Server side
-  
+
   (defun #1=serve-cosi-port (socket)
     (let ((maxbuf (make-array *max-buffer-length*
                               :element-type '(unsigned-byte 8))))
@@ -254,34 +256,40 @@ THE SOFTWARE.
 		(usocket:socket-receive socket maxbuf (length maxbuf))
 	      (declare (ignore rem-ip rem-port))
 	      ;; (pr :sock-read buf-len rem-ip rem-port (loenc:decode buf))
-              (when (null *socket-open*)
+              (when (null *socket-local-port*)
                 (return-from #1#))
               (let ((saf-buf  (if (eq buf maxbuf)
                                   (subseq buf 0 buf-len)
-                                buf)))
+                                  buf)))
                 (port-router saf-buf))))
         ;; unwinding
         (usocket:socket-close socket)
-        ;; (pr :server-stopped)
+        (setf *server-process*    nil
+              *socket*            nil
+              *socket-local-port* nil)
         )))
-  
+
   (defun start-ephemeral-server (&optional (port 0))
     (let* ((my-ip  (node-real-ip *my-node*))
 	   (socket (usocket:socket-connect nil nil
 					   :protocol :datagram
 					   :local-host my-ip
-					   :local-port port
-					   )))
-      (mpcompat:process-run-function "UDP Cosi Server" nil
-                                     'serve-cosi-port socket)
-      (setf *socket-open* (usocket:get-local-port socket))))
-       
+					   :local-port port))
+           (server (mpcompat:process-run-function "UDP Cosi Server"
+                                                  nil
+                                                  #'serve-cosi-port socket)))
+      (setf *socket-local-port* (usocket:get-local-port socket)
+            *socket* socket
+            *server-process* server)))
+
+
   (defun start-server ()
     (start-ephemeral-server *cosi-port*))
 
+
   ;; -------------
   ;; Client side
-  
+
   (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
       (when (> nb *max-buffer-length*)
@@ -312,7 +320,7 @@ THE SOFTWARE.
 
   ;; -------------------------
   ;; Server side
-  
+
   (defun #1=udp-cosi-server-process-request (async-io-state string bytes-num ip-address port-num)
     (declare (ignore bytes-num ip-address port-num))
     (let ((status (comm:async-io-state-read-status async-io-state)))
@@ -322,20 +330,20 @@ THE SOFTWARE.
         (start-server)
         (return-from #1#))
 
-      (if (null *socket-open*)
+      (if (null *socket-local-port*)
           (comm:close-async-io-state async-io-state)
         (progn
           (port-router string)
           (udp-cosi-server-receive-next async-io-state)))))
-  
+
   (defun udp-cosi-server-receive-next (async-io-state )
     (comm:async-io-state-receive-message async-io-state
                                          (make-array *max-buffer-length*
                                                      :element-type '(unsigned-byte 8))
                                          'udp-cosi-server-process-request :needs-address t))
-  
+
   (defun start-ephemeral-server (&optional (port 0))
-    (let ((async-io-state (comm:create-async-io-state-and-udp-socket 
+    (let ((async-io-state (comm:create-async-io-state-and-udp-socket
                            (ensure-udp-wait-state-collection)
                            :name "UDP Cosi server socket"
                            :local-port port)))
@@ -343,14 +351,14 @@ THE SOFTWARE.
       (multiple-value-bind (ip port)
           (comm:async-io-state-address async-io-state)  ;; returns address,port
         (declare (ignore ip))
-        (setf *socket-open* port))))
-      
+        (setf *socket-local-port* port))))
+
   (defun start-server ()
     (start-ephemeral-server *cosi-port*))
 
   ;; -----------------
   ;; Client side
-  
+
   (defun internal-udp-cosi-client-send-request (callback ip-address ip-port packet)
     (let* ((collection     (ensure-udp-wait-state-collection))
            (async-io-state (comm:create-async-io-state-and-udp-socket collection)))
@@ -360,7 +368,7 @@ THE SOFTWARE.
                                                    packet
                                                    callback)
       async-io-state))
-  
+
   (defun internal-send-socket (ip port packet)
     (let ((nb (length packet)))
       (ac:pr (format nil "internal-send-socket nb=~A" nb))
