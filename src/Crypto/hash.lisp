@@ -117,6 +117,10 @@ THE SOFTWARE.
       (ironclad:update-digest dig (hashable seed)))
     (ironclad:produce-digest dig)))
 
+(defun get-hash-nbits (nbits seed)
+  "Concatenated SHA3 until we collect enough bits"
+  (get-hash-nbytes (ceiling nbits 8) seed))
+
 ;; -----------------------------------------------------
 
 (defmethod hash-check (item (expected string))

@@ -913,4 +913,5 @@ from calling the function."
     (+ lmin (mod (ctr-drbg-int (integer-length rng))
                  rng))))
 
-
+(defun field-random (base)
+  (random-between 1 base))

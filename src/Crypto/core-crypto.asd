@@ -22,13 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cl-user)
-
 (asdf:defsystem "core-crypto"
   :description "core-crypto: core cryptography functions"
   :version     "1.0"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
+  :in-order-to ((test-op (test-op "core-crypto-tests")))
   :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
+  :serial       t
   :components  ((:file "ecc-package")
                 (:file "cached-var")
                 (:file "modular-arith")
@@ -40,13 +40,13 @@ THE SOFTWARE.
                 #+:COM.RAL (:file "crypto-le")
                 (:file "kdf")
                 (:file "gf-571")
+                (:file "lib-loads")
                 (:file "edwards")
                 (:file "ecc-B571")
                 (:file "curve-gen")
                 (:file "crypto-environ")
                 #+:COM.RAL (:file "machine-id")
                 (:file "lagrange-4-square"))
-  :serial       t
   :depends-on   ("ironclad"
                  #+:COM.RAL "aesx"
                  "useful-macros"
@@ -55,5 +55,48 @@ THE SOFTWARE.
                  "s-base64"
                  "emotiq"
                  "emotiq/delivery"
+                 "cffi"
+		 "core-crypto/libraries"
+                 "crypto-pairings/libraries"
                  ))
+
+(defsystem "core-crypto/libraries"
+  :perform
+  (prepare-op
+   :before (o c)
+   (let ((wildcard-for-libraries
+          (make-pathname :defaults 
+                         (asdf:system-relative-pathname
+                          :emotiq "../var/local/lib/libLispCurve1174")
+                         :type :wild)))
+     (unless (directory wildcard-for-libraries)
+       (format *standard-output*
+               "~&Failed to find libraries matching~&~t~a~&~
+~&Attempting to build native libraries... hang on for a minute, please..."
+               wildcard-for-libraries)
+       (run-program `("bash" "--verbose"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-ecc.bash")))
+                    :output :string :error :string)
+       (format *standard-output* "~tWhew!  Finished.~&")))))
+
+(defsystem "crypto-pairings/libraries"
+  :perform
+  (prepare-op
+   :before (o c)
+   (let ((wildcard-for-libraries
+          (make-pathname :defaults 
+                         (asdf:system-relative-pathname
+                          :emotiq "../var/local/lib/libLispPBCIntf")
+                         :type :wild)))
+     (unless (directory wildcard-for-libraries)
+       (format *standard-output*
+               "~&Failed to find libraries matching~&~t~a~&~
+~&Attempting to build native libraries... hang on for a minute, please..."
+               wildcard-for-libraries)
+       (run-program `("bash"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-pairings.bash")))
+                    :output :string :error :string)
+       (format *standard-output* "~tWhew!  Finished.~&")))))
 

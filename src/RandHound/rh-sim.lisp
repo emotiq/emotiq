@@ -31,6 +31,7 @@ THE SOFTWARE.
 ;; ------------------------------------------------------
 ;; Simulation support
 
+#|
 (defvar *sim-pkey-skey-table* (make-hash-table
                            :test 'equal))
 
@@ -45,8 +46,6 @@ THE SOFTWARE.
 (defun build-sim-nodes (&optional (nbr 16))
   ;; NOTE: you don't want to run this very often. It takes a long time
   ;; due to PKBF2 @ 2048 iters of SHA3. About 2.6 sec/key.
-  (init-nodes)
-  (clrhash *sim-pkey-skey-table*)
   (loop repeat nbr do
         (let* ((lst   (make-random-keypair))
                (pkey  (getf lst :pkey))
@@ -98,8 +97,6 @@ THE SOFTWARE.
   (let ((lst (with-open-file (f *sim-keys-file*
                                 :direction :input)
                (read f))))
-    (init-nodes)
-    (clrhash *sim-pkey-skey-table*)
     (let* ((nnodes  (length lst))
            (max-bft (floor (1- nnodes) 3)))
       (setf *max-bft* max-bft)
@@ -121,3 +118,4 @@ THE SOFTWARE.
                                                            :s  s))
           )))))
 
+|#
