@@ -45,6 +45,9 @@
    #:emotiq/log/)
 
   (:export
+   #:x11-display-p)
+
+  (:export
    #:start-node)
   (:export
    #:*notestream*

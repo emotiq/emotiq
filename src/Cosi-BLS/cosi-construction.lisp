@@ -389,6 +389,9 @@ THE SOFTWARE.
                      :text txt)))
 
   (defmethod view-tree ((tree node) &key (layout :left-right))
+    (unless (emotiq:x11-display-p)
+      (emotiq:note "No X11 display available to view tree")
+      (return-from view-tree nil))
     (capi:contain
      (make-instance 'capi:graph-pane
                     :layout-function layout
