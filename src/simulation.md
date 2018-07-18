@@ -5,20 +5,6 @@ process.
 
 ## Running
 
-### Cloaked
-```lisp
-(ql:quickload :emotiq/sim)
-(emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
-(emotiq/sim:run) 
-```    
-
-### Uncloaked 
-```lisp
-(ql:quickload :emotiq/sim)
-(emotiq/sim:initialize)  ;; takes several keywords - see node-sim.lisp
-(emotiq/sim:run :cloaked nil)
-```
-
 ### New Transactions
 ```lisp
 (ql:quickload :emotiq/sim)
@@ -30,7 +16,7 @@ process.
 
 ## Explanation    
 
-### EMOTIQ/SIM:RUN
+### EMOTIQ/SIM:RUN (deprecated)
 
 The simulation performs the following steps:
 
@@ -45,7 +31,7 @@ The simulation performs the following steps:
 Various diagnostic messages from the actor threads will
 appear to `cl:*standard-output*` and `cl:*standard-error*`.
 
-### EMOTIQ/SIM:RUN-NEW-TX
+### EMOTIQ/SIM:RUN-NEW-TX (use this, not RUN)
 
 Simulation with "new transactions".
 
@@ -61,36 +47,5 @@ transactions.
 
 The specials `*user-1*` `*user-2*` `*user-3*` will hold references to the
 user identities.
-
-Subsequently, one may use the `spend` and `spend-list` functions to
-create further transactions.  
-
-
-## Notes
-### helpers...
-```lisp
-(progn
-  (system:run-shell-command "rm -rf ~/.cache/common-lisp/")
-  (ql:quickload :emotiq/sim))
-
-(progn
-  (emotiq/sim:initialize)
-  (emotiq/sim::run :cloaked nil))
-```    
-
-### for pt linux
-```lisp
-(system:run-shell-command "rm -rf ~/.cache/common-lisp/")
-(ql:quickload :emotiq/sim)
-(emotiq/sim:initialize :cosi-prepare-timeout 60 :cosi-commit-timeout 60 :executive-threads 8)
-```
-```lisp
-(emotiq/sim:run :cloaked t)
-```
-or
-```lisp
-(emotiq/sim:run :cloaked nil)
-```
-
 
     

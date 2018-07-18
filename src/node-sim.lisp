@@ -144,6 +144,9 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
           *user-3*
           (pbc:make-key-pair :user-3))))
 
+
+#| deprecated  (*newtx-p* is always T)
+
 (defun run (&key (monetary-supply 1000) (cloaked t))
   "Run the block chain simulation entirely within the current process
 
@@ -196,6 +199,7 @@ This will spawn an actor which will asynchronously do the following:
   (let ((result (emotiq/tracker:query-current-state)))
     (emotiq:note "current state = ~A" result)
     result))   ;;; return non-nil if we are able to exit cleanly
+|#
 
 (defun run-new-tx ()
   "Using new tx feature, run the block chain simulation entirely within the current process.
