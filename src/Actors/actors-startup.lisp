@@ -187,8 +187,14 @@ THE SOFTWARE.
 
 (defun blind-print (cmd &rest items)
   (declare (ignore cmd))
+  (let ((prfn (get :actors :print-handler)))
   (dolist (item items)
-    (emotiq:note "~A" item)))
+    (funcall prfn item))))
+
+(eval-when (:load-toplevel)
+  (unless (get :actors :print-handler)
+    (setf (get :actors :print-handler) 'print)))
+
 
 (defvar *shared-printer-actor*    #'blind-print)
 
@@ -201,8 +207,7 @@ THE SOFTWARE.
           (make-actor
            (dlambda
             (:print (&rest things-to-print)
-                    (dolist (item things-to-print)
-                      (emotiq:note "~A" item)))
+             (apply 'blind-print :print things-to-print))
             
             (:quit () (become 'blind-print))
             )))
