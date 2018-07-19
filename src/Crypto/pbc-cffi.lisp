@@ -176,7 +176,7 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("init_pairing" _init-pairing :library :libpbc) :int64
+(cffi:defcfun ("init_pairing" _init-pairing :library :libLispPBC) :int64
   (context     :uint64)
   (param-text  :pointer :char)
   (ntext       :uint64)
