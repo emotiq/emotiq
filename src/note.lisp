@@ -25,5 +25,6 @@ a CL:FORMAT control string referencing the values contained in ARGS."
 (eval-when (:load-toplevel)
   ;; hook, even if Actors isn't loaded...
   ;; If Actors are loaded later, they will respect the hook
-  (setf (get :actors :print-handler) (um:curry 'note "~A")))
+  (setf (get :actors :print-handler) (lambda (item)
+                                       (note "~A" item))))
 
