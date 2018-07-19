@@ -37,7 +37,7 @@ THE SOFTWARE.
                 (:file "hash")
                 (:file "ctr-hash-drbg")
                 (:file "primes")
-                #+:COM.RAL (:file "crypto-le")
+                #+(AND :MACOSX :COM.RAL) (:file "crypto-le")
                 (:file "kdf")
                 (:file "gf-571")
                 (:file "lib-loads")
@@ -45,7 +45,7 @@ THE SOFTWARE.
                 (:file "ecc-B571")
                 (:file "curve-gen")
                 (:file "crypto-environ")
-                #+:COM.RAL (:file "machine-id")
+                #+(AND :MACOSX :COM.RAL) (:file "machine-id")
                 (:file "lagrange-4-square"))
   :depends-on   ("ironclad"
                  #+:COM.RAL "aesx"
