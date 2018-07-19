@@ -30,8 +30,6 @@ case ${LISP} in
 esac
 
 mkdir -p $HOME/bin
-cp ci/lisp-wrapper.bash $HOME/bin
-chmod +x $HOME/bin/lisp-wrapper.bash
 
 # Setup ASDF searh path
 
@@ -43,7 +41,7 @@ echo "(:tree \"$BASE\")" >~/.config/common-lisp/source-registry.conf.d/emotiq.co
 
 echo "Installing Quicklisp"
 wget -O /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
-$HOME/bin/lisp-wrapper.bash -l /tmp/quicklisp.lisp -e '(quicklisp-quickstart:install)'
+$DIR/lisp-wrapper.bash -l /tmp/quicklisp.lisp -e '(quicklisp-quickstart:install)'
 
 cat >$rcfile <<EOF
   ;;; The following lines added by ql:add-to-init-file:
@@ -53,7 +51,7 @@ cat >$rcfile <<EOF
       (load quicklisp-init)))
 EOF
 
-$HOME/bin/lisp-wrapper.bash -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
+$DIR/lisp-wrapper.bash -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
                 (lisp-implementation-type)
                 (lisp-implementation-version)
                 #+asdf(asdf:asdf-version) #-asdf "not required")' || exit 1
