@@ -8,22 +8,6 @@ fi
 BASE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source $BASE/functions.bash
 
-case ${LISP} in
-    lispworks*)
-        lisp="lwpro"
-        ;;
-    ccl*)
-        lisp="ccl"
-        ;;
-    sbcl*)
-        lisp="sbcl --disable-debugger"
-        ;;
-    *)
-        echo "Unknown Lisp dialect: $LISP, falling back to CCL"
-        lisp="ccl"
-        ;;
-esac
-
 IFS=
 lisp_exec $@
 status=$?

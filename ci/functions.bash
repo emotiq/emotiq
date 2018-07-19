@@ -1,8 +1,28 @@
 #!/usr/bin/env bash
 
-lisp=${lisp:-'ccl'}
+function lisp_for_ci () {
+    implementation=$1
+    lisp_cli=
+    case ${implementation} in
+        lispworks*)
+            lisp_cli="lwpro"
+            ;;
+        ccl*)
+            lisp_cli="ccl"
+            ;;
+        sbcl*)
+            lisp_cli="sbcl --disable-debugger"
+            ;;
+        *)
+            # Fallback to ccl
+            lisp_cli="ccl"
+    esac
+    echo $lisp_cli
+}
 
 function lisp_exec () {
+    lisp=${lisp:-$(lisp_for_ci $LISP)}
+
     tmpfile=$(mktemp /tmp/script-exec.lisp-XXXXXX)
     while test $# -gt 0; do
         case "$1" in
@@ -24,21 +44,4 @@ function lisp_exec () {
     done
     echo "(uiop:quit 0)" >> $tmpfile
     ${lisp} <$tmpfile
-}
-
-function lisp_for_ci () {
-    implementation=$1
-    lisp_cli=
-    case ${implementation} in
-        lispworks*)
-            lisp_cli="$HOME/bin/lwpro"
-            ;;
-        ccl*)
-            lisp_cli="$HOME/bin/ccl"
-            ;;
-        sbcl*)
-            lisp_cli="/usr/local/bin/sbcl --disable-debugger"
-            ;;
-    esac
-    echo $lisp_cli
 }
