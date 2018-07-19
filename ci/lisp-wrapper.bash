@@ -5,9 +5,8 @@ if test $# -eq 0; then
   exit 1
 fi
 
-DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-source $DIR/functions.bash
+BASE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source $BASE/functions.bash
 
 case ${LISP} in
     lispworks*)
@@ -25,6 +24,7 @@ case ${LISP} in
         ;;
 esac
 
+IFS=
 lisp_exec $@
 status=$?
 
