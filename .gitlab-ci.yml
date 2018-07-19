@@ -3,7 +3,6 @@ variables:
   GITHUB_REPO: emotiq
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
-  lisp: ci/lisp-wrapper.bash
 # Add ASDF systems to test in <file:etc/all-tests.sexp>
 
 stages:
