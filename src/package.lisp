@@ -138,7 +138,11 @@
 
 (defpackage emotiq/txn
   (:use #:cl)
-  (:export))
+  (:export
+   #:*transaction-fee*
+   #:get-utxos
+   #:select-utxos
+   #:make-spend-transaction))
 
 (defpackage emotiq/tracker
   (:use #:cl)
