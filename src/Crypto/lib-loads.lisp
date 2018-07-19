@@ -11,16 +11,6 @@
   (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
            cffi:*foreign-library-directories* :test 'equal)
   (cffi:define-foreign-library
-      :libGMP
-    (:darwin     "libgmp.dylib")
-    (:linux      "libgmp.so")
-    (t (:default "libgmp")))
-  (cffi:define-foreign-library
-      :libPBC
-    (:darwin     "libpbc.dylib")
-    (:linux      "libpbc.so")
-    (t (:default "libpbc")))
-  (cffi:define-foreign-library
       :libEd3363 
     (:darwin     "libLispEd3363.dylib")
     (:linux      "libLispEd3363.so")
@@ -59,8 +49,6 @@
   (if (emotiq:production-p)
       (define-production-dlls)
     (define-dev-dlls))
-  (cffi:use-foreign-library :libGMP)
-  (cffi:use-foreign-library :libPBC)
   (cffi:use-foreign-library :libLispPBC)
   (cffi:use-foreign-library :libEd3363)
   (cffi:use-foreign-library :libCurve1174))
