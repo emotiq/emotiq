@@ -55,9 +55,6 @@ extern "C" {
 			   unsigned char* lpz);
 }
 
-#endif __curve1174_intf_h__
+#endif // __curve1174_intf_h__
 
 // -- end of curve1174_intf.h -- //
-
-
-

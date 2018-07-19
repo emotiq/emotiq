@@ -55,9 +55,6 @@ extern "C" {
 			unsigned char* lpz);
 }
 
-#endif __ed3363_intf_h__
+#endif // __ed3363_intf_h__
 
 // -- end of ed3363_intf.h -- //
-
-
-

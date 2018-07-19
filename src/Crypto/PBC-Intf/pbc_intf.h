@@ -112,9 +112,6 @@ extern "C" {
   void get_Zr_from_hash(uint64_t ctxt, uint8_t *zr_val, uint8_t *phash, uint64_t nhash);
 }
 
-#endif __pbc_intf_h__
+#endif // __pbc_intf_h__
 
 // -- end of pbc_intf.h -- //
-
-
-
