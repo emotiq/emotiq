@@ -378,7 +378,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                function-name))))))
 
 (defun eval-x-error (type &rest additional-args)
-  (warn "Error in eval-x of type ~a: additional info: ~s"
+  (emotiq:em-warn "Error in eval-x of type ~a: additional info: ~s"
         type additional-args)
   (fail-script))
     
@@ -471,7 +471,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (cond
     (*current-transaction*
      (require-transaction-script-context)
-     (warn "Failure in script.")        ; bind current script?
+     (emotiq:em-warn "Failure in script.")        ; bind current script?
      (throw *transaction-script-catch-tag*
        nil))
     (t
@@ -491,7 +491,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
      (require-transaction-script-op-context)
      (if *debugging-chainlisp*
          (cerror "Continue" "Failure in script op ~a" *current-script-op*)
-         (warn "Failure in script op ~a" *current-script-op*))
+         (emotiq:em-warn "Failure in script op ~a" *current-script-op*))
      (throw *transaction-script-catch-tag*
        nil))
     (t
@@ -535,10 +535,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    - Add the transaction to the mempool."
 
   (when (null (transaction-inputs transaction))
-    (warn "Transaction with no inputs rejected")
+    (emotiq:em-warn "Transaction with no inputs rejected")
     (return-from validate-transaction nil))
   (when (null (transaction-outputs transaction))
-    (warn "Transaction with no outputs rejected")
+    (emotiq:em-warn "Transaction with no outputs rejected")
     (return-from validate-transaction nil))
 
   (let ((txid (transaction-id transaction)))
@@ -547,7 +547,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       ;; a message to that effect. This corresponds to above rule
       ;; 'Reject if we have a matching transaction in the mempool or
       ;; in a block of the blockchain'
-      (warn "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
+      (emotiq:em-warn "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
             (txid-string txid))
       (return-from validate-transaction nil))
     (loop with succeed-p
@@ -558,8 +558,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
           as input-tx-outputs 
             = (cond
                 ((null input-tx)
-                 (warn
-                  "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
+                 (emotiq:em-warn
+                  "Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
                   (txid-string id))
                  (return nil))
                 (t (transaction-outputs input-tx)))
@@ -567,26 +567,26 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             = (let ((tx-out
                       (or (nth index input-tx-outputs)
                           (unless (tx-ids= id (transaction-id input-tx))
-                            (warn "TX ~a output does not match input spec [~a/~d]."
+                            (emotiq:em-warn "TX ~a output does not match input spec [~a/~d]."
                                   input-tx id index)
                             (return nil))
                           ;; debugging:
                           (error "TX ~a output [~a/~d] lost - likely programming error"
                                  input-tx id index))))
                 (when (double-spend-tx-out-p id index t)
-                  (warn "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
+                  (emotiq:em-warn "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
                         (txid-string id) index)
                   (return nil))
                 tx-out)
           as input-subamount = (tx-out-amount utxo)
           when (coinbase-transaction-input-p tx-in)
-            do (warn "Transaction with coinbase input - rejected")
+            do (emotiq:em-warn "Transaction with coinbase input - rejected")
                (return nil)
           when (or (not (slot-boundp tx-in '%tx-in-signature))
                    (null (%tx-in-signature tx-in))
                    (not (slot-boundp tx-in '%tx-in-public-key))
                    (null (%tx-in-public-key tx-in)))
-            do (warn "Transaction missing witness data. Forgot to sign? Rejected.")
+            do (emotiq:em-warn "Transaction missing witness data. Forgot to sign? Rejected.")
                (return nil)                 
           do (setq succeed-p (run-chainlisp-script transaction tx-in utxo))
           when (not succeed-p)
@@ -596,15 +596,15 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                           (loop for tx-out in (transaction-outputs transaction)
                                 sum (tx-out-amount tx-out))))
                     (when (< sum-of-inputs sum-of-outputs)
-                      (warn "TX sum of inputs values < sum of output values. Rejected.")
+                      (emotiq:em-warn "TX sum of inputs values < sum of output values. Rejected.")
                       (return nil))
                     (when (transaction-fee-too-low-p 
                            (- sum-of-inputs sum-of-outputs))
-                      (warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
+                      (emotiq:em-warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil))
-                    (emotiq:note "~%Node ~a declares successful transaction ~a~%  TxID = ~a~%"
+                    (emotiq:note "Node ~a declares successful transaction ~a  TxID = ~a"
                                  (cosi-simgen:current-node)
                                  transaction
                                  (txid-string (transaction-id transaction)))
@@ -748,11 +748,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (def-script-op public-key-equal-verify (public-key public-key-hash)
   (cond
     ((not (typep public-key 'pbc:public-key))
-     (format t "~%Arg public-key (~s) is not of correct type: ~s~%"
+     (emotiq:note "Arg public-key (~s) is not of correct type: ~s"
              public-key 'pbc:public-key)
      (fail-script-op))
     ((not (stringp public-key-hash))
-     (format t "~%Public-key-hash ~s not a string but string expected~%"
+     (emotiq:note "Public-key-hash ~s not a string but string expected"
              public-key-hash)
      (fail-script-op))
     (t
@@ -762,11 +762,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             (l2 (length public-key-hash-from-public-key)))
        (cond
          ((not (stringp public-key-hash-from-public-key))
-          (format t "~%Public-key hash ~s derived from public-key ~s not a string but string expected~%"
+          (emotiq:note "Public-key hash ~s derived from public-key ~s not a string but string expected"
                   public-key-hash-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
-          (format t "~%Public key hash ~s length ~s ~%  not same as public key ~s hash ~s length ~s~%"
+          (emotiq:note "Public key hash ~s length ~s not same as public key ~s hash ~s length ~s"
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
@@ -1152,7 +1152,7 @@ returns the block the transaction was found in as a second value."
                ;; indicating we have an usnpent transaction output
                ;; (UTXO)
                (when (tx-ids= (transaction-id tx) id)
-                 (format t "~%Hey look: the TxID~%  ~a~%is the same as the arg TxID~%  ~a~%Wow!~%"
+                 (emotiq:note "Hey look: the TxID  ~a is the same as the arg TxID  ~a Wow!"
                          (txid-string (transaction-id tx))
                          (txid-string id))
                  (return-from double-spend-tx-out-p
@@ -1160,13 +1160,13 @@ returns the block the transaction was found in as a second value."
 
 
 (defun trace-compare-all-tx-ids (id)
-  (format t "~%Trace:~%")
+  (emotiq:note "Trace:")
   (do-blockchain (blk)
     (do-transactions (tx blk)
-      (format t "~%TX id = ~s   vs~%  ~s [~a]"
+      (emotiq:note "TX id = ~s vs  ~s [~a]"
               (transaction-id tx) id
               (tx-ids= (transaction-id tx) id))))
-  (format t "~&end trace~%"))
+  (emotiq:note "end trace"))
     
 
 
@@ -1299,8 +1299,8 @@ returns the block the transaction was found in as a second value."
 
 (defun check-secret-keys-for-transaction-inputs (secret-keys tx-inputs)
   (unless (= (length secret-keys) (length tx-inputs))
-    (warn 
-     "Unequal-length secret-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
+    (emotiq:em-warn 
+     "Unequal-length secret-keys/tx-input hashes ~a length = ~d vs. ~a length = ~d. Programming error likely!"
      secret-keys
      (length secret-keys)
      tx-inputs
@@ -1308,8 +1308,8 @@ returns the block the transaction was found in as a second value."
 
 (defun check-public-keys-for-transaction-inputs (public-keys tx-inputs)
   (unless (= (length public-keys) (length tx-inputs))
-    (warn 
-     "Unequal-length public-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
+    (emotiq:em-warn 
+     "Unequal-length public-keys/tx-input hashes ~a length = ~d vs. ~a length = ~d. Programming error likely!"
      public-keys
      (length public-keys)
      tx-inputs
@@ -1486,34 +1486,34 @@ of type TYPE."
 
 (defun dump-tx (tx &key out-only)
   (unless (eq (transaction-type tx) ':spend)
-    (format t "~&  ~a Transaction~%" (transaction-type tx)))
-  (format t "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
+    (emotiq:note "  ~a Transaction" (transaction-type tx)))
+  (emotiq:note "  TxID: ~a" (txid-string (transaction-id tx)))
   (unless (or out-only
               (member (transaction-type tx)
                       '(:coinbase :collect))) ; no-input tx types
     (loop for tx-in in (transaction-inputs tx)
-          do (format t "    input outpoint: index = ~a/TxID = ~a~%"
+          do (emotiq:note "    input outpoint: index = ~a/TxID = ~a"
                      (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
-  (format t "    outputs:~%")
+  (emotiq:note "    outputs:")
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
-        do (format t "      [~d] amt = ~a (out to) addr = ~a~%"
+        do (emotiq:note "      [~d] amt = ~a (out to) addr = ~a"
                    i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
            (when block
-             (format t "~%Dump txs in block = ~s:~%" block)
+             (emotiq:note "Dump txs in block = ~s:" block)
              (do-transactions (tx block)
                (dump-tx tx)))
            (when mempool
-             (format t "~%Dump txs in mempool:~%")
+             (emotiq:note "Dump txs in mempool:")
              (loop for tx being each hash-value of cosi-simgen:*mempool*
                    do (dump-tx tx)))
            (when blockchain
-             (format t "~%Dump txs on blockchain:~%")
+             (emotiq:note "Dump txs on blockchain:")
              (do-blockchain (block)
-               (format t " Dump txs in block = ~s:~%" block)
+               (emotiq:note " Dump txs in block = ~s:" block)
                (do-transactions (tx block)
                  (dump-tx tx))))))
     (let ((cosi-simgen:*current-node*
@@ -1613,7 +1613,7 @@ of type TYPE."
               count-so-far)
         as time-through from 0
         initially
-           (format t "~%Awaiting ~d ~a txs.~%"
+           (emotiq:note "Awaiting ~d ~a txs."
                    n                   
                    (if (spend-tx-types-p tx-types) 
                        "spend"
@@ -1790,7 +1790,7 @@ of type TYPE."
         count (remove-transaction-from-mempool transaction mempool)
           into n-removed
         finally
-           (format t "~%Removed ~d transaction~p from mempool.~%"
+           (emotiq:note "Removed ~d transaction~p from mempool."
                    n-removed n-removed)
            (cosi/proofs/newtx:dump-txs :mempool t)))
 

@@ -188,7 +188,7 @@ THE SOFTWARE.
 (defun blind-print (cmd &rest items)
   (declare (ignore cmd))
   (dolist (item items)
-    (print item)))
+    (emotiq:note "~A" item)))
 
 (defvar *shared-printer-actor*    #'blind-print)
 
@@ -202,7 +202,7 @@ THE SOFTWARE.
            (dlambda
             (:print (&rest things-to-print)
                     (dolist (item things-to-print)
-                      (print item)))
+                      (emotiq:note "~A" item)))
             
             (:quit () (become 'blind-print))
             )))
