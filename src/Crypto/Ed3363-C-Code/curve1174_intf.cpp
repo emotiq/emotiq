@@ -265,42 +265,6 @@ void gmul(type64 *x,type64 *y,type64 *z)
 
 void ginv(type64 *x)
 {
-#if 0
-  // 316*M
-	int i;
-	type64 w[5],t[5],x5[5],x15[5];
-
-	gsqr(x,w);    // w = x^2
-	gsqr(w,t);    // t = x^4
-	gmul(t,x,x5);
-	gmul(w,x5,t); // t = x^7 starting value
-	gsqr(t,w);    // w = x^14
-	gmul(w,x,x15);
-
-	gsqr(t,w);
-	gsqr(w,t);
-	gsqr(t,w);
-	gsqr(w,t);
-	gmul(t,x15,w);
-	for(i = 30; --i >= 0;)
-	  {
-	    gsqr(w,t);
-	    gsqr(t,w);
-	    gsqr(w,t);
-	    gsqr(t,w);
-	    gmul(w,x15, t);
-	    gsqr(t,w);
-	    gsqr(w,t);
-	    gsqr(t,w);
-	    gsqr(w,t);
-	    gmul(t,x15, w);
-	  }
-	gsqr(w,t);
-	gsqr(t,w);
-	gsqr(w,t);
-	gsqr(t,w);
-	gmul(w,x5,x);
-#else
 	// --------------------------------------
 	// 205*M
 	int    i;
@@ -377,7 +341,6 @@ void ginv(type64 *x)
 	gsqr(w,t1);
 	gsqr(t1,w);     // w = x^(2^251-16)
 	gmul(x5,w,x);   // a = x^5, c = x^(2^251-11)
-#endif
 }
 
 // Point Structure
