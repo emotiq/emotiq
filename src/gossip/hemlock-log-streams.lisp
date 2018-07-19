@@ -63,14 +63,16 @@ around this thing to get back that purity.
   ())
 
 (defmethod ccl::stream-write-char ((stream highlevel-hemlock-output-stream) char)
-  (ccl::call-in-event-process
+ ; (ccl::call-in-event-process
+   (ccl::queue-for-event-process
    (lambda () (funcall (hi::old-lisp-stream-out stream) stream char))))
 
 (defmethod ccl::stream-write-string ((stream highlevel-hemlock-output-stream) string
                                      &optional
                                      (start 0)
                                      (end (length string)))
-  (ccl::call-in-event-process
+  ;(ccl::call-in-event-process
+   (ccl::queue-for-event-process
    (lambda () (funcall (hi::old-lisp-stream-sout stream) stream string start end))))
 
 (defmethod highlevel-stream-from-window ((window hemlock-frame))

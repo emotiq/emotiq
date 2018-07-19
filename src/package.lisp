@@ -51,7 +51,8 @@
    #:start-node)
   (:export
    #:*notestream*
-   #:note)
+   #:note
+   #:em-warn)
   (:export
    #:production-p
    #:main
@@ -128,11 +129,16 @@
               #:emotiq/path)
   (:export
    #:*subpath*
+   #:subpath
    #:emotiq/user/root/
    #:emotiq/wallet/
    #:tmp/
    #:etc/
    #:var/log/))
+
+(defpackage emotiq/txn
+  (:use #:cl)
+  (:export))
 
 (defpackage emotiq/tracker
   (:use #:cl)
