@@ -43,6 +43,14 @@
                 :serial t
                 :components ((:file "filesystem")))))
 
+(defsystem "emotiq/txn"
+  :depends-on (emotiq
+               cosi-bls)
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "txn")))))
+                
 (defsystem "emotiq/startup"
   :depends-on (emotiq/node
                actors
