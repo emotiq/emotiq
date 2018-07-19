@@ -1,5 +1,6 @@
 ;; use (run) to run all-cloaked transactions
-;; use (urun) to run all-uncloaked transactions
+;; use (run :cloaked nil) to run all-uncloaked transactions
+;; use (emotiq/sim:run-new-tx) to run new-style transactions
 ;; pretty cheesy at the moment -  cloaked was working, copy/paste to make uncloaked
 
 ;; top-level glue code for a simulation node
@@ -69,6 +70,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   nil
   "Genesis UTXO.")
 
+#+OBSOLETE
 (defun broadcast-message (&rest message)
   (loop
      :for node :across cosi-simgen:*node-bit-tbl*
@@ -85,8 +87,9 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
     (declare (ignore secrg))
     (eassert (cosi/proofs:validate-txout utxog))
     (setf *genesis-output* utxog)
-    (broadcast-message :genesis-utxo
-                       :utxo utxog)
+    (cosi-simgen:gossip-neighborcast nil
+                                     :genesis-utxo
+                                     :utxo utxog)
     utxog))
 
 (defun create-transaction (from-account from-utxo amount-list to-pkey-list fee &key (cloaked t))
@@ -117,8 +120,9 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (unless (cosi/proofs:validate-transaction trans)
     (error (format nil "transaction ~A did not validate" name)))
   (format *error-output* "~&Broadcasting transaction ~a to all simulated nodes" name)
-  (broadcast-message :new-transaction
-                     :trn trans))
+  (cosi-simgen:gossip-neighborcast nil
+                                   :new-transaction
+                                   :trn trans))
 
 (defun force-epoch-end ()
   (ac:pr "force-epoch-end")
@@ -228,7 +232,7 @@ This will spawn an actor which will asynchronously do the following:
 
       (format t "~%Tx 0 created/genesis, now broadcasting.")
       (cosi/proofs/newtx:dump-tx genesis-transaction)      
-      (broadcast-message :genesis-block :blk genesis-block)
+      (cosi-simgen:gossip-neighborcast nil :genesis-block :blk genesis-block)
 
       (let* ((txid
                (cosi/proofs/newtx:transaction-id genesis-transaction))
@@ -257,7 +261,7 @@ This will spawn an actor which will asynchronously do the following:
         (format t "~%Tx 1 created/signed by genesis (~a), now broadcasting."
                 genesis-public-key-hash)
         (cosi/proofs/newtx:dump-tx signed-transaction)
-        (broadcast-message :new-transaction-new :trn signed-transaction)
+        (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
 
         (let* ((user-2-public-key-hash
                  (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*)))
@@ -284,7 +288,7 @@ This will spawn an actor which will asynchronously do the following:
           (setq *tx-2* signed-transaction)
           (ac:pr (format nil "Broadcasting 2nd TX."))
           (cosi/proofs/newtx:dump-tx signed-transaction)
-          (broadcast-message :new-transaction-new :trn signed-transaction)
+          (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
 
           (let* ((user-3-public-key-hash
                    (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
@@ -310,7 +314,7 @@ This will spawn an actor which will asynchronously do the following:
             (format t "~%Tx 3 created/signed by user-2 (~a), now broadcasting."
                     user-2-public-key-hash)
             (cosi/proofs/newtx:dump-tx signed-transaction)
-            (broadcast-message :new-transaction-new :trn signed-transaction)
+            (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
 
             ;; here: attempt a double-spend: (with same TxID)
             (setq signed-transaction
@@ -322,7 +326,7 @@ This will spawn an actor which will asynchronously do the following:
             (ac:pr (format nil "Broadcasting 4th TX [attempt to double-spend (same TxID)]."))
             (format t "~%Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
                     user-2-public-key-hash)
-            (broadcast-message :new-transaction-new :trn signed-transaction)
+            (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
 
             ;; here: attempt a double-spend: (with different TxID)
             (setq transaction-outputs
@@ -339,7 +343,7 @@ This will spawn an actor which will asynchronously do the following:
             (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
             (format t "~%Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
                     user-2-public-key-hash)
-            (broadcast-message :new-transaction-new :trn signed-transaction)
+            (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
 
 
             (emotiq/elections:fire-election)

@@ -298,6 +298,7 @@
   (:export
    :*current-node*
    :current-node
+   :gossip-neighborcast
    :node
    :node-pkey
    :node-skey

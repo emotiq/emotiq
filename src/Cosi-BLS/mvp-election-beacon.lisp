@@ -303,8 +303,8 @@ based on their relative stake"
 
           (when (null node-stake)
             (error "Stake is nil for this node. Cannot continue."))
-          (when (cosi/proofs/newtx:in-legal-stake-range-p stake)
-            (error "Stake value ~s is not valid for a stake." stake))
+          (when (cosi/proofs/newtx:in-legal-stake-range-p node-stake)
+            (error "Stake value ~s is not valid for a stake." node-stake))
 
           (set-nodes witnesses-and-stakes)
           (setf (node-stake node) node-stake)))
