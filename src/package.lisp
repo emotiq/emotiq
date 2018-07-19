@@ -48,7 +48,8 @@
    #:start-node)
   (:export
    #:*notestream*
-   #:note)
+   #:note
+   #:em-warn)
   (:export
    #:production-p
    #:main
