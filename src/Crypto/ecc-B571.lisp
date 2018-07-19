@@ -397,6 +397,7 @@ THE SOFTWARE.
   (assert (not (ecc-infinite-p (ecc-basic-mul pt *ecc-h*))))
   pt)
 
+#+(:MACOSX :COM.RAL)
 (ecc-validate-public-key *ecc-gen*)
 
 ;; --------------------------------------------------------

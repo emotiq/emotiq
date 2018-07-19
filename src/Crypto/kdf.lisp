@@ -29,13 +29,7 @@ THE SOFTWARE.
 
 ;; ------------------------------------------------------------------------
 
-(defun mask-off (arr rembits)
-  (when (plusp rembits)
-    (setf (aref arr 0) (ldb (byte rembits 0) (aref arr 0))))
-  arr)
-
-
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-kdf)
 
 (defun apply-c-kdf (nbits keys)

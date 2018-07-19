@@ -499,7 +499,7 @@ from calling the function."
 #-:COM.RAL
 (defstub sha2_file)
 
-#+:LISPWORKS
+#+(AND :MACOSX :LISPWORKS :COM.RAL)
 (defun fast-sha2-file (fname)
   (fli:with-dynamic-foreign-objects ()
     (let ((carr (fli:allocate-dynamic-foreign-object
@@ -512,7 +512,7 @@ from calling the function."
                   (fli:dereference carr :index ix)))
       ans)))
 
-#-:LISPWORKS
+#-(AND :MACOSX :LISPWORKS :COM.RAL)
 (defstub fast-sha2-file)
   
 
@@ -526,7 +526,7 @@ from calling the function."
 #-:COM.RAL
 (defstub shad2_file)
 
-#+:LISPWORKS
+#+(AND :LISPWORKS :MACOSX :COM.RAL)
 (defun fast-shad2-file (fname)
   (fli:with-dynamic-foreign-objects ()
     (let ((carr (fli:allocate-dynamic-foreign-object
@@ -539,9 +539,10 @@ from calling the function."
                   (fli:dereference carr :index ix)))
       ans)))
 
-#-:LISPWORKS
+#-(AND :LISPWORKS :MACOSX :COM.RAL)
 (defstub fast-shad2-file)
-  
+
+#+(AND :LISPWORKS :MACOSX :COM.RAL)
 (defun shad2-file (fname)
   (with-fast-impl
    (fast-shad2-file fname)
@@ -731,9 +732,10 @@ from calling the function."
   nil)
   
 
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub gf-random-k*)
 
+#+(AND :MACOSX :COM.RAL)
 (defun make-ecc-projective-pt (&key x y (z 1) alpha)
   (let* ((alpha   (or alpha
                       (gf-random-k*)))
@@ -875,6 +877,7 @@ from calling the function."
 ;; --------------------------------------------------------
 ;; Obfuscated private key multiplication
 
+#+(AND :MACOSX :COM.RAL)
 (defun ecc-stitch (r lst)
   (let ((a (ecc-mul r (car lst))))
     (if (endp (cdr lst))
@@ -884,6 +887,7 @@ from calling the function."
 (defun my-eval (e)
   (funcall (compile nil `(lambda () ,e))))
 
+#+(AND :MACOSX :COM.RAL)
 (defun list-stitch-factors (key levels)
   (um:nlet iter ((e   (primes:decompose key))
                  (lvl levels))
@@ -897,6 +901,7 @@ from calling the function."
         (cons (+ *ecc-r* factor)
               (iter subexpr (1- lvl)))) )))
 
+#+(AND :MACOSX :COM.RAL)
 (defmacro ecc-mul-kpriv (arg key &key (levels 7))
   ;; key must be a number, not an expression
   `(ecc-stitch ,arg ',(list-stitch-factors key levels)))
@@ -915,3 +920,12 @@ from calling the function."
 
 (defun field-random (base)
   (random-between 1 base))
+
+;; ---------------------------------------------------------
+
+(defun mask-off (arr rembits)
+  (when (plusp rembits)
+    (setf (aref arr 0) (ldb (byte rembits 0) (aref arr 0))))
+  arr)
+
+
