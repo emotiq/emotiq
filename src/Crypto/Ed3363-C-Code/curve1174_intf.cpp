@@ -340,7 +340,7 @@ void ginv(type64 *x)
 	gsqr(t1,w);
 	gsqr(w,t1);
 	gsqr(t1,w);     // w = x^(2^251-16)
-	gmul(x5,w,x);   // a = x^5, c = x^(2^251-11)
+	gmul(x5,w,x);   // x = x^(2^251-11)
 }
 
 // Point Structure

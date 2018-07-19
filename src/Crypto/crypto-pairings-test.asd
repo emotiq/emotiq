@@ -4,7 +4,7 @@
                core-crypto
                crypto-pairings)
   :perform  (test-op (o s)
-                     (symbol-call :lisp-unit :run-tests
+                     (symbol-call :lisp-unit :run-test
                                   :all :crypto-pairings-test))
   :components ((:module package
                 :pathname "crypto-pairings-test/"
