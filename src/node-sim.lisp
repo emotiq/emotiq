@@ -410,7 +410,7 @@ This will spawn an actor which will asynchronously do the following:
       ;;;; there's a race here - without sleep the emotiq/txn:make-spend-transaction
       ;;;; below fails on insufficient funds since genesis UTXO is not yet "persisted"
       ;;;; we need to give time to leader to process the :genesis-block message
-      (sleep 1.0)
+      (sleep 10.0)
       
       (let* ((user-1-public-key-hash    ; a/k/a address
               (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-1*)))
@@ -427,7 +427,8 @@ This will spawn an actor which will asynchronously do the following:
         (cosi/proofs/newtx:dump-tx signed-transaction)
         (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
 
-        (sleep 1.0)
+        (emotiq/elections:fire-election)
+        (sleep 120.0)
 
         (let ((user-2-public-key-hash
                (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*))))
