@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -x
+
 uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
