@@ -27,9 +27,9 @@ lisp=${lisp:-'ccl'}
 
 function lisp_exec () {
     # We're running in the CI
-    if [[ ${lisp} == "lisp-wrapper.sh" ]]; then
+    if [[ ${lisp} == "lisp-wrapper.bash" ]]; then
         ${lisp} $*
-    else 
+    else
         tmpfile=$(mktemp /tmp/script-exec.lisp-XXXXXX)
         while test $# -gt 0; do
             case "$1" in
@@ -71,12 +71,12 @@ for system in ${systems}; do
     lisp_exec \
         --eval "(ql:quickload :asdf-test-harness)" \
         --load "${DIR}/test-harness.lisp" \
-        --eval "(test-harness:test-system ${system})" 
+        --eval "(test-harness:test-system ${system})"
     status=$?
     if [[ $status -ne 0 ]] ; then
         echo "!== ASDF:TEST-SYSTEM failed for ${system}"
         failed="${failed} ${system}"
-    else 
+    else
         echo "<== ASDF:TEST-SYSTEM on ${system} succeeded."
     fi
 done
@@ -87,6 +87,3 @@ if [[ ! -z ${failed} ]]; then
 fi
 
 exit 0
-
-                                
-   
