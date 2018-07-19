@@ -27,7 +27,7 @@ lisp=${lisp:-'ccl'}
 
 function lisp_exec () {
     # We're running in the CI
-    if [[ ${lisp} == "lisp-wrapper.bash" ]]; then
+    if [[ ${lisp} == "ci/lisp-wrapper.bash" ]]; then
         ${lisp} $*
     else
         tmpfile=$(mktemp /tmp/script-exec.lisp-XXXXXX)

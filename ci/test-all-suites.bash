@@ -6,10 +6,7 @@
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-. ${DIR}/lisp-wrapper-location.bash
+. ${DIR}/functions.bash
 lisp=$(lisp_for_ci ${LISP})
 
-lisp=$lisp ${DIR}/../etc/test-harness.bash 
-
-
-       
+lisp=$lisp ${DIR}/../etc/test-harness.bash
