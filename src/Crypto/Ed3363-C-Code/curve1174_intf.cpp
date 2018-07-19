@@ -265,6 +265,8 @@ void gmul(type64 *x,type64 *y,type64 *z)
 
 void ginv(type64 *x)
 {
+#if 0
+  // 316*M
 	int i;
 	type64 w[5],t[5],x5[5],x15[5];
 
@@ -298,6 +300,84 @@ void ginv(type64 *x)
 	gsqr(w,t);
 	gsqr(t,w);
 	gmul(w,x5,x);
+#else
+	// --------------------------------------
+	// 205*M
+	int    i;
+	type64 w[5],t1[5],t2[5],x3[5],x5[5];
+	
+	gsqr(x,w);      // w = x^2
+	gmul(x,w,x3);   // x3 = x^3 = x^(2^2-1)
+	gmul(w,x3,x5);  // x5 = x^5
+
+	gsqr(x3,w);
+	gsqr(w,t1);     // t1 = x^(2^4-4)
+	gmul(x3,t1,w);  // w = x^(2^4-1)
+
+	gsqr(w,t1);
+	gsqr(t1,w);     // w = x^(2^6-4)
+	gmul(x3,w,t1);  // t1 = x^(2^6-1)
+	gcopy(t1,t2);
+	for(i = 3; --i >= 0; )
+	  {
+	    gsqr(t1,w);
+	    gsqr(w,t1);
+	  }
+	gmul(t1,t2,w);  // w = x^(2^12-1)
+
+	gsqr(w,t1);
+	gsqr(t1,w);     // w = x^(2^14-4)
+	gmul(x3,w,t1);  // t1 = x^(2^14-1)
+	gcopy(t1,t2);
+	for(i = 7; --i >= 0; )
+	  {
+	    gsqr(t1,w);
+	    gsqr(w,t1);
+	  }
+	gmul(t1,t2,w);  // w = x^(2^28-1)
+
+	gsqr(w,t1);
+	gsqr(t1,w);     // w = x^(2^30-4)
+	gmul(x3,w,t1);  // t1 = x^(2^30-1)
+	gcopy(t1,t2);
+	for(i = 15; --i >= 0; )
+	  {
+	    gsqr(t1,w);
+	    gsqr(w,t1);
+	  }
+	gmul(t1,t2,w);  // w = x^(2^60-1)
+
+	gcopy(w,t2);
+	for(i = 30; --i >= 0; )
+	  {
+	    gsqr(w,t1);
+	    gsqr(t1,w);
+	  }
+	gmul(w,t2,t1);  // t1 = x^(2^120-1)
+
+	gsqr(t1,w);
+	gsqr(w,t1);     // t1 = x^(2^122 - 4)
+	gmul(x3,t1,w);  // w = x^(2^122-1)
+	gcopy(w,t2);
+	for(i = 61; --i >= 0;)
+	  {
+	    gsqr(w,t1);
+	    gsqr(t1,w);
+	  }
+	gmul(w,t2,t1);  // t1 = x^(2^244-1)
+
+	gsqr(t1,w);     // w = x^(2^245-2)
+	gmul(x,w,t1);   // t1 = x^(2^245-1)
+	gsqr(t1,w);      
+	gsqr(w,t1);     // t1 = x^(2^247-4)
+	gmul(x3,t1,w);  // w = x^(2^247-1)
+	
+	gsqr(w,t1);
+	gsqr(t1,w);
+	gsqr(w,t1);
+	gsqr(t1,w);     // w = x^(2^251-16)
+	gmul(x5,w,x);   // a = x^5, c = x^(2^251-11)
+#endif
 }
 
 // Point Structure
