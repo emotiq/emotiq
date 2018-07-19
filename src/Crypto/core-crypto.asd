@@ -37,18 +37,10 @@ THE SOFTWARE.
                 (:file "hash")
                 (:file "ctr-hash-drbg")
                 (:file "primes")
-                #+(AND :MACOSX :COM.RAL) (:file "crypto-le")
-                #+(AND :MACOSX :COM.RAL) (:file "kdf")
-                #+(AND :MACOSX :COM.RAL) (:file "gf-571")
                 (:file "lib-loads")
                 (:file "edwards")
-                #+(AND :MACOSX :COM.RAL) (:file "ecc-B571")
-                #+(AND :MACOSX :COM.RAL) (:file "curve-gen")
-                #+(AND :MACOSX :COM.RAL) (:file "crypto-environ")
-                #+(AND :MACOSX :COM.RAL) (:file "machine-id")
                 (:file "lagrange-4-square"))
   :depends-on   ("ironclad"
-                 #+:COM.RAL "aesx"
                  "useful-macros"
                  "mpcompat"
                  "lisp-object-encoder"
@@ -56,11 +48,10 @@ THE SOFTWARE.
                  "emotiq"
                  "emotiq/delivery"
                  "cffi"
-		 "core-crypto/libraries"
-                 "crypto-pairings/libraries"
+		 "crypto-libraries"
                  ))
 
-(defsystem "core-crypto/libraries"
+(defsystem "crypto-libraries"
   :perform
   (prepare-op
    :before (o c)
@@ -78,22 +69,6 @@ THE SOFTWARE.
                       ,(namestring (system-relative-pathname
                                     :emotiq "../etc/build-crypto-ecc.bash")))
                     :output :string :error :string)
-       (format *standard-output* "~tWhew!  Finished.~&")))))
-
-(defsystem "crypto-pairings/libraries"
-  :perform
-  (prepare-op
-   :before (o c)
-   (let ((wildcard-for-libraries
-          (make-pathname :defaults 
-                         (asdf:system-relative-pathname
-                          :emotiq "../var/local/lib/libLispPBCIntf")
-                         :type :wild)))
-     (unless (directory wildcard-for-libraries)
-       (format *standard-output*
-               "~&Failed to find libraries matching~&~t~a~&~
-~&Attempting to build native libraries... hang on for a minute, please..."
-               wildcard-for-libraries)
        (run-program `("bash"
                       ,(namestring (system-relative-pathname
                                     :emotiq "../etc/build-crypto-pairings.bash")))

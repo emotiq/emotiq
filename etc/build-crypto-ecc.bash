@@ -24,15 +24,10 @@ uname_s=$(uname -s)
 case ${uname_s} in
     Linux*)
         echo Building for Linux
-        lib_suffix=linux
         maketarget=makefile.linux
-        if [ "x${PENTIUM4}" == "xtrue" ] ; then
-          EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
-        fi
         ;;
     Darwin*)
         echo Building for macOS
-        lib_suffix=osx
         maketarget=makefile.macos
         ;;
     *)
@@ -42,14 +37,12 @@ case ${uname_s} in
         ;;
 esac
 
-libs_url=https://github.com/emotiq/emotiq-external-libs/releases/download/${EXTERNAL_LIBS_VERSION}/emotiq-external-libs-${lib_suffix}.tgz
-
 mkdir -p ${var}/local/{lib,include}
 
 prefix=${var}/local
 lib=${prefix}/lib
 inc=${prefix}/include
-eccintf=${BASE}/src/Crypto/Ed3363-C-Code
+eccintf=${BASE}/src/Crypto/Crypto-Libraries/Ed3363-C-Code
 
 export CFLAGS=-I${inc}
 export CPPFLAGS=-I${inc}
