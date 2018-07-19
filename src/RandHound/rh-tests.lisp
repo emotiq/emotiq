@@ -1,8 +1,10 @@
 
 (in-package :randhound)
 
-;; (asdf :emotiq/sim)
-;; (emotiq/sim::initialize)
+#|
+(ql:quickload :emotiq/sim)
+(emotiq/sim::initialize)
+|#
 
 (defun test-rh ()
   (setf cosi-simgen::*testing-randhound* t)
@@ -21,4 +23,6 @@
         (start-randhound-round))
       )))
 
-        
+#|
+(test-rh)
+|#
