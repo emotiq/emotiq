@@ -241,6 +241,8 @@ void gmul(type64 *x,type64 *y,type64 *z)
 }
 
 // Inverse x = 1/x = x^(p-2) mod p
+//  = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB"
+// (83 F's)
 
 void ginv(type64 *x)
 {

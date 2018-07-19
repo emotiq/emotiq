@@ -260,10 +260,11 @@ void gmul(type64 *x,type64 *y,type64 *z)
 #endif
 
 // Inverse x = 1/x = x^(p-2) mod p
+// the exponent (p-2) = "07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5"
+// (61 F's)
 
 void ginv(type64 *x)
 {
-  // the exponent (p-2) = 07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5
 	int i;
 	type64 w[5],t[5],x5[5],x15[5];
 
