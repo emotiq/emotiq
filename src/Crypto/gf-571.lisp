@@ -325,9 +325,9 @@ THE SOFTWARE.
         ))
 
 
-;; #-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-gf571-mul)
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-gf128-mul)
 
 (defun bin-gf* (a b)
@@ -431,9 +431,9 @@ THE SOFTWARE.
     g1))
 
   
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-gf128-inv)
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-gf571-inv)
 
 (defun gfinv (x)
@@ -470,9 +470,9 @@ THE SOFTWARE.
       ans)))
 |#
 
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-gf128-div)
-#-:COM.RAL
+#-(AND :MACOSX :COM.RAL)
 (defstub c-gf571-div)
 
 (defun bin-gf/ (a b)
