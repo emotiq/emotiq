@@ -3,7 +3,7 @@ variables:
   GITHUB_REPO: emotiq
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
-  lisp: lisp-wrapper.bash
+  lisp: ci/lisp-wrapper.bash
 # Add ASDF systems to test in <file:etc/all-tests.sexp>
 
 stages:
@@ -18,7 +18,7 @@ stages:
 before_script:
   - export PATH="$HOME/bin:$PATH"
   - ci/install-lisp.bash
-  - lisp-wrapper.bash -l etc/setup-emotiq-quicklisp.lisp
+  - ci/lisp-wrapper.bash -l etc/setup-emotiq-quicklisp.lisp
 
 .test: &test_definition
   stage: test
@@ -61,6 +61,7 @@ test:macos:ccl:
     - macos
   variables:
     LISP: ccl
+    lisp: ccl
 
 .test:macos:sbcl:
   <<: *test_definition
