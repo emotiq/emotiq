@@ -179,7 +179,8 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
   (emotiq:note "Block committed to blockchain")
-  (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*)))))
+  (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
+  (send-hold-election))
 
 ;; ------------------------------------------------------------------------------------
 
