@@ -136,6 +136,10 @@
    #:etc/
    #:var/log/))
 
+(defpackage emotiq/txn
+  (:use #:cl)
+  (:export))
+
 (defpackage emotiq/tracker
   (:use #:cl)
   (:export
