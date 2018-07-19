@@ -25,7 +25,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 ;;;; Transaction Types
 
-;;; A `transaction' in Emotiq Lisp software is implemented an instance of class
+;;; A `transaction' in Emotiq Lisp software is implemented as an instance of class
 ;;; TRANSACTION. The Lisp type of an instance of this class is TRANSACTION. In
 ;;; the following discussion, however, the word "type" is used in its generic
 ;;; meaning, not Lisp/programming-language sense.
@@ -65,8 +65,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; as a so-called "change address".
 
 (defclass transaction ()
-  ((transaction-type
-    :reader transaction-type :initarg :transaction-type :initform :spend)
+  ((transaction-type :reader transaction-type :initarg :transaction-type :initform :spend)
 
    ;; [First put outputs, since they start out at first unspent until a
    ;; later transaction arrives with inputs authorized to redeem them.]
@@ -74,7 +73,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    ;; sequence of transaction-output structures (see below)
    (transaction-outputs :reader transaction-outputs :initarg :transaction-outputs)
 
-   ;; sequence of transaction-input structions (see below)
+   ;; sequence of transaction-input structures (see below)
    (transaction-inputs :reader transaction-inputs :initarg :transaction-inputs)
 
 
@@ -516,26 +515,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    transmitted via gossip network.  The following checks are done:
 
    (Items in square brackets ([]) are not yet implemented and may be somewhat in doubt.)
-
    - Reject if transaction-inputs or transaction-outputs are nil.
-
    [- Reject if any output amount or the total is outside the legal money range.]
-
    - Reject if this appears to be a coinbase transaction (created by block creator only).
-
    - Reject if we have a matching transaction in the mempool or in a block of the blockchain.
-
    - For each input, if the referenced output exists in any other tx in the mempool, reject this transaction.
-
    - For each input, if the referenced output does not exist or has already been spent, reject this transaction.
-
    - Reject if the sum of input values < sum of output values.
-
    - Reject if transaction fee (= sum of input values minus sum of output values) would be too low.
-
    - Reject if input missing witness data (i.e., transaction has not
      been signed, i.e., signature and public-key slots are unbound).
-
    - For each input, apply the unlock script function to no args,
      check that the result is a valid arg list (typically the
      list (signature public-key)), then apply the result to the lock
@@ -732,8 +721,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun hash-transaction-id (tx)
-  (let ((message (serialize-transaction tx)))
-    (transaction-hash message)))
+  (transaction-hash (serialize-transaction tx)))
 
 (defun hash-transaction-input-scripts-id (tx)
   (transaction-hash 
@@ -791,7 +779,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (def-script-op check-signature (public-key signature)
   (check-hash
-   (hash:hash/256 (serialize-current-transaction))
+   (transaction-hash (serialize-current-transaction))
    signature public-key))
 
 
@@ -1046,7 +1034,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun make-genesis-transaction (public-key-hash)
-  (make-transaction
+  (make-newstyle-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
           public-key-hash 
@@ -1309,12 +1297,12 @@ returns the block the transaction was found in as a second value."
 ;; ---*** transaction cloaked. Review later!  -mhd, 6/26/18
 
 
-(defun check-private-keys-for-transaction-inputs (private-keys tx-inputs)
-  (unless (= (length private-keys) (length tx-inputs))
+(defun check-secret-keys-for-transaction-inputs (secret-keys tx-inputs)
+  (unless (= (length secret-keys) (length tx-inputs))
     (warn 
-     "Unequal-length private-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
-     private-keys
-     (length private-keys)
+     "Unequal-length secret-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
+     secret-keys
+     (length secret-keys)
      tx-inputs
      (length tx-inputs))))
 
@@ -1331,13 +1319,13 @@ returns the block the transaction was found in as a second value."
 (defun make-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys (type :spend))
   "Create a transaction. Then, if keyword keys is provided non-nil,
 the transaction is signed. In the signing case, keys should supply one
-private key for each input, either as a single private atomic private
+secret key for each input, either as a single secret atomic secret
 key or singleton list in the case of a single input or as a list of
 keys in the case of two or more inputs. Normally, all transactions
 should be signed, and only coinbase transactions are not
 signed. Keyword TYPE, if provided, should a transaction type keyword,
 or else it defaults to :SPEND for an uncloaked spend transaction."
-  (let* ((transaction (make-transaction tx-inputs tx-outputs type)))
+  (let* ((transaction (make-newstyle-transaction tx-inputs tx-outputs type)))
     ;; Got keys? Sign transaction if so:
     (when skeys
       (sign-transaction transaction skeys pkeys))
@@ -1345,7 +1333,7 @@ or else it defaults to :SPEND for an uncloaked spend transaction."
 
 
 
-(defun make-transaction (tx-inputs tx-outputs type)
+(defun make-newstyle-transaction (tx-inputs tx-outputs type)
   "Create a transaction with inputs TX-INPUTS, outputs TX-OUTPUTS, and
 of type TYPE."
   (make-instance
@@ -1355,7 +1343,7 @@ of type TYPE."
    :transaction-outputs tx-outputs))
 
 (defun sign-transaction (transaction skeys pkeys)
-  "Sign transactions with private and public key or keys SKEYS and PKEYS,
+  "Sign transactions with secret and public key or keys SKEYS and PKEYS,
    respectively. SKEYS/PKEYS should be supplied as either a single atomic key or
    a singleton list in the case of a single input or as a list of two or more
    keys in the case of two or more inputs. Normally, all transactions should be
@@ -1364,14 +1352,14 @@ of type TYPE."
    that the signature stores and makes accessible its corresponding public key."
   (with-slots (transaction-inputs) transaction
     (let* ((message (serialize-transaction transaction))
-           (private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
-      (check-private-keys-for-transaction-inputs private-keys transaction-inputs)
+           (secret-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
+      (check-secret-keys-for-transaction-inputs secret-keys transaction-inputs)
       (let ((public-keys (if (and pkeys (atom pkeys)) (list pkeys) pkeys)))
         (check-public-keys-for-transaction-inputs public-keys transaction-inputs)
         (loop for tx-input in transaction-inputs
-              as private-key in private-keys
+              as secret-key in secret-keys
               as public-key in public-keys
-              as signature = (sign-hash (hash:hash/256 message) private-key)
+              as signature = (sign-hash (transaction-hash message) secret-key)
               do (setf (%tx-in-signature tx-input) signature)
                  (setf (%tx-in-public-key tx-input) public-key))))))
   
@@ -1721,7 +1709,7 @@ of type TYPE."
   (let* ((leader-public-key cosi-simgen:*leader*)
          (leader-address
            (cosi/proofs:public-key-to-address leader-public-key)))
-    (make-transaction
+    (make-newstyle-transaction
      (list (make-coinbase-transaction-input))
      (list (make-coinbase-transaction-output leader-address fee))
      ':collect)))
