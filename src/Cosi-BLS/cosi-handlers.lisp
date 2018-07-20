@@ -735,7 +735,7 @@ check that each TXIN and TXOUT is mathematically sound."
                        :graphID nil) ;; force send to ourselves
     ;; this really should go to everyone
     (gossip:broadcast msg
-                      :startNodeID my-pkey ;; need this or else get an error sending to NIL destnode
+                      ;; :startNodeID my-pkey ;; need this or else get an error sending to NIL destnode
                       :graphID :UBER)))
 
 ;; -----------------------------------------------------------
