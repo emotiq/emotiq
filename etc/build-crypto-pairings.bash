@@ -51,7 +51,7 @@ mkdir -p ${var}/local
 prefix=${var}/local
 lib=${prefix}/lib
 inc=${prefix}/include
-pbcintf=${BASE}/src/Crypto/PBC-Intf
+pbcintf=${BASE}/src/Crypto/Crypto-Libraries/PBC-Intf
 
 # Remove shared libs (we use only statics)
 rm ${lib}/*.dylib ${lib}/libgmp.so* ${lib}/libpbc.so*
