@@ -185,7 +185,7 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
   ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
   ;; These should not be happening, just log the incident, and ignore.
-  (emotiq:note (format nil "WARN - Unexpected GOSSIP message: ~S" msg)))
+  (emotiq:note "WARN - Unexpected GOSSIP message: ~S" msg))
 
 ;; ------------------------------------------------------------------------------------
 
