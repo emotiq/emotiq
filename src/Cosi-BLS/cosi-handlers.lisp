@@ -1026,6 +1026,7 @@ check that each TXIN and TXOUT is mathematically sound."
       ((list :signed seq sig bits)
        (cond
         ((eql seq sess)
+         (emotiq:note "Made it back from signing")
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
              (reply reply-to
@@ -1057,9 +1058,10 @@ check that each TXIN and TXOUT is mathematically sound."
                   :reply-to  self
                   :blk       new-block
                   :timeout   prepare-timeout)
-    (pr "Waiting for Cosi prepare")
+    (emotiq:note "Waiting for Cosi prepare")
     (recv
       ((list :answer (list :signature sig bits))
+       (emotiq:note "Made it back from Cosi validate")
        (with-current-node node
          (update-block-signature new-block sig bits)
          ;; we now have a fully assembled block with
@@ -1068,18 +1070,19 @@ check that each TXIN and TXOUT is mathematically sound."
                        :reply-to  self
                        :blk       new-block
                        :timeout   commit-timeout)
-         (pr "Waiting for Cosi commit")
+         (emotiq:note "Waiting for Cosi commit")
          (recv
            ((list :answer (list* :signature _))
+            (emotiq:note "Made it back from Cosi commit with good signature")
             (send *dly-instr* :plt)
             (send (node-pkey node) :block-finished))
            
            ((list :answer (list :corrupt-cosi-network))
-            (pr "Corrupt Cosi network in COMMIT phase"))
+            (emotiq:note "Corrupt Cosi network in COMMIT phase"))
            )))
       
       ((list :answer (list :corrupt-cosi-network))
-       (pr "Corrupt Cosi network in PREPARE phase"))
+       (emotiq:note "Corrupt Cosi network in PREPARE phase"))
       )))
     
 (defun leader-exec (prepare-timeout commit-timeout)
