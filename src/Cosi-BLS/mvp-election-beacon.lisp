@@ -280,7 +280,7 @@ based on their relative stake"
 ;; ---------------------------------------------------------------
 ;; if we don't hold a new election before this timeout, established at
 ;; the end of commit phase, then call for a new election
-(defvar *emergency-timeout*  60)
+(defvar *emergency-timeout*  20)
 
 (defun setup-emergency-call-for-new-election ()
   ;; give the election beacon a chance to do its thing

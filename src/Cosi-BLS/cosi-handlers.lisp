@@ -180,7 +180,10 @@ THE SOFTWARE.
   (emotiq/tracker:track :block-finished)
   (emotiq:note "Block committed to blockchain")
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
-  (send-hold-election))
+  (node-schedule-after 2
+    (pr :Hello!)
+    ;; (send-hold-election)
+    ))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
   ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
@@ -775,7 +778,7 @@ check that each TXIN and TXOUT is mathematically sound."
                  (g-bits    0)
                  (g-sig     nil))
              
-             (pr "Running Gossip Signing")
+             (emotiq:note "Running Gossip Signing, Node = ~A" (short-id my-node))
 
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
@@ -787,7 +790,7 @@ check that each TXIN and TXOUT is mathematically sound."
              
              (labels
                  ((=return (val)
-                    (pr "Return from Gossip Signing")
+                    (emotiq:note "Return from Gossip Signing")
                     (become 'do-nothing) ;; stop responding to messages
                     (=values val))
                   
@@ -934,6 +937,7 @@ check that each TXIN and TXOUT is mathematically sound."
     ))
 
 ;; ----------------------------------------------------------------------------
+(defvar *iterations* 0)
 
 (defun node-cosi-signing (reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
@@ -942,25 +946,30 @@ check that each TXIN and TXOUT is mathematically sound."
          (blk-hash (hash/256 (signature-hash-message blk)))
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
-    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
+    (emotiq:note "Node: ~A :Stage ~A" (short-id node) consensus-stage)
     (=node-bind (ans)
         ;; ----------------------------------
         (par
           ;; parallel task #1
           (with-current-node node
+            (when (> (incf *iterations*) 3)
+              (ac:kill-executives))
             (=values 
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
              ;; to decide for themselves
-             (if (validate-cosi-message node consensus-stage blk)
+             (or (and (validate-cosi-message node consensus-stage blk)
+                      (progn
+                        (emotiq:note "Block validated ~A" (short-id node))
+                        (emotiq:note "Block witnesses = ~A" (block-witnesses blk))
+                        (let ((pos (position (node-pkey node) (block-witnesses blk)
+                                             :test 'int=)))
+                          (when pos
+                            (list (pbc:sign-hash blk-hash (node-skey node))
+                                  (ash 1 pos))))))
                  (progn
-                   (ac:pr (format nil "Block validated ~A" (short-id node)))
-                   (list (pbc:sign-hash blk-hash (node-skey node))
-                         (ash 1 (position (node-pkey node) (block-witnesses blk)
-                                          :test 'int=))))
-               (progn
-                 (ac:pr (format nil "Block not validated ~A" (short-id node)))
-                 (list nil 0)))))
+                   (emotiq:note "Block not validated ~A" (short-id node))
+                   (list nil 0)))))
 
           ;; parallel task #2
           ;; ... and here is where we have all the subnodes in our
@@ -978,14 +987,14 @@ check that each TXIN and TXOUT is mathematically sound."
                           timeout))
         ;; ----------------------------------
       
-      (pr ans)
+      (emotiq:note "Answer from cosi-signing: ~A" ans)
       (destructuring-bind ((sig bits) r-lst g-ans) ans
         (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
-                       (pr (format nil "No signing: ~A"
-                                   (short-id sub)))
+                       (emotiq:note "No signing: ~A"
+                                   (short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -1023,6 +1032,7 @@ check that each TXIN and TXOUT is mathematically sound."
       ((list :signed seq sig bits)
        (cond
         ((eql seq sess)
+         (emotiq:note "Made it back from signing")
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
              (reply reply-to
@@ -1033,7 +1043,7 @@ check that each TXIN and TXOUT is mathematically sound."
         ;; ------------------------------------
         (t ;; seq mismatch
            ;; must have been a late arrival
-           (pr :late-arrival)
+           (emotiq:note "late-arrival")
            (retry-recv))
         )) ;; end of message pattern
       )))
@@ -1043,20 +1053,21 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun leader-assemble-block (trns prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
-  (pr "Assemble new block")
+  (emotiq:note "Assemble new block")
   (let* ((node      (current-node))
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
                                               *election-proof* *leader*
-                                              (map 'vector 'node-pkey *node-bit-tbl*)
+                                              (map 'vector 'first (get-witness-list))
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
                   :blk       new-block
                   :timeout   prepare-timeout)
-    (pr "Waiting for Cosi prepare")
+    (emotiq:note "Waiting for Cosi prepare")
     (recv
-      ((list :answer (list :signature sig bits))
+      ((list :answer :signature sig bits)
+       (emotiq:note "Made it back from Cosi validate")
        (with-current-node node
          (update-block-signature new-block sig bits)
          ;; we now have a fully assembled block with
@@ -1065,18 +1076,19 @@ check that each TXIN and TXOUT is mathematically sound."
                        :reply-to  self
                        :blk       new-block
                        :timeout   commit-timeout)
-         (pr "Waiting for Cosi commit")
+         (emotiq:note "Waiting for Cosi commit")
          (recv
-           ((list :answer (list* :signature _))
+           ((list* :answer :signature _)
+            (emotiq:note "Made it back from Cosi commit with good signature")
             (send *dly-instr* :plt)
             (send (node-pkey node) :block-finished))
            
-           ((list :answer (list :corrupt-cosi-network))
-            (pr "Corrupt Cosi network in COMMIT phase"))
+           ((list :answer :corrupt-cosi-network)
+            (emotiq:note "Corrupt Cosi network in COMMIT phase"))
            )))
       
-      ((list :answer (list :corrupt-cosi-network))
-       (pr "Corrupt Cosi network in PREPARE phase"))
+      ((list :answer :corrupt-cosi-network)
+       (emotiq:note "Corrupt Cosi network in PREPARE phase"))
       )))
     
 (defun leader-exec (prepare-timeout commit-timeout)
