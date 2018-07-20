@@ -18,22 +18,6 @@ case $(uname -s) in
         ;;
 esac
 
-case ${LISP} in
-    lispworks*)
-        ls=''
-        ;;
-    ccl*)
-        lisp_cli="$HOME/bin/ccl"
-        ;;
-    sbcl*)
-        lisp_cli="/usr/local/bin/sbcl --disable-debugger"
-        ;;
-    *)
-        echo "Unknown Lisp dialect: $LISP, falling back to CCL"
-        lisp_cli="$HOME/bin/ccl"
-        ;;
-esac
-
 start_timeout=30
 node_id=${1:-1}
 rc=0
