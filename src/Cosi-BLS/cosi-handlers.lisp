@@ -952,18 +952,18 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
              ;; to decide for themselves
-             (if (validate-cosi-message node consensus-stage blk)
+             (or (and (validate-cosi-message node consensus-stage blk)
+                      (progn
+                        (emotiq:note "Block validated ~A" (short-id node))
+                        (emotiq:note "Block witnesses = ~A" (block-witnesses blk))
+                        (let ((pos (position (node-pkey node) (block-witnesses blk)
+                                             :test 'int=)))
+                          (unless pos
+                            (list (pbc:sign-hash blk-hash (node-skey node))
+                                  (ash 1 pos))))))
                  (progn
-                   (emotiq:note "Block validated ~A" (short-id node))
-                   (emotiq:note "Block witnesses = ~A" (block-witnesses blk))
-                   (let ((pos (position (node-pkey node) (block-witnesses blk)
-                                          :test 'int=)))
-                     (unless pos
-                       (list (pbc:sign-hash blk-hash (node-skey node))
-                             (ash 1 pos)))))
-               (progn
-                 (emotiq:note "Block not validated ~A" (short-id node))
-                 (list nil 0)))))
+                   (emotiq:note "Block not validated ~A" (short-id node))
+                   (list nil 0)))))
 
           ;; parallel task #2
           ;; ... and here is where we have all the subnodes in our
