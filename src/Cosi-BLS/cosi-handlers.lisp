@@ -654,7 +654,7 @@ check that each TXIN and TXOUT is mathematically sound."
   (short-id (node-pkey node)))
 
 (defmethod short-id (x)
-  (let* ((str (base58-str x))
+  (let* ((str (hex-str x))
          (len (length str)))
     (if (> len 20)
         (concatenate 'string (subseq str 0 10)
