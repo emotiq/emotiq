@@ -942,7 +942,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (blk-hash (hash/256 (signature-hash-message blk)))
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
-    (pr (format nil "Node: ~A :Stage ~A" (short-id node) consensus-stage))
+    (emotiq:note "Node: ~A :Stage ~A" (short-id node) consensus-stage)
     (=node-bind (ans)
         ;; ----------------------------------
         (par
@@ -981,14 +981,14 @@ check that each TXIN and TXOUT is mathematically sound."
                           timeout))
         ;; ----------------------------------
       
-      (pr ans)
+      (emotiq:note "Answer from cosi-signing: ~A" ans)
       (destructuring-bind ((sig bits) r-lst g-ans) ans
         (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
-                       (pr (format nil "No signing: ~A"
-                                   (short-id sub)))
+                       (emotiq:note "No signing: ~A"
+                                   (short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -1037,7 +1037,7 @@ check that each TXIN and TXOUT is mathematically sound."
         ;; ------------------------------------
         (t ;; seq mismatch
            ;; must have been a late arrival
-           (pr :late-arrival)
+           (emotiq:note "late-arrival")
            (retry-recv))
         )) ;; end of message pattern
       )))
@@ -1047,7 +1047,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun leader-assemble-block (trns prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
-  (pr "Assemble new block")
+  (emotiq:note "Assemble new block")
   (let* ((node      (current-node))
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
