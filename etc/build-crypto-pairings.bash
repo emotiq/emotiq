@@ -54,7 +54,7 @@ inc=${prefix}/include
 pbcintf=${BASE}/src/Crypto/PBC-Intf
 
 # Remove shared libs (we use only statics)
-rm ${lib}/*.dylib ${lib}/libgmp.so* ${lib}/libpbc.so*
+rm ${lib}/libgmp*.dylib ${lib}/libpbc*.dylib ${lib}/libgmp.so* ${lib}/libpbc.so*
 
 export CFLAGS=-I${inc}
 export CPPFLAGS=-I${inc}
