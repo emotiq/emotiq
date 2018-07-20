@@ -958,7 +958,7 @@ check that each TXIN and TXOUT is mathematically sound."
                         (emotiq:note "Block witnesses = ~A" (block-witnesses blk))
                         (let ((pos (position (node-pkey node) (block-witnesses blk)
                                              :test 'int=)))
-                          (unless pos
+                          (when pos
                             (list (pbc:sign-hash blk-hash (node-skey node))
                                   (ash 1 pos))))))
                  (progn
