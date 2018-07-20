@@ -775,7 +775,7 @@ check that each TXIN and TXOUT is mathematically sound."
                  (g-bits    0)
                  (g-sig     nil))
              
-             (pr "Running Gossip Signing")
+             (emotiq:note "Running Gossip Signing, Node = ~A" (short-id my-node))
 
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
@@ -787,7 +787,7 @@ check that each TXIN and TXOUT is mathematically sound."
              
              (labels
                  ((=return (val)
-                    (pr "Return from Gossip Signing")
+                    (emotiq:note "Return from Gossip Signing")
                     (become 'do-nothing) ;; stop responding to messages
                     (=values val))
                   
