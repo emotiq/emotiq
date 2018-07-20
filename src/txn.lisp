@@ -2,75 +2,106 @@
 
 (defparameter *transaction-fee* 10)
 
-(defmethod get-utxos ((from-account pbc:keying-triple))
-  (let* ((cosi-simgen:*current-node* cosi-simgen:*top-node*)
-         (from-pkey (pbc:keying-triple-pkey from-account))
-         (from-public-key-hash (cosi/proofs:public-key-to-address from-pkey)))
-    (cosi/proofs/newtx:get-utxos-per-account from-public-key-hash)))
-  
+;;;; ADDRESS method could ideally be placed in EMOTIQ or EMOTIQ/USER package?
+(defmethod address ((account pbc:keying-triple))
+  (address (pbc:keying-triple-pkey account)))
+(defmethod address ((pkey pbc:public-key))
+  (cosi/proofs:public-key-to-address pkey))
 
-(defun make-spend-transaction (from-account      ;; pbc:keying-triple
-                               to-public-key-hash  ;; target address
+
+(defmethod get-utxos ((account pbc:keying-triple))
+  (address (address account)))
+(defmethod get-utxos ((address string))
+  (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
+    (cosi/proofs/newtx:get-utxos-per-account address)))
+         
+
+(defun make-spend-transaction (from-account ;; pbc:keying-triple
+                               to-address     ;; target address
                                amount
                                &key
                                  (fee *transaction-fee*)
-                                 (from-utxos (get-utxos from-account)))
-                                  
+                                 (from-utxos nil)) ;; (list (TXO (TxID INDEX) AMT) ... )
   (let* ((from-skey (pbc:keying-triple-skey from-account))
          (from-pkey (pbc:keying-triple-pkey from-account))
-         (from-public-key-hash (cosi/proofs:public-key-to-address from-pkey))
-         (charged-amount (+ amount fee))
-         (tx-input-specs nil)
-         (tx-output-specs nil))
-
-    ;; TODO: how to handle FEE here? now it's just deducted from UTXOs...
-    (multiple-value-bind (utxos-amount utxos-to-spend utxo-to-split?)
-        (select-utxos from-utxos charged-amount)
-      
-      (when utxo-to-split?
-        (destructuring-bind (utxo utxo-id/index utxo-amount)
-            utxo-to-split?
-          (declare (ignore utxo utxo-amount))
-          (let ((split-utxo-amount-to-change (- utxos-amount charged-amount)))
-            (push (copy-list utxo-id/index) tx-input-specs)
-            (push (list from-public-key-hash split-utxo-amount-to-change) tx-output-specs))))
-      
-      (loop :for (nil utxo-id/index nil) :in utxos-to-spend
-         :do (push utxo-id/index tx-input-specs))
-      (push (list to-public-key-hash amount) tx-output-specs)
-      
-      (let* ((tx-inputs (cosi/proofs/newtx:make-transaction-inputs tx-input-specs))
-             (tx-outputs (cosi/proofs/newtx:make-transaction-outputs tx-output-specs))
-             (transaction (cosi/proofs/newtx::make-newstyle-transaction
-                           tx-inputs tx-outputs :spend)))
-        
+         (from-address (address from-pkey))
+         (from-utxos (or from-utxos (get-utxos from-address))))
+    (multiple-value-bind (inputs outputs)
+        (make-inputs/outputs from-address to-address amount fee from-utxos)
+      (let ((transaction (cosi/proofs/newtx::make-newstyle-transaction inputs outputs :spend)))
         (cosi/proofs/newtx:sign-transaction transaction from-skey from-pkey)
         transaction))))
-        
-           
+
+
+(defun make-inputs/outputs (from-address to-address amount fee candidates
+                            &key
+                              (get-amount #'third)
+                              (get-input-spec #'second))
+  (flet ((get-output-spec (address amount)
+           (list address amount)))
+    (let ((charged-amount (+ amount fee))
+          (input-specs nil)
+          (output-specs nil))
+      (multiple-value-bind (selected-amount txns-to-spend txn-to-split?)
+          (select-inputs candidates charged-amount get-amount)
+        (when txn-to-split?
+          (let* ((amount-to-change (- selected-amount charged-amount))
+                 (output-spec (get-output-spec from-address amount-to-change))
+                 (input-spec (funcall get-input-spec txn-to-split?)))
+            (push input-spec input-specs)
+            (push output-spec output-specs)))
+        (loop :for txn :in txns-to-spend
+           :do (push (funcall get-input-spec txn) input-specs))
+        (push (get-output-spec to-address amount) output-specs)
+        (values (cosi/proofs/newtx:make-transaction-inputs input-specs)
+                (cosi/proofs/newtx:make-transaction-outputs output-specs))))))
+
+;; (TXO (TxID INDEX) AMT)
 ;; ideally we would use knapsack algorithm, doing it naively for now
-;; UTXOS: (list (TXO (TxID INDEX) AMT) ...)
-(defun select-utxos (utxos amount)
-  (let ((utxos (sort (coerce utxos 'vector) #'< :key #'third))
-        (utxos-amount 0)
-        (selected-utxos nil))
-    (flet ((utxos-exact ()
-             (return-from select-utxos
-               (values utxos-amount selected-utxos nil)))
-           (utxos-surplus ()
-             (destructuring-bind (utxo-to-split . rem-utxos)
-                 selected-utxos
-               (return-from select-utxos 
-                 (values utxos-amount rem-utxos utxo-to-split)))))
+(defun select-inputs (candidates amount get-amount)
+  (let ((candidates (sort (coerce candidates 'vector) #'< :key get-amount))
+        (selected-amount 0)
+        (selected-txns nil))
+    (flet ((exact ()
+             (return-from select-inputs
+               (values selected-amount selected-txns nil)))
+           (surplus ()
+             (destructuring-bind (txn-to-split . rem-txns)
+                 selected-txns
+               (return-from select-inputs 
+                 (values selected-amount rem-txns txn-to-split)))))
       (loop
-         :for utxo-spec :across utxos
-         :as (nil nil tx-amount) = utxo-spec
-         :do (incf utxos-amount tx-amount)
-         :do (push utxo-spec selected-utxos)
-         :do (cond ((= utxos-amount amount) (utxos-exact))
-                   ((> utxos-amount amount) (utxos-surplus))))
-      (error "insufficient funds: UTXOs = ~A" selected-utxos))))
-  
+         :for txn-spec :across candidates
+         :as tx-amount = (funcall get-amount txn-spec)
+         :do (incf selected-amount tx-amount)
+         :do (push txn-spec selected-txns)
+         :do (cond ((= selected-amount amount) (exact))
+                   ((> selected-amount amount) (surplus))))
+      (error "insufficient funds ~A" selected-txns))))
+
+
+
+;; UTXOS: (list (TXO (TxID INDEX) AMT) ...)
+;; (defun select-utxos (utxos amount)
+;;   (let ((utxos (sort (coerce utxos 'vector) #'< :key #'third))
+;;         (utxos-amount 0)
+;;         (selected-utxos nil))
+;;     (flet ((utxos-exact ()
+;;              (return-from select-utxos
+;;                (values utxos-amount selected-utxos nil)))
+;;            (utxos-surplus ()
+;;              (destructuring-bind (utxo-to-split . rem-utxos)
+;;                  selected-utxos
+;;                (return-from select-utxos 
+;;                  (values utxos-amount rem-utxos utxo-to-split)))))
+;;       (loop
+;;          :for utxo-spec :across utxos
+;;          :as (nil nil tx-amount) = utxo-spec
+;;          :do (incf utxos-amount tx-amount)
+;;          :do (push utxo-spec selected-utxos)
+;;          :do (cond ((= utxos-amount amount) (utxos-exact))
+;;                    ((> utxos-amount amount) (utxos-surplus))))
+;;       (error "insufficient funds: UTXOs = ~A" selected-utxos))))
 
 
 
