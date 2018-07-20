@@ -334,6 +334,7 @@
    :reset-nodes
    :forwarding
    :startup-elections
+   :short-id
    ))
 
 (defpackage :cosi-keying
