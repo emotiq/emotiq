@@ -140,8 +140,8 @@
   (:use #:cl)
   (:export
    #:*transaction-fee*
+   #:address
    #:get-utxos
-   #:select-utxos
    #:make-spend-transaction))
 
 (defpackage emotiq/tracker

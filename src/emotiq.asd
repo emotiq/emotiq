@@ -96,7 +96,8 @@
 (defsystem "emotiq/sim"  ;; a simulated network entirely within the local process
   :depends-on (emotiq/cli
                alexandria
-	       emotiq/tracker)
+	       emotiq/tracker
+               emotiq/txn)  
   :in-order-to ((test-op (test-op "emotiq-sim-test")))
   :components ((:module source
                 :pathname "./"
