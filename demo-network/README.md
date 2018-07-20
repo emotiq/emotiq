@@ -4,17 +4,17 @@ Using scripts located here, we can run 3 Emotiq nodes bound to 127.0.0.1.
 To avoid conflicts, each node uses its own set of TCP ports:
 
 1. Node 1 ports:
-  * 3140 REST API
-  * 3145 WebSockets API
-  * 65000 Gossip communications
+  * 3140 - REST API
+  * 3145 - WebSockets API
+  * 65000 - Gossip communications
 1. Node 2 ports:
-  * 3141 REST API
-  * 3146 WebSockets API
-  * 65001 Gossip communications
+  * 3141 - REST API
+  * 3146 - WebSockets API
+  * 65001 - Gossip communications
 1. Node 3 ports:
-  * 3142 REST API
-  * 3147 WebSockets API
-  * 65002 Gossip communications
+  * 3142 - REST API
+  * 3147 - WebSockets API
+  * 65002 - Gossip communications
 
 Configuration files for this nodes are located in `var/etc` folder from the root of the repository.
 
