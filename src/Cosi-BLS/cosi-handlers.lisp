@@ -937,6 +937,7 @@ check that each TXIN and TXOUT is mathematically sound."
     ))
 
 ;; ----------------------------------------------------------------------------
+(defvar *iterations* 0)
 
 (defun node-cosi-signing (reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
@@ -951,6 +952,8 @@ check that each TXIN and TXOUT is mathematically sound."
         (par
           ;; parallel task #1
           (with-current-node node
+            (when (> (incf *iterations*) 3)
+              (ac:kill-executives))
             (=values 
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
