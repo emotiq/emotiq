@@ -656,10 +656,10 @@ check that each TXIN and TXOUT is mathematically sound."
 (defmethod short-id (x)
   (let* ((str (hex-str x))
          (len (length str)))
-    (if (> len 20)
-        (concatenate 'string (subseq str 0 10)
+    (if (> len 14)
+        (concatenate 'string (subseq str 0 7)
                      ".."
-                     (subseq str (- len 10)))
+                     (subseq str (- len 7)))
       str)))
 
 ;; ------------------------------
