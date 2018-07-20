@@ -642,9 +642,7 @@ check that each TXIN and TXOUT is mathematically sound."
         (apply 'send (node-pkey (gethash ip *ip-node-tbl*)) msg)))
 
 (defmethod short-id ((node node))
-  (node-ip node)
-  ;; (short-id (node-pkey node))
-  )
+  (node-pkey node))
 
 (defmethod short-id (x)
   (let* ((str (base58-str x))
