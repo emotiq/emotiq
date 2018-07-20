@@ -986,15 +986,15 @@ check that each TXIN and TXOUT is mathematically sound."
                           seq-id
                           timeout))
         ;; ----------------------------------
-      
-      (emotiq:note "Answer from cosi-signing: ~A" ans)
-      (destructuring-bind ((sig bits) r-lst g-ans) ans
-        (labels ((fold-answer (sub resp)
+
+        (emotiq:note "Answer from cosi-signing: ~A" ans)
+        (destructuring-bind ((sig bits) r-lst g-ans) ans
+          (labels ((fold-answer (sub resp)
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
                        (emotiq:note "No signing: ~A"
-                                   (short-id sub))
+                                    (short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -1008,11 +1008,11 @@ check that each TXIN and TXOUT is mathematically sound."
                            (mark-node-corrupted node sub))
                          ))
                       )))
-          (mapc #'fold-answer subs r-lst) ;; gather results from subs
-          (when g-ans
-            (fold-answer node g-ans))
-          (send reply-to :signed seq-id sig bits))
-        ))))
+            (mapc #'fold-answer subs r-lst) ;; gather results from subs
+            (when g-ans
+              (fold-answer node g-ans))
+            (send reply-to :signed seq-id sig bits))
+          ))))
 
 ;; -----------------------------------------------------------
 

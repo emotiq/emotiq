@@ -94,16 +94,23 @@ THE SOFTWARE.
         ))
 
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
-  (let ((node (gethash (int pkey) *pkey-node-tbl*)))
-    (unless node
-      (pr (format nil "Unknown pkey: ~A" (short-id pkey))))
-    (when node
-      (when (node-byz node)
-        (pr (format nil "Byzantine node: ~A" (short-id pkey))))
-      (unless (node-byz node)
-        (if (eq node *current-node*)
-            (apply 'ac:send (node-self node) msg)
-          (gossip-send pkey nil msg))))))
+  (cond (*use-real-gossip*
+         (if (int= pkey (node-pkey *my-node*))
+             (apply 'ac:send (node-self *my-node*) msg)
+           (gossip-send pkey nil msg)))
+        
+        (t
+         (let ((node (gethash (int pkey) *pkey-node-tbl*)))
+           (unless node
+             (pr (format nil "send to unknown pkey: ~A" (short-id pkey))))
+           (when node
+             (when (node-byz node)
+               (pr (format nil "Byzantine node: ~A" (short-id pkey))))
+             (unless (node-byz node)
+               (if (eq node *current-node*)
+                   (apply 'ac:send (node-self node) msg)
+                 (gossip-send pkey nil msg))))))
+        ))
 
 ;; --------------------------------------------------------------
 
