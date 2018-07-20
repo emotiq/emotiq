@@ -218,10 +218,13 @@
    transaction-outputs
    transaction-inputs
    make-transaction
+   sign-transaction
    make-and-maybe-sign-transaction
    make-transaction-outputs
    make-transaction-inputs
    initial-total-coin-amount
+   in-legal-money-range-p
+   in-legal-stake-range-p
    validate-transaction
    get-transactions-for-new-block
    check-block-transactions
@@ -295,6 +298,7 @@
   (:export
    :*current-node*
    :current-node
+   :gossip-neighborcast
    :node
    :node-pkey
    :node-skey

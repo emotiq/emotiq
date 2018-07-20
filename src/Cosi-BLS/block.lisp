@@ -241,7 +241,7 @@ added to the blockchain."
         collect `(,public-key . ,stake-info)))
 
 ;; Currently, our config system gives us public keys as bignums
-;; (function get-stakes in package gossip), while the simulator
+;; (function get-stakes), while the simulator
 ;; (function keys-and-stakes in package emotiq/sim) supplies them as
 ;; instances.
     

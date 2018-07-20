@@ -36,7 +36,8 @@
                              (:file "external")))))
 
 (defsystem "emotiq/filesystem"
-  :depends-on (emotiq)
+  :depends-on (uiop
+               emotiq)
   :components ((:module source
                 :pathname "./"
                 :serial t
