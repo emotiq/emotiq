@@ -471,21 +471,17 @@ This will spawn an actor which will asynchronously do the following:
                (emotiq/elections:fire-election)
                (sleep 120.0)
           
+               ;; here: attempt a double-spend: (with same TxID)
+               (emotiq:note "Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
+                            user-2-public-key-hash)
+               (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
+                 
+               (emotiq/elections:fire-election)
+               (sleep 120.0)
+          
                #+nil
                (let ()
 
-                 ;; here: attempt a double-spend: (with same TxID)
-                 (setq signed-transaction
-                       (cosi/proofs/newtx:make-and-maybe-sign-transaction
-                        transaction-inputs transaction-outputs
-                        :skeys (pbc:keying-triple-skey *user-2*)
-                        :pkeys (pbc:keying-triple-pkey *user-2*)))
-                 
-                 (ac:pr (format nil "Broadcasting 4th TX [attempt to double-spend (same TxID)]."))
-                 (emotiq:note "Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
-                              user-2-public-key-hash)
-                 (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
-                 
                  ;; here: attempt a double-spend: (with different TxID)
                  (setq transaction-outputs
                        (cosi/proofs/newtx:make-transaction-outputs
