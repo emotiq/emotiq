@@ -372,7 +372,6 @@ This will spawn an actor which will asynchronously do the following:
     (emotiq:note "current state = ~A" result)
     result))  ;;; return non-nil if we are able to exit cleanly
 
-
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
 
