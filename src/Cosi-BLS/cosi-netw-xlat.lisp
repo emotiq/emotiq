@@ -46,13 +46,14 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------
 
 (defstruct actor-return-addr
-  (node (node-pkey (current-node)))
-  aid)
+  node aid)
 
 (defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
                    (setf (ac:get-property obj 'aid) (gen-uuid-int))))
          (ret  (make-actor-return-addr
+                :node (node-pkey (or (current-node)
+                                     *my-node*))
                 :aid  aid)))
     (associate-aid-with-actor aid obj)
     (sdle-store:backend-store-object backend ret stream)))
