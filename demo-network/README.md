@@ -51,3 +51,35 @@ To use supplied Python scripts to communcate with node using WebSockets API, als
   sudo apt-get update && sudo apt-get python3 python3-pip
   sudo pip3 install -U -r requirements.txt
   ```
+
+## Running blockchain
+
+### Setup configuration files for the nodes
+:bangbang: **ATTENTION!!! Overwrites `var/etc/{node1,node2,node3}` directories** :bangbang:
+```bash
+./copy-sample-configs.bash
+```
+:bangbang: **ATTENTION!!! Overwrites `var/etc/{node1,node2,node3}` directories** :bangbang:
+
+This script copies configurations from `node-configs` directory to `var/etc`.
+
+### Start 3-node blockchain
+```bash
+./start-blockchain.bash
+```
+
+This script starts 3 nodes in the separate `tmux` sessions `node1`, `node2` and `node3`
+One can attach to the node Lisp REPL using following command:
+```bash
+tmux a -t node1   # for Node 1
+```
+
+### Run single WebSockets ping to each node
+```bash
+./ping-nodes.bash
+```
+
+### Stop all nodes
+```bash
+./stop-blockchain.bash
+```
