@@ -13,8 +13,6 @@
 # debug
 set -x
 
-EXTERNAL_LIBS_VERSION=release-0.1.13
-
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE=${DIR}/..
@@ -28,7 +26,7 @@ case ${uname_s} in
         ;;
     Darwin*)
         echo Building for macOS
-        maketarget=makefile.macos
+        maketarget=makefile.macos-norpath
         ;;
     *)
         maketarget=makefile.linux
