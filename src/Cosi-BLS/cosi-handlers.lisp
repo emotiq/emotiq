@@ -956,11 +956,13 @@ check that each TXIN and TXOUT is mathematically sound."
                  (progn
                    (emotiq:note "Block validated ~A" (short-id node))
                    (emotiq:note "Block witnesses = ~A" (block-witnesses blk))
-                   (list (pbc:sign-hash blk-hash (node-skey node))
-                         (ash 1 (position (node-pkey node) (block-witnesses blk)
-                                          :test 'int=))))
+                   (let ((pos (position (node-pkey node) (block-witnesses blk)
+                                          :test 'int=)))
+                     (unless pos
+                       (list (pbc:sign-hash blk-hash (node-skey node))
+                             (ash 1 pos)))))
                (progn
-                 (ac:pr (format nil "Block not validated ~A" (short-id node)))
+                 (emotiq:note "Block not validated ~A" (short-id node))
                  (list nil 0)))))
 
           ;; parallel task #2
