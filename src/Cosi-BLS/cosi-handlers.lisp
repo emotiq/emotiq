@@ -195,7 +195,8 @@ THE SOFTWARE.
                  (with-current-node node
                    (apply 'node-dispatcher msg)))
                )))
-    (lambda (&rest msg)
+    (make-actor
+     (lambda (&rest msg)
       (um:dcase msg
          (:actor-callback (aid &rest ans)
           (let ((actor (lookup-actor-for-aid aid)))
