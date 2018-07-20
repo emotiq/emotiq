@@ -26,9 +26,11 @@ case ${uname_s} in
     Linux*)
         echo Building for Linux
         lib_suffix=linux
-        maketarget=makefile.linux.static
+	#        maketarget=makefile.linux.static
+        maketarget=makefile.linux
         if [ "x${PENTIUM4}" == "xtrue" ] ; then
-          EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
+	    #          EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
+            EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
         fi
         ;;
     Darwin*)
