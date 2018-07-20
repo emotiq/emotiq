@@ -140,12 +140,12 @@ THE SOFTWARE.
   ;; We can use the receipt of the genesis UTXO to also start up our
   ;; internal election beacon in loose synchrony with other witnesses.
   ;;
-  (pr (format nil "~A got genesis utxo" (short-id (current-node))))
+  (emotiq:note "~A got genesis utxo" (short-id (current-node)))
   (really-record-new-utxo utxo))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
-  (pr (format nil "~A got genesis block" (short-id (current-node))))
+  (emotiq:note "~A got genesis block" (short-id (current-node)))
   (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
   (push blk *blockchain*)
@@ -181,7 +181,7 @@ THE SOFTWARE.
   (emotiq:note "Block committed to blockchain")
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
   (node-schedule-after 2
-    (pr :Hello!)
+    (emotiq:note "Hello! from delayed call to hold-election")
     ;; (send-hold-election)
     ))
 
@@ -410,7 +410,7 @@ to precede TXIN consumers.
 TLST is a list of pairs (k v) with k being the hash of the
 transaction, and v being the transaction itself."
   ;; first, compute lists of keys just once
-  (pr "Topological sorting")
+  (emotiq:note "Topological sorting")
   (let ((txrecs (mapcar (lambda (tx)
                           (make-txrec
                            :tx     tx
@@ -521,14 +521,14 @@ topo-sorted partial order"
       (cosi/proofs/newtx:get-transactions-for-new-block
        :max *max-transactions*)))
   (let ((tx-pairs (get-candidate-transactions)))
-    (pr "Trimming transactions")
+    (emotiq:note "Trimming transactions")
     (multiple-value-bind (hd tl)
         (um:split *max-transactions* tx-pairs)
       (dolist (tx tl)
         ;; put these back in the pond for next round
         (back-out-transaction tx))
       ;; now hd represents the actual transactions going into the next block
-      (pr (format nil "~D Transactions" (length hd)))
+      (emotiq:note "~D Transactions" (length hd))
       hd)))
       
 ;; ----------------------------------------------------------------------
@@ -701,8 +701,8 @@ check that each TXIN and TXOUT is mathematically sound."
           :TIMEOUT timeout
           :ON-TIMEOUT
           (progn
-            (pr (format nil "SubSigning timeout waiting for ~A"
-                        (short-id node)))
+            (emotiq:note "SubSigning timeout waiting for ~A"
+                         (short-id node))
             (=return nil))
           )))))
 
@@ -812,7 +812,7 @@ check that each TXIN and TXOUT is mathematically sound."
                              sig
                              (zerop (logand g-bits bits)) ;; check for no intersection
                              (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                    (pr (hex bits))
+                    (emotiq:note "Got bits: ~A" (hex-str bits))
                     (setf g-bits (logior g-bits bits)
                           g-sig  (add-sigs sig g-sig)))
                   (if (>= (logcount g-bits) bft-thrsh)
@@ -823,7 +823,7 @@ check that each TXIN and TXOUT is mathematically sound."
                       (retry-recv))))
                  
                  (msg
-                  (pr (format nil "Gossip-wait got unknown message: ~A" msg))
+                  (emotiq:note "Gossip-wait got unknown message: ~A" msg)
                   (adj-timeout)
                   (retry-recv))
                  
