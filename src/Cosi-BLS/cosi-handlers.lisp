@@ -954,7 +954,8 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; to decide for themselves
              (if (validate-cosi-message node consensus-stage blk)
                  (progn
-                   (ac:pr (format nil "Block validated ~A" (short-id node)))
+                   (emotiq:note "Block validated ~A" (short-id node))
+                   (emotiq:note "Block witnesses = ~A" (block-witnesses blk))
                    (list (pbc:sign-hash blk-hash (node-skey node))
                          (ash 1 (position (node-pkey node) (block-witnesses blk)
                                           :test 'int=))))
