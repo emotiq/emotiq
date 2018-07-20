@@ -50,7 +50,9 @@
 
   (emotiq/tracker:start-tracker)
   (emotiq:start-node)
-  (cosi-simgen:startup-elections))
+  (emotiq:note "about to start elections")
+  (cosi-simgen:startup-elections)
+  (emotiq:note "elections started"))
 
 ;; Entry Point for binary version of the system.
 
