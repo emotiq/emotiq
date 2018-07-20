@@ -17,4 +17,3 @@ for i in {1..3} ; do
 done
 
 echo 3-node Emotiq network started!
-exit 1
