@@ -300,10 +300,12 @@ based on their relative stake"
                (node-stake
                  (second (assoc (node-pkey node) witnesses-and-stakes
                                 :test 'int=))))
-
+          ;;; FIXME: this probably won't work for unstaked nodes.
+          ;;; They shouldn't be participating in elections, but as I
+          ;;; understand it, everyone is currently see this call.
           (when (null node-stake)
             (error "Stake is nil for this node. Cannot continue."))
-          (when (cosi/proofs/newtx:in-legal-stake-range-p node-stake)
+          (unless (cosi/proofs/newtx:in-legal-stake-range-p node-stake)
             (error "Stake value ~s is not valid for a stake." node-stake))
 
           (set-nodes witnesses-and-stakes)
