@@ -182,6 +182,11 @@ THE SOFTWARE.
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
   (send-hold-election))
 
+(defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
+  ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
+  ;; These should not be happening, just log the incident, and ignore.
+  (emotiq:note (format nil "Unexpected GOSSIP message: ~S" msg)))
+
 ;; ------------------------------------------------------------------------------------
 
 (defun make-node-dispatcher (node)
@@ -190,9 +195,8 @@ THE SOFTWARE.
                  (with-current-node node
                    (apply 'node-dispatcher msg)))
                )))
-    (make-actor
-     (lambda (&rest msg)
-       (um:dcase msg
+    (lambda (&rest msg)
+      (um:dcase msg
          (:actor-callback (aid &rest ans)
           (let ((actor (lookup-actor-for-aid aid)))
             (when actor
@@ -201,7 +205,7 @@ THE SOFTWARE.
          
           (t (&rest msg)
              (apply 'send beh msg))
-          )))))
+          ))))
 
 ;; -------------------------------------------------------------------------------------
 
@@ -724,12 +728,14 @@ check that each TXIN and TXOUT is mathematically sound."
 
 
 (defun broadcast+me (msg)
-  ;; make sure our own Node gets the message too
-  (gossip:singlecast msg (node-pkey (current-node)) 
-                     :graphID nil) ;; force send to ourselves
-  ;; this really should go to everyone
-  (gossip:broadcast msg
-                    :graphID :UBER))
+  (let ((my-pkey (node-pkey (current-node))))
+    ;; make sure our own Node gets the message too
+    (gossip:singlecast msg my-pkey
+                       :graphID nil) ;; force send to ourselves
+    ;; this really should go to everyone
+    (gossip:broadcast msg
+                      :startNodeID my-pkey ;; need this or else get an error sending to NIL destnode
+                      :graphID :UBER)))
 
 ;; -----------------------------------------------------------
 
