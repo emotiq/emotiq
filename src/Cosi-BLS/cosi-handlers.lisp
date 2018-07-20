@@ -1051,7 +1051,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
                                               *election-proof* *leader*
-                                              (map 'vector 'node-pkey *node-bit-tbl*)
+                                              (map 'vector 'first (get-witness-list))
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
