@@ -41,6 +41,12 @@ a CL:FORMAT control string referencing the values contained in ARGS."
     (record-note timestring " " outstring)
     outstring))
 
+(eval-when (:load-toplevel)
+  ;; hook, even if Actors isn't loaded...
+  ;; If Actors are loaded later, they will respect the hook
+  (setf (get :actors :print-handler) (lambda (item)
+                                       (note "~A" item))))
+
 (defun em-warn (message-or-format &rest args)
   "Like note but this is for warnings."
   (let ((timestring (timestring))

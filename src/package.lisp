@@ -136,6 +136,14 @@
    #:etc/
    #:var/log/))
 
+(defpackage emotiq/txn
+  (:use #:cl)
+  (:export
+   #:*transaction-fee*
+   #:get-utxos
+   #:select-utxos
+   #:make-spend-transaction))
+
 (defpackage emotiq/tracker
   (:use #:cl)
   (:export

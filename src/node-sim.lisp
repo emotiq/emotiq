@@ -372,6 +372,180 @@ This will spawn an actor which will asynchronously do the following:
     (emotiq:note "current state = ~A" result)
     result))  ;;; return non-nil if we are able to exit cleanly
 
+
+(defun run-new-tx-1 ()
+  "Using new tx feature, run the block chain simulation entirely within the current process.
+This will spawn an actor which will asynchronously do the following:
+
+  1.  Create a genesis block (amount of coin is parameterized in the
+      code).  Transact AMOUNT coins to *USER-1*.  The resulting
+      transaction can be referenced via *tx-1*.
+
+  2.  Transfer the some amount of coins from *user-1* to *user-2* as *tx2*.
+
+  3.  Transfer some other amount of coins from *user-2* to *user-3* as *tx3*."
+
+  (ensure-simulation-keys)
+  (setf *genesis-output* nil *tx-1* nil *tx-2* nil)
+  (cosi-simgen:reset-nodes)
+  (let ((fee 10))    
+    (ac:pr "Construct Genesis Block")
+    (let* ((genesis-block
+             (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
+               ;; Establish current-node binding of genesis node
+               ;; around call to create genesis block.
+               (cosi/proofs:create-genesis-block
+                (pbc:keying-triple-pkey *genesis-account*)
+                (keys-and-stakes))))
+           (genesis-transaction         ; kludgey handling here
+             (first (cosi/proofs:block-transactions genesis-block)))
+           (genesis-public-key-hash
+             (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*))))
+
+      (emotiq:note "Tx 0 created/genesis, now broadcasting.")
+      (cosi/proofs/newtx:dump-tx genesis-transaction)      
+      (cosi-simgen:gossip-neighborcast nil :genesis-block :blk genesis-block)
+
+      ;;;; there's a race here - without sleep the emotiq/txn:make-spend-transaction
+      ;;;; below fails on insufficient funds since genesis UTXO is not yet "persisted"
+      ;;;; we need to give time to leader to process the :genesis-block message
+      (sleep 1.0)
+      
+      (let* ((user-1-public-key-hash    ; a/k/a address
+              (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-1*)))
+             (signed-transaction
+              (emotiq/txn:make-spend-transaction *genesis-account*
+                                                 user-1-public-key-hash
+                                                 890
+                                                 :fee fee)))
+        
+        (setq *tx-1* signed-transaction)
+        (ac:pr (format nil "Broadcasting 1st TX."))
+        (emotiq:note "Tx 1 created/signed by genesis (~a), now broadcasting."
+                     genesis-public-key-hash)
+        (cosi/proofs/newtx:dump-tx signed-transaction)
+        (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
+
+        (sleep 1.0)
+
+        (let ((user-2-public-key-hash
+               (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*))))
+
+          (setf signed-transaction
+                (emotiq/txn:make-spend-transaction *user-1*
+                                                   user-2-public-key-hash
+                                                   500
+                                                   :fee fee))
+          
+          
+          ;; (setq txid (cosi/proofs/newtx:transaction-id signed-transaction))
+          ;; (setq index 0)
+          ;; (setq transaction-inputs
+          ;;       (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
+
+          ;; (setq transaction-outputs
+          ;;       (cosi/proofs/newtx:make-transaction-outputs
+          ;;        `((,user-2-public-key-hash ,amount-2)
+          ;;          (,user-1-public-key-hash ,change-amount-2))))
+
+          ;; (setq signed-transaction      ; signed by user 1
+          ;;       (cosi/proofs/newtx:make-and-maybe-sign-transaction
+          ;;        transaction-inputs transaction-outputs
+          ;;        :skeys (pbc:keying-triple-skey *user-1*)
+          ;;        :pkeys (pbc:keying-triple-pkey *user-1*)))
+          
+          (emotiq:note "Tx 2 created/signed by user-1 (~a), now broadcasting."
+                  user-1-public-key-hash)
+          (setq *tx-2* signed-transaction)
+          (ac:pr (format nil "Broadcasting 2nd TX."))
+          (cosi/proofs/newtx:dump-tx signed-transaction)
+          (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
+
+          (sleep 1.0)
+
+          
+          #+nil
+          (let* ((user-3-public-key-hash
+                  (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
+                 (amount-3 350)
+                 (change-amount-3 (- amount-2 (+ amount-3 fee))))
+
+            (setq txid (cosi/proofs/newtx:transaction-id signed-transaction))
+            (setq index 0)
+            (setq transaction-inputs
+                  (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
+
+            (setq transaction-outputs
+                  (cosi/proofs/newtx:make-transaction-outputs
+                   `((,user-3-public-key-hash ,amount-3)
+                     (,user-2-public-key-hash ,change-amount-3))))
+
+            (setq signed-transaction    ; signed by user 2
+                  (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                   transaction-inputs transaction-outputs
+                   :skeys (pbc:keying-triple-skey *user-2*)
+                   :pkeys (pbc:keying-triple-pkey *user-2*)))          
+            (ac:pr (format nil "Broadcasting 3rd TX."))
+            (emotiq:note "Tx 3 created/signed by user-2 (~a), now broadcasting."
+                    user-2-public-key-hash)
+            (cosi/proofs/newtx:dump-tx signed-transaction)
+            (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
+
+            ;; here: attempt a double-spend: (with same TxID)
+            (setq signed-transaction
+                  (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                   transaction-inputs transaction-outputs
+                   :skeys (pbc:keying-triple-skey *user-2*)
+                   :pkeys (pbc:keying-triple-pkey *user-2*)))
+
+            (ac:pr (format nil "Broadcasting 4th TX [attempt to double-spend (same TxID)]."))
+            (emotiq:note "Tx 4 created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting."
+                    user-2-public-key-hash)
+            (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
+
+            ;; here: attempt a double-spend: (with different TxID)
+            (setq transaction-outputs
+                  (cosi/proofs/newtx:make-transaction-outputs
+                   `((,user-3-public-key-hash 123)
+                     (,user-2-public-key-hash 321))))
+            (setq signed-transaction
+                  (cosi/proofs/newtx:make-and-maybe-sign-transaction
+                   transaction-inputs transaction-outputs
+                   :skeys (pbc:keying-triple-skey *user-2*)
+                   :pkeys (pbc:keying-triple-pkey *user-2*)
+                   :type ':spend))
+
+            (ac:pr (format nil "Broadcasting 5th TX [attempt to double-spend (diff TxID)]."))
+            (emotiq:note "Tx 5 created/signed by user-2 (~a) [attempt to double-spend (diff TxID)], now broadcasting."
+                    user-2-public-key-hash)
+            (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
+
+
+            (emotiq/elections:fire-election)
+
+            ;; Dump the whole blockchain now after about a minute,
+            ;; just before exiting:
+            (multiple-value-bind (all-done-p elapsed-seconds-if-done)
+               (cosi/proofs/newtx:wait-for-tx-count 3 :timeout 60)
+              (cond
+                (all-done-p
+                 (emotiq:note "Finished ~d spend transactions in ~d second~p"
+                         3 elapsed-seconds-if-done elapsed-seconds-if-done))
+                (t
+                 (cerror
+                  "Continue regardless."
+                  "Timed out, waited 60 sec for 4 transactions on blockchain."))))
+            ;; previous:
+            ;; (sleep 60)
+
+            
+            (emotiq:note "~2%Here's a dump of the whole blockchain currently:")
+            (cosi/proofs/newtx:dump-txs :blockchain t)
+            (format t "~2%Good-bye and good luck!~%"))))))
+  (let ((result (emotiq/tracker:query-current-state)))
+    (emotiq:note "current state = ~A" result)
+    result))  ;;; return non-nil if we are able to exit cleanly
+
 (defun blocks ()
   "Return the blocks in the chain currently under local simulation
 
