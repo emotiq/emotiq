@@ -136,7 +136,7 @@ THE SOFTWARE.
    (load     :accessor node-load     ;; cpu loading of group for this node
              :initform 1)
    (self     :accessor node-self     ;; ptr to Actor handler
-             :accessor application-handler ;; accessor used by gossip system to find our Actor
+             :accessor gossip:application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
    ))
 
@@ -201,6 +201,14 @@ THE SOFTWARE.
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
   (call-next-method))
+
+(defmethod initialize-instance :after ((node node) &key &allow-other-keys)
+  (when (null (node-blockchain node))
+    (let ((genesis-block (emotiq/config:get-genesis-block)))
+      (push genesis-block (node-blockchain node))
+      (setf (gethash (cosi/proofs:hash-block genesis-block)
+                     (node-blockchain-tbl node))
+            genesis-block))))
 
 ;; --------------------------------------------------------------
 
