@@ -2,10 +2,26 @@
 
 BASE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && cd ../.. && pwd)"
 
+source ${BASE}/ci/tests/chain-functions.bash
+
 pushd $BASE/demo-network
 
-./start-blockchain.bash || (echo Failed to start blockchain ; exit 1)
-./ping-nodes.bash || (echo Failed to ping nodes ; exit 1)
+./copy-sample-configs.bash
+
+if ./start-blockchain.bash ; then
+  echo "Emotiq blockchain started ok!"
+else
+  cleanup
+  exit 1
+fi
+
+if ./ping-nodes.bash ; then
+  echo "Nodes are responding ok!"
+else
+  cleanup
+  exit 1 
+fi
+
 ./stop-blockchain.bash
 
 popd
