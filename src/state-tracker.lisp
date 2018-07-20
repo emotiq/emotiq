@@ -66,7 +66,7 @@
   (let ((cosi-simgen-node-ip (and (find-package :cosi-simgen)
                                   (intern "NODE-IP" :cosi-simgen))))
     (if (not (functionp cosi-simgen-node-ip))
-        (format nil "~a" node)
+        (cosi-simgen:short-id node) ;; (format nil "~a" node)
         ;; whatever is most appropriate - is node-ip is useful, then export it
         (funcall cosi-simgen-node-ip node))))
 
