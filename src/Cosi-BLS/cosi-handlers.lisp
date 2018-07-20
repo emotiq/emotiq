@@ -1091,8 +1091,5 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; -----------------------------------------------------------------
 
 (defun init-sim ()
-  (shutdown-server)
   (reconstruct-tree)
-  (prog1
-      (start-server)
-    (reset-system)))
+  (reset-system))
