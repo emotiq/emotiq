@@ -180,6 +180,7 @@ THE SOFTWARE.
   (emotiq/tracker:track :block-finished)
   (emotiq:note "Block committed to blockchain")
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
+  (sleep 2) ;; PLEASE DON'T DO LAME THINGS LIKE THIS !!!!
   (send-hold-election))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
