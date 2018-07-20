@@ -63,10 +63,10 @@
 
 (defun stringify-node (node)
   "Return some string representation for given NODE"
-  (let ((cosi-simgen-node-ip (and (find-package :cosi-simgen)
-                                  (intern "NODE-IP" :cosi-simgen))))
-    (if (not (functionp cosi-simgen-node-ip))
-        (cosi-simgen:short-id node) ;; (format nil "~a" node)
-        ;; whatever is most appropriate - is node-ip is useful, then export it
-        (funcall cosi-simgen-node-ip node))))
+  (let ((cosi-simgen-node-id-str (and (find-package :cosi-simgen)
+                                        (intern "NODE-ID-STR" :cosi-simgen))))
+    (if (not (functionp cosi-simgen-node-id-str))
+        (format nil "~a" node)
+      ;; whatever is most appropriate - is node-ip is useful, then export it
+      (funcall cosi-simgen-node-id-str node))))
 

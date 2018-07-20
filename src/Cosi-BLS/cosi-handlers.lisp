@@ -662,6 +662,9 @@ check that each TXIN and TXOUT is mathematically sound."
                      (subseq str (- len 7)))
       str)))
 
+(defun node-id-str (node)
+  (short-id node))
+
 ;; ------------------------------
 
 (defun sub-signing (my-node consensus-stage blk seq-id timeout)

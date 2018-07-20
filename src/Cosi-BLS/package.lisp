@@ -335,6 +335,7 @@
    :forwarding
    :startup-elections
    :short-id
+   :node-id-str
    ))
 
 (defpackage :cosi-keying
