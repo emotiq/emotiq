@@ -48,7 +48,8 @@
   "load the dev or production dlls at runtime"
   (if (emotiq:production-p)
       (define-production-dlls)
-    (define-dev-dlls))
+      (define-dev-dlls))
+  ;; (format t "DYLD_LIBRARY_PATH = ~S" (getenv "DYLD_LIBRARY_PATH"))
   (cffi:use-foreign-library :libLispPBC)
   (cffi:use-foreign-library :libEd3363)
   (cffi:use-foreign-library :libCurve1174))
