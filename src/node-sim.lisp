@@ -52,6 +52,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
               (not (and (probe-file cosi-simgen:*default-data-file*)
                         (probe-file cosi-simgen:*default-key-file*))))
     (cosi-simgen:generate-tree :nodes nodes))
+  (gossip:gossip-startup)
   (setf cosi-simgen:*cosi-prepare-timeout* cosi-prepare-timeout)
   (setf cosi-simgen:*cosi-commit-timeout* cosi-commit-timeout)
   (cosi-simgen:init-sim)

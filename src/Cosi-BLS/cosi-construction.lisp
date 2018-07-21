@@ -182,14 +182,15 @@ THE SOFTWARE.
 (defun make-cosi-tree-node (ipstr pkeyzkp parent)
   (let* ((cmpr-pkey (first pkeyzkp))
          (pval      (keyval cmpr-pkey))
-         (node (make-instance 'node
-                              :ip      ipstr
+         (node (gossip:make-node :cosi
                               :skey    (gethash pval *pkey-skey-tbl*)
                               :pkey    cmpr-pkey
-                              :pkeyzkp pkeyzkp
-                              :parent  parent
-                              :real-ip *comm-ip*
                               )))
+    (setf (node-ip node) ipstr
+          (node-pkeyzkp node) pkeyzkp
+          (node-parent node) parent
+          (node-real-ip node) *comm-ip*)
+
     (setf (gethash ipstr *ip-node-tbl*)   node
           (gethash pval  *pkey-node-tbl*) node)))
 
