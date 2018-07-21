@@ -859,7 +859,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             as first-time = t then nil
             when (not first-time)
               do (format stream ", ")
-            do (format stream "~d/~a" amt public-key-hash-string amt)))))
+            do (format stream "~d/~a" amt public-key-hash-string)))))
 
 
 
