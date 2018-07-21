@@ -48,12 +48,14 @@ THE SOFTWARE.
          *all-nodes*)
         (t
          ;; other sim
-         (um:accum acc
-           (maphash (lambda (k node)
-                      (declare (ignore k))
-                      (acc (list (node-pkey node)
-                                 (node-stake node))))
-                    *ip-node-tbl*)))
+         (or *all-nodes*
+             (setf *all-nodes*
+                   (um:accum acc
+                     (maphash (lambda (k node)
+                                (declare (ignore k))
+                                (acc (list (node-pkey node)
+                                           (node-stake node))))
+                              *ip-node-tbl*)))))
         ))
 
 (defun get-witnesses-sans-pkey (pkey)
@@ -302,24 +304,34 @@ based on their relative stake"
       ;; *local-epoch* will also not have
       ;; changed
       (unless (get-witness-list)
-        (unless (node-blockchain node)
-          (error "There is no blockchain. Cannot continue."))
-        (let* ((genesis-block (first (node-blockchain node)))
-               (witnesses-and-stakes
-                 (cosi/proofs:block-witnesses-and-stakes genesis-block))
-               (node-stake
-                 (second (assoc (node-pkey node) witnesses-and-stakes
-                                :test 'int=))))
-          ;;; FIXME: this probably won't work for unstaked nodes.
-          ;;; They shouldn't be participating in elections, but as I
-          ;;; understand it, everyone is currently see this call.
-          (when (null node-stake)
-            (error "Stake is nil for this node. Cannot continue."))
-          (unless (cosi/proofs/newtx:in-legal-stake-range-p node-stake)
-            (error "Stake value ~s is not valid for a stake." node-stake))
+        (cond (*use-real-gossip*
+               (let* ((nodes/stakes (emotiq/config:get-stakes))
+                      (my-pair      (find (node-pkey node) nodes/stakes
+                                          :test 'int=
+                                          :key  'first)))
+                 (setf (node-stake node) (cadr my-pair))
+                 (set-nodes nodes/stakes)))
 
-          (set-nodes witnesses-and-stakes)
-          (setf (node-stake node) node-stake)))
+              (t
+               (unless (node-blockchain node)
+                 (error "There is no blockchain. Cannot continue."))
+               (let* ((genesis-block (first (node-blockchain node)))
+                      (witnesses-and-stakes
+                       (cosi/proofs:block-witnesses-and-stakes genesis-block))
+                      (node-stake
+                       (second (assoc (node-pkey node) witnesses-and-stakes
+                                      :test 'int=))))
+                 ;;; FIXME: this probably won't work for unstaked nodes.
+                 ;;; They shouldn't be participating in elections, but as I
+                 ;;; understand it, everyone is currently see this call.
+                 (when (null node-stake)
+                   (error "Stake is nil for this node. Cannot continue."))
+                 (unless (cosi/proofs/newtx:in-legal-stake-range-p node-stake)
+                   (error "Stake value ~s is not valid for a stake." node-stake))
+                 
+                 (set-nodes witnesses-and-stakes)
+                 (setf (node-stake node) node-stake)))
+              ))
       
       (when (= *local-epoch* old-epoch) ;; anything changed?
         (call-for-new-election)))
