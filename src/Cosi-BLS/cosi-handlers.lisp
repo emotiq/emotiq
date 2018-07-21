@@ -810,19 +810,23 @@ check that each TXIN and TXOUT is mathematically sound."
                (recv
                  ((list :signed sub-seq sig bits)
                   (with-current-node my-node
-                    (when (and (eql sub-seq seq-id)
-                               sig
-                               (zerop (logand g-bits bits)) ;; check for no intersection
-                               (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                      (pr "Got bits: ~A" (hex-str bits))
-                      (setf g-bits (logior g-bits bits)
-                            g-sig  (add-sigs sig g-sig)))
-                    (if (>= (logcount g-bits) bft-thrsh)
-                        (=finish)
-                      ;; else
-                      (progn
-                        (adj-timeout)
-                        (retry-recv)))))
+                    (cond ((and (eql sub-seq seq-id)
+                                sig
+                                (zerop (logand g-bits bits)) ;; check for no intersection
+                                (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
+                           (pr "Got bits: ~A" (hex-str bits))
+                           (setf g-bits (logior g-bits bits)
+                                 g-sig  (add-sigs sig g-sig))
+                           (if (>= (logcount g-bits) bft-thrsh)
+                               (=finish)
+                             ;; else
+                             (progn
+                               (adj-timeout)
+                               (retry-recv))))
+
+                          (t
+                           (adj-timeout)
+                           (retry-recv)))))
                  
                  (msg
                   (pr "Gossip-wait got unknown message: ~A" msg)
