@@ -175,7 +175,7 @@
           ;; First object in logmsg is the timestamp.
           ;;
           ;; TODO: use the timestamp directly
-          (emotiq:note "~&~{~a~^ ~}~&" (rest logmsg)))
+          (emotiq:note "~{~a~^ ~}~&" (rest logmsg)))
     (:quit (ac:become 'ac:do-nothing))
           
     ; :save saves current log to files without modifying it
