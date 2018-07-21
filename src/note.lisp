@@ -14,13 +14,19 @@
 
 (defun %note (message-or-format &rest args)
   "Format a log message and return it"
-  (let ((message 
+  (let ((message
+         #|
          (format nil
                  "~a~%"
                  (apply 'format 
                         nil
                         message-or-format
-                        args))))
+                        args))
+         |#
+         (apply 'format 
+                nil
+                message-or-format
+                args)))
     message))
 
 ; This can be redefined to be actor-based for proper serialization

@@ -197,7 +197,8 @@ THE SOFTWARE.
                )))
     (make-actor
      (lambda (&rest msg)
-      (um:dcase msg
+       (pr "Cosi MSG: ~A" msg)
+       (um:dcase msg
          (:actor-callback (aid &rest ans)
           (let ((actor (lookup-actor-for-aid aid)))
             (when actor
@@ -771,7 +772,7 @@ check that each TXIN and TXOUT is mathematically sound."
 
 ;; -------------------------------------------------------------
 
-(=defun gossip-signing (my-node consensus-stage blk blk-hash  seq-id timeout)
+(=defun gossip-signing (my-node consensus-stage blk blk-hash seq-id timeout)
   (with-current-node my-node
     (cond ((and *use-gossip*
                 (int= (node-pkey my-node) *leader*))
@@ -788,7 +789,7 @@ check that each TXIN and TXOUT is mathematically sound."
                                   :consensus-stage consensus-stage
                                   :blk             blk
                                   :seq             seq-id
-                                  :timneout        timeout)
+                                  :timeout         timeout)
              (setf start (get-universal-time))
              
              (labels
@@ -808,19 +809,24 @@ check that each TXIN and TXOUT is mathematically sound."
                   
                (recv
                  ((list :signed sub-seq sig bits)
-                  (when (and (eql sub-seq seq-id)
-                             sig
-                             (zerop (logand g-bits bits)) ;; check for no intersection
-                             (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                    (pr "Got bits: ~A" (hex-str bits))
-                    (setf g-bits (logior g-bits bits)
-                          g-sig  (add-sigs sig g-sig)))
-                  (if (>= (logcount g-bits) bft-thrsh)
-                      (=finish)
-                    ;; else
-                    (progn
-                      (adj-timeout)
-                      (retry-recv))))
+                  (with-current-node my-node
+                    (cond ((and (eql sub-seq seq-id)
+                                sig
+                                (zerop (logand g-bits bits)) ;; check for no intersection
+                                (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
+                           (pr "Got bits: ~A" (hex-str bits))
+                           (setf g-bits (logior g-bits bits)
+                                 g-sig  (add-sigs sig g-sig))
+                           (if (>= (logcount g-bits) bft-thrsh)
+                               (=finish)
+                             ;; else
+                             (progn
+                               (adj-timeout)
+                               (retry-recv))))
+
+                          (t
+                           (adj-timeout)
+                           (retry-recv)))))
                  
                  (msg
                   (pr "Gossip-wait got unknown message: ~A" msg)
