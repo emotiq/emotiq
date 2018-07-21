@@ -23,17 +23,11 @@
 
 (in-package "EMOTIQ")
 
-(defun directorify (str)
-  "Ensure str doesn't start with #\/ but it does end with one"
-  (let ((slash #.(string #\/)))
-    (setf str (string-trim slash str))
-    (setf str (concatenate 'string str slash))))
-
 ;; "Entry Point" for development - does nothing, just load and go
 (defun main (&key config-subpath how-started-message?)
   (setf cosi-simgen::*use-real-gossip* t) ;; make sure code knows 
   (when config-subpath
-    (setf emotiq/fs:*subpath* (directorify config-subpath)))
+    (setf emotiq/fs:*subpath* config-subpath))
   (message-running-state how-started-message?)
   ;; Create a default wallet on disk if one doesn't already exist
   (emotiq/wallet:create-wallet)

@@ -315,7 +315,7 @@ Usually, they are in big-endian representation for PBC library."
   (if *print-readably*
       (call-next-method)
     ;; else
-    (format out-stream "#<~A ~A >"
+    (format out-stream "#<~A ~A>"
             (class-name (class-of obj))
             (short-str (hex-str obj)))
     ))

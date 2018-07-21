@@ -1,3 +1,4 @@
 jsonrpc_websocket
+websockets
 requests
 async
