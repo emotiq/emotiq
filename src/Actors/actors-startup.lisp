@@ -187,9 +187,16 @@ THE SOFTWARE.
 
 (defun blind-print (cmd &rest items)
   (declare (ignore cmd))
-  (let ((prfn (get :actors :print-handler)))
-  (dolist (item items)
-    (funcall prfn item))))
+  (let ((prfn (get :actors :print-handler))
+        (fmt  (first items)))
+    (cond ((and (stringp fmt)
+                (find #\~ fmt))
+           (funcall prfn (apply 'format nil fmt (rest items))))
+
+          (t
+           (dolist (item items)
+             (funcall prfn item)))
+          )))
 
 (eval-when (:load-toplevel)
   (unless (get :actors :print-handler)

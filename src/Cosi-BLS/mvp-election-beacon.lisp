@@ -44,7 +44,17 @@ THE SOFTWARE.
                             node-list)))
 
 (defun get-witness-list ()
-  *all-nodes*)
+  (cond (*use-real-gossip*
+         *all-nodes*)
+        (t
+         ;; other sim
+         (um:accum acc
+           (maphash (lambda (k node)
+                      (declare (ignore k))
+                      (acc (list (node-pkey node)
+                                 (node-stake node))))
+                    *ip-node-tbl*)))
+        ))
 
 (defun get-witnesses-sans-pkey (pkey)
   (remove pkey (get-witness-list)
@@ -250,11 +260,11 @@ based on their relative stake"
               *local-epoch*      n  ;; unlikely to repeat from election to election
               *election-calls*   nil) ;; reset list of callers for new election
         
-        (emotiq:note "~A got :hold-an-election ~A" (short-id node) n)
-        (emotiq:note "election results ~A (stake = ~A)"
+        (pr "~A got :hold-an-election ~A" (short-id node) n)
+        (pr "election results ~A (stake = ~A)"
                      (if (int= pkey winner) " *ME* " " not me ")
                      stake)
-        (emotiq:note "winner ~A me=~A"
+        (pr "winner ~A me=~A"
                      (short-id winner)
                      (short-id pkey))
 
@@ -367,7 +377,7 @@ based on their relative stake"
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (or (emotiq:note "Got call for new election") t)
+             (or (pr "Got call for new election") t)
              (>= (length *election-calls*)
                 (bft-threshold (get-witness-list))))
     (run-special-election)))

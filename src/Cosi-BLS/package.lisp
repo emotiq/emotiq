@@ -212,6 +212,8 @@
    :edec
    :pbc)
   (:shadow block)            ; used internally, not required for users
+  (:import-from :actors
+   pr)
   (:export 
    transaction-id
    make-genesis-transaction
@@ -336,6 +338,8 @@
    :startup-elections
    :short-id
    :node-id-str
+   :set-nodes
+   :get-witness-list
    ))
 
 (defpackage :cosi-keying
