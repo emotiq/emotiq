@@ -1025,7 +1025,8 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun node-compute-cosi (reply-to consensus-stage blk timeout)
   ;; top-level entry for Cosi signature creation
   ;; assume for now that leader cannot be corrupted...
-  (let* ((self (current-actor))
+  (let* ((node (current-node))
+         (self (current-actor))
          (hash (hash/256 (signature-hash-message blk)))
          (sess (int hash)))
     (ac:self-call :signing
