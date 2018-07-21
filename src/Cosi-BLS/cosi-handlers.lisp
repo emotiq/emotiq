@@ -180,10 +180,7 @@ THE SOFTWARE.
   (emotiq/tracker:track :block-finished)
   (emotiq:note "Block committed to blockchain")
   (emotiq:note "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
-  (progn ;; node-schedule-after 2
-    ;; (emotiq:note "Hello! from delayed call to hold-election")
-    (send-hold-election)
-    ))
+  (send-hold-election))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
   ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
