@@ -363,7 +363,9 @@ based on their relative stake"
                   :test 'int=)
       (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
       (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
-                        :graphID :UBER))))
+                        :graphID :UBER))
+    (node-schedule-after *emergency-timeout*
+      (call-for-new-election))))
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (emotiq:note "Got call for new election")
