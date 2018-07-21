@@ -228,6 +228,7 @@ Later it may become an ADS structure"
 
 (defmethod node-check-transaction (msg)
   "Just ignore invalid messages"
+  (declare (ignore msg))
   nil)
 
 (defmethod node-check-transaction ((msg transaction))
@@ -672,6 +673,7 @@ check that each TXIN and TXOUT is mathematically sound."
   (declare (ignore my-node))
   (=lambda (node)
     (let ((start  (get-universal-time)))
+      #-:LISPWORKS (declare (ignore start))
       (send node :signing
             :reply-to        (current-actor)
             :consensus-stage consensus-stage
