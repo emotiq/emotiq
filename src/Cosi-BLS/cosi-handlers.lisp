@@ -940,7 +940,6 @@ check that each TXIN and TXOUT is mathematically sound."
     ))
 
 ;; ----------------------------------------------------------------------------
-(defvar *iterations* 0)
 
 (defun node-cosi-signing (reply-to consensus-stage blk seq-id timeout)
   ;; Compute a collective BLS signature on the message. This process
@@ -955,8 +954,6 @@ check that each TXIN and TXOUT is mathematically sound."
         (par
           ;; parallel task #1
           (with-current-node node
-            (when (> (incf *iterations*) 3)
-              (ac:kill-executives))
             (=values 
              ;; Here is where we decide whether to lend our signature. But
              ;; even if we don't, we stil give others in the group a chance
@@ -1042,8 +1039,7 @@ check that each TXIN and TXOUT is mathematically sound."
                ;; we completed successfully
                (progn
                  (emotiq:note "Forwarding multisig to leader")
-                 (reply reply-to
-                        (list :signature sig bits)))
+                 (reply reply-to :signature sig bits))
              ;; bad signature
              (reply reply-to :corrupt-cosi-network)
              ))
@@ -1073,7 +1069,7 @@ check that each TXIN and TXOUT is mathematically sound."
                   :timeout   prepare-timeout)
     (emotiq:note "Waiting for Cosi prepare")
     (recv
-      ((list :answer (list :signature sig bits))
+      ((list :answer :signature sig bits)
        (emotiq:note "Made it back from Cosi validate")
        (with-current-node node
          (update-block-signature new-block sig bits)
@@ -1085,7 +1081,7 @@ check that each TXIN and TXOUT is mathematically sound."
                        :timeout   commit-timeout)
          (emotiq:note "Waiting for Cosi commit")
          (recv
-           ((list :answer (list* :signature _))
+           ((list* :answer :signature _)
             (emotiq:note "Made it back from Cosi commit with good signature")
             (send *dly-instr* :plt)
             (send (node-pkey node) :block-finished))
