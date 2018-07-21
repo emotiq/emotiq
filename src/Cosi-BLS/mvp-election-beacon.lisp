@@ -245,8 +245,7 @@ based on their relative stake"
   ;; knocked out, then we fall back to early elections with BFT
   ;; consensus on decision to resync.
   (let ((self      (current-actor))
-        (node      (current-node))
-        (witnesses (get-witness-list)))
+        (node      (current-node)))
     
     (with-accessors ((stake       node-stake) ;; only used for diagnostic messages
                      (pkey        node-pkey)
