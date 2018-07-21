@@ -665,6 +665,9 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun node-id-str (node)
   (short-id node))
 
+(defmethod print-object ((node node) out-stream)
+  (format out-stream "#<NODE ~A>" (short-id node)))
+
 ;; ------------------------------
 
 (defun sub-signing (my-node consensus-stage blk seq-id timeout)
