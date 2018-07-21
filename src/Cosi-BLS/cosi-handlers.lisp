@@ -1041,8 +1041,10 @@ check that each TXIN and TXOUT is mathematically sound."
          (emotiq:note "Made it back from signing")
          (if (check-hash-multisig hash sig bits blk)
              ;; we completed successfully
-             (reply reply-to
-                    (list :signature sig bits))
+             (progn
+               (emotiq:note "Forwarding multisig to leader")
+               (reply reply-to
+                      (list :signature sig bits)))
            ;; bad signature
            (reply reply-to :corrupt-cosi-network)
            ))
