@@ -604,7 +604,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil))
-                    (emotiq:note "Node ~a declares successful transaction ~a  TxID = ~a"
+                    (pr "Node ~a declares successful transaction ~a  TxID = ~a"
                                  (cosi-simgen:current-node)
                                  transaction
                                  (txid-string (transaction-id transaction)))
@@ -748,11 +748,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (def-script-op public-key-equal-verify (public-key public-key-hash)
   (cond
     ((not (typep public-key 'pbc:public-key))
-     (emotiq:note "Arg public-key (~s) is not of correct type: ~s"
+     (pr "Arg public-key (~s) is not of correct type: ~s"
              public-key 'pbc:public-key)
      (fail-script-op))
     ((not (stringp public-key-hash))
-     (emotiq:note "Public-key-hash ~s not a string but string expected"
+     (pr "Public-key-hash ~s not a string but string expected"
              public-key-hash)
      (fail-script-op))
     (t
@@ -762,11 +762,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             (l2 (length public-key-hash-from-public-key)))
        (cond
          ((not (stringp public-key-hash-from-public-key))
-          (emotiq:note "Public-key hash ~s derived from public-key ~s not a string but string expected"
+          (pr "Public-key hash ~s derived from public-key ~s not a string but string expected"
                   public-key-hash-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
-          (emotiq:note "Public key hash ~s length ~s not same as public key ~s hash ~s length ~s"
+          (pr "Public key hash ~s length ~s not same as public key ~s hash ~s length ~s"
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
@@ -1152,7 +1152,7 @@ returns the block the transaction was found in as a second value."
                ;; indicating we have an usnpent transaction output
                ;; (UTXO)
                (when (tx-ids= (transaction-id tx) id)
-                 (emotiq:note "Hey look: the TxID  ~a is the same as the arg TxID  ~a Wow!"
+                 (pr "Hey look: the TxID  ~a is the same as the arg TxID  ~a Wow!"
                          (txid-string (transaction-id tx))
                          (txid-string id))
                  (return-from double-spend-tx-out-p
@@ -1160,13 +1160,13 @@ returns the block the transaction was found in as a second value."
 
 
 (defun trace-compare-all-tx-ids (id)
-  (emotiq:note "Trace:")
+  (pr "Trace:")
   (do-blockchain (blk)
     (do-transactions (tx blk)
-      (emotiq:note "TX id = ~s vs  ~s [~a]"
+      (pr "TX id = ~s vs  ~s [~a]"
               (transaction-id tx) id
               (tx-ids= (transaction-id tx) id))))
-  (emotiq:note "end trace"))
+  (pr "end trace"))
     
 
 
@@ -1486,34 +1486,34 @@ of type TYPE."
 
 (defun dump-tx (tx &key out-only)
   (unless (eq (transaction-type tx) ':spend)
-    (emotiq:note "  ~a Transaction" (transaction-type tx)))
-  (emotiq:note "  TxID: ~a" (txid-string (transaction-id tx)))
+    (pr "  ~a Transaction" (transaction-type tx)))
+  (pr "  TxID: ~a" (txid-string (transaction-id tx)))
   (unless (or out-only
               (member (transaction-type tx)
                       '(:coinbase :collect))) ; no-input tx types
     (loop for tx-in in (transaction-inputs tx)
-          do (emotiq:note "    input outpoint: index = ~a/TxID = ~a"
+          do (pr "    input outpoint: index = ~a/TxID = ~a"
                      (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
-  (emotiq:note "    outputs:")
+  (pr "    outputs:")
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
-        do (emotiq:note "      [~d] amt = ~a (out to) addr = ~a"
+        do (pr "      [~d] amt = ~a (out to) addr = ~a"
                    i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
            (when block
-             (emotiq:note "Dump txs in block = ~s:" block)
+             (pr "Dump txs in block = ~s:" block)
              (do-transactions (tx block)
                (dump-tx tx)))
            (when mempool
-             (emotiq:note "Dump txs in mempool:")
+             (pr "Dump txs in mempool:")
              (loop for tx being each hash-value of cosi-simgen:*mempool*
                    do (dump-tx tx)))
            (when blockchain
-             (emotiq:note "Dump txs on blockchain:")
+             (pr "Dump txs on blockchain:")
              (do-blockchain (block)
-               (emotiq:note " Dump txs in block = ~s:" block)
+               (pr " Dump txs in block = ~s:" block)
                (do-transactions (tx block)
                  (dump-tx tx))))))
     (let ((cosi-simgen:*current-node*
@@ -1613,7 +1613,7 @@ of type TYPE."
               count-so-far)
         as time-through from 0
         initially
-           (emotiq:note "Awaiting ~d ~a txs."
+           (pr "Awaiting ~d ~a txs."
                    n                   
                    (if (spend-tx-types-p tx-types) 
                        "spend"
@@ -1667,7 +1667,7 @@ of type TYPE."
                      do (decf tx-count))
                (setq transactions (nreverse rev-txs))))
            ;; #+development (assert (= (length transactions) tx-count))
-           (emotiq:note "~D Transactions for new block" tx-count)
+           (pr "~D Transactions for new block" tx-count)
            ;; Now, compute the fees, and add a collect transaction,
            ;; which must precede all the other transactions.
            (let* ((total-fee
@@ -1790,7 +1790,7 @@ of type TYPE."
         count (remove-transaction-from-mempool transaction mempool)
           into n-removed
         finally
-           (emotiq:note "Removed ~d transaction~p from mempool."
+           (pr "Removed ~d transaction~p from mempool."
                    n-removed n-removed)
            (cosi/proofs/newtx:dump-txs :mempool t)))
 

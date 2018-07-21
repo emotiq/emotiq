@@ -557,25 +557,25 @@ the cosi-simgen implementation of the simulator."
 (defun kill-beacon ()
   (emotiq/elections:kill-beacon))
 
-(defun nodes ()
-  "Return a list of all nodes under simulation"
-  (alexandria:hash-table-values cosi-simgen:*ip-node-tbl*))
-
 ;; ----------------------------------------------------------------
 ;; These disappear once Gossip is installed...
 ;; 
 
 (defun phony-up-nodes ()
-  (maphash (lambda (k node)
-             (declare (ignore k))
-             (setf (cosi-simgen:node-stake node) (random 100000)))
-           cosi-simgen:*ip-node-tbl*))
+  (cosi-simgen:set-nodes
+   (um:accum acc
+     (maphash (lambda (k node)
+                (declare (ignore k))
+                (let ((pkey  (cosi-simgen:node-pkey node))
+                      (stake (random 100000)))
+                  (setf (cosi-simgen:node-stake node) stake)
+                  (ac:pr (list pkey stake))
+                  (acc (list pkey stake))))
+              cosi-simgen:*ip-node-tbl*))))
 
 (defun keys-and-stakes ()
   "Return a list of lists of public key and stake for nodes"
-  (mapcar (lambda (node)
-            (list (cosi-simgen:node-pkey node) (cosi-simgen:node-stake node)))
-          (nodes)))
+  (cosi-simgen:get-witness-list))
 
 ;; END? of "those which disappear once Gossip in installed…"
 ;; ----------------------------------------------------------------
