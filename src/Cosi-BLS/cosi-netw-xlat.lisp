@@ -185,6 +185,7 @@ THE SOFTWARE.
               (pbc:make-key-pair (list :port-authority (uuid:make-v1-uuid))))))
     hmac-keypair)
   (defmethod socket-send (ip port dest msg)
+    (declare (ignore ip port))
     (let* ((payload (make-hmac (list* dest msg)
                                (pbc:keying-triple-pkey (hmac-keypair))
                                (pbc:keying-triple-skey (hmac-keypair))))
