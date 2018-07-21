@@ -43,7 +43,7 @@ THE SOFTWARE.
 (defvar *cosi-commit-timeout* 10
   "Timeout in seconds that the leader waits during commit phase for sealing a block.")
 
-(defvar *cosi-max-wait-period* 120
+(defvar *cosi-max-wait-period* 30
   "Timeout in seconds that represents the longest witness idle period before setting up an emergency call-for-new-election.")
   
 ;; -------------------------------------------------------
