@@ -368,7 +368,7 @@ based on their relative stake"
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (emotiq:note "Got call for new election")
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (> (length *election-calls*)
+             (>= (length *election-calls*)
                 (bft-threshold (get-witness-list))))
     (run-special-election)))
 
