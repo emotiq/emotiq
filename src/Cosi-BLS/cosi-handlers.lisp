@@ -1036,24 +1036,25 @@ check that each TXIN and TXOUT is mathematically sound."
                   :timeout         timeout)
     (recv
       ((list :signed seq sig bits)
-       (cond
-        ((eql seq sess)
-         (emotiq:note "Made it back from signing")
-         (if (check-hash-multisig hash sig bits blk)
-             ;; we completed successfully
-             (progn
-               (emotiq:note "Forwarding multisig to leader")
-               (reply reply-to
-                      (list :signature sig bits)))
-           ;; bad signature
-           (reply reply-to :corrupt-cosi-network)
-           ))
-        ;; ------------------------------------
-        (t ;; seq mismatch
-           ;; must have been a late arrival
-           (emotiq:note "late-arrival")
-           (retry-recv))
-        )) ;; end of message pattern
+       (with-current-node node
+         (cond
+          ((eql seq sess)
+           (emotiq:note "Made it back from signing")
+           (if (check-hash-multisig hash sig bits blk)
+               ;; we completed successfully
+               (progn
+                 (emotiq:note "Forwarding multisig to leader")
+                 (reply reply-to
+                        (list :signature sig bits)))
+             ;; bad signature
+             (reply reply-to :corrupt-cosi-network)
+             ))
+          ;; ------------------------------------
+          (t ;; seq mismatch
+             ;; must have been a late arrival
+             (emotiq:note "late-arrival")
+             (retry-recv))
+          ))) ;; end of message pattern
       )))
 
 ;; ------------------------------------------------------------------------------------------------
@@ -1074,7 +1075,7 @@ check that each TXIN and TXOUT is mathematically sound."
                   :timeout   prepare-timeout)
     (emotiq:note "Waiting for Cosi prepare")
     (recv
-      ((list :answer :signature sig bits)
+      ((list :answer (list :signature sig bits))
        (emotiq:note "Made it back from Cosi validate")
        (with-current-node node
          (update-block-signature new-block sig bits)
@@ -1086,7 +1087,7 @@ check that each TXIN and TXOUT is mathematically sound."
                        :timeout   commit-timeout)
          (emotiq:note "Waiting for Cosi commit")
          (recv
-           ((list* :answer :signature _)
+           ((list :answer (list* :signature _))
             (emotiq:note "Made it back from Cosi commit with good signature")
             (send *dly-instr* :plt)
             (send (node-pkey node) :block-finished))
