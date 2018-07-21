@@ -789,7 +789,7 @@ check that each TXIN and TXOUT is mathematically sound."
                                   :consensus-stage consensus-stage
                                   :blk             blk
                                   :seq             seq-id
-                                  :timneout        timeout)
+                                  :timeout         timeout)
              (setf start (get-universal-time))
              
              (labels
