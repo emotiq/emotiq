@@ -197,7 +197,8 @@ THE SOFTWARE.
                )))
     (make-actor
      (lambda (&rest msg)
-      (um:dcase msg
+       (pr "Cosi MSG: ~A" msg)
+       (um:dcase msg
          (:actor-callback (aid &rest ans)
           (let ((actor (lookup-actor-for-aid aid)))
             (when actor
@@ -820,8 +821,8 @@ check that each TXIN and TXOUT is mathematically sound."
                         (=finish)
                       ;; else
                       (progn
-                      (adj-timeout)
-                      (retry-recv)))))
+                        (adj-timeout)
+                        (retry-recv)))))
                  
                  (msg
                   (pr "Gossip-wait got unknown message: ~A" msg)
