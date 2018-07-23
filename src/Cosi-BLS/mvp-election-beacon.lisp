@@ -86,6 +86,7 @@ THE SOFTWARE.
   t)
 
 (defmethod tree-node-p (x)
+  (declare (ignore x))
   nil)
 
 (defmethod node-stake ((node tree-node))

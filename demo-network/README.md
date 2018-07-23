@@ -52,6 +52,23 @@ To use supplied Python scripts to communcate with node using WebSockets API, als
   sudo pip3 install -U -r requirements.txt
   ```
 
+## (Optional) Install `tmux-logging` tmux plugin to save tmux session logs to files
+
+Use following `bash` commands to install `tmux-logging` plugin:
+```bash
+mkdir -p ~/.tmux/plugins
+git clone https://github.com/tmux-plugins/tmux-logging ~/.tmux/plugins/tmux-logging
+```
+Add lines:
+```
+set -g history-limit 50000
+run-shell ~/.tmux/plugins/tmux-logging/logging.tmux
+```
+On `macOS` its also recommended to install `ansifilter` utility:
+```bash
+brew install ansifilter
+```
+
 ## Running blockchain
 
 ### Setup configuration files for the nodes
@@ -82,4 +99,23 @@ tmux a -t node1   # for Node 1
 ### Stop all nodes
 ```bash
 ./stop-blockchain.bash
+```
+
+### Toggle `tmux` session logging for a node
+```bash
+./toggle_logging.bash <node_id>
+```
+Example for `node1`:
+```bash
+./toggle_logging.bash 1
+```
+Run the same command to stop logging.
+
+### Save session history for a node:
+```bash
+./save-history.bash <node_id>
+```
+Example for `node1`:
+```bash
+./save-history.bash 1
 ```

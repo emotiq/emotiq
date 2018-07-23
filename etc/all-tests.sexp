@@ -3,5 +3,6 @@
  :crypto-pairings-test
  :emotiq-config-test
  :cosi-bls-test
+ :emotiq-wallet
  :emotiq-sim-test)
  
