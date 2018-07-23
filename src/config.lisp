@@ -31,3 +31,12 @@
     (if key
         (alexandria:assoc-value c key)
         c)))
+
+(defun make-keying-triple (pkey-bigint skey-bigint &optional signature)
+  (let* ((pkey (pbc:public-key pkey-bigint))
+         (skey (pbc:secret-key skey-bigint)))
+    (make-instance 'pbc:keying-triple
+                   :pkey pkey
+                   :skey skey
+                   :sig (or signature (pbc:sign-hash (hash:hash/256 pkey) skey)))))
+

@@ -111,7 +111,7 @@
       (:init
        #+OPENMCL
        (if (find-package :gui) ; CCL IDE is running
-           (setf emotiq:*notestream* nil) ; just use gossip::*log* in this case
+           (when (eql *error-output* emotiq:*notestream*) (setf emotiq:*notestream* nil)) ; just use gossip::*log* in this case
            ; (setf emotiq:*notestream* (hemlock-ext:top-listener-output-stream)) ; another possibility
            (setf emotiq:*notestream* *error-output*))
        ;; In the OpenMCL IDE, outputs to *standard-output* and *error-output* go to a separate listener for the
