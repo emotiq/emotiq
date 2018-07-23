@@ -69,7 +69,7 @@
                quri
                lisp-object-encoder
                cosi-bls)
-  :in-order-to ((test-op (test-op "wallet-tests")))
+  :in-order-to ((test-op (test-op "wallet-test")))
   :components ((:module source
                 :pathname "wallet/"
                 :serial t
