@@ -27,11 +27,13 @@ To run the network, following tools have to be installed:
 * rlwrap
 * netcat
 
+`macOS` also needs `coreutils` to be installed
+
 They can be installed using following shell commands:
 
 * **macOS**
   ```bash
-  brew install tmux rlwrap netcat
+  brew install tmux rlwrap netcat coreutils
   ```
 * **Linux**
   ```bash
@@ -68,6 +70,8 @@ On `macOS` its also recommended to install `ansifilter` utility:
 ```bash
 brew install ansifilter
 ```
+
+`tmux-logging` plugin places logs in $HOME directory.
 
 ## Running blockchain
 
