@@ -64,6 +64,10 @@ Add lines:
 set -g history-limit 50000
 run-shell ~/.tmux/plugins/tmux-logging/logging.tmux
 ```
+On `macOS` its also recommended to install `ansifilter` utility:
+```bash
+brew install ansifilter
+```
 
 ## Running blockchain
 
