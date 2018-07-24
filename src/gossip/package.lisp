@@ -40,6 +40,7 @@
    #:visualize-nodes
    #:uid
    #:gossip-init
+   #:lookup-node
 
    ; API
    #:locate-local-uid-for-graph
