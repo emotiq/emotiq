@@ -83,16 +83,8 @@ THE SOFTWARE.
 
 (defmethod gossip-send (pkey aid msg)
   ;; stub code to do direct UDP until we plug in actual Gossip code...
-  (cond (*use-real-gossip*
-         (gossip:singlecast msg (int pkey)
-                            :graphID :uber))
-
-        (t
-         (multiple-value-bind (ip port)
-             (translate-pkey-to-ip-port pkey)
-           (let ((dest (or aid pkey)))
-             (socket-send ip port dest msg))))
-        ))
+  (gossip:singlecast msg (int pkey)
+                     :graphID :uber))
 
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
   (if (int= pkey (node-pkey *my-node*))

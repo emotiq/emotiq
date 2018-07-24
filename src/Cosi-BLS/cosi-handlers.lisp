@@ -722,16 +722,9 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun gossip-neighborcast (my-node &rest msg)
   "Gossip-neighborcast - send message to all witness nodes."
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :style :neighborcast
-                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
-
-        (t
-         (loop for node across *node-bit-tbl* do
-               (unless (eql node my-node)
-                 (apply 'send (node-pkey node) msg))))
-        ))
+  (gossip:broadcast msg
+                    :style :neighborcast
+                    :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
 
 (defun broadcast+me (msg)
@@ -893,12 +886,10 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun call-for-punishment ()
   ;; a witness detected a problem with a block handed by the leader... hmmm...
   ;; for now, just call for new election
-  (when *use-real-gossip*
-    (call-for-new-election)))
+  (call-for-new-election))
 
 (defun done-with-duties ()
-  (when *use-real-gossip*
-    (setup-emergency-call-for-new-election)))
+  (setup-emergency-call-for-new-election))
   
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
