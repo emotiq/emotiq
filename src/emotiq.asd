@@ -25,7 +25,7 @@
                 :pathname "./"
                 :components ((:file "production")))))
 
-(defsystem "emotiq/utilities"  
+(defsystem "emotiq/utilities"
   :depends-on (emotiq/delivery
                ironclad
                bordeaux-threads)
@@ -84,10 +84,11 @@
                 :pathname "./"
                 :components ((:file "node")))))
 
-(defsystem "emotiq/sim"  ;; a simulated node
+(defsystem "emotiq/sim"  ;; a simulated network entirely within the local process
   :depends-on (emotiq/cli
                alexandria
 	       emotiq/tracker)
+  :in-order-to ((test-op (test-op "emotiq-sim-test")))
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
@@ -95,12 +96,14 @@
                              (:file "node-sim" :depends-on (election-sim))))))
 
 (defsystem "emotiq/tracker"
-  :depends-on (emotiq actors emotiq/logging cosi-bls)
+  :depends-on (emotiq
+               actors
+               emotiq/logging)
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "state-tracker")))))
-                                       
+
 (defsystem "emotiq/ate"
   :depends-on (emotiq emotiq/tracker emotiq/sim emotiq/startup gossip)
   :components ((:module source
@@ -119,10 +122,15 @@
   :components ((:module source
                 :pathname "./"
                 :serial t
-                :components ((:file "keys")
-                             (:file "stakes")
+                :components ((:file "stakes")
                              (:file "genesis")
                              (:file "config")))))
 
-
-
+(defsystem "emotiq/config/generate"
+  :depends-on (emotiq/config
+               cosi-bls)
+  :in-order-to ((test-op (test-op "emotiq-config-test")))
+  :components ((:module source
+                :pathname "./"
+                :serial t
+                :components ((:file "generate")))))

@@ -68,3 +68,9 @@
    (length string)
    :initial-contents string 
    :element-type 'character))
+
+
+(defun x11-display-p ()
+  "Whether the process is capable of being an X11 client"
+  (not (null (uiop:getenv "DISPLAY"))))
+

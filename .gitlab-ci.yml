@@ -3,11 +3,11 @@ variables:
   GITHUB_REPO: emotiq
   LWPRO: lwpro
   LWPRO_MACOS_64: lwpro
-  lisp: lisp-wrapper.sh
 # Add ASDF systems to test in <file:etc/all-tests.sexp>
 
 stages:
   - test
+  - test_chain
   - build_test
   - test_binary
   - build_release
@@ -16,14 +16,14 @@ stages:
 
 before_script:
   - export PATH="$HOME/bin:$PATH"
-  - ci/install-lisp.sh
-  - lisp-wrapper.sh -l etc/setup-emotiq-quicklisp.lisp
+  - ci/install-lisp.bash
+  - ci/lisp-wrapper.bash -l etc/setup-emotiq-quicklisp.lisp
 
 .test: &test_definition
   stage: test
   retry: 1
   script:
-    - ci/with-timeout.sh etc/test-harness.bash
+    - ci/with-timeout.bash ci/test-all-suites.bash
 
 test:linux:lispworks:
   <<: *test_definition
@@ -60,6 +60,7 @@ test:macos:ccl:
     - macos
   variables:
     LISP: ccl
+    lisp: ccl
 
 .test:macos:sbcl:
   <<: *test_definition
@@ -69,6 +70,38 @@ test:macos:ccl:
     LISP: sbcl
   allow_failure: true
 
+.test_chain: &test_chain_definition
+  stage: test_chain
+  script:
+    - ci/tests/test-chain.bash
+
+test_chain:linux:ccl:
+  <<: *test_chain_definition
+  tags:
+    - linux
+  variables:
+    LISP: ccl
+
+test_chain:linux:lispworks:
+  <<: *test_chain_definition
+  tags:
+    - linux
+  variables:
+    LISP: lispworks
+
+test_chain:macos:ccl:
+  <<: *test_chain_definition
+  tags:
+    - macos
+  variables:
+    LISP: ccl
+
+test_chain:macos:lispworks:
+  <<: *test_chain_definition
+  tags:
+    - macos
+  variables:
+    LISP: lispworks
 
 .build_release: &build_release_definition
   stage: build_release
@@ -112,7 +145,7 @@ release:
   only:
     - tags
   script:
-    - ci/publish.sh
+    - ci/publish.bash
 
 deploy:linux:
   <<: *deploy_definition

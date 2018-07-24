@@ -25,33 +25,28 @@
     (hunchensocket:send-text-message client json)))
 
 (defmethod hunchensocket:text-message-received ((resource wallet-server) client message)
-  (emotiq:note "~a connected to ~a:~&~t~a~&" client resource message)
-  (let ((request  (cl-json:decode-json-from-string message)))
-    (let ((method (alexandria:assoc-value request :method)))
+  (emotiq:note "~a on resource ~a received:~&~t~a~&" client resource message)
+  (let ((request (cl-json:decode-json-from-string message)))
+    (let ((method (alexandria:assoc-value request :method))
+          (id (alexandria:assoc-value request :id)))
       (unless method
         (emotiq:note "No method specified in message: ~a" message)
         (return-from hunchensocket:text-message-received nil))
-      (let ((response
-             (make-instance 'response
-                            :result nil
-                            :error nil
-                            :id (alexandria:assoc-value request :id))))
-        (with-slots (result error)
-            response
-          (cond
+      (let ((json-rpc::*json-rpc-version* json-rpc::+json-rpc-2.0+)
+            result error)
+        (cond
             ((string= method "subscribe")
            ;;; FIXME: locking under load
              (if (find "consensus" (alexandria:assoc-value request :params) :test 'string=)
-                   (add-client client response)
+                 (setf result 
+                       (add-client client))
                  ;; error
-                 (setf result nil
-                       error `(:object (:code . -32602)
+                 (setf error `(:object (:code . -32602)
                                        (:message . "No such subscription available.")
                                        (:data . nil)))))
             ((string= method "unsubscribe")
              (if (not (find client *consensus-clients*))
-                 (setf result nil
-                       error `(:object (:code . -32602)
+                 (setf error `(:object (:code . -32602)
                                        (:message . "No subscription has been registered.")
                                        (:data . nil)))
                  (progn
@@ -72,7 +67,7 @@
                (setf result
                      (emotiq/wallet:submit-transaction
                       transaction
-                      :name name
+                      :wallet-name name
                       :address address))))
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
@@ -83,7 +78,10 @@
                    error `(:object (:code . -32601)
                                    (:message . "No such method.")
                                    (:data . nil)))))
-          (send-as-json client response))))))
+        (let ((response (json-rpc::make-rpc-response :result result
+                                                         :error error
+                                                         :id id)))
+          (hunchensocket:send-text-message client response))))))
 
 (defvar *handlers* nil)
 
@@ -119,18 +117,4 @@
                (slot-value *acceptor* 'hunchentoot::address)
                (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
-
-(defclass json-rpc ()
-  ((jsonrpc
-    :initform "2.0")
-   (id :initarg :id
-       :initform nil)))
-   
-(defclass request (json-rpc)
-  ((method :initarg :method)
-   (params :initarg :params)))
-
-(defclass response (json-rpc)
-  ((result :initarg :result)
-   (error :initarg :error)))
 
