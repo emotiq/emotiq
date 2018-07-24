@@ -34,10 +34,6 @@ THE SOFTWARE.
 (defun get-witness-list ()
   (gossip:get-live-uids))
 
-(defun get-witnesses-sans-pkey (pkey)
-  (remove pkey (get-witness-list)
-          :test 'int=))
-
 (defun witness-p (pkey)
   (find pkey (get-witness-list)
         :test 'int=))

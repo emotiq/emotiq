@@ -716,7 +716,7 @@ check that each TXIN and TXOUT is mathematically sound."
       (setf *cosi-gossip-neighborhood-graph*
             (or :UBER ;; for now while debugging
                 (gossip:establish-broadcast-group
-                 (mapcar 'first (get-witness-list))
+                 (get-witness-list)
                  :graphID :cosi)))
       ))
 
@@ -1066,7 +1066,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
                                               *election-proof* *leader*
-                                              (map 'vector 'identity (get-witness-list))
+                                              (coerce (get-witness-list) 'vector)
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
