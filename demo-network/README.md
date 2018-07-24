@@ -95,6 +95,16 @@ One can attach to the node Lisp REPL using following command:
 tmux a -t node1   # for Node 1
 ```
 
+### (Experimental) Start blockchain with CCL IDE running 1st node
+```bash
+./start-blockchain-with-ide.bash
+```
+
+**ATTENTION** When buffer pops up, press `Command-Shift-E` to start node.
+CCL Cocoa IDE assumed to be named `Clozure CL64.app` (change )
+
+
+
 ### Run single WebSockets ping to each node
 ```bash
 ./ping-nodes.bash
