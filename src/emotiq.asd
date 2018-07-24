@@ -97,13 +97,17 @@
   :depends-on (emotiq/cli
                alexandria
 	       emotiq/tracker
-               emotiq/txn)  
+               emotiq/txn
+               cosi-bls
+               )  
   :in-order-to ((test-op (test-op "emotiq-sim-test")))
   :components ((:module source
                 :pathname "./"
                 :components ((:file "handler")
-                             (:file "election-sim")
-                             (:file "node-sim" :depends-on (election-sim))))))
+                             ;;;(:file "election-sim") ;obsolete
+                             ;;;(:file "node-sim" :depends-on (election-sim))
+                             (:file "node-sim")
+                             ))))
 
 (defsystem "emotiq/tracker"
   :depends-on (emotiq
