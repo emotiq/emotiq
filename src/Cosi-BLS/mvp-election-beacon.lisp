@@ -287,10 +287,13 @@ based on their relative stake"
 ;; ----------------------------------------------------------------
 ;; Startup Init Stuff...
 
+(defmethod node-dispatcher ((msg-sym (eql :startup-system)))
+  (setup-emergency-call-for-new-election))
+
 (defun startup-elections ()
   ;; call this from global init after all housekeeping
-  (with-current-node *my-node*
-    (setup-emergency-call-for-new-election)))
+  (gossip:broadcast :startup-system
+                    :graphID :UBER))
 
 (defmethod gossip:make-node ((kind (eql :cosi)) &key pkey skey)
   (setf *my-node* (make-instance 'node
