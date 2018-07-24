@@ -128,10 +128,6 @@ THE SOFTWARE.
                
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (emotiq/tracker:track :reset)
-  (reset-nodes))
-
-(defmethod node-dispatcher ((msg-sym (eql :reset-from-on-high)) &key)
-  (emotiq/tracker:track :reset-from-on-high)
   (reset-from-on-high))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
@@ -626,9 +622,6 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; debug init
 
 (defun reset-system ()
-  (send-real-nodes :reset))
-
-(defun reset-nodes ()
   (gossip:broadcast :reset-from-on-high
                     :graphID :UBER)
   (reset-from-on-high))
@@ -652,10 +645,6 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun group-subs (node)
   (um:accum acc
     (iter-subs node #'acc)))
-
-(defun send-real-nodes (&rest msg)
-  (loop for ip in *real-nodes* do
-        (apply 'send (node-pkey (gethash ip *ip-node-tbl*)) msg)))
 
 (defmethod short-id ((node node))
   (short-id (node-pkey node)))

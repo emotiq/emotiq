@@ -31,8 +31,6 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------------------
 ;; list of (pubkey stake) associations for all witness nodes
 
-(defvar *all-nodes*  nil) 
-
 (defun set-nodes (node-list)
   "NODE-LIST is a list of (public-key stake-amount) pairs"
   (ac:pr (format nil "election set-nodes ~A" node-list))
@@ -44,28 +42,14 @@ THE SOFTWARE.
                             node-list)))
 
 (defun get-witness-list ()
-  (cond (*use-real-gossip*
-         *all-nodes*)
-        (t
-         ;; other sim
-         (or *all-nodes*
-             (setf *all-nodes*
-                   (um:accum acc
-                     (maphash (lambda (k node)
-                                (declare (ignore k))
-                                (acc (list (node-pkey node)
-                                           (node-stake node))))
-                              *ip-node-tbl*)))))
-        ))
+  (gossip:get-live-uids))
 
 (defun get-witnesses-sans-pkey (pkey)
   (remove pkey (get-witness-list)
-          :key  'first
           :test 'int=))
 
 (defun witness-p (pkey)
   (find pkey (get-witness-list)
-        :key  'first
         :test 'int=))
 
 ;; ---------------------------------------------------------------------------------------

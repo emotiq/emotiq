@@ -34,26 +34,6 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("localhost"    . "127.0.0.1")))
-#|
-(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
-                         ("Malachite.local" . "10.0.1.6")
-                         ("Dachshund.local" . "10.0.1.3")
-                         ("Rambo"           . "10.0.1.13")
-                         ("ChromeKote.local" . "10.0.1.36")))
-|#
-(defun get-local-ipv4 (node-name)
-  (cdr (assoc node-name *local-nodes*
-              :test 'string-equal)))
-  
-(defun get-my-ipv4 ()
-  (get-local-ipv4 (machine-instance)))
-
-(defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "localhost"))
-;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
-
-(defvar *top-node*   nil) ;; current leader node
 (defvar *my-node*    nil) ;; which node my machine is on
 
 ;; default-timeout-period needs to be made smarter, based on node height in tree
@@ -74,9 +54,7 @@ THE SOFTWARE.
               :initial-element nil))
 
 (defclass node (gossip:gossip-node)
-  ((ip       :accessor node-ip       ;; IPv4 string for this node
-             :initarg  :ip)
-   (pkeyzkp  :accessor node-pkeyzkp  ;; public key + ZKP
+  ((pkeyzkp  :accessor node-pkeyzkp  ;; public key + ZKP
              :initarg  :pkeyzkp)
    (skey     :accessor node-skey     ;; private key
              :initarg  :skey)
@@ -143,9 +121,6 @@ THE SOFTWARE.
 (defmethod node-bitmap ((node node))
   (ash 1 (node-bit node)))
 
-(defmethod node-realnode ((node node))
-  (string-equal (node-ip node) (node-real-ip node)))
-
 (defmethod iteri-subs ((node node) fn)
   (loop for sub across (node-subs node)
         for ix from 0
@@ -163,36 +138,7 @@ THE SOFTWARE.
                   when sub
                   sum  (node-load sub)))))
 
-;; --------------------------------------------------------------------
-;; For now, 3 different ways to specify a node:
-;;   1. node structure pointer
-;;   2. IPv4 address (in dotted string notation)
-;;   3. PKEY (compressed public key ECC point)
-
-;; XREF from IPv4 address to Tree Node
-(defvar *ip-node-tbl*   (make-hash-table :test 'equal)) ;; IPv4 string as key
-(defvar *pkey-node-tbl* (make-hash-table))              ;; compressed ECC pt integer as key
-
-(defvar *pkey-skey-tbl* (make-hash-table))              ;; commpressed ECC pt integer as key
-
 ;; -------------------------------------------------------------------
-
-(defvar *comm-ip*  nil) ;; internal use only
-
-(defun make-cosi-tree-node (ipstr pkeyzkp parent)
-  (let* ((cmpr-pkey (first pkeyzkp))
-         (pval      (keyval cmpr-pkey))
-         (node (gossip:make-node :cosi
-                              :skey    (gethash pval *pkey-skey-tbl*)
-                              :pkey    cmpr-pkey
-                              )))
-    (setf (node-ip node) ipstr
-          (node-pkeyzkp node) pkeyzkp
-          (node-parent node) parent
-          (node-real-ip node) *comm-ip*)
-
-    (setf (gethash ipstr *ip-node-tbl*)   node
-          (gethash pval  *pkey-node-tbl*) node)))
 
 (defun need-to-specify (&rest args)
   (declare (ignore args))
@@ -213,65 +159,8 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------------
 
-(defun check-pkey (zkp)
-  ;; verify pkey zkp, return decompressed pkey ECC point
-  (destructuring-bind (pkey psig) zkp
-    (values pkey
-            (cosi-keying:validate-pkey pkey psig))))
-
-#+:ALLEGRO
-(defun allegro-dotted-to-integer (string)
-  (multiple-value-bind (start end starts ends)
-      (#~m/^([0-9]+).([0-9]+).([0-9]+).([0-9]+)$/ string)
-    (declare (ignore start end))
-    (reduce (lambda (ans pair)
-              (destructuring-bind (start . end) pair
-                (logior (ash ans 8)
-                        (parse-integer string :start start :end end))))
-            (nreverse (pairlis (coerce starts 'list)
-                               (coerce ends   'list)))
-            :initial-value 0)))
-
-#+:ALLEGRO
-(defun allegro-integer-to-dotted (val)
-  (let ((parts (um:nlet-tail iter ((n   4)
-                                   (pos 0)
-                                   (ans nil))
-                 (if (zerop n)
-                     ans
-                   (iter (1- n) (+ pos 8) (cons (ldb (byte 8 pos) val) ans)))
-                 )))
-    (format nil "~{~d~^.~}" parts)))
-
-(defun dotted-string-to-integer (string)
-  #+:LISPWORKS (comm:string-ip-address string)
-  #+:OPENMCL   (ccl::dotted-to-ipaddr string)
-  #+:ALLEGRO   (allegro-dotted-to-integer string)
-  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
-  (usocket:host-byte-order string))
-
-(defun integer-to-dotted-string (val)
-  #+:LISPWORKS (comm:ip-address-string val)
-  #+:OPENMCL (CCL::ipaddr-to-dotted val)
-  #+:ALLEGRO (allegro-integer-to-dotted val)
-  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
-  (usocket:hbo-to-dotted-quad val))
-
-(defun keyval (key)
-  (vec-repr:int key))
-
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
 
-(defun gen-node-id (ip)
-  (if (consp ip)
-      (values-list ip)
-    (with-accessors ((pkey  pbc:keying-triple-pkey)
-                     (psig  pbc:keying-triple-sig)
-                     (skey  pbc:keying-triple-skey))
-        (pbc:make-key-pair ip)
-      (setf (gethash (keyval pkey) *pkey-skey-tbl*) skey)
-      (values ip
-              (list pkey psig))
-      )))
+
 

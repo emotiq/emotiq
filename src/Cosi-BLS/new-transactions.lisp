@@ -1516,10 +1516,10 @@ of type TYPE."
                (pr " Dump txs in block = ~s:" block)
                (do-transactions (tx block)
                  (dump-tx tx))))))
-    (let ((cosi-simgen:*current-node*
-            (or node 
-                cosi-simgen:*current-node*
-                cosi-simgen:*top-node*)))
+    (cosi-simgen:with-current-node
+        (or node 
+            (cosi-simgen:current-node)
+            cosi-simgen:*my-node*)
       (if file
           (with-open-file (*standard-output*
                            file
@@ -1604,7 +1604,7 @@ of type TYPE."
         with cosi-simgen:*current-node*
           = (or node 
                 cosi-simgen:*current-node*
-                cosi-simgen:*top-node*)
+                cosi-simgen:*my-node*)
         as count                        ; see note!
           = (let ((count-so-far 0))
               (do-all-transactions (tx)
