@@ -199,15 +199,18 @@ based on their relative stake"
 
 ;; ---------------------------------------------------------------------------
 
+(defun make-signed-message (msg)
+  (append msg (list :sig (pbc:sign-hash msg (node-skey (current-node))))))
+
+;; ---------------------------------------------------------------------------
+
 (defun make-election-message-skeleton (pkey seed)
   `(:hold-an-election
        :n      ,seed
-       :beacon ,pkey
-       :sig))
+       :beacon ,pkey))
 
-(defun make-signed-election-message (pkey seed skey)
-  (let ((skel (make-election-message-skeleton pkey seed)))
-    (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
+(defun make-signed-election-message (pkey seed)
+  (make-signed-message (make-election-message-skeleton pkey seed)))
 
 (defun validate-election-message (n beacon sig)
   (and (or (and (null *beacon*)      ;; it would be nil at startup
@@ -218,10 +221,8 @@ based on their relative stake"
 
 (defun send-hold-election ()
   (with-election-reply (seed) :next
-    (with-accessors ((pkey  node-pkey)
-                     (skey  node-skey)) (current-node)
-      (broadcast+me (make-signed-election-message pkey seed skey)))
-    ))
+    (broadcast+me (make-signed-election-message (node-pkey (current-node))
+                                                seed))))
 
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
@@ -362,12 +363,10 @@ based on their relative stake"
 (Defun make-call-for-election-message-skeleton (pkey epoch)
   `(:call-for-new-election
     :pkey  ,pkey
-    :epoch ,epoch
-    :sig))
+    :epoch ,epoch))
 
-(defun make-signed-call-for-election-message (pkey epoch skey)
-  (let ((skel  (make-call-for-election-message-skeleton pkey epoch)))
-    (um:append1 skel (pbc:sign-hash (hash/256 skel) skey))))
+(defun make-signed-call-for-election-message (pkey epoch)
+  (make-signed-message (make-call-for-election-message-skeleton pkey epoch)))
 
 (defun validate-call-for-election-message (pkey epoch sig)
   (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?
@@ -379,12 +378,11 @@ based on their relative stake"
        (push pkey *election-calls*)))
   
 (defun call-for-new-election ()
-  (with-accessors ((pkey  node-pkey)
-                   (skey  node-skey)) (current-node)
+  (with-accessors ((pkey  node-pkey)) (current-node)
     (unless (find pkey *election-calls* ;; prevent repeated calls
                   :test 'int=)
       (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
-      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
+      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch*)
                         :graphID :UBER))))
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
