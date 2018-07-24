@@ -82,7 +82,7 @@ THE SOFTWARE.
       ;; else
       l)))
 
-(defun hold-election (nfrac &optional (nodes (get-witness-list)))
+(defun hold-election (nfrac &optional (nodes (emotiq/config:get-stakes)))
   "Given a fraction (0 < nfrac < 1) arrange all stakeholders into a
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
@@ -230,7 +230,9 @@ based on their relative stake"
       (update-election-seed pkey)
 
       (let* ((winner     (hold-election n))
-             (new-beacon (hold-election n (get-witnesses-sans-pkey winner))))
+             (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
+                                                  :key 'first
+                                                  :test 'int=))))
 
         (setf *leader*           winner
               *beacon*           new-beacon
