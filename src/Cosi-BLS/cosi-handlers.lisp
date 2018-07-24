@@ -130,6 +130,10 @@ THE SOFTWARE.
   (emotiq/tracker:track :reset)
   (reset-nodes))
 
+(defmethod node-dispatcher ((msg-sym (eql :reset-from-on-high)) &key)
+  (emotiq/tracker:track :reset-from-on-high)
+  (reset-from-on-high))
+
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
   (ac:pr args))
 
@@ -625,15 +629,19 @@ check that each TXIN and TXOUT is mathematically sound."
   (send-real-nodes :reset))
 
 (defun reset-nodes ()
-  (loop for node across *node-bit-tbl* do
-        (setf (node-bad        node) nil
-              (node-blockchain node) nil)
+  (gossip:broadcast :reset-from-on-high
+                    :graphID :UBER)
+  (reset-from-on-high))
 
-        (setf (node-current-leader node) (node-pkey *top-node*))
-        (clrhash (node-blockchain-tbl node))
-        (clrhash (node-mempool        node))
-        (clrhash (node-utxo-table     node))
-        ))
+(defun reset-from-on-high ()
+  (let ((node (current-node)))
+    (setf (node-bad        node) nil
+          (node-blockchain node) nil)
+    
+    (clrhash (node-blockchain-tbl node))
+    (clrhash (node-mempool        node))
+    (clrhash (node-utxo-table     node))
+    ))
 
 ;; -------------------------------------------------------------------
 
@@ -1114,5 +1122,4 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; -----------------------------------------------------------------
 
 (defun init-sim ()
-  (reconstruct-tree)
   (reset-system))

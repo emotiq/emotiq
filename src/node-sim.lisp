@@ -48,19 +48,16 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (setf actors::*maximum-age* 120)
   (when executive-threads
     (actors:set-executive-pool executive-threads))
-  (when (or new-configuration-p
-              (not (and (probe-file cosi-simgen:*default-data-file*)
-                        (probe-file cosi-simgen:*default-key-file*))))
-    (cosi-simgen:generate-tree :nodes nodes))
   (gossip:gossip-startup)
   (setf cosi-simgen:*cosi-prepare-timeout* cosi-prepare-timeout)
   (setf cosi-simgen:*cosi-commit-timeout* cosi-commit-timeout)
   (cosi-simgen:init-sim)
 
   ;; should this following code be executed every time or only when a new configuration is created?
-  (phony-up-nodes)
-  (emotiq/elections:set-nodes (keys-and-stakes))
+  ;; (phony-up-nodes)
+  ;; (emotiq/elections:set-nodes (keys-and-stakes))
   (emotiq/tracker:start-tracker)
+  (cosi-simgen:startup-elections)
   (if run-cli-p
       (emotiq/cli:main)
       ;;; FIXME:  return nil when initialization is not successful
