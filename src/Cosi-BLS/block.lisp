@@ -39,8 +39,7 @@
     :reader block-signature-bitmap
     :initform 0
     :documentation 
-    "Use methods ith-witness-signed-p and set-ith-witness-signed-p OR,
-     to access directly, supply a bitmap represented by an
+    "Supply a bitmap represented by an
      integer (potentially a bignum), where each position of the bitmap
      corresponds to a vector index, such that its state tells you
      whether that particular potential witness signed.")
@@ -395,21 +394,6 @@ added to the blockchain."
             collect (hash-256 a b)
               into row
             finally (return (compute-merkle-pairs row)))))
-
-
-
-(defmethod ith-witness-signed-p (block i)
-  "Return true or false (nil) according to whether the ith witness has signed."
-  (with-slots (signature-bitmap) block
-    (logbitp i signature-bitmap)))
-
-(defmethod set-ith-witness-signed-p (block i signed-p)
-  "Set signed-p to either true or false (nil) for witness at position i."
-  (with-slots (signature-bitmap) block
-    (setf signature-bitmap
-          (dpb (if signed-p 1 0)
-               (byte 1 i)
-               signature-bitmap))))
 
 
 
