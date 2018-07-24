@@ -40,8 +40,8 @@
           (mapc (lambda (pubkey)
                   (make-node ':gossip :uid pubkey))
                 pubkeys))
-      ;; clear log and start server
-      (run-gossip)
+      ;; keep existing log and start server
+      (run-gossip nil)
       t)))
 
 (defun ping-other-machines (&optional (hosts *hosts*))

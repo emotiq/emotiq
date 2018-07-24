@@ -2120,12 +2120,12 @@ gets sent back, and everything will be copacetic.
   ;  (although system-async messages never expect replies).
   (locally-receive-msg gossip-msg node srcuid))
 
-(defun run-gossip ()
+(defun run-gossip (&optional (archive-log t))
   "Archive the current log and clear it.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
-  (archive-log)
+  (when archive-log (archive-log))
   (sleep .5)
   (start-gossip-transport usocket:*wildcard-host* *nominal-gossip-port*)
   (maphash (lambda (uid node)
