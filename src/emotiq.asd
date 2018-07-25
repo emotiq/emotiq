@@ -93,22 +93,6 @@
                 :pathname "./"
                 :components ((:file "node")))))
 
-(defsystem "emotiq/sim"  ;; a simulated network entirely within the local process
-  :depends-on (emotiq/cli
-               alexandria
-	       emotiq/tracker
-               emotiq/txn
-               cosi-bls
-               )  
-  :in-order-to ((test-op (test-op "emotiq-sim-test")))
-  :components ((:module source
-                :pathname "./"
-                :components ((:file "handler")
-                             ;;;(:file "election-sim") ;obsolete
-                             ;;;(:file "node-sim" :depends-on (election-sim))
-                             (:file "node-sim")
-                             ))))
-
 (defsystem "emotiq/tracker"
   :depends-on (emotiq
                actors
@@ -117,13 +101,6 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "state-tracker")))))
-
-(defsystem "emotiq/ate"
-  :depends-on (emotiq emotiq/tracker emotiq/sim emotiq/startup gossip)
-  :components ((:module source
-                :pathname "./"
-                :serial t
-                :components ((:file "ate")))))
 
 (defsystem "emotiq/config"
   :depends-on (cl-json

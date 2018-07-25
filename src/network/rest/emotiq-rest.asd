@@ -1,9 +1,7 @@
 (defsystem "emotiq-rest"
   :depends-on (emotiq/logging
                emotiq/tracker
-               emotiq/sim
                emotiq/tracker
-               emotiq/sim
                model/wallet
                restas 
                cosi-bls
@@ -27,11 +25,9 @@
                         :depends-on (util)
                         :serial t 
                         :components  ((:file "api-0.0.1")
-                                      (:file "client-0.0.1")                               
-                                      (:file "dictionary-0.0.1")
+                                      (:file "client-0.0.1")                                                                   (:file "dictionary-0.0.1")
                                       (:file "wallet-0.0.1")
                                       (:file "node-0.0.1")
-                                      (:file "simulator-0.0.1")
                                       (:file "emotiq-0.0.1")))))
 
 (defsystem "emotiq-rest/config"
