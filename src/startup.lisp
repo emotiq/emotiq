@@ -25,7 +25,6 @@
 
 ;; "Entry Point" for development - does nothing, just load and go
 (defun main (&key config-subpath how-started-message?)
-  (setf cosi-simgen::*use-real-gossip* t) ;; make sure code knows 
   (when config-subpath
     (setf emotiq/fs:*subpath* config-subpath))
   (message-running-state how-started-message?)

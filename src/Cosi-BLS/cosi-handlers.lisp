@@ -30,7 +30,6 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------
 
 (defvar *use-gossip*      t)     ;; use Gossip graphs instead of Cosi Trees
-(defvar *use-real-gossip* t)     ;; set to T for real Gossip mode, NIL = simulation mode
 
 ;; ---------------------------------------------------------------
 
