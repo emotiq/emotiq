@@ -177,38 +177,7 @@ FIXME:
 
 
 
-(defparameter *message-to-sign*
-  "The quick brown fox jumps over the lazy dog")
 
-(define-test test-signing
-  (multiple-value-bind (private-key public-key bitcoin-address)
-      (keygen)
-    (declare (ignore bitcoin-address))
-    (let* ((message *message-to-sign*)
-           (signature (sign-message private-key message))
-           (verification (verify-signature public-key message signature)))
-      (assert-eql (length signature) 128)
-      (assert-true verification)
-
-      (setq signature 
-            (sign-message 
-             private-key 
-             (string-upcase message)
-             :start 3 :end 20))
-      (setq verification
-            (verify-signature
-             public-key
-             (string-upcase message)
-             signature
-             :start 3 :end 20))
-      (assert-eql (length signature) 128)
-      (assert-true verification)
-
-      (setq signature (sign-message private-key "Something"))
-      (setq verification
-            (verify-signature public-key "NotTheSame" signature))
-      (assert-eql (length signature) 128)
-      (assert-false verification))))
 
 
 
