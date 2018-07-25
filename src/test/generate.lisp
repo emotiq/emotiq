@@ -14,12 +14,9 @@
                                (emotiq/fs:tmp/))))
     (ensure-directories-exist root)
     (multiple-value-bind (directories configurations)
-        (emotiq/config:network/generate :nodes-dns-ip nodes :root root)
+        (emotiq/config/generate:network/generate :nodes-dns-ip nodes :root root)
       (loop
          :for c :in configurations
          :doing (assert-true
                  (probe-file
-                  (merge-pathnames (emotiq/config::generated-directory c) root)))))))
-
-
-
+                  (merge-pathnames (emotiq/config/generate::generated-directory c) root)))))))

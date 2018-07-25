@@ -5,7 +5,8 @@
   :license "MIT (see LICENSE.txt)"
   :depends-on (lisp-unit
                cosi-bls
-               emotiq/config)
+               emotiq/config
+               emotiq/config/generate)
   :perform (test-op (o s)
                     (symbol-call :lisp-unit :run-tests
                                  :all :emotiq-config-generate-test))
@@ -16,5 +17,3 @@
                 :depends-on (package)
                 :pathname "./"
                 :components ((:file "generate")))))
-
-
