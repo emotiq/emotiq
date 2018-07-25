@@ -182,6 +182,16 @@ THE SOFTWARE.
     (node-cosi-signing reply-to
                        consensus-stage blk seq timeout)))
 
+(defmethod node-dispatcher ((msg-sym (eql :leader-signing))
+                            &key reply-to consensus-stage blk seq timeout)
+  ;; witness nodes receive this message to participate in a multi-signing
+  ;;;
+  ;;; prophylactic so leader does not sign its own messages
+  ;;; TODO determine whether this is no necessary
+  (setf *had-work* t)
+  (node-cosi-signing reply-to
+                     consensus-stage blk seq timeout))
+
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
   (pr "Block committed to blockchain")
@@ -1029,7 +1039,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self (current-actor))
          (hash (hash/256 (signature-hash-message blk)))
          (sess (int hash)))
-    (ac:self-call :signing
+    (ac:self-call :leader-signing
                   :reply-to        self
                   :consensus-stage consensus-stage
                   :blk             blk
