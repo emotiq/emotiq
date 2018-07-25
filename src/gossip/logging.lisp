@@ -83,7 +83,7 @@
   "Syntactic sugar to play nicely with ac:pr. Note this is NOT an actor function, so don't call actor-only functions from it."
   (case cmd
     (:quit (ac:become 'ac::blind-print))
-    (t (apply 'default-logging-function :PR items))))
+    (t (apply 'default-logging-function items))))
 
 (defun default-logging-function (logcmd &rest args)
   "Default logger for nodes. Filters using the *log-filter* mechanism."
