@@ -82,13 +82,13 @@
   (let ((decoded (handler-case
                    ;; might not be a valid serialization
                    (funcall deserialize-fn)
-                   (error (e) (log-event :error "Invalid deserialization" e)
+                   (error (e) (edebug 1 :error "Invalid deserialization" e)
                           nil))))
     (when (and decoded
                (handler-case
                    ;; might not be a pbc:signed-message
                    (pbc:check-message decoded)
-                 (error (e) (log-event :error "Invalid signature" e)
+                 (error (e) (edebug 1 :error "Invalid signature" e)
                         nil)))
       (funcall body-fn (pbc:signed-message-msg decoded)))))
 
@@ -653,7 +653,7 @@ are in place between nodes.
     (unless (= 0 (real-uid node))
       (let ((oldnode (lookup-node (real-uid node))))
         (when oldnode
-          (log-event :WARN oldnode "being replaced by proxy" node)))
+          (edebug 1 :WARN oldnode "being replaced by proxy" node)))
       (set-uid node (real-uid node)))
     (memoize-node node)))
 
@@ -1006,17 +1006,6 @@ dropped on the floor.
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* uid))
 
-; Logcmd: Keyword that describes what a node has done with a given message UID
-; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
-(defmethod node-log ((node abstract-gossip-node) logcmd msg &rest args)
-  "Log a message-based event that occurred to a node."
-  (when (logfn node)
-    (apply (logfn node)
-           logcmd
-           node
-           msg
-           args)))
-
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler methods for bootstrapping messages
@@ -1041,7 +1030,7 @@ dropped on the floor.
                                     :gossip ; actor-verb
                                     srcuid  ; first arg of actor-msg
                                     msg))
-      (log-event :error error destuid msg :from srcuid))))
+      (edebug 1 :error error destuid msg :from srcuid))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -1183,7 +1172,7 @@ dropped on the floor.
            node logsym msg (kind msg) :from srcuid (args msg))
     (gossip-handler-case
      (funcall kindsym msg node srcuid)
-     (error (c) (node-log node :ERROR msg c)))))
+     (error (c) (edebug 1 node :ERROR msg c)))))
 
 (defmethod locally-receive-msg ((msg system-async) (node abstract-gossip-node) srcuid)
   (multiple-value-bind (kindsym failure-reason) (accept-msg? msg node srcuid)
@@ -1212,9 +1201,9 @@ dropped on the floor.
                         (when (and was-present?
                                    (debug-level 4))
                           ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
-                          (node-log node :STOP-WAITING msg srcuid))))
+                          (edebug 1 node :STOP-WAITING msg srcuid))))
                     ; weird. Shouldn't ever happen.
-                    (node-log node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
+                    (edebug 1 node :ERROR msg :from srcuid :ACTIVE-IGNORE-WRONG-TYPE)))
                (:already-seen ; potentially SEND an active ignore
                 (when (typep msg 'solicitation) ; following is extremely important. See note A below.
                   ; If we're ignoring a message from node X, make sure that we are not in fact
@@ -1226,7 +1215,7 @@ dropped on the floor.
                     (when (and was-present?
                                (debug-level 4))
                       ; Don't log a :STOP-WAITING message if we were never waiting for a reply from srcuid in the first place
-                      (node-log node :STOP-WAITING msg srcuid))
+                      (edebug 1 node :STOP-WAITING msg srcuid))
                     (unless (neighborcast? msg) ; not neighborcast means use active ignores. Neighborcast doesn't need them.
                       (send-active-ignore srcuid (uid node) (kind msg) soluid failure-reason)))))
                (t nil)))))))
@@ -1275,7 +1264,7 @@ dropped on the floor.
                       (edebug 3 node :DONE-WAITING-WIN msg))
                      (t ; note: Following log message doesn't necessarily mean anything is wrong.
                       ; If node is singly-connected to the graph, it's to be expected
-                      (node-log node :NO-TIMER-FOUND msg)))))
+                      (edebug 1 node :NO-TIMER-FOUND msg)))))
         (coalesce&reply (reply-to msg) node kind soluid)))))
 
 (defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
@@ -1296,13 +1285,13 @@ dropped on the floor.
   "Timeouts are a special kind of message in the gossip protocol,
   and they're typically sent by a special timer thread."
   (cond ((eq srcuid 'ac::*master-timer*)
-         ;;(node-log thisnode :timing-out msg :from srcuid (solicitation-uid msg))
+         ;;(edebug 1 thisnode :timing-out msg :from srcuid (solicitation-uid msg))
          (let* ((soluid (solicitation-uid msg))
                 (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
            (when timeout-handler
              (funcall timeout-handler t))))
         (t ; log an error and do nothing
-         (node-log thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
+         (edebug 1 thisnode :ERROR msg :from srcuid :INVALID-TIMEOUT-SOURCE))))
 
 (defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
   "Utility function. Can be called by message handlers.
@@ -1361,12 +1350,12 @@ dropped on the floor.
   "Default method"
   (or *ll-application-handler*
       (lambda (node msg)
-        (node-log node :LL-APPLICATION-HANDLER msg))))
+        (edebug 1 node :LL-APPLICATION-HANDLER msg))))
 
 (defmethod application-handler ((node abstract-gossip-node))
   "Default method"
   (lambda (&rest args)
-    (apply 'node-log node :APPLICATION-HANDLER args)))
+    (apply 'edebug 1 node :APPLICATION-HANDLER args)))
 
 (defun handoff-to-application-handlers (node msg highlevel-message-extractor)
   (let ((lowlevel-application-handler (lowlevel-application-handler node))
@@ -1374,12 +1363,12 @@ dropped on the floor.
     (when lowlevel-application-handler ; mostly for gossip's use, not the application programmer's
       (uiop:if-let (error (actor-send lowlevel-application-handler node msg))
         (if *gossip-absorb-errors*
-            (node-log node :ERROR error msg)
+            (edebug 1 node :ERROR error msg)
             (error error)))
       (when application-handler
         (uiop:if-let (error (apply 'actor-send application-handler (funcall highlevel-message-extractor msg)))
           (if *gossip-absorb-errors*
-              (node-log node :ERROR error msg)
+              (edebug 1 node :ERROR error msg)
               (error error)))))))
 
 ; I don't remember where the "k" in these names came from; I just needed a way to distinguish internal gossip
@@ -1546,14 +1535,14 @@ dropped on the floor.
                           (edebug 3 thisnode thisnode :WAITING msg downstream))
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
-                          (node-log thisnode :WAITING msg :ANONYMOUS)
+                          (edebug 1 thisnode :WAITING msg :ANONYMOUS)
                           (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
                     (setf timer (schedule-gossip-timeout (ceiling seconds-to-wait) (actor thisnode) soluid))
                     (kvs:relate-unique! (timers thisnode) soluid timer)
                     (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
-                    ;(node-log thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
+                    ;(edebug 1 thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
                     )
                    (t ; just forward the message since there won't be an :UPSTREAM reply
                     (forward msg thisnode downstream)
@@ -1672,7 +1661,7 @@ dropped on the floor.
           ;   somebody running the sim told it to.
           ((or (null where-to-send-reply)
                (eq t where-to-send-reply))
-           (node-log srcnode :NO-REPLY-DESTINATION! soluid data))
+           (edebug 1 srcnode :NO-REPLY-DESTINATION! soluid data))
           (t
            (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (actor-send where-to-send-reply reply)))))
@@ -1823,7 +1812,7 @@ gets sent back, and everything will be copacetic.
       (declare (ignore store))
       (cond ((zerop (hash-table-count interim-table))
              ; if this is the last reply, kill the whole table for this soluid and return true
-             ;; (node-log node :KILL-TABLE-1 nil)
+             ;; (edebug 1 node :KILL-TABLE-1 nil)
              (kvs:remove-key! (repliers-expected node) soluid)
              (values t was-present?))
             (t (values nil was-present?))))))
@@ -1888,12 +1877,12 @@ gets sent back, and everything will be copacetic.
                          (loop for reply being each hash-value of interim-table
                            while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    ;(node-log node :COALESCE interim-data local-data)
+    ;(edebug 1 node :COALESCE interim-data local-data)
     (let ((coalesced-output
            (reduce coalescer
                    interim-data
                    :initial-value local-data)))
-      ;(node-log node :COALESCED-OUTPUT coalesced-output)
+      ;(edebug 1 node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1909,7 +1898,7 @@ gets sent back, and everything will be copacetic.
                       (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
                         (if timeout-handler ; will be nil for messages that don't expect a reply
                             (funcall timeout-handler nil)
-                            ; (node-log thisnode :NO-TIMEOUT-HANDLER! soluid) ; this is not an error. Quit logging it.
+                            ; (edebug 1 thisnode :NO-TIMEOUT-HANDLER! soluid) ; this is not an error. Quit logging it.
                             )))
                      (t ; more repliers are expected
                       ; functionally coalesce all known data and send it upstream as another interim reply
@@ -2020,7 +2009,7 @@ gets sent back, and everything will be copacetic.
     message ; has already been deserialized at this point
     ;; Unpack envelope containing Gossip metadata.
     (destructuring-bind (destuid srcuid rem-address rem-port msg) packet ;; see Note G
-      (log-event "Gossip transport message received" rem-address rem-port)
+      (edebug 1 "Gossip transport message received" rem-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
       (when (typep msg 'solicitation) ; only make proxies for solicitations; never replies
         (let ((reply-to (reply-to msg))) ; and even then, only make proxies for solicitations that expect replies,
@@ -2038,11 +2027,11 @@ gets sent back, and everything will be copacetic.
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
-  (log-event :TRANSPORT "Transport connection to peer established" peer-address peer-port))
+  (edebug 1 :TRANSPORT "Transport connection to peer established" peer-address peer-port))
 
 (defun transport-peer-down (peer-address peer-port reason)
   "Callback for transport layer event."
-  (log-event :TRANSPORT "Transport connection to peer failed" peer-address peer-port reason))
+  (edebug 1 :TRANSPORT "Transport connection to peer failed" peer-address peer-port reason))
 
 (defun shutdown-gossip-server ()
   "Stop the Gossip Transport network endpoint (if currently running)."

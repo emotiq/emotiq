@@ -34,7 +34,7 @@
           (unless keypairs (badfile *keypairs-filename*))
           (setf hosts (read-pairs-database *hosts-db-path*))
           (unless hosts
-            (gossip::log-event :WARN (format nil "'~A' invalid or empty" *hosts-filename*)))
+            (edebug 1 :WARN (format nil "'~A' invalid or empty" *hosts-filename*)))
           (setf local-machine (read-local-machine-configuration *machine-db-path*))
           (unless local-machine (badfile *machine-filename*))
           (values keypairs hosts local-machine)))

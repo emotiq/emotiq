@@ -67,10 +67,10 @@
   The network connectivity test can be invoked via PING-OTHER-MACHINES
   with this list if desired."
   ; if we're given a root-path, use that instead of the global one
-  (emotiq:note "Starting gossip configuration for testnet…")
+  (edebug 1 "Starting gossip configuration for testnet…")
   (handler-bind 
       ((error (lambda (e)
-                (emotiq:note "Cannot configure local machine: ~a" e))))
+                (edebug 1 :WARN "Cannot configure local machine: ~a" e))))
     (when root-path 
       (gossip/config:initialize :root-path root-path))
     (gossip-init ':maybe)
@@ -86,14 +86,14 @@
                   when (not (and (= eripa-host-hbo host-hbo)
                                  (= *nominal-gossip-port* (second host-pair))))
                     collect host-pair))
-      (emotiq:note "Gossip init finished.")
+      (edebug 1 "Gossip init finished.")
       (if ping-others
           (handler-bind 
               ((error (lambda (e)
-                        (emotiq:note "Failed to run connectivity tests: ~a" e))))
+                        (edebug 1 :WARN "Failed to run connectivity tests: ~a" e))))
             (let ((other-machines (ping-other-machines hosts)))
               (unless other-machines
-                (emotiq:note "No other hosts to check for ping others routine."))
+                (edebug 1 :WARN "No other hosts to check for ping others routine."))
               other-machines))
           hosts))))
 
