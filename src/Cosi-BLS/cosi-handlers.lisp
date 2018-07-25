@@ -176,7 +176,7 @@ THE SOFTWARE.
   ;;;
   ;;; prophylactic so leader does not sign its own messages
   ;;; TODO determine whether this is no necessary
-  (unless (int= (current-node)
+  (unless (int= (gossip:uid (current-node))
                 *leader*)
     (setf *had-work* t)
     (node-cosi-signing reply-to
