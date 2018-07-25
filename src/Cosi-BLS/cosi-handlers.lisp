@@ -184,10 +184,7 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :leader-signing))
                             &key reply-to consensus-stage blk seq timeout)
-  ;; witness nodes receive this message to participate in a multi-signing
-  ;;;
-  ;;; prophylactic so leader does not sign its own messages
-  ;;; TODO determine whether this is no necessary
+  ;; Leader node receives this message to start a Cosi multi-signing
   (setf *had-work* t)
   (node-cosi-signing reply-to
                      consensus-stage blk seq timeout))
