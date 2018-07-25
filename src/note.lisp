@@ -14,8 +14,10 @@
 
 (defun %prefixed-note (prefix message-or-format &rest args)
   (when *notestream*
-    (let ((timestamped (concatenate 'string "~&" (timestring) prefix message-or-format)))
-      (apply #'format *notestream* timestamped args))))
+    (let ((timestamped (concatenate 'string "~%" (timestring) prefix message-or-format)))
+      ; following because some format control strings like ~& throw errors on
+      ;   some kinds of *notestream*, e.g. those created by #'make-log-window
+      (write-string (apply #'format nil timestamped args) *notestream*))))
 
 ;;; Do NOT call the following with leading or trailing newlines
 ;;;  in message-or-format. They will be added automatically.
@@ -29,7 +31,7 @@ a CL:FORMAT control string referencing the values contained in ARGS."
   ;; hook, even if Actors isn't loaded...
   ;; If Actors are loaded later, they will respect the hook
   (setf (get :actors :print-handler) (lambda (item)
-                                       (note "~A~&" item))))
+                                       (note "~A~%" item))))
 
 (defun em-warn (message-or-format &rest args)
   "Like note but this is for warnings."
