@@ -730,14 +730,9 @@ check that each TXIN and TXOUT is mathematically sound."
 
 
 (defun broadcast+me (msg)
-  (let ((my-pkey (node-pkey (current-node))))
-    ;; make sure our own Node gets the message too
-    (gossip:singlecast msg my-pkey
-                       :graphID nil) ;; force send to ourselves
-    ;; this really should go to everyone
-    (gossip:broadcast msg
-                      :startNodeID my-pkey ;; need this or else get an error sending to NIL destnode
-                      :graphID :UBER)))
+  "Always goes to all local real nodes automatically"
+  (gossip:broadcast msg
+                    :graphID :UBER))
 
 ;; -----------------------------------------------------------
 
