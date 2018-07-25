@@ -1652,31 +1652,32 @@ of type TYPE."
         count t into tx-count
         collect tx into transactions
         finally
-           ;; topologically sort transactions:
-           (setq transactions (sort transactions #'transaction-must-precede-p))
-           (when (and max (> max 0) (> tx-count max))
-             ;; Now, if necessary, it's safe to remove from
-             ;; back. Reverse the list, then remove from the back
-             ;; until down to max, then rereverse the list, leaving
-             ;; variable transactions shortened from the back. Note
-             ;; that the mempool is not altered (no transactions added
-             ;; or removed).
-             (let ((rev-txs (nreverse transactions)))
-               (loop do (pop rev-txs)
-                     while (> tx-count max)
-                     do (decf tx-count))
-               (setq transactions (nreverse rev-txs))))
-           ;; #+development (assert (= (length transactions) tx-count))
-           (pr "~D Transactions for new block" tx-count)
-           ;; Now, compute the fees, and add a collect transaction,
-           ;; which must precede all the other transactions.
-           (let* ((total-fee
-                    (loop for tx in transactions
-                          sum (compute-transaction-fee tx)))
-                  (collect-transaction
-                    (make-collect-transaction total-fee)))
-             (push collect-transaction transactions))
-           (return transactions)))
+        (when (> tx-count 0)
+          ;; topologically sort transactions:
+          (setq transactions (sort transactions #'transaction-must-precede-p))
+          (when (and max (> max 0) (> tx-count max))
+            ;; Now, if necessary, it's safe to remove from
+            ;; back. Reverse the list, then remove from the back
+            ;; until down to max, then rereverse the list, leaving
+            ;; variable transactions shortened from the back. Note
+            ;; that the mempool is not altered (no transactions added
+            ;; or removed).
+            (let ((rev-txs (nreverse transactions)))
+              (loop do (pop rev-txs)
+                    while (> tx-count max)
+                    do (decf tx-count))
+              (setq transactions (nreverse rev-txs))))
+          ;; #+development (assert (= (length transactions) tx-count))
+          (pr "~D Transactions for new block" tx-count)
+          ;; Now, compute the fees, and add a collect transaction,
+          ;; which must precede all the other transactions.
+          (let* ((total-fee
+                  (loop for tx in transactions
+                        sum (compute-transaction-fee tx)))
+                 (collect-transaction
+                  (make-collect-transaction total-fee)))
+            (push collect-transaction transactions))
+          (return transactions))))
 
 ;; Note: new transactions currently do not use UTXO database, only
 ;; mempool and blockchain.

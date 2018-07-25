@@ -529,20 +529,8 @@ topo-sorted partial order"
       )))
                
 (defun get-transactions-for-new-block ()
-  (when *newtx-p*
-    (return-from get-transactions-for-new-block
-      (cosi/proofs/newtx:get-transactions-for-new-block
-       :max *max-transactions*)))
-  (let ((tx-pairs (get-candidate-transactions)))
-    (pr "Trimming transactions")
-    (multiple-value-bind (hd tl)
-        (um:split *max-transactions* tx-pairs)
-      (dolist (tx tl)
-        ;; put these back in the pond for next round
-        (back-out-transaction tx))
-      ;; now hd represents the actual transactions going into the next block
-      (pr "~D Transactions" (length hd))
-      hd)))
+  (cosi/proofs/newtx:get-transactions-for-new-block
+   :max *max-transactions*))
       
 ;; ----------------------------------------------------------------------
 ;; Code run by Cosi block validators...
