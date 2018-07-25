@@ -58,6 +58,7 @@
 
 (defpackage gossip/config
   (:use #:cl)
+  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
   (:export
    #:generate-network
    #:generate-node
