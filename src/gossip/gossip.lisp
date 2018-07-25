@@ -627,11 +627,10 @@ are in place between nodes.
 
 (defmethod initialize-node ((node gossip-node) &key pkey skey)
   (declare (ignore skey)) ; methods specialized on other types of nodes use this. We don't.
-  (let* ((actor (make-gossip-actor node)))
-    (setf (actor node) actor)
-    (when pkey ; pkey, if given, takes precedence over automatically-generated UID
-      (set-uid node pkey))
-    (memoize-node node)))
+  (setf (actor node) (make-gossip-actor node))
+  (when pkey ; pkey, if given, takes precedence over automatically-generated UID
+    (set-uid node pkey))
+  (memoize-node node))
 
 (defmethod make-node ((kind (eql :gossip)) &rest rest &key pkey skey &allow-other-keys)
   (with-keywords-removed (rest (:pkey :skey))
