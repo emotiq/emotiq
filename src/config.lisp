@@ -6,8 +6,8 @@
                  :type "json"))
 
 (defun settings/read (&optional key)
-  (unless (probe-file *emotiq-conf*)
-    (emotiq:note "No configuration able to be read from '~a'" *emotiq-conf*)
+  (unless (probe-file (emotiq-conf))
+    (emotiq:note "No configuration able to be read from '~a'" (emotiq-conf))
     (return-from settings/read nil))
   ;;; TODO: do gossip/configuration sequence
   (let ((c (cl-json:decode-json-from-source (emotiq-conf))))
