@@ -170,11 +170,17 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
   (node-check-transaction trn))
 
-(defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
+(defmethod node-dispatcher ((msg-sym (eql :signing))
+                            &key reply-to consensus-stage blk seq timeout)
   ;; witness nodes receive this message to participate in a multi-signing
-  (setf *had-work* t)
-  (node-cosi-signing reply-to
-                     consensus-stage blk seq timeout))
+  ;;;
+  ;;; prophylactic so leader does not sign its own messages
+  ;;; TODO determine whether this is no necessary
+  (unless (int= (current-node)
+                *leader*)
+    (setf *had-work* t)
+    (node-cosi-signing reply-to
+                       consensus-stage blk seq timeout)))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
@@ -197,6 +203,7 @@ THE SOFTWARE.
                )))
     (make-actor
      (lambda (&rest msg)
+       ;;; Source of majority of messages on screen makes it fairly verbose
        (pr "Cosi MSG: ~A" msg)
        (um:dcase msg
          (:actor-callback (aid &rest ans)
