@@ -82,6 +82,7 @@ THE SOFTWARE.
   "Given a fraction (0 < nfrac < 1) arrange all stakeholders into a
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
+  (emotiq/tracker:track :election)
   (let* ((tree    (car (um:nlet-tail iter ((nodes nodes)) ;; tail recursive, scheme-like, named let
                          (if (= 1 (length nodes))
                              nodes
