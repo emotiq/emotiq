@@ -216,6 +216,23 @@ are in place between nodes.
   "Returns a list of UIDs representing real nodes known to be resident on other machines."
   (mapcar 'uid (local-nodes-matching 'proxy-node-p)))
 
+(defun node-in-hosts (node &optional (hosts *hosts*))
+  "Returns true if node is a proxy node that is represented in hosts"
+  (when (proxy-node-p node)
+    (with-slots (real-address real-port) node
+      (member-if (lambda (host)
+                   (print host)
+                   (and (usocket::ip= real-address (first host))
+                        (= real-port (second host))))
+                 hosts))))
+
+(defun missing-hosts ()
+  "Returns a list of members of *hosts* that are not represented in (local-real-uids)."
+  (let ((nodes (local-nodes-matching 'proxy-node-p)))
+    (setf nodes (remove-if (lambda (node)
+                             (node-in-hosts node))
+                           nodes))))
+
 (defun uber-set ()
   "Returns a complete list of UIDs of real nodes known on both this machine and other machines.
   Note that some members of the list may point to [permanent] proxies on this machine."
@@ -840,7 +857,7 @@ dropped on the floor.
 
 (defun actor-send (&rest args)
   "Error-safe version of ac:send. Returns nil if successful; otherwise returns error object"
-      (handler-case (progn (apply 'ac:send args)
+      (gossip-handler-case (progn (apply 'ac:send args)
                       nil)
         (error (e) e)))
 
