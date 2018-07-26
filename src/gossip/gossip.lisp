@@ -213,26 +213,13 @@ are in place between nodes.
   "Returns a list of UIDs representing real (non-proxy) nodes resident on this machine."
   (mapcar 'uid (local-real-nodes)))
 
+(defun remote-real-nodes ()
+  "Returns a list of permanent proxies that point at remote nodes"
+  (local-nodes-matching 'proxy-node-p))
+
 (defun remote-real-uids ()
   "Returns a list of UIDs representing real nodes known to be resident on other machines."
-  (mapcar 'uid (local-nodes-matching 'proxy-node-p)))
-
-(defun node-in-hosts (node &optional (hosts *hosts*))
-  "Returns true if node is a proxy node that is represented in hosts"
-  (when (proxy-node-p node)
-    (with-slots (real-address real-port) node
-      (member-if (lambda (host)
-                   (and (usocket::ip= real-address (first host))
-                        (= real-port (second host))))
-                 hosts))))
-
-(defun missing-hosts ()
-  "Returns a list of members of *hosts* that are not represented in (local-real-uids)."
-  (let ((nodes (local-nodes-matching 'proxy-node-p)))
-    (setf nodes (remove-if (lambda (node)
-                             (node-in-hosts node))
-                           nodes))))
-
+  (mapcar 'uid (remote-real-nodes)))
 (defun uber-set ()
   "Returns a complete list of UIDs of real nodes known on both this machine and other machines.
   Note that some members of the list may point to [permanent] proxies on this machine."
@@ -608,6 +595,48 @@ are in place between nodes.
 
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
+
+(defmethod node-matches-host? ((node proxy-gossip-node) (hostpair cons))
+  "Returns true if host of node matches hostpair."
+  (with-slots (real-address real-port) node
+    (and (usocket::ip= real-address (first hostpair))
+         (= real-port (second hostpair)))))
+
+(defmethod node-matches-host? (node host)
+  (declare (ignore node host))
+  nil)
+
+(defun node-in-hosts (node &optional (hosts *hosts*))
+  "Returns true if node is a proxy node that is represented in hosts,
+  where each host is a pair of (ipaddr port)."
+  (when (proxy-node-p node)
+    (member-if (lambda (hostpair)
+                 (node-matches-host? node hostpair))
+               hosts)))
+
+(defun host-in-nodes (hostpair &optional (nodes (remote-real-nodes)))
+  "Returns a list of members of *hosts* that are not represented in (remote-real-nodes)."
+  (member-if (lambda (node)
+               (node-matches-host? node hostpair))
+             nodes))
+
+(defun new-nodes (&optional (hosts *hosts*))
+  "Returns a list of members of (remote-real-nodes) whose hosts are not represented in *hosts*.
+   Such nodes are not errors; they merely represent nodes that said hello to us whose hosts were
+   not in our hosts.conf file."
+  (let ((nodes (remote-real-nodes)))
+    (remove-if (lambda (node)
+                 (node-in-hosts node hosts))
+               nodes)))
+
+(defun missing-hosts (&optional (hosts *hosts*))
+  "Returns a list of members of *hosts* that are not [yet] represented in (remote-real-nodes).
+  Such hosts are concerning; they indicate we have not yet heard from one or more hosts
+  that were listed in our hosts.conf file."
+  (remove-if (lambda (hostpair)
+               (host-in-nodes hostpair))
+             hosts))
+
 
 (defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
