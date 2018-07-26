@@ -164,7 +164,7 @@ THE SOFTWARE.
                (when (CAS (car (actor-busy self)) nil t)
                  ;; The Ready Queue just contains function closures to
                  ;; be dequeued and executed by the Executives.
-                 (mailbox-send *actor-ready-queue* (list #'run (get-universal-time)) ;; car is fn, cadr is timestamp
+                 (mailbox-send *actor-ready-queue* (cons #'run (get-universal-time)) ;; car is fn, cdr is timestamp
                                :prio (actor-priority self))
                  (unless *executive-processes*
                    (ensure-executives))))
@@ -684,7 +684,7 @@ THE SOFTWARE.
                          (make-prio-mailbox))))
     ;; nudge any Executives waiting on the queue to move over to the
     ;; new one.
-    (let ((entry (list 'do-nothing (get-universal-time)))) ;; car is fn, cadr is timestamp
+    (let ((entry (cons 'do-nothing (get-universal-time)))) ;; car is fn, cadr is timestamp
       (mapc (lambda (proc)
               (declare (ignore proc))
               (mailbox-send old-mb entry))
@@ -715,7 +715,7 @@ THE SOFTWARE.
      
      (check-sufficient-execs ()
        (um:when-let (entry (mailbox-peek *actor-ready-queue*)) ;; anything waiting to run?
-         (let ((age  (- (get-universal-time) (cadr entry))))   ;; cadr entry is timestamp
+         (let ((age  (- (get-universal-time) (cdr entry))))   ;; cadr entry is timestamp
            (unless (< age *maximum-age*)
              ;; -------------------------------------------
              ;;
