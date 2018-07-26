@@ -126,3 +126,13 @@
                 :pathname "./"
                 :serial t
                 :components ((:file "generate")))))
+
+(defsystem "emotiq/app"
+  :depends-on (gossip
+               emotiq
+               emotiq/txn
+               cosi-bls)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "app")))))
+

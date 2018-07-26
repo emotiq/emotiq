@@ -145,3 +145,17 @@
    #:stakes/generate
    #:network/generate
    #:ensure-defaults))
+
+(defpackage emotiq/app
+  (:use #:cl)
+  (:export
+   #:account
+   #:make-account
+   #:wait-for-node-startup
+   #:publish-transaction
+   #:send-all-genesis-coin-to
+   #:spend
+   #:get-transactions
+   #:get-balance))
+
+

@@ -27,9 +27,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass account ()
-  (skey :accesor account-skey)  
-  (pkey :accesor account-pkey)  
-  (triple :accesor account-triple))
+  ((skey :accessor account-skey)  
+   (pkey :accessor account-pkey)  
+   (triple :accessor account-triple)))
 
 (defun make-account (name)
   "return an account class"
@@ -44,14 +44,14 @@
   ;; currently - nothing - don't care
   )
 
-(defmethod publish-transaction ((txn cosi/proofs/newtx:transaction))
+(defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
   (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber))
 
 (defparameter *max-amount* 1000000000000) ;; all emtq coin
 
 (defmethod send-all-genesis-coin-to ((dest account))
   "all coins are assigned to the first node in the config files - move those coins to an account used by this app"
-  (multiple-value-bind (genesis-pkey gensis-skey)
+  (multiple-value-bind (genesis-pkey genesis-skey)
       (emotiq/config:settings/read :address-for-coins)
     (let ((txn (emotiq/txn:make-spend-transaction (account-triple from)
                                                   (emotiq/txn:address (account-triple to))
@@ -60,14 +60,14 @@
 
 (defmethod spend ((from account) (to account) amount fee)
   "make a transaction and publish it"
-  (let ((txn (emotiq/txn:make-spend-transaction from (emotiq/txn:address (accont-pkey to)) amount :fee fee)))
+  (let ((txn (emotiq/txn:make-spend-transaction from (emotiq/txn:address (account-pkey to)) amount :fee fee)))
     (publish-transaction txn)))
 
 (defmethod get-transactions ((a account))
   "return multiple value - (a) list of transactions that were inputs to this account and (b) list of transactions that this account was output to"
   (let ((input-txns nil)
         (outputs-to nil))
-    
+    :finish-me!))
 
 (defmacro with-current-node (&rest body)
   `(cosi-simgen:with-current-node (cosi-simgen:current-node)
@@ -83,15 +83,16 @@
 
 (defun this-tx-ouputs-to (tx)
   "return list of txns which use the given tx as input"
-  (loop for tx-out in (transaction-outputs tx)
+  (loop for tx-out in (cosi/proofs/newtx::transaction-outputs tx)
         collect tx-out into result
         finally (return result)))
 
 (defun this-tx-inputs-from (tx)
   "return list of txns which this tx uses as inputs"
-  (loop for tx-in i (transaction-inputs tx)
-        collect tx-in into result
-        finally (return result)))
+  (loop
+     :for tx-in :in (cosi/proofs/newtx::transaction-inputs tx)
+     :collecting tx-in :into result
+     :finally (return result)))
 
 ;;; stolen from MHD new-transactions.lisp
 
