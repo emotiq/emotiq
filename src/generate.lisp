@@ -99,7 +99,7 @@ Returns the enumeration of lists of public keys and staked amounts."
          (copy-alist +default-configuration+)))
     (loop
        :for (key . value) :in (alexandria:plist-alist node)
-       :doing (push (cons key value) configuration))
+       :doing (setf (alexandria:assoc-value configuration key) value))
     (when address-for-coins
       (push (cons :address-for-coins
                   address-for-coins)
