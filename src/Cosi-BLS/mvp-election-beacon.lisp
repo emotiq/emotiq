@@ -324,6 +324,7 @@ based on their relative stake"
        (push pkey *election-calls*)))
   
 (defun call-for-new-election ()
+  (pr "Node ~A Calling for New Election" (short-id (current-node)))
   (with-accessors ((pkey  node-pkey)) (current-node)
     (unless (find pkey *election-calls* ;; prevent repeated calls
                   :test 'int=)
