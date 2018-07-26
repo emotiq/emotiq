@@ -41,6 +41,7 @@
    #:uid
    #:gossip-init
    #:lookup-node
+   #:ensure-pinger-daemon
 
    ; API
    #:locate-local-uid-for-graph

@@ -44,11 +44,29 @@
       (run-gossip nil)
       t)))
 
+(defun ensure-pinger-daemon ()
+  "Ensure the existence of a background daemon that pings other machines until we're
+  convinced we're connected to the outside world."
+  (unless (find-process "Pinger")
+    (mpcompat:process-run-function "Pinger"
+      nil
+      (lambda ()
+        (let ((interval (+ 20 (random 40)))) ; minimum 20 seconds; maximum 60
+          (loop
+            (unless (> (length (remote-real-uids))
+                       ; sqrt is just a heuristic about whether we're connected to the outside world.
+                       ;  Needs to be more sophisticated if *hosts* can vary over time,
+                       ;   and if we begin to cause (remote-real-uids) to decrease over time
+                       ;   when nodes disappear.
+                       (sqrt (length *hosts*)))
+              (ping-other-machines))
+            (sleep interval)))))))
+
 (defun ping-other-machines (&optional (hosts *hosts*))
   "Find what other machines are alive.
    Returns a list of augmented-data or exception monads about live UIDs on other machines.
    You can map unwrap on these things to get at the real data.
-   Stashes result along with time of acquisition at *live-uids*>"
+   Result can be queried by using #'remote-real-uids."
   (when hosts
     (multiple-list-uids hosts)))
 
