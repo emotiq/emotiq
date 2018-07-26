@@ -22,7 +22,8 @@
         that are not expected to be globally-unique.")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-(defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
+; (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
+(defparameter *direct-reply-max-seconds-to-wait* 100 "Max second to wait for direct replies")
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
 (defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
@@ -1955,7 +1956,7 @@ gets sent back, and everything will be copacetic.
                       (or (usocket:ip= real-address (eripa))
                           (usocket:ip= real-address #(127 0 0 1))
                           (usocket:ip= real-address "localhost")))
-                 (edebug 1 :ERROR "Incoming IP address and port match those of this process. Remote machine may be misconfigured."
+                 (edebug 1 :ERROR "Proxy IP address and port match those of this process. Shouldn't happen."
                          real-address real-port)
                  (setf proxy (make-proxy-node mode
                                               :real-address real-address
