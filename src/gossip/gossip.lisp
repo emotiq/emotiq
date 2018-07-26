@@ -221,7 +221,6 @@ are in place between nodes.
   (when (proxy-node-p node)
     (with-slots (real-address real-port) node
       (member-if (lambda (host)
-                   (print host)
                    (and (usocket::ip= real-address (first host))
                         (= real-port (second host))))
                  hosts))))
