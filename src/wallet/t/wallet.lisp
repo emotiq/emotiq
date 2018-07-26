@@ -13,3 +13,5 @@
     (assert-true (not (null wallet)))
     (assert-true (= (length (emotiq/wallet:enumerate-wallets))
                     (1+ (length existing-wallet-names))))))
+
+             

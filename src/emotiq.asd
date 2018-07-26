@@ -67,6 +67,7 @@
   :depends-on (emotiq/logging
                ironclad
                quri
+               emotiq/txn
                lisp-object-encoder
                cosi-bls)
   :in-order-to ((test-op (test-op "wallet-test")))

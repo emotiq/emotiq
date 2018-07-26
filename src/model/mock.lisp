@@ -66,6 +66,28 @@
                            (:cloaked . (:false))
                            (:address . ,address)
                            (:amount . 100)))))
+      (:object (:id . "277A27C6C9746DE0C63763A6CA")
+               (:timestamp . 1527691324) (:type . "spend") (:epoch . 315) (:fee . 10)
+               (:inputs .
+                        (:array
+                         (:object
+                          (:cloaked . (:false))
+                          (:address . ,address)
+                          (:amount . 50000))))
+               (:outputs .
+                         (:array
+                          (:object
+                           (:cloaked . (:false))
+                           (:address . "277A27C6C9746DE0C63763A650FCA37C8F1BF9440F017E780C0C4D916FAF3357")
+                           (:amount . 40000))
+                          (:object
+                           (:cloaked . (:false))
+                           (:address . "6C9746DE0C63763A650FCA37C8F1BF9440F017E780C0C4D916FAF3357")
+                           (:amount . 4000))
+                          (:object
+                           (:cloaked . (:false))
+                           (:address . ,address)
+                           (:amount . 100)))))
       (:object (:id . "9746DE0C63763A650FCAFF277A27C6C")
                (:timestamp . 1527791324) (:type . "spend") (:epoch . 320) (:fee . 10)
                (:inputs .
