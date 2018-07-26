@@ -164,7 +164,7 @@ THE SOFTWARE.
                (when (CAS (car (actor-busy self)) nil t)
                  ;; The Ready Queue just contains function closures to
                  ;; be dequeued and executed by the Executives.
-                 (mailbox-send *actor-ready-queue* #'run
+                 (mailbox-send *actor-ready-queue* (list #'run (get-universal-time)) ;; car is fn, cadr is timestamp
                                :prio (actor-priority self))
                  (unless *executive-processes*
                    (ensure-executives))))
@@ -617,7 +617,6 @@ THE SOFTWARE.
 ;; Executive Pool - actual system threads dedicated to running Actor code
 
 (defvar *heartbeat-timer*    nil) ;; the system watchdog timer
-(defvar *last-heartbeat*     0)   ;; time of last Executive activity
 (defvar *executive-counter*  0)   ;; just a serial number on Executive threads
 (defvar *heartbeat-interval* 1)   ;; how often the watchdog should check for system stall
 (defvar *maximum-age*        3)   ;; how long before watchdog should bark, in seconds
@@ -660,12 +659,11 @@ THE SOFTWARE.
 (defun executive-loop ()
   ;; the main executive loop
   (unwind-protect
-      (loop for fn = (mailbox-read *actor-ready-queue*
-                                   "Waiting for Actor")
+      (loop for entry = (mailbox-read *actor-ready-queue*
+                                      "Waiting for Actor")
             do
-            (setf *last-heartbeat* (get-universal-time))
             (restart-case
-                (funcall fn)
+                (funcall (car entry)) ;; car is fn, cadr is timestamp
               (:terminate-actor ()
                 :report "Terminate Actor"
                 )))
@@ -686,10 +684,11 @@ THE SOFTWARE.
                          (make-prio-mailbox))))
     ;; nudge any Executives waiting on the queue to move over to the
     ;; new one.
-    (mapc (lambda (proc)
-            (declare (ignore proc))
-            (mailbox-send old-mb 'do-nothing))
-          *executive-processes*)
+    (let ((entry (list 'do-nothing (get-universal-time)))) ;; car is fn, cadr is timestamp
+      (mapc (lambda (proc)
+              (declare (ignore proc))
+              (mailbox-send old-mb entry))
+            *executive-processes*))
     ))
 
 #|
@@ -715,38 +714,36 @@ THE SOFTWARE.
          (mpcompat:process-interrupt exec 'exec-terminate-actor actor)))
      
      (check-sufficient-execs ()
-       (let (age)
-         (unless (or (emptyq-p *actor-ready-queue*)        ;; nothing to do anyway?
-                     (< (setf age (- (get-universal-time)  ;; been stalled long enough?
-				     *last-heartbeat*))
-			*maximum-age*))
-           ;; -------------------------------------------
-           ;;
-           ;; Why kill the workhorse?
-           ;;
-           ;; For LW, the timer routine triggers in an arbitrary
-           ;; thread with a retriggering timer. This routine runs as
-           ;; an interrupt routine and we need to keep it short. We
-           ;; also need to prevent retriggering of nuisance
-           ;; notifications while we are busy handling the situation.
-           ;;
-           ;; For ACL, the timer runs in its own dedicated thread and
-           ;; won't retrigger until we return from here. But we also
-           ;; need to keep this short so that we don't block ongoing
-           ;; useful activity that may need something inside this
-           ;; monitor section.
-           ;;
-           ;; So in both cases, just kill off the timer and let a new
-           ;; thread handle the notification with the user.
-           ;; ----------------------------------------------
-           (unschedule-timer (shiftf *heartbeat-timer* nil))
-           ;; --------------------------------------------
-	   
-           (mpcompat:process-run-function
-            "Handle Stalling Actors"
-            '()
-            *watchdog-hook* age)
-           )))
+       (um:when-let (entry (mailbox-peek *actor-ready-queue*)) ;; anything waiting to run?
+         (let ((age  (- (get-universal-time) (cadr entry))))   ;; cadr entry is timestamp
+           (unless (< age *maximum-age*)
+             ;; -------------------------------------------
+             ;;
+             ;; Why kill the workhorse?
+             ;;
+             ;; For LW, the timer routine triggers in an arbitrary
+             ;; thread with a retriggering timer. This routine runs as
+             ;; an interrupt routine and we need to keep it short. We
+             ;; also need to prevent retriggering of nuisance
+             ;; notifications while we are busy handling the situation.
+             ;;
+             ;; For ACL, the timer runs in its own dedicated thread and
+             ;; won't retrigger until we return from here. But we also
+             ;; need to keep this short so that we don't block ongoing
+             ;; useful activity that may need something inside this
+             ;; monitor section.
+             ;;
+             ;; So in both cases, just kill off the timer and let a new
+             ;; thread handle the notification with the user.
+             ;; ----------------------------------------------
+             (unschedule-timer (shiftf *heartbeat-timer* nil))
+             ;; --------------------------------------------
+             
+             (mpcompat:process-run-function
+              "Handle Stalling Actors"
+              '()
+              *watchdog-hook* age)
+             ))))
 
      (remove-from-pool (proc)
        (setf *executive-processes* (delete proc *executive-processes*)))
@@ -763,7 +760,6 @@ THE SOFTWARE.
        (unless *heartbeat-timer*
          (setf *heartbeat-timer*
                (make-timer 'check-sufficient-execs))
-         (setf *last-heartbeat* (get-universal-time))
          (schedule-timer-relative
           *heartbeat-timer*
           *maximum-age*
@@ -775,10 +771,8 @@ THE SOFTWARE.
            (push-new-executive))))
      
      (kill-executives ()
-       (let ((timer (shiftf *heartbeat-timer* nil)))
-         (when timer
-           (unschedule-timer timer)
-           (setf *last-heartbeat* 0)))
+       (um:when-let (timer (shiftf *heartbeat-timer* nil))
+         (unschedule-timer timer))
        (let ((procs (shiftf *executive-processes* nil)))
          (setf *executive-counter* 0)
          (dolist (proc procs)
