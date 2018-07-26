@@ -11,7 +11,7 @@ else:
 
 
 async def main():
-    server = Server("ws://localhost:%d/wallet" % (3144+node_offset))
+    server = Server("ws://localhost:%d/wallet" % (4144+node_offset))
     try:
         await server.ws_connect()
         resp = await server.ping()
