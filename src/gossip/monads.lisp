@@ -100,14 +100,13 @@
     (integer (= ip1 (usocket::host-byte-order ip2)))))
 
 (defun gossip-equalp (d1 d2)
-  "Like equalp but also tests for ip addresses"
+  "Like equalp but also tests for ip addresses and DNS names"
   (or (equalp d1 d2)
-      (and (integerp d1)
-           (integerp d2)
-           (usocket:ip= d1 d2))))
+      (ignore-errors (usocket:ip= d1 d2))
+      (ignore-errors (= (usocket::host-to-hbo d1) (usocket::host-to-hbo d2)))))
 
 (defun metadata-match? (md1 md2)
-  "Returns true if the two metadatas match, or nil if not.
+  "Returns true if the two metadata match, or nil if not.
    Metadata match if they are both nil, or if they both have identical keys and values,
    but possibly in different orders."
   (null (set-exclusive-or md1 md2 :test 'gossip-equalp)))
