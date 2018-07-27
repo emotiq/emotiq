@@ -150,11 +150,10 @@ THE SOFTWARE.
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)
   (when (null (node-blockchain node))
-    (let ((genesis-block (emotiq/config:get-genesis-block)))
-      (push genesis-block (node-blockchain node))
-      (setf (gethash (cosi/proofs:hash-block genesis-block)
-                     (node-blockchain-tbl node))
-            genesis-block))))
+    (let* ((genesis-block (emotiq/config:get-genesis-block))
+           (hashID        (hash-block genesis-block)))
+      (setf (node-blockchain node) hashID
+            (gethash hashID (node-blockchain-tbl node)) genesis-block))))
 
 ;; --------------------------------------------------------------
 

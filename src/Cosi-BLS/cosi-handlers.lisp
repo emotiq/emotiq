@@ -197,6 +197,7 @@ THE SOFTWARE.
   (send-hold-election))     ;; b'cast to witness pool
 
 (defmethod node-dispatcher ((msg-sym (eql :blockchain-head)) &key pkey hashID sig)
+  (assert (integerp hashID))
   (unless (eql *blockchain* hashID)
     (pr "Missing block head ~A, requesting fill" hashID)
     (setf *blockchain* hashID)
@@ -245,6 +246,7 @@ THE SOFTWARE.
           )))))
 
 ;; -------------------------------------------------------------------------------------
+;; Blockchain Sync
 
 (defun ask-neighbor-node (&rest msg)
   (let* ((my-pkey (node-pkey (current-node)))
@@ -973,6 +975,10 @@ check that each TXIN and TXOUT is mathematically sound."
   (make-signed-message (make-blockchain-comment-message-skeleton pkey hashID)))
 
 (defun send-blockchain-comment ()
+  (pr "TEST - Blockchain = ~A" *blockchain*)
+  (inspect *blockchain*)
+  (assert (or (null *blockchain*)
+              (integerp *blockchain*)))
   (gossip:broadcast (make-signed-blockchain-comment-message (node-pkey (current-node))
                                                             *blockchain*)
                     :graphID :UBER))
