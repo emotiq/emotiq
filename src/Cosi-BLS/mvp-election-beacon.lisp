@@ -227,9 +227,9 @@ based on their relative stake"
   (let ((self      (current-actor))
         (node      (current-node)))
     
-    (with-accessors ((pkey  node-pkey)) node
+    (with-accessors ((me  node-pkey)) node
 
-      (update-election-seed pkey)
+      (update-election-seed me)
 
       (let* ((winner     (hold-election n))
              (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
@@ -243,18 +243,18 @@ based on their relative stake"
         
         (pr "~A got :hold-an-election ~A" (short-id node) n)
         (pr "election results ~A (stake = ~A)"
-                     (if (int= pkey winner) " *ME* " " not me ")
+                     (if (int= me winner) " *ME* " " not me ")
                      (stake-for winner))
         (pr "winner ~A me=~A"
                      (short-id winner)
-                     (short-id pkey))
+                     (short-id me))
 
-        (when (int= pkey new-beacon)
+        (when (int= me new-beacon)
           ;; launch a beacon
           (node-schedule-after *mvp-election-period*
             (send-hold-election)))
 
-        (cond ((int= pkey winner)
+        (cond ((int= me winner)
                ;; why not use ac:self-call?  A: Because doing it with
                ;; send, instead, allows queued up messages to be
                ;; handled first. Might be some transactions waiting to
