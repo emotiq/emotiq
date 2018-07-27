@@ -195,9 +195,9 @@ THE SOFTWARE.
 (defun block-list (&optional (from *blockchain*))
   (um:accum acc
     (um:nlet-tail iter ((id from))
-      (um:when-let (blk (gethash id *blockchain-tbl*))
+      (um:when-let (blk (gethash (int id) *blockchain-tbl*))
         (acc blk)
-        (iter (int (block-prev-block-hash blk)))
+        (iter (block-prev-block-hash blk))
         ))))
 
 
