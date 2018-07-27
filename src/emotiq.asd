@@ -131,6 +131,7 @@
   :depends-on (gossip
                emotiq
                emotiq/txn
+               emotiq/startup
                cosi-bls)
   :components ((:module source
                         :pathname "./"
