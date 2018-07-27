@@ -1,3 +1,7 @@
+;;
+;; test usage:
+;; (emotiq/app::test-app)
+
 (in-package :emotiq/app)
 
 ;; for testin
@@ -13,20 +17,6 @@
      (first public-private)
      (second public-private))))
 
-#|
-(defun make-history-1 ()
-    (let ((alice (get-nth-key 0))
-          (bob (get-nth-key 1)))
-      (let ((txn-1 (emotiq/txn:make-spend-transaction alice (emotiq/txn:address bob) (expt 10 5))))
-        (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
-
-(defun make-history-2 ()
-    (let ((bob (get-nth-key 1))
-          (carol (get-nth-key 2)))
-      (let ((txn-1 (emotiq/txn:make-spend-transaction bob (emotiq/txn:address carol (expt 10 4)))))
-        (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
-|#
-
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
 (defparameter *bob* nil)
@@ -38,6 +28,19 @@
    (pkey :accessor account-pkey)  
    (triple :accessor account-triple)
    (name :accessor account-name)))
+
+(defun get-genesis-key ()
+  (get-nth-key 0))
+
+(defun make-genesis-account ()
+  (let ((r (make-instance 'account))
+        (gk (get-genesis-key)))
+    (setf (account-triple r) gk
+          (account-skey r) (pbc:keying-triple-skey gk)
+          (account-pkey r) (pbc:keying-triple-pkey gk)
+          (account-name r) "genesis")
+    (setf *genesis* r)
+    r))
 
 (defun make-account (name)
   "return an account class"
@@ -51,6 +54,8 @@
 
 (defun app2 ()
   (wait-for-node-startup)
+
+  (setf *genesis-account* (make-genesis-account))
 
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
@@ -74,38 +79,34 @@
 (defun wait-for-node-startup ()
   "do whatever it takes to get this node's blockchain to be current"
   ;; currently - nothing - don't care
-  (sleep 10)
+  (emotiq:note "sleeping to let blockchain start up (is this necessary?)")
+  (sleep 5)
   )
 
 (defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
   (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber))
 
-(defparameter *max-amount* (cosi/proofs/newtx::initial-coin-units))
-
-(defun get-genesis-key ()
-  (get-nth-key 0))
+(defparameter *max-amount* (cosi/proofs/newtx::initial-coin-units)
+"total amount of emtq's - is this correct?  or, does it need to multiplied by sub-units-per-coin?")
 
 (defmethod send-all-genesis-coin-to ((dest account))
   "all coins are assigned to the first node in the config files - move those coins to an account used by this app"
-  (let ((txn (emotiq/txn:make-spend-transaction (get-genesis-key)
-                                                (emotiq/txn:address (account-triple dest))
-                                                *max-amount*)))
-    (setf *tx0* txn)
-    (publish-transaction txn)))
+  (let ((txn (spend *genesis* dest *max-amount*)))
+    (setf *tx0* txn)))
 
 (defmacro with-current-node (&rest body)
   `(cosi-simgen:with-current-node (cosi-simgen:current-node)
      ,@body))
 
-;(defmacro with-current-node (&rest body)
-;  `(cosi-simgen:with-current-node cosi-simgen::*my-node*
-;     ,@body))
-
-(defmethod spend ((from account) (to account) amount fee)
+(defmethod spend ((from account) (to account) amount &key (fee 10))
   "make a transaction and publish it"
+  ;; minimum fee 10 required by Cosi-BLS/new-transactions.lisp/validate-transaction
   (with-current-node
    (let ((txn (emotiq/txn:make-spend-transaction (account-triple from) (emotiq/txn:address (account-pkey to)) amount :fee fee)))
-     (publish-transaction txn))))
+     (publish-transaction txn)
+     (emotiq:note "sleeping to let txn propagate (is this necessary?)")
+     (sleep 5)
+     txn)))
   
 (defmethod get-balance ((triple pbc:keying-triple))
   "return the balance for a given account"
@@ -132,12 +133,14 @@
 (defun test-app ()
   (emotiq:main)
   (app2)
+  (let ((bal-genesis (get-balance (get-genesis-key))))
+    (format t "genesis balance(~a)~%" bal-genesis))
   (let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
     (format t "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james))
-  (let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
+  #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
         (txo-bob (get-all-transactions-to-given-target-account *bob*))
         (txo-mary (get-all-transactions-to-given-target-account *mary*))
         (txo-james (get-all-transactions-to-given-target-account *james*)))
@@ -145,18 +148,13 @@
             txo-alice
             txo-bob
             txo-mary
-            txo-james)))
+            txo-james))
+  (let ((emotiq:*notestream* *error-output*))
+    (with-current-node
+     (cosi/proofs/newtx:dump-txs :blockchain t)))
+  (ac:kill-executives))
 
-(defun test-app1 ()
-  (emotiq:main)
-  (app2)
-  (let ((bal-genesis (get-balance (get-genesis-key))))
-    (format t "genesis balance(~a)~%" bal-genesis))
-  #+nil(let ((bal-alice (get-balance *alice*)))
-    #+nil(format t "balances alice(~a)~%" bal-alice )))
-
-
-;; verify that transactions can refer to themselves in same block
+;;; ;; verify that transactions can refer to themselves in same block
 ;;
 ;; initial: initial-coin-units * subunits-per-coin
 ;;
