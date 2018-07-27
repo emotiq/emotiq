@@ -196,7 +196,9 @@ THE SOFTWARE.
   (um:accum acc
     (um:nlet-tail iter ((id from))
       (when id
+        ;; terminate on null reference (from genesis block)
           (um:when-let (blk (gethash (int id) *blockchain-tbl*))
+            ;; or terminate when missing the block
             (acc blk)
             (iter (block-prev-block-hash blk))
             )))))
