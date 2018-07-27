@@ -22,6 +22,29 @@
 	  (bob-tx (get-transactions bob))
 	  (mary-tx (get-transactions mary))))))
 
+(defun get-nth-stake-key (n)
+  (let ((public-private (nth n (gossip/config:get-values))))
+    (emotiq/config::make-keying-triple
+     (first public-private)
+     (second public-private))))
+
+(defun make-history-1 ()
+    (let ((alice (get-nth-stake 0))
+          (bob (get-nth-stake 1)))
+      (let ((txn-1 (emotiq/txn:make-spend-transaction alice (emotiq/txn:address bob) (expt 10 5))))
+        (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
+
+(defun make-history-2 ()
+    (let ((bob (get-nth-stake 0))
+          (carol (get-nth-stake 1)))
+      (let ((txn-1 (emotiq/txn:make-spend-transaction alice (emotiq/txn:address bob) (expt 10 5))))
+        (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
+
+
+
+      
+  
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; api's
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -140,4 +163,3 @@
 ;;;               finally (setq utxos-so-far
 ;;;                             (nconc utxos-so-far result)))))
 ;;;     utxos-so-far))
-
