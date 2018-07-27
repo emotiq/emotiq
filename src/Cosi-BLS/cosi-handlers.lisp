@@ -217,7 +217,9 @@ THE SOFTWARE.
        (unless (find (node-pkey node) *dead-node-pkeys*
                      :test 'int=)
          ;;; Source of majority of messages on screen makes it fairly verbose
-         (pr "Cosi MSG: ~A" (mapcar 'short-id msg))
+         (pr "Cosi MSG: Node ~A ~A"
+             (short-id node)
+             (mapcar 'short-id msg))
          (um:dcase msg
            (:actor-callback (aid &rest ans)
             (let ((actor (lookup-actor-for-aid aid)))
