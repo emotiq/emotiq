@@ -1,35 +1,43 @@
 (in-package :emotiq/app)
 
-(defun app2 ()
+;; for testin
+(defparameter *tx0* nil)
+(defparameter *tx1* nil)
+(defparameter *tx2* nil)
+(defparameter *tx3* nil)
+(defparameter *tx4* nil)
 
-  (wait-for-node-startup)
- 
-  (let ((alice (make-account "alice"))
-	(bob (make-account "bob"))
-	(mary (make-account "mary"))
-	(fee 10))
+(defun get-nth-key (n)
+  (let ((public-private (nth n (gossip/config:get-values))))
+    (emotiq/config::make-keying-triple
+     (first public-private)
+     (second public-private))))
 
-    ;; make various transactions
-    (send-all-genesis-coin-to alice)
-    
-    (spend alice bob 490 fee)
-    (spend bob mary 290 fee)
-    (spend alice mary 190 fee)
-    
-    ;; get all transactions (in, out) for each person
+#|
+(defun make-history-1 ()
+    (let ((alice (get-nth-key 0))
+          (bob (get-nth-key 1)))
+      (let ((txn-1 (emotiq/txn:make-spend-transaction alice (emotiq/txn:address bob) (expt 10 5))))
+        (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
 
-    (let ((alice-tx (get-transactions alice))
-	  (bob-tx (get-transactions bob))
-	  (mary-tx (get-transactions mary))))))
+(defun make-history-2 ()
+    (let ((bob (get-nth-key 1))
+          (carol (get-nth-key 2)))
+      (let ((txn-1 (emotiq/txn:make-spend-transaction bob (emotiq/txn:address carol (expt 10 4)))))
+        (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
+|#
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; api's
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defparameter *genesis* nil)
+(defparameter *alice* nil)
+(defparameter *bob* nil)
+(defparameter *mary* nil)
+(defparameter *james* nil)
 
 (defclass account ()
   ((skey :accessor account-skey)  
    (pkey :accessor account-pkey)  
-   (triple :accessor account-triple)))
+   (triple :accessor account-triple)
+   (name :accessor account-name)))
 
 (defun make-account (name)
   "return an account class"
@@ -37,41 +45,67 @@
 	(a (make-instance 'account)))
     (setf (account-triple a) key-triple
           (account-skey a) (pbc:keying-triple-skey key-triple)
-          (account-pkey a) (pbc:keying-triple-pkey key-triple))))
+          (account-pkey a) (pbc:keying-triple-pkey key-triple)
+          (account-name a) name)
+    a))
+
+(defun app2 ()
+  (wait-for-node-startup)
+
+  (setf *alice* (make-account "alice")
+	*bob* (make-account "bob")
+	*mary* (make-account "mary")
+        *james* (make-account "james"))
+
+  (let ((fee 10))
+
+    ;; make various transactions
+    (send-all-genesis-coin-to *alice*)
+    
+    #+nil(spend *alice* *bob* 490 fee)
+    #+nil(spend *bob* *mary* 290 fee)
+    #+nil(spend *alice* *mary* 190 fee)
+    #+nil(spend *alice* *james* 90 fee)))
+    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; api's
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun wait-for-node-startup ()
   "do whatever it takes to get this node's blockchain to be current"
   ;; currently - nothing - don't care
+  (sleep 10)
   )
 
 (defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
   (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber))
 
-(defparameter *max-amount* 1000000000000) ;; all emtq coin
+(defparameter *max-amount* (cosi/proofs/newtx::initial-coin-units))
+
+(defun get-genesis-key ()
+  (get-nth-key 0))
 
 (defmethod send-all-genesis-coin-to ((dest account))
   "all coins are assigned to the first node in the config files - move those coins to an account used by this app"
-  (multiple-value-bind (genesis-pkey genesis-skey)
-      (emotiq/config:settings/read :address-for-coins)
-    (let ((txn (emotiq/txn:make-spend-transaction (account-triple from)
-                                                  (emotiq/txn:address (account-triple to))
-                                                  *max-amount*)))
-      (publish-transaction txn))))
-
-(defmethod spend ((from account) (to account) amount fee)
-  "make a transaction and publish it"
-  (let ((txn (emotiq/txn:make-spend-transaction from (emotiq/txn:address (account-pkey to)) amount :fee fee)))
+  (let ((txn (emotiq/txn:make-spend-transaction (get-genesis-key)
+                                                (emotiq/txn:address (account-triple dest))
+                                                *max-amount*)))
+    (setf *tx0* txn)
     (publish-transaction txn)))
-
-(defmethod get-transactions ((a account))
-  "return multiple value - (a) list of transactions that were inputs to this account and (b) list of transactions that this account was output to"
-  (let ((input-txns nil)
-        (outputs-to nil))
-    :finish-me!))
 
 (defmacro with-current-node (&rest body)
   `(cosi-simgen:with-current-node (cosi-simgen:current-node)
      ,@body))
+
+;(defmacro with-current-node (&rest body)
+;  `(cosi-simgen:with-current-node cosi-simgen::*my-node*
+;     ,@body))
+
+(defmethod spend ((from account) (to account) amount fee)
+  "make a transaction and publish it"
+  (with-current-node
+   (let ((txn (emotiq/txn:make-spend-transaction (account-triple from) (emotiq/txn:address (account-pkey to)) amount :fee fee)))
+     (publish-transaction txn))))
   
 (defmethod get-balance ((triple pbc:keying-triple))
   "return the balance for a given account"
@@ -81,63 +115,50 @@
 (defmethod get-balance ((a account))
   (get-balance (account-triple a)))
 
-(defun this-tx-ouputs-to (tx)
-  "return list of txns which use the given tx as input"
-  (loop for tx-out in (cosi/proofs/newtx::transaction-outputs tx)
-        collect tx-out into result
-        finally (return result)))
+(defmethod get-all-transactions-to-given-target-account ((a account))
+  "return a list of transactions that SPEND (and COLLET) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
+  (let ((account-address (emotiq/txn:address (account-pkey a)))
+        (result nil))
+    (cosi-simgen:with-current-node (cosi-simgen:current-node)
+      (cosi/proofs/newtx::do-blockchain (block) ;; TODO: optimize this
+        (cosi/proofs/newtx::do-transactions (tx block)
+          (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
+                    (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
+            (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
+              (when (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
+                (push tx result)))))))
+    result))
 
-(defun this-tx-inputs-from (tx)
-  "return list of txns which this tx uses as inputs"
-  (loop
-     :for tx-in :in (cosi/proofs/newtx::transaction-inputs tx)
-     :collecting tx-in :into result
-     :finally (return result)))
+(defun test-app ()
+  (emotiq:main)
+  (app2)
+  (let ((bal-alice (get-balance *alice*))
+        (bal-bob   (get-balance *bob*))
+        (bal-mary  (get-balance *mary*))
+        (bal-james (get-balance *james*)))
+    (format t "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james))
+  (let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
+        (txo-bob (get-all-transactions-to-given-target-account *bob*))
+        (txo-mary (get-all-transactions-to-given-target-account *mary*))
+        (txo-james (get-all-transactions-to-given-target-account *james*)))
+    (format t "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
+            txo-alice
+            txo-bob
+            txo-mary
+            txo-james)))
 
-;;; stolen from MHD new-transactions.lisp
-
-;;; (defun dump-txs (&key file mempool block blockchain node)
-;;;   (flet ((dump-loops ()
-;;;            (when block
-;;;              (pr "Dump txs in block = ~s:" block)
-;;;              (do-transactions (tx block)
-;;;                (dump-tx tx)))
-;;;            (when mempool
-;;;              (pr "Dump txs in mempool:")
-;;;              (loop for tx being each hash-value of cosi-simgen:*mempool*
-;;;                    do (dump-tx tx)))
-;;;            (when blockchain
-;;;              (pr "Dump txs on blockchain:")
-;;;              (do-blockchain (block)
-;;;                (pr " Dump txs in block = ~s:" block)
-;;;                (do-transactions (tx block)
-;;;                  (dump-tx tx))))))
-;;;     (cosi-simgen:with-current-node
-;;;         (or node 
-;;;             (cosi-simgen:current-node)
-;;;             cosi-simgen:*my-node*)
-;;;       (if file
-;;;           (with-open-file (*standard-output*
-;;;                            file
-;;;                            :direction :output :if-exists :supersede)
-;;;             (dump-loops))
-;;;           (dump-loops)))))
+(defun test-app1 ()
+  (emotiq:main)
+  (app2)
+  (let ((bal-genesis (get-balance (get-genesis-key))))
+    (format t "genesis balance(~a)~%" bal-genesis))
+  #+nil(let ((bal-alice (get-balance *alice*)))
+    #+nil(format t "balances alice(~a)~%" bal-alice )))
 
 
-
-;;; (defun get-utxo-txns-per-account (address)
-;;;   (let ((utxos-so-far '()))
-;;;     (do-blockchain (block)
-;;;       (do-transactions (tx block)
-;;;         (loop for txo in (transaction-outputs tx)
-;;;               as public-key-hash = (tx-out-public-key-hash txo)
-;;;               as index from 0
-;;;               when (and (account-addresses= public-key-hash address)
-;;;                         (utxo-p tx index))
-;;;                 collect `(,txo (,(transaction-id tx) ,index) 
-;;;                                ,(tx-out-amount txo))
-;;;                   into result
-;;;               finally (setq utxos-so-far
-;;;                             (nconc utxos-so-far result)))))
-;;;     utxos-so-far))
-
+;; verify that transactions can refer to themselves in same block
+;;
+;; initial: initial-coin-units * subunits-per-coin
+;;
+;; gossip:send node :kill-node
+;;
