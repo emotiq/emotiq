@@ -331,6 +331,8 @@
    :with-current-node
    :block-list
    :latest-block
+   :kill-node
+   :enable-node
    ))
 
 (defpackage :cosi-keying

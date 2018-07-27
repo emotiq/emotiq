@@ -209,6 +209,14 @@ based on their relative stake"
    
 (defvar *mvp-election-period*  20) ;; seconds between election rounds
 
+(defun my-stake (node)
+  (let* ((pkey (node-pkey node))
+         (pair (find pkey (emotiq/config:get-stakes)
+                     :key  'first
+                     :test 'int=)))
+    (and pair
+         (cadr pair))))
+
 (defun run-election (n)
   ;; use the election value n (0 < n < 1) to decide on staked winner
   ;; to become new leader node. Second runner up becomes responsible
@@ -220,13 +228,12 @@ based on their relative stake"
   (let ((self      (current-actor))
         (node      (current-node)))
     
-    (with-accessors ((stake       node-stake) ;; only used for diagnostic messages
-                     (pkey        node-pkey)
-                     (local-epoch node-local-epoch)) node
+    (with-accessors ((pkey  node-pkey)) node
 
       (update-election-seed pkey)
 
-      (let* ((winner     (hold-election n))
+      (let* ((stake      (my-stake node)) ;; used only for diagnostic display
+             (winner     (hold-election n))
              (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
                                                   :key 'first
                                                   :test 'int=))))
@@ -270,8 +277,7 @@ based on their relative stake"
 
 (defun setup-emergency-call-for-new-election ()
   ;; give the election beacon a chance to do its thing
-  (let* ((node      (current-node))
-         (old-epoch *local-epoch*))
+  (let* ((old-epoch *local-epoch*))
     (node-schedule-after *emergency-timeout*
       ;; first time processing at startup
       ;; go gather keys and stakes.

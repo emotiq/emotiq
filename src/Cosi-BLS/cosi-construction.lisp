@@ -117,6 +117,38 @@ THE SOFTWARE.
              :initarg  :self)
    ))
 
+;; -------------------------------------------------------
+
+(defvar *current-node*  nil)  ;; for sim = current node running
+
+(defun current-node ()
+  *current-node*)
+
+(defmacro with-current-node (node &body body)
+  `(let ((*current-node* ,node))
+     ,@body))
+
+(define-symbol-macro *blockchain*     (node-blockchain     *current-node*))
+(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
+(define-symbol-macro *mempool*        (node-mempool        *current-node*))
+(define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
+(define-symbol-macro *leader*         (node-current-leader *current-node*))
+(define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
+(define-symbol-macro *had-work*       (node-had-work       *current-node*))
+
+;; election related items
+(define-symbol-macro *election-calls* (node-election-calls *current-node*))
+(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
+(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
+
+(defun add-to-blockchain (node blk)
+  (with-current-node node
+    (let ((hashID (int (hash-block blk))))
+      (setf *blockchain* hashID
+            (gethash hashID *blockchain-tbl*) blk))))
+
+;; -------------------------------------------------------
+
 (defmethod node-bitmap ((node node))
   (ash 1 (node-bit node)))
 
@@ -150,10 +182,7 @@ THE SOFTWARE.
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)
   (when (null (node-blockchain node))
-    (let* ((genesis-block (emotiq/config:get-genesis-block))
-           (hashID        (hash-block genesis-block)))
-      (setf (node-blockchain node) hashID
-            (gethash hashID (node-blockchain-tbl node)) genesis-block))))
+    (add-to-blockchain node (emotiq/config:get-genesis-block))))
 
 ;; --------------------------------------------------------------
 
