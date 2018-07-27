@@ -198,13 +198,23 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :blockchain-head)) &key pkey hashID sig)
   (unless (eql *blockchain* hashID)
+    (pr "Missing block head ~A, requesting fill" hashID)
     (setf *blockchain* hashID)
-    (sync-blockchain hashID)))
+    (spawn 'sync-blockchain (current-node) hashID)))
 
-(defmethod node-dispatcher ((msg-sym (eql :request-block)) &key replyTo hashId)
+
+(defvar *max-query-depth*  8)
+
+(defmethod node-dispatcher ((msg-sym (eql :request-block)) &key replyTo hashId depth)
   (let ((blk (gethash hashID *blockchain-tbl*)))
-    (when blk
-      (reply replyTo :block-you-requested hashID blk))))
+    (if blk
+        (reply replyTo :block-you-requested hashID blk)
+      (when (< depth *max-query-depth*)
+        (ask-neighbor-node :request-block   ;; else forward to someone else
+                           :replyTo replyTo
+                           :hashID  hashID
+                           :depth   (1+ depth))
+        ))))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
   ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
@@ -237,23 +247,55 @@ THE SOFTWARE.
 ;; -------------------------------------------------------------------------------------
 
 (defun ask-neighbor-node (&rest msg)
-  (NYI "ask-neighbor-node"))
+  (let* ((my-pkey (node-pkey (current-node)))
+         (nodes   (remove my-pkey  ;; avoid asking myself
+                          (get-witness-list)
+                          :test 'int=)))
+    (gossip:singlecast msg (nth (random (length nodes)) nodes)
+                       :graphID :uber
+                       :startNodeID my-pkey)))
 
-(defun sync-blockchain (hashID)
+(defun validate-block-signature (blkID blk)
+  (let ((bits  (block-signature-bitmap blk))
+        (pkey  (composite-pkey blk bits)))
+    (and (int= blkID (hash-block blk))            ;; is it really the block I think it is?
+         (>= (logcount bits) (bft-threshold blk)) ;; does it have BFT thresh signatures?
+         (int= pkey (composite-pkey blk bits))    ;; is the signature pkey properly formed?
+         (pbc:check-hash blkid                    ;; does the signature check out?
+                         (block-signature blk)
+                         pkey)
+         )))
+
+(defun sync-blockchain (node hashID &optional (retries 1))
   (when hashID
-    (let* ((node  (current-node)))
-      (ask-neighbor-node :request-block :replyTo (current-actor) :hashID hashID)
-      (recv
-        ((list :answer :block-you-requested blkID blk)
-         (unless (gethash blkID *blockchain-tbl*)
-           (setf (gethash blkID *blockchain-tbl*) blk)
-           (let ((newID (block-prev-block-hash blk)))
-             (unless (gethash newID *blockchain-tbl*)
-               (sync-blockchain newID)))))
-
-        :TIMEOUT 60
-        :ON-TIMEOUT (error "No response to blockchain query")
-        ))))
+    (with-current-node node
+      (ask-neighbor-node :request-block :replyTo (current-actor) :hashID hashID :depth 1)
+      (let ((start   (get-universal-time))
+            (timeout 60))
+        (labels ((retry-ask ()
+                   (if (>= retries 3)
+                       (pr "ERROR - No response to blockchain query for block ~A" hashID)
+                     (sync-blockchain node hashID (1+ retries)))))
+          (recv
+            ((list :answer :block-you-requested blkID blk)
+             (with-current-node node
+               (cond ((and (int= blkID hashID)
+                           (validate-block-signature blkID blk)) ;; a valid response?
+                      (setf (gethash blkID *blockchain-tbl*) blk)
+                      (um:when-let (newID (block-prev-block-hash blk)) ;; do I have predecessor?
+                        (unless (gethash newID *blockchain-tbl*)
+                          (sync-blockchain node newID))))  ;; if not, then ask for it
+                     (t
+                      ;; wasn't what I asked for, or invalid block response
+                      (setf timeout (- (+ start 60) (get-universal-time)))
+                      (if (plusp timeout)
+                          (retry-recv) ;; maybe node I asked forwarded to another node?
+                        (retry-ask)))
+                     )))
+            
+            :TIMEOUT    timeout
+            :ON-TIMEOUT (retry-ask)
+            ))))))
 
 ;; --------------------------------------------------------------------
 

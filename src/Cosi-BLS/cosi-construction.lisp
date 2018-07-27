@@ -167,9 +167,9 @@ THE SOFTWARE.
   (and *blockchain*
        (gethash *blockchain* *blockchain-tbl*)))
 
-(defun block-list ()
+(defun block-list (&optional (from *blockchain*))
   (um:accum acc
-    (um:nlet-tail iter ((id *blockchain*))
+    (um:nlet-tail iter ((id from))
       (unless (null id)
         (let ((blk (gethash id *blockchain-tbl*)))
           (acc blk)
