@@ -271,6 +271,9 @@ THE SOFTWARE.
                       (um:when-let (newID (block-prev-block-hash blk)) ;; do I have predecessor?
                         (assert (integerp newID))
                         (unless (gethash newID *blockchain-tbl*)
+                          ;; NOTE: While the following may appear to be a recursive call,
+                          ;; the semantics of ACTORS:RECV ensure that it performs in constant
+                          ;; stack space.
                           (sync-blockchain node newID))))  ;; if not, then ask for it
                      (t
                       ;; wasn't what I asked for, or invalid block response
