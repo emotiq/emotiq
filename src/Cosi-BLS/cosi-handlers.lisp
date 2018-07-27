@@ -1,4 +1,3 @@
-
 ;;
 ;; DM/Emotiq  02/18
 ;; ---------------------------------------------------------------
@@ -247,9 +246,7 @@ THE SOFTWARE.
          (pkey  (composite-pkey blk bits)))
     (and (int= blkID (hash-block blk))            ;; is it really the block I think it is?
          (>= (logcount bits) (bft-threshold blk)) ;; does it have BFT thresh signatures?
-         (pbc:check-hash blkid                    ;; does the signature check out?
-                         (block-signature blk)
-                         pkey)
+         (check-block-multisignature blk)         ;; does the signature check out?
          )))
 
 (defun sync-blockchain (node hashID &optional (retries 1))
