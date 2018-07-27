@@ -174,8 +174,7 @@ THE SOFTWARE.
     (unless (eql *blockchain* hashID)
       (pr "Missing block head ~A, requesting fill" (short-id hashID))
       (setf *blockchain* hashID)
-      (spawn 'sync-blockchain (current-node) hashID))))
-
+      (start-backfill (current-node) hashID))))
 
 (defvar *max-query-depth*  8)
 
@@ -286,6 +285,16 @@ THE SOFTWARE.
             :TIMEOUT    timeout
             :ON-TIMEOUT (retry-ask)
             ))))))
+
+(defun start-backfill (node fromID)
+  ;; User callable backfill starter - need to provide a reference to
+  ;; the NODE structure to be backfilled, and a starting block ID hash
+  ;; value.
+  ;;
+  ;; If you received a warning about a missing block when calling
+  ;; (BLOCK-LIST) then the block ID you need is the prev-block-hash in
+  ;; the header of the last block in your returned list.
+  (spawn 'sync-blockchain node fromID))
 
 ;; --------------------------------------------------------------------
 

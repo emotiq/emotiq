@@ -333,6 +333,7 @@
    :latest-block
    :kill-node
    :enable-node
+   :start-backfill
    ))
 
 (defpackage :cosi-keying
