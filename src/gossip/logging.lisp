@@ -21,12 +21,23 @@
 (defun (setf debug-level) (val)
   (setf *debug-level* val))
 
-(defmacro edebug (level tag &rest args)
+; Logcmd: Keyword that describes what a node has done with a given message UID
+; Examples: :IGNORE, :ACCEPT, :FORWARD, etc.
+(defmethod node-log ((node abstract-gossip-node) logcmd msg &rest args)
+  "Log a message-based event that occurred to a node."
+  (when (logfn node)
+    (apply (logfn node)
+           logcmd
+           node
+           msg
+           args)))
+
+(defun edebug (level tag &rest args)
   "Syntactic sugar for wrapping debug-level around a log-event call"
-  `(when (debug-level ,level)
-     (typecase ,tag 
-       (abstract-gossip-node (node-log ,tag ,@args))
-       (t (log-event ,tag ,@args)))))
+  (when (debug-level level)
+     (typecase tag 
+       (abstract-gossip-node (apply 'node-log tag args))
+       (t (apply 'log-event tag args)))))
 
 (defun log-exclude (&rest strings)
   "Prevent log messages whose logcmd contains any of the given strings. Case-insensitive."
@@ -83,7 +94,7 @@
   "Syntactic sugar to play nicely with ac:pr. Note this is NOT an actor function, so don't call actor-only functions from it."
   (case cmd
     (:quit (ac:become 'ac::blind-print))
-    (t (apply 'default-logging-function :PR items))))
+    (t (apply 'default-logging-function items))))
 
 (defun default-logging-function (logcmd &rest args)
   "Default logger for nodes. Filters using the *log-filter* mechanism."
@@ -174,8 +185,8 @@
           ;;; Shunt message to line-oriented log facility
           ;; First object in logmsg is the timestamp.
           ;;
-          ;; TODO: use the timestamp directly
-          (emotiq:note "~&~{~a~^ ~}~&" (rest logmsg)))
+          ;; TODO: use the timestamp directly. It's (car logmsg).
+          (emotiq:note "~{~a~^ ~}" (cdr logmsg)))
     (:quit (ac:become 'ac:do-nothing))
           
     ; :save saves current log to files without modifying it

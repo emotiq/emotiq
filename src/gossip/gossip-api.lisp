@@ -49,6 +49,11 @@
                     nodeID                   ; destination
                     nil)))))
 
+(defun ensure-list (thing)
+  (if (listp thing)
+      thing
+      (list thing)))
+
 ; Normally you wouldn't call this as a high-level application programmer. Call broadcast instead.
 (defun gossipcast (message &key (graphID +default-graphid+) startnodeID (howmany 2) (kind ':k-multicast))
   "Sends message via traditional gossip.
@@ -58,7 +63,7 @@
                        :kind kind
                        :forward-to howmany ; traditional gossip
                        :graphID graphID
-                       :args message)))
+                       :args (ensure-list message))))
     (send-msg solicitation
               startnodeID                   ; destination
               nil)))

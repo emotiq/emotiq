@@ -158,8 +158,7 @@ THE SOFTWARE.
   (if *print-readably*
       (format out-stream "#.(make-instance '~W :value ~A)"
               (class-name (class-of obj))
-              (with-output-to-string (s)
-                (print-object (ub8v-repr obj) s)))
+              (ub8v-repr obj) s)
     ;; else
     (format out-stream "#<~A ~A >"
             (class-name (class-of obj))
@@ -167,11 +166,11 @@ THE SOFTWARE.
 
 (defun short-str (str)
   (let ((len (length str)))
-    (if (< len 40)
+    (if (< len 17)
         str
-      (format nil "~A...~A"
-              (subseq str 0 20)
-              (subseq str (- len 20)))
+      (format nil "~A..~A"
+              (subseq str 0 7)
+              (subseq str (- len 7)))
       )))
 
 ;; ----------------------------------------------------------

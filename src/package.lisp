@@ -16,7 +16,7 @@
            #:sha3-512-string #:sha3-512-vector
            #:hash-160-string #:hash-160-vector
            #:hash-256-string #:hash-256-vector
-           #:keygen #:sign-message #:verify-signature)
+           )
   (:export #:hash-digest-vector-to-hex-string
            #:sha-256-string #:sha-256-vector
            #:sha3-512-string #:sha3-512-vector
@@ -51,7 +51,8 @@
    #:start-node)
   (:export
    #:*notestream*
-   #:note)
+   #:note
+   #:em-warn)
   (:export
    #:production-p
    #:main
@@ -87,32 +88,6 @@
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
 
-(defpackage emotiq/sim
-  (:use #:cl)
-
-  (:export
-   #:initialize
-
-   #:run
-   #:run-new-tx
-
-   #:blocks
-   #:nodes
-   #:keys-and-stakes
-
-   #:create-transaction
-   #:force-epoch-end
-
-
-   #:*user-1* #:*user-2* #:*user-3*
-   #:*tx-1* #:*tx-2*
-
-   #:eassert
-
-   #:prdebug
-
-   #:node-repl))
-
 (defpackage emotiq/elections
   (:use #:cl)
   (:export
@@ -128,11 +103,20 @@
               #:emotiq/path)
   (:export
    #:*subpath*
+   #:subpath
    #:emotiq/user/root/
    #:emotiq/wallet/
    #:tmp/
    #:etc/
    #:var/log/))
+
+(defpackage emotiq/txn
+  (:use #:cl)
+  (:export
+   #:*transaction-fee*
+   #:address
+   #:get-utxos
+   #:make-spend-transaction))
 
 (defpackage emotiq/tracker
   (:use #:cl)
@@ -140,15 +124,6 @@
    #:start-tracker
    #:query-current-state
    #:track))
-
-(defpackage emotiq/ate
-  (:use #:cl)
-  (:export
-   #:begin
-   #:wind-down
-   #:begin-sim
-   #:wind-down-sim
-   #:introspect))
 
 (defpackage emotiq/config
   (:use #:cl)
@@ -170,3 +145,17 @@
    #:stakes/generate
    #:network/generate
    #:ensure-defaults))
+
+(defpackage emotiq/app
+  (:use #:cl)
+  (:export
+   #:account
+   #:make-account
+   #:wait-for-node-startup
+   #:publish-transaction
+   #:send-all-genesis-coin-to
+   #:spend
+   #:get-transactions
+   #:get-balance))
+
+

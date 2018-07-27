@@ -2,6 +2,8 @@
 ;;
 ;; DM/Emotiq 03/18
 ;; ---------------------------------------------------------
+;;; THIS FILE IS OBSOLETE. USE PBC-CFFI.LISP INSTEAD.
+
 #|
 Copyright (c) 2018 Emotiq AG
 

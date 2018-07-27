@@ -187,13 +187,27 @@ THE SOFTWARE.
 
 (defun blind-print (cmd &rest items)
   (declare (ignore cmd))
-  (dolist (item items)
-    (print item)))
+  (let ((prfn (get :actors :print-handler)))
+    (dolist (item items)
+      (funcall prfn item))
+    ))
+
+(eval-when (:load-toplevel)
+  (unless (get :actors :print-handler)
+    (setf (get :actors :print-handler) 'print)))
 
 (defvar *shared-printer-actor*    #'blind-print)
 
 (defun pr (&rest things-to-print)
-  (apply #'send *shared-printer-actor* :print things-to-print))
+  (let ((fmt  (first things-to-print)))
+    (cond ((and (stringp fmt)
+                (find #\~ fmt))
+           (send *shared-printer-actor* :print
+                 (apply 'format nil fmt (rest things-to-print))))
+
+          (t
+           (apply #'send *shared-printer-actor* :print things-to-print))
+          )))
 
 (defun install-actor-printer ()
   (unless (typep *shared-printer-actor* 'actor)
@@ -201,8 +215,7 @@ THE SOFTWARE.
           (make-actor
            (dlambda
             (:print (&rest things-to-print)
-                    (dolist (item things-to-print)
-                      (print item)))
+		    (apply 'blind-print :print things-to-print))
             
             (:quit () (become 'blind-print))
             )))

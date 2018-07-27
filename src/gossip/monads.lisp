@@ -84,6 +84,21 @@
                  (augment (funcall dc (data ad1) (data ad2)) (metadata ad1))
                  (list ad1 ad2)))))))
 
+; fix a pretty horrible bug in this function in usocket
+;  where
+;  (USOCKET:IP= "127.0.0.1" #(127 0 0 1)) = T
+;  but
+;  (USOCKET:IP= #(127 0 0 1) "127.0.0.1") = NIL
+(defun usocket::ip= (ip1 ip2)
+  (etypecase ip1
+    (string (string= ip1 (usocket::host-to-hostname ip2)))
+    ((or (vector t 4)
+         (array (unsigned-byte 8) (4))
+         (vector t 16)
+         (array (unsigned-byte 8) (16)))
+     (equalp ip1 (usocket::host-to-vector-quad ip2)))
+    (integer (= ip1 (usocket::host-byte-order ip2)))))
+
 (defun gossip-equalp (d1 d2)
   "Like equalp but also tests for ip addresses"
   (or (equalp d1 d2)

@@ -13,51 +13,63 @@
 
 (defparameter *subpath* nil "Directory subpath to be added to each of the below. Must end with /. Useful for testing.")
 
+(defun ensure-relative-directory (path)
+  "Ensure str represents a relative directory path"
+  (let ((dir (uiop:ensure-directory-pathname path)))
+    ; now force it to be relative
+    (make-pathname :directory `(:relative ,@(cdr (pathname-directory dir))))))
+
+(defun subpath ()
+  "Returns properly-formed *subpath*, if any"
+  (when *subpath*
+    ; TODO wrap this in a handler-case eventually because it can error if bad stuff is in *subpath*
+    (ensure-relative-directory *subpath*)))
+
 (defun var/log/ ()
   "Absolute cl:pathname of the directory to persist logs and traces of system activity."
   (let ((d (asdf:system-relative-pathname :emotiq "../var/log/")))
-    (when *subpath*
-      (setf d (merge-pathnames *subpath* d)))
+    (uiop:if-let (subpath (subpath)) 
+      (setf d (merge-pathnames subpath d)))
     (ensure-directories-exist d)
     d))
 
 (defun etc/ ()
   "All configuration files for a node"
   (let ((d (asdf:system-relative-pathname :emotiq "../var/etc/")))
-    (when *subpath*
-      (setf d (merge-pathnames *subpath* d)))
+    (uiop:if-let (subpath (subpath))
+      (setf d (merge-pathnames subpath d)))
     (ensure-directories-exist d)
     d))
 
 (defun tmp/ ()
   "Writable filesystem for temporary output"
   (let ((d  #p"/var/tmp/emotiq/"))
-    (when *subpath*
-      (setf d (merge-pathnames *subpath* d)))
+    (uiop:if-let (subpath (subpath))
+      (setf d (merge-pathnames subpath d)))
     (ensure-directories-exist d)))
   
 (defun emotiq/user/root/ ()
   #+:windows
   (error "Not implemented on Windows")
   #+:linux
-  (if *subpath*
-      (merge-pathnames *subpath* (merge-pathnames ".emotiq/" (user-homedir-pathname)))
-      (merge-pathnames ".emotiq/" (user-homedir-pathname)))
+  (let ((root (merge-pathnames ".emotiq/" (user-homedir-pathname))))
+    (uiop:if-let (subpath (subpath))
+      (setf root (merge-pathnames subpath root)))
+    root)
   #+:darwin
-  (if *subpath*
-      (merge-pathnames *subpath* (merge-pathnames "Emotiq/"
+  (let ((root (merge-pathnames "Emotiq/"
                                                   (merge-pathnames "Library/Application Support/"
-                                                                   (user-homedir-pathname))))
-      (merge-pathnames "Emotiq/"
-                       (merge-pathnames "Library/Application Support/"
-                                        (user-homedir-pathname)))))
+                                                                   (user-homedir-pathname)))))
+    (uiop:if-let (subpath (subpath))
+      (setf root (merge-pathnames subpath root)))
+    root))
 
 (defun emotiq/wallet/ ()
   "The pathname for the directory containing wallets"
-  (if *subpath*
-      (merge-pathnames *subpath* (merge-pathnames (make-pathname :directory '(:relative "wallet"))
-                                                  (emotiq/user/root/)))
-      (merge-pathnames (make-pathname :directory '(:relative "wallet"))
-                       (emotiq/user/root/))))
+  (let ((wallet (merge-pathnames (make-pathname :directory '(:relative "wallet"))
+                                 (emotiq/user/root/))))
+    (uiop:if-let (subpath (subpath))
+      (setf wallet (merge-pathnames subpath wallet)))
+    wallet))
 
 

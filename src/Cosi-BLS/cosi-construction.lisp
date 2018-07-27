@@ -34,26 +34,6 @@ THE SOFTWARE.
 ;; --------------------------------------------------------------------
 ;; Physical network
 
-(defvar *local-nodes*  '(("localhost"    . "127.0.0.1")))
-#|
-(defvar *local-nodes*  '(("Arroyo.local"    . "10.0.1.33")
-                         ("Malachite.local" . "10.0.1.6")
-                         ("Dachshund.local" . "10.0.1.3")
-                         ("Rambo"           . "10.0.1.13")
-                         ("ChromeKote.local" . "10.0.1.36")))
-|#
-(defun get-local-ipv4 (node-name)
-  (cdr (assoc node-name *local-nodes*
-              :test 'string-equal)))
-  
-(defun get-my-ipv4 ()
-  (get-local-ipv4 (machine-instance)))
-
-(defvar *real-nodes*  (mapcar 'cdr *local-nodes*))
-(defvar *leader-node* (get-local-ipv4 "localhost"))
-;;(defvar *leader-node* (get-local-ipv4 "ChromeKote.local"))
-
-(defvar *top-node*   nil) ;; current leader node
 (defvar *my-node*    nil) ;; which node my machine is on
 
 ;; default-timeout-period needs to be made smarter, based on node height in tree
@@ -74,9 +54,7 @@ THE SOFTWARE.
               :initial-element nil))
 
 (defclass node (gossip:gossip-node)
-  ((ip       :accessor node-ip       ;; IPv4 string for this node
-             :initarg  :ip)
-   (pkeyzkp  :accessor node-pkeyzkp  ;; public key + ZKP
+  ((pkeyzkp  :accessor node-pkeyzkp  ;; public key + ZKP
              :initarg  :pkeyzkp)
    (skey     :accessor node-skey     ;; private key
              :initarg  :skey)
@@ -98,8 +76,7 @@ THE SOFTWARE.
    (blockchain     :accessor node-blockchain
                    :initform nil)
    (blockchain-tbl :accessor node-blockchain-tbl
-                   :initform (make-hash-table
-                              :test 'equalp))
+                   :initform (make-hash-table))
    (mempool        :accessor  node-mempool
                    :initform  (make-hash-table
                                :test 'equalp))
@@ -136,15 +113,44 @@ THE SOFTWARE.
    (load     :accessor node-load     ;; cpu loading of group for this node
              :initform 1)
    (self     :accessor node-self     ;; ptr to Actor handler
-             :accessor application-handler ;; accessor used by gossip system to find our Actor
+             :accessor gossip:application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
    ))
 
+;; -------------------------------------------------------
+
+(defvar *current-node*  nil)  ;; for sim = current node running
+
+(defun current-node ()
+  *current-node*)
+
+(defmacro with-current-node (node &body body)
+  `(let ((*current-node* ,node))
+     ,@body))
+
+(define-symbol-macro *blockchain*     (node-blockchain     *current-node*))
+(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
+(define-symbol-macro *mempool*        (node-mempool        *current-node*))
+(define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
+(define-symbol-macro *leader*         (node-current-leader *current-node*))
+(define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
+(define-symbol-macro *had-work*       (node-had-work       *current-node*))
+
+;; election related items
+(define-symbol-macro *election-calls* (node-election-calls *current-node*))
+(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
+(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
+
+(defun add-to-blockchain (node blk)
+  (with-current-node node
+    (let ((hashID (int (hash-block blk))))
+      (setf *blockchain* hashID
+            (gethash hashID *blockchain-tbl*) blk))))
+
+;; -------------------------------------------------------
+
 (defmethod node-bitmap ((node node))
   (ash 1 (node-bit node)))
-
-(defmethod node-realnode ((node node))
-  (string-equal (node-ip node) (node-real-ip node)))
 
 (defmethod iteri-subs ((node node) fn)
   (loop for sub across (node-subs node)
@@ -163,35 +169,7 @@ THE SOFTWARE.
                   when sub
                   sum  (node-load sub)))))
 
-;; --------------------------------------------------------------------
-;; For now, 3 different ways to specify a node:
-;;   1. node structure pointer
-;;   2. IPv4 address (in dotted string notation)
-;;   3. PKEY (compressed public key ECC point)
-
-;; XREF from IPv4 address to Tree Node
-(defvar *ip-node-tbl*   (make-hash-table :test 'equal)) ;; IPv4 string as key
-(defvar *pkey-node-tbl* (make-hash-table))              ;; compressed ECC pt integer as key
-
-(defvar *pkey-skey-tbl* (make-hash-table))              ;; commpressed ECC pt integer as key
-
 ;; -------------------------------------------------------------------
-
-(defvar *comm-ip*  nil) ;; internal use only
-
-(defun make-cosi-tree-node (ipstr pkeyzkp parent)
-  (let* ((cmpr-pkey (first pkeyzkp))
-         (pval      (keyval cmpr-pkey))
-         (node (make-instance 'node
-                              :ip      ipstr
-                              :skey    (gethash pval *pkey-skey-tbl*)
-                              :pkey    cmpr-pkey
-                              :pkeyzkp pkeyzkp
-                              :parent  parent
-                              :real-ip *comm-ip*
-                              )))
-    (setf (gethash ipstr *ip-node-tbl*)   node
-          (gethash pval  *pkey-node-tbl*) node)))
 
 (defun need-to-specify (&rest args)
   (declare (ignore args))
@@ -202,351 +180,29 @@ THE SOFTWARE.
   (setf (node-self node) (make-node-dispatcher node))
   (call-next-method))
 
+(defmethod initialize-instance :after ((node node) &key &allow-other-keys)
+  (when (null (node-blockchain node))
+    (add-to-blockchain node (emotiq/config:get-genesis-block))))
+
 ;; --------------------------------------------------------------
-
-(defun check-pkey (zkp)
-  ;; verify pkey zkp, return decompressed pkey ECC point
-  (destructuring-bind (pkey psig) zkp
-    (values pkey
-            (cosi-keying:validate-pkey pkey psig))))
-
-#+:ALLEGRO
-(defun allegro-dotted-to-integer (string)
-  (multiple-value-bind (start end starts ends)
-      (#~m/^([0-9]+).([0-9]+).([0-9]+).([0-9]+)$/ string)
-    (declare (ignore start end))
-    (reduce (lambda (ans pair)
-              (destructuring-bind (start . end) pair
-                (logior (ash ans 8)
-                        (parse-integer string :start start :end end))))
-            (nreverse (pairlis (coerce starts 'list)
-                               (coerce ends   'list)))
-            :initial-value 0)))
-
-#+:ALLEGRO
-(defun allegro-integer-to-dotted (val)
-  (let ((parts (um:nlet-tail iter ((n   4)
-                                   (pos 0)
-                                   (ans nil))
-                 (if (zerop n)
-                     ans
-                   (iter (1- n) (+ pos 8) (cons (ldb (byte 8 pos) val) ans)))
-                 )))
-    (format nil "~{~d~^.~}" parts)))
-
-(defun dotted-string-to-integer (string)
-  #+:LISPWORKS (comm:string-ip-address string)
-  #+:OPENMCL   (ccl::dotted-to-ipaddr string)
-  #+:ALLEGRO   (allegro-dotted-to-integer string)
-  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
-  (usocket:host-byte-order string))
-
-(defun integer-to-dotted-string (val)
-  #+:LISPWORKS (comm:ip-address-string val)
-  #+:OPENMCL (CCL::ipaddr-to-dotted val)
-  #+:ALLEGRO (allegro-integer-to-dotted val)
-  #-(or :LISPWORKS :ALLEGRO :CLOZURE)
-  (usocket:hbo-to-dotted-quad val))
-
-(defun keyval (key)
-  (vec-repr:int key))
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
 
-(defun gen-node-id (ip)
-  (if (consp ip)
-      (values-list ip)
-    (with-accessors ((pkey  pbc:keying-triple-pkey)
-                     (psig  pbc:keying-triple-sig)
-                     (skey  pbc:keying-triple-skey))
-        (pbc:make-key-pair ip)
-      (setf (gethash (keyval pkey) *pkey-skey-tbl*) skey)
-      (values ip
-              (list pkey psig))
-      )))
-
-;; -------------------------------------------------------------
-
-;; the *NODE-BIT-TBL* is really an ordered vector of all nodes in the
-;; tree, ordered by public key magnitude
-
-(defvar *node-bit-tbl* #())
-
-(defun assign-bits ()
-  ;; assign bit positions to each node
-  (let ((collected
-         (um:accum acc
-           (maphash (lambda (k node)
-                      (declare (ignore k))
-                      (acc node))
-                    *ip-node-tbl*))))
-    (setf collected (sort collected '<
-                          :key (um:compose 'keyval 'node-pkey)))
-    (loop for node in collected
-          for ix from 0 do
-          (setf (node-bit node) ix))
-    (setf *node-bit-tbl*
-          (coerce collected 'vector))
-    ))
-
-(defun init-mappings ()
-  (setf *my-node* nil
-        *top-node* nil
-        *leader-node* (get-local-ipv4 "localhost")
-        *real-nodes*  (mapcar 'cdr *local-nodes*))
-  (clrhash *ip-node-tbl*)
-  (clrhash *pkey-node-tbl*)
-  (clrhash *pkey-skey-tbl*)
-  (setf *node-bit-tbl* #()))
-
-;; -------------------------------------------------------------------
-;; Node construction
-
-(defun partition (node ip-list &key (key 'identity))
-  (let* ((bins  (make-subs))
-         (nbins (length bins))
-         (vnode (dotted-string-to-integer (node-ip node))))
-    (mapc (lambda (ip-arg)
-            (let* ((vip (dotted-string-to-integer (funcall key ip-arg)))
-                   (ix  (mod (logxor vnode vip) nbins)))
-              (push ip-arg (aref bins ix))))
-          ip-list)
-    (setf (node-subs node) bins)))
-
-(defun inner-make-node-tree (ip ip-list &optional parent)
-  (multiple-value-bind (ipstr pkeyzkp)
-      (gen-node-id ip)
-    (let ((node (make-cosi-tree-node ipstr pkeyzkp parent)))
-      (when ip-list
-        (let ((bins (partition node ip-list
-                               :key (lambda (ip-arg)
-                                      (if (consp ip-arg)
-                                          (car ip-arg)
-                                        ip-arg)))))
-          (iteri-subs node
-                      (lambda (ix subs)
-                        (setf (aref bins ix)
-                              (inner-make-node-tree (car subs)
-                                                    (cdr subs)
-                                                    node))))
-          (set-node-load node)))
-      node)))
-
-(defun make-node-tree (ip vlist)
-  ;; main entry point - captures IPv4 of arg ip for use as real-ip in
-  ;; succeeding nodes
-  (multiple-value-bind (ipstr pkeyzp)
-      (gen-node-id ip)
-    (let ((*comm-ip*  ipstr))
-      (inner-make-node-tree (list ipstr pkeyzp) vlist))))
-
-;; --------------------------------------------------------------------
-;; for visual debugging...
-
-#+:LISPWORKS
-(progn
-  (defmethod children (x layout)
-    nil)
-  
-  (defmethod children ((node node) layout)
-    (remove nil (coerce (node-subs node) 'list)))
-
-  (defun split-to-octets (val)
-    (um:nlet-tail iter ((n   4)
-                        (val val)
-                        (lst nil))
-      (if (zerop n)
-          lst
-        (iter (1- n) (ash val -8) (cons (ldb (byte 8 0) val) lst)))
-      ))
-
-  (defclass red-text (capi:item-pinboard-object)
-    ())
-
-  (defclass black-text (capi:item-pinboard-object)
-    ())
-
-  (defmethod capi:draw-pinboard-object :around (pinboard (self red-text) &key &allow-other-keys)
-    (gp:with-graphics-state (pinboard
-                             :foreground :red)
-      (call-next-method)))
-  
-  (defmethod make-node-pane (graphics-port (node node))
-    (declare (ignore graphics-port))
-    (let ((txt (node-ip node)))
-      (make-instance (if (node-realnode node)
-                         'red-text
-                       'black-text)
-                     :text txt)))
-
-  (defmethod view-tree ((tree node) &key (layout :left-right))
-    (unless (emotiq:x11-display-p)
-      (emotiq:note "No X11 display available to view tree")
-      (return-from view-tree nil))
-    (capi:contain
-     (make-instance 'capi:graph-pane
-                    :layout-function layout
-                    :roots (list tree)
-                    :node-pane-function 'make-node-pane
-                    :children-function (lambda (node)
-                                         (children node layout))
-                    ))))
-
-;; --------------------------------------------------------------------
-;; Initial Tree Generation and Persistence
-
-(defvar *default-data-file* (asdf:system-relative-pathname :cosi-bls "config/cosi-nodes.txt"))
-(defvar *default-key-file*  (asdf:system-relative-pathname :cosi-bls "config/cosi-keying.txt"))
-
-(defun generate-ip ()
-  ;; generate a unique random IPv4 address
-  (let ((ip (integer-to-dotted-string (random #.(expt 2 32)))))
-    (if (gethash ip *ip-node-tbl*)
-        (generate-ip) ;; should be unlikely, would be 50% at around 2^16 nodes
-      (setf (gethash ip *ip-node-tbl*) ip))))
-
-(defmethod pair-ip-pkey ((node node))
-  ;; used during initial tree generation
-  ;; we need numeric values of keys for store in file
-  (list (node-ip node)
-        (node-pkeyzkp node)))
-
-(defmethod pair-ip-pkey ((ip string))
-  ;; used during initial tree generation
-  ;; we need numeric values of keys for store in file
-  (pair-ip-pkey (gethash ip *ip-node-tbl*)))
-
-(defun gen-main-tree (leader real-nodes grps)
-  (let* ((trees     (mapcar 'make-node-tree real-nodes grps))
-         (main-tree (find leader trees
-                          :test 'string=
-                          :key  'node-ip)))
-    ;; attach the non-leader real nodes to the leader node
-    (let ((all-but (remove main-tree trees)))
-      (setf (node-subs main-tree) (concatenate 'vector
-                                               (node-subs main-tree)
-                                               (apply 'vector all-but)))
-      (dolist (tree all-but)
-        (setf (node-parent tree) main-tree)))
-    main-tree))
-
 ;; --------------------------------------------------------------
-;; Generate Tree / Keying and save to startup init files
 
-(defun generate-tree (&key datafile keyfile (nodes 1000))
-  (init-mappings)
-  (let* ((leader     *leader-node*)
-         (real-nodes  (remove-duplicates *real-nodes*
-                                         :test 'string=)))
-    
-    ;; ensure leader is in the real-nodes collection
-    (assert (member leader real-nodes :test 'string=))
-    
-    ;; pre-populate hash table with real-nodes
-    (clrhash *ip-node-tbl*)
-    (clrhash *pkey-node-tbl*)
-    (clrhash *pkey-skey-tbl*)
-    (dolist (ip real-nodes)
-      (setf (gethash ip *ip-node-tbl*) ip))
+(defun latest-block ()
+  (and *blockchain*
+       (gethash *blockchain* *blockchain-tbl*)))
 
-    ;; build the trees
-    (let* ((nreal       (length real-nodes))
-           (nodes/grp   (ceiling nodes nreal))
-           (grps        (loop repeat nreal collect
-                              (loop repeat nodes/grp collect
-                                    (generate-ip))))
-           (main-tree   (gen-main-tree leader real-nodes grps)))
+(defun block-list (&optional (from *blockchain*))
+  (um:accum acc
+    (um:nlet-tail iter ((id from))
+      (unless (null id)
+        (let ((blk (gethash id *blockchain-tbl*)))
+          (acc blk)
+          (iter (int (block-prev-block-hash blk)))
+          )))))
 
-      ;; save nodes as a text file for later
-      (ensure-directories-exist *default-key-file*  :verbose t)
-      (ensure-directories-exist *default-data-file* :verbose t)
-      
-      (with-open-file (f (or datafile *default-data-file*)
-                         :direction :output
-                         :if-does-not-exist :create
-                         :if-exists :rename)
-        (with-standard-io-syntax
-          (let ((*print-readably*     t)
-                (*print-right-margin* 128))
-            (pprint `(:leader     ,leader
-                      :real-nodes ,(mapcar 'pair-ip-pkey real-nodes)
-                      :groups     ,(mapcar (lambda (grp)
-                                             (mapcar 'pair-ip-pkey grp))
-                                           grps))
-                    f))))
-      
-      ;; write the pkey/skey associations
-      (with-open-file (f (or keyfile *default-key-file*)
-                         :direction :output
-                         :if-does-not-exist :create
-                         :if-exists :rename)
-        (let ((keys nil))
-          (maphash (lambda (k v)
-                     (push (cons k v) keys))
-                   *pkey-skey-tbl*)
-          (with-standard-io-syntax
-            (pprint keys f))))
-      (assign-bits)
-      #+:LISPWORKS (view-tree main-tree)
-      (setf *my-node*  main-tree
-            *top-node* main-tree)
-      )))
 
-;; ---------------------------------------------------------------
-;; Tree reconstruction from startup init files
-
-(defun read-data-file (path)
-  (with-open-file (f path
-                     :direction :input)
-    (read f)))
-      
-(defun reconstruct-tree (&key datafile keyfile)
-  ;; read the keying file
-  (init-mappings)
-  (let* ((key-path  (or keyfile 
-                     *default-key-file*))
-         (keys       (read-data-file key-path))
-         (data-path   (or datafile
-                          *default-data-file*))
-         (data        (read-data-file data-path))
-         (leader      (getf data :leader))
-         (real-nodes  (getf data :real-nodes))
-         (grps        (getf data :groups)))
-    
-    ;; sanity checking
-    (assert (member leader real-nodes
-                    :test 'string=
-                    :key  'car))
-    (labels ((no-dups (lst)
-               (dolist (ip lst)
-                 (destructuring-bind (ipstr zkp) ip
-                   (assert (null (gethash ipstr *ip-node-tbl*)))
-                   (let ((pval (keyval (first zkp))))
-                     (assert (null (gethash pval *pkey-node-tbl*)))
-                     (assert (apply 'cosi-keying:validate-pkey zkp))
-                     (setf (gethash ipstr *ip-node-tbl*)   ip
-                           (gethash pval  *pkey-node-tbl*) ip)
-                     )))))
-      (clrhash *ip-node-tbl*)
-      (clrhash *pkey-node-tbl*)
-      (no-dups real-nodes)
-      (mapc #'no-dups grps))
-    
-    ;; reconstruct keying info
-    (clrhash *pkey-skey-tbl*)
-    (mapc (lambda (pair)
-            (destructuring-bind (k . v) pair
-              ;; k is integer, compressed pkey ECC pt
-              ;; v is skey secret key
-              (setf (gethash k *pkey-skey-tbl*) v)))
-          keys)
-    
-    ;; reconstruct the trees
-    (let ((main-tree  (gen-main-tree leader real-nodes grps)))
-      (assign-bits)
-      #+:LISPWORKS (view-tree main-tree)
-      (setf *top-node* main-tree
-            *my-node*  main-tree)) ;; (gethash (get-my-ipv4) *ip-node-tbl*)
-    ))
 

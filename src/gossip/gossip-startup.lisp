@@ -40,15 +40,33 @@
           (mapc (lambda (pubkey)
                   (make-node ':gossip :uid pubkey))
                 pubkeys))
-      ;; clear log and start server
-      (run-gossip)
+      ;; keep existing log and start server
+      (run-gossip nil)
       t)))
+
+(defun ensure-pinger-daemon ()
+  "Ensure the existence of a background daemon that pings other machines until we're
+  convinced we're connected to the outside world."
+  (unless (find-process "Pinger")
+    (mpcompat:process-run-function "Pinger"
+      nil
+      (lambda ()
+        (let ((interval (+ 20 (random 40)))) ; minimum 20 seconds; maximum 60
+          (loop
+            (unless (> (length (remote-real-uids))
+                       ; sqrt is just a heuristic about whether we're connected to the outside world.
+                       ;  Needs to be more sophisticated if *hosts* can vary over time,
+                       ;   and if we begin to cause (remote-real-uids) to decrease over time
+                       ;   when nodes disappear.
+                       (sqrt (length *hosts*)))
+              (ping-other-machines))
+            (sleep interval)))))))
 
 (defun ping-other-machines (&optional (hosts *hosts*))
   "Find what other machines are alive.
    Returns a list of augmented-data or exception monads about live UIDs on other machines.
    You can map unwrap on these things to get at the real data.
-   Stashes result along with time of acquisition at *live-uids*>"
+   Result can be queried by using #'remote-real-uids."
   (when hosts
     (multiple-list-uids hosts)))
 
@@ -67,10 +85,10 @@
   The network connectivity test can be invoked via PING-OTHER-MACHINES
   with this list if desired."
   ; if we're given a root-path, use that instead of the global one
-  (emotiq:note "Starting gossip configuration for testnet…")
+  (edebug 1 "Starting gossip configuration for testnet…")
   (handler-bind 
       ((error (lambda (e)
-                (emotiq:note "Cannot configure local machine: ~a" e))))
+                (edebug 1 :WARN "Cannot configure local machine: ~a" e))))
     (when root-path 
       (gossip/config:initialize :root-path root-path))
     (gossip-init ':maybe)
@@ -86,14 +104,14 @@
                   when (not (and (= eripa-host-hbo host-hbo)
                                  (= *nominal-gossip-port* (second host-pair))))
                     collect host-pair))
-      (emotiq:note "Gossip init finished.")
+      (edebug 1 "Gossip init finished.")
       (if ping-others
           (handler-bind 
               ((error (lambda (e)
-                        (emotiq:note "Failed to run connectivity tests: ~a" e))))
+                        (edebug 1 :WARN "Failed to run connectivity tests: ~a" e))))
             (let ((other-machines (ping-other-machines hosts)))
               (unless other-machines
-                (emotiq:note "No other hosts to check for ping others routine."))
+                (edebug 1 :WARN "No other hosts to check for ping others routine."))
               other-machines))
           hosts))))
 
@@ -111,7 +129,7 @@
       (:init
        #+OPENMCL
        (if (find-package :gui) ; CCL IDE is running
-           (setf emotiq:*notestream* nil) ; just use gossip::*log* in this case
+           (when (eql *error-output* emotiq:*notestream*) (setf emotiq:*notestream* nil)) ; just use gossip::*log* in this case
            ; (setf emotiq:*notestream* (hemlock-ext:top-listener-output-stream)) ; another possibility
            (setf emotiq:*notestream* *error-output*))
        ;; In the OpenMCL IDE, outputs to *standard-output* and *error-output* go to a separate listener for the
