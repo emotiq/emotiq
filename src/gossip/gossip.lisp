@@ -22,8 +22,8 @@
         that are not expected to be globally-unique.")
 (defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
-; (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max second to wait for direct replies")
-(defparameter *direct-reply-max-seconds-to-wait* 100 "Max second to wait for direct replies")
+(defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max seconds to wait for direct replies")
+;(defparameter *direct-reply-max-seconds-to-wait* 100 "Max seconds to wait for direct replies")
 (defvar *incoming-mailbox* (mpcompat:make-mailbox) "Destination for incoming objects off the wire. Should be an actor in general. Mailbox is only for testing.")
 (defparameter *max-buffer-length* 65500)
 (defvar *hmac-keypair* nil "Keypair for this running instance. Should only be written to by *hmac-keypair-actor*")
@@ -184,12 +184,12 @@ are in place between nodes.
   "Delete all knowledge of local real and proxy nodes. Usually used only for testing and startup."
    (kvs:clear-store *nodes*))
 
-(defun local-nodes-matching (fn)
-  "Returns a list of local nodes for which fn returns true. If fn=T, return all local nodes."
-  (when fn
+(defun local-nodes-matching (pred)
+  "Returns a list of local nodes for which pred returns true. If pred=T, return all local nodes."
+  (when pred
     (loop for node being each hash-value of *nodes*
-      when (or (eq t fn)
-               (funcall fn node))
+      when (or (eq t pred)
+               (funcall pred node))
       collect node)))
 
 (defun real-node-p (node)
@@ -197,12 +197,27 @@ are in place between nodes.
        (not (temporary-p node))))
 
 (defun proxy-node-p (node)
+  "Returns true if node is a non-temporary proxy node"
   (and (typep node 'proxy-gossip-node)
        (not (temporary-p node))))
 
 (defun local-real-nodes ()
   "Returns a list of nodes that are real (non-proxy), permanent and resident on this machine."
   (local-nodes-matching 'real-node-p))
+
+(defun proxy-to-host (&rest hostpair)
+  "Returns a proxy (could be temporary, and it fact probably will be) with real-uid=0 pointing to given ipaddr and port"
+  (let ((proxies (local-nodes-matching (lambda (node) (and (typep node 'proxy-gossip-node)
+                                                           (eql 0 (real-uid node)))))))
+    (find-if (lambda (node)
+               (node-matches-host? node hostpair))
+             proxies)))
+
+(defun inspect-temp-proxies ()
+  "Only used for debugging"
+  (let ((proxies (local-nodes-matching (lambda (node) (and (typep node 'proxy-gossip-node))))))
+    (dolist (proxy proxies)
+      (inspect proxy))))
 
 (defun random-node ()
   "Only used for testing"
@@ -1443,14 +1458,16 @@ dropped on the floor.
   "Announce a UID, IP address, and port to the collective.
   (This is different from the automatic ensure-proxy-node that happens with every incoming
    connection because that implicitly proxifies only the immediate upstream sender.
-   This explicitly proxifies a particular node.)
-  Every intermediate node will have the message
-  both delivered to it and forwarded through it.
+   This explicitly proxifies a particular node.)*
+  Every intermediate node will have the message both delivered to it and forwarded through it.
   Recipient nodes are not expected to reply."
   (destructuring-bind (uid ipaddr ipport) (args msg)
     (ensure-proxy-node :tcp ipaddr ipport uid)
     ; thisnode becomes new source for forwarding purposes
     (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
+
+;;; *automatically-created ensure-proxy-nodes probably need to go away--even for solicitations expecting replies--
+;;;    because solicitations expecting replies themselves need to go away.
 
 (defmethod k-dissolve ((msg solicitation) thisnode srcuid)
   "Commands every node it passes through to dissolve connections associated with a given graphID.
@@ -1973,12 +1990,12 @@ gets sent back, and everything will be copacetic.
   "Real-address, real-port, and real-uid refer to the node on an OTHER machine that this node points to.
   Returns newly-created or old proxy-gossip-node, if any.
   This is very conservative: It will never replace an existing real node of a given UID with a proxy node,
-    and it will never replace an existing proxy node of a given UID with a new one.
+  and it will never replace an existing proxy node of a given UID with a new one.
   Newly-created proxy (if any) will be added to *nodes* database for this process.
   If successful, proxy (new or existing) will be returned.
   If proxy could not be found nor made for some reason, returns NIL."
   (check-type real-port integer) ; might want to support lookup of port-name to port-number eventually
-  (let* ((oldnode (lookup-node real-uid)) ; proxy uids should match their real-uids
+  (let* ((oldnode nil) 
          (proxy nil))
     (flet ((make-proxy ()
              (if (and (eql real-port *actual-tcp-gossip-port*)
@@ -1992,6 +2009,10 @@ gets sent back, and everything will be copacetic.
                                               :real-port real-port
                                               :real-uid real-uid
                                               :temporary-p temporary-p)))))
+      (setf oldnode
+            (if (eql 0 real-uid)
+                (proxy-to-host real-address real-port)
+                (lookup-node real-uid))) ; proxy uids should match their real-uids if /= 0
       (cond ((and oldnode
                   (not (typep oldnode 'proxy-gossip-node)))
              (edebug 1 :WARN oldnode "Expected proxy; found real node. Doing nothing." real-uid))

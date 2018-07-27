@@ -93,6 +93,25 @@
 ;;; TCP transport implementation based on thread-per-connection model.
 ;;;
 
+;;; To see open sockets:
+;;; (gossip/transport::sockets gossip::*transport*)
+
+(defun inspect-socket (socket)
+  (append (multiple-value-list (usocket::get-local-name socket))
+          (multiple-value-list (usocket::get-peer-name socket))))
+
+(defun sockets-matching (pred)
+  (when pred
+    (loop for socket in (gossip/transport::sockets gossip::*transport*)
+      when (or (eq t pred)
+               (funcall pred socket))
+      collect socket)))
+
+(defun sockets-to (peer-address)
+  "Returns a list of sockets connected to given peer-address"
+  (sockets-matching (lambda (socket)
+                      (gossip::gossip-equalp peer-address (usocket::get-peer-address socket)))))
+
 (defclass tcp-threads-transport ()
   (;; Operational state.
    (listen-socket :initarg :listen-socket :initform nil :accessor listen-socket
