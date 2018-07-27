@@ -66,10 +66,14 @@
 
 (defpackage emotiq/wallet
   (:use #:cl)
+  (:nicknames #:wallet)
   (:export
    #:submit-transaction
    #:get-transaction)
   (:export
+   #:address
+   #:address=
+   
    #:get-wallet-named
 
    #:create-wallet
@@ -113,13 +117,108 @@
    #:etc/
    #:var/log/))
 
-(defpackage emotiq/txn
+(defpackage emotiq/block
   (:use #:cl)
+  (:nicknames #:block)
   (:export
-   #:*transaction-fee*
-   #:address
+   #:eblock
+   #:make-block
+   #:prev-block-hash
+   #:timestamp
+   #:leader-pkey
+   #:election-proof
+   #:signature
+   #:signature-bitmap
+   #:witnesses
+   #:witnesses-and-stakes
+   #:transactions
+   #:merkle-root-hash
+   #:input-script-merkle-root-hash
+   #:witness-merkle-root-hash
+   #:transactions
+   #:make-genesis-block
+   #:hash
+   #:compute-merkle-root-hash
+   #:compute-input-script-merkle-root-hash
+   #:compute-witness-merkle-root-hash
+   #:serialize
+   #:serialize-header
+   #:update-signature
+   #:new-transactions
+   #:check-transactions))
+
+(defpackage emotiq/blockchain
+  (:use #:cl)
+  (:nicknames #:blockchain)
+  (:export
+   #:do-blockchain
+   #:do-transactions
+   #:do-all-transactions
+   #:count-transactions
    #:get-utxos
-   #:make-spend-transaction))
+   #:dump))
+
+(defpackage emotiq/mempool
+  (:use #:cl)
+  (:nicknames #:mempool)
+  (:export
+   #:add-transaction
+   #:remove-transaction
+   #:get-transactions
+   #:clear-block-transactions))
+    
+(defpackage emotiq/transaction
+  (:use #:cl)
+  (:nicknames #:txn)
+  (:import-from #:emotiq/blockchain
+                #:do-blockchain
+                #:do-transactions
+                #:do-all-transactions)
+  (:export
+   #:*minimum-transaction-fee*
+   #:transaction
+   #:transaction-input
+   #:transaction-output
+   #:id
+   #:id=
+   #:id-string
+   #:hash
+   #:type
+   #:outputs
+   #:inputs
+   #:output-address
+   #:output-lock-script
+   #:output-amount
+   #:output-proof
+   #:output-message
+   #:input-id
+   #:input-index
+   #:input-unlock-script
+   #:witness-data-p
+   #:sum-outputs
+   #:utxo-p
+   #:precedes-p
+   #:coinbase-input-p
+   #:compute-fee
+   #:make-genesis-transaction
+   #:make-spend-transaction
+   #:make-collect-transaction
+   #:validate
+   #:dump))
+
+(defpackage emotiq/transaction/script
+  (:use #:cl)
+  (:nicknames #:txn/script)
+  (:shadow #:eval #:apply #:error)
+  (:export
+   #:get-lock-script
+   #:get-unlock-script
+   #:get-lock-script-for-type
+   #:get-unlock-script-for-type
+   #:eval
+   #:apply
+   #:error
+   #:run))
 
 (defpackage emotiq/tracker
   (:use #:cl)

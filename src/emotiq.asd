@@ -43,14 +43,6 @@
                 :serial t
                 :components ((:file "filesystem")))))
 
-(defsystem "emotiq/txn"
-  :depends-on (emotiq
-               cosi-bls)
-  :components ((:module source
-                :pathname "./"
-                :serial t
-                :components ((:file "txn")))))
-                
 (defsystem "emotiq/startup"
   :depends-on (emotiq/node
                actors
@@ -69,15 +61,35 @@
                quri
                emotiq/txn
                lisp-object-encoder
-               cosi-bls)
+               core-crypto
+               crypto-pairings)
   :in-order-to ((test-op (test-op "wallet-test")))
   :components ((:module source
                 :pathname "wallet/"
                 :serial t
-                :components ((:file "name")
+                :components ((:file "address")
+                             (:file "name")
+                             (:file "keying")
                              (:file "transaction")
                              (:file "file")
                              (:file "wallet")))))
+
+(defsystem "emotiq/blockchain"
+  :depends-on (emotiq
+               emotiq/wallet
+               cosi-bls)
+  :components ((:module source
+                :pathname "blockchain/"
+                :serial t
+                :components ((:file "transaction-base")
+                             (:file "transaction-script")
+                             (:file "transaction")
+                             (:file "block")
+                             (:file "mempool")
+                             (:file "blockchain-base")
+                             (:file "blockchain-transaction")
+                             (:file "block-transactions")
+                             (:file "blockchain")))))
 
 (defsystem "emotiq/cli"
   :depends-on (emotiq/wallet

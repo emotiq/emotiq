@@ -121,13 +121,14 @@ THE SOFTWARE.
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
   (pr "~A got genesis block" (short-id (current-node)))
-  (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
+  (unless blk   ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
   (add-to-blockchain (current-node) blk))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction-new)) &key trn)
-  (cosi/proofs/newtx:validate-transaction trn))
+  #-package-refactor (cosi/proofs/newtx:validate-transaction trn)
+  #+package-refactor (txn:validate trn))
 
 (defmethod node-dispatcher ((msg-sym (eql :make-block)) &key)
   (emotiq/tracker:track :make-block)
@@ -338,7 +339,8 @@ THE SOFTWARE.
 (defvar *in-simulatinon-always-byz-ok* nil) ;; set to nil for non-sim mode, forces consensus
 
 (defun signature-hash-message (blk)
-  (cosi/proofs:serialize-block-header-octets blk))
+  #-package-refactor (cosi/proofs:serialize-block-header-octets blk)
+  #+package-refactor (block:serialize-header blk))
 
 (defun get-block-transactions (blk)
   "Right now it is a simple partially ordered list of transactions.
@@ -642,6 +644,7 @@ topo-sorted partial order"
 ;; ----------------------------------------------------------------------
 ;; Code run by Cosi block validators...
 
+#-package-refactor
 (defun #1=check-block-transactions (blk)
   "TLST is list of transactions from current pending block. Return nil
 if invalid block.
@@ -668,6 +671,10 @@ check that each TXIN and TXOUT is mathematically sound."
     (dolist (txout (trans-txouts tx))
       (record-new-utxo txout)))
   t) ;; tell caller everything ok
+
+#+package-refactor
+(defun check-block-transactions (blk)
+  (block:check-transactions blk))
 
 ;; --------------------------------------------------------------------
 ;; Message handlers for verifier nodes
@@ -870,8 +877,12 @@ check that each TXIN and TXOUT is mathematically sound."
 (defmethod bft-threshold ((witnesses sequence))
   (bft-threshold (length witnesses)))
 
+#-package-refactor
 (defmethod bft-threshold ((blk eblock))
   (bft-threshold (block-witnesses blk)))
+#+package-refactor
+(defmethod bft-threshold ((blk block:eblock))
+  (bft-threshold (block:witnesses blk)))
 
 ;; -------------------------------------------------------------
 
@@ -954,9 +965,15 @@ check that each TXIN and TXOUT is mathematically sound."
       (>= (logcount bits)
           (bft-threshold blk))))
 
+#-package-refactor
 (defun check-block-transactions-hash (blk)
   (int= (block-merkle-root-hash blk) ;; check transaction hash against header
          (compute-merkle-root-hash blk)))
+
+#+package-refactor
+(defun check-block-transactions-hash (blk)
+  (hash= (block:merkle-root-hash blk) ;; check transaction hash against header
+         (block:compute-merkle-root-hash blk)))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
   pkey2)
@@ -975,7 +992,8 @@ check that each TXIN and TXOUT is mathematically sound."
   ;; compute composite witness key sum
   (let ((wsum  nil))
     (loop for ix from 0
-          for wkey in (coerce (block-witnesses blk) 'list)
+       for wkey in (coerce #-package-refactor (block-witnesses blk)
+                           #+package-refactor (block:witnesses blk) 'list)
           do
           (when (logbitp ix bits)
             (setf wsum (add-pkeys wsum wkey))))
@@ -986,6 +1004,7 @@ check that each TXIN and TXOUT is mathematically sound."
        (check-byz-threshold bits blk)
        (pbc:check-hash hash sig (composite-pkey blk bits))))
 
+#-package-refactor
 (defun check-block-multisignature (blk)
   (let* ((bits  (block-signature-bitmap blk))
          (sig   (block-signature blk))
@@ -994,6 +1013,15 @@ check that each TXIN and TXOUT is mathematically sound."
                :test 'int=)
          (check-hash-multisig hash sig bits blk)  ;; does the multisignature validate?
          (check-block-transactions-hash blk))     ;; do the transactions hash to the header Merkel hash?
+    ))
+
+#+package-refactor
+(defun check-block-multisignature (blk)
+  (let* ((bits  (block:signature-bitmap blk))
+         (sig   (block:signature blk))
+         (hash  (hash/256 (signature-hash-message blk))))
+    (and (check-hash-multisig hash sig bits blk)
+         (check-block-transactions-hash blk))
     ))
 
 (defun call-for-punishment ()
@@ -1032,12 +1060,18 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
      (or
-      (and (int= *leader* (block-leader-pkey blk))
+      (and (int= *leader*
+                 #-package-refactor (block-leader-pkey blk)
+                 #+package-refactor (block:leader-pkey blk))
            (check-block-transactions-hash blk)
            (let ((prevblk (latest-block)))
              (or (null prevblk)
+                 #-package-refactor
                  (and (> (block-timestamp blk) (block-timestamp prevblk))
-                      (int= (block-prev-block-hash blk) (hash-block prevblk)))))
+                      (int= (block-prev-block-hash blk) (hash-block prevblk)))
+                 #+package-refactor
+                 (and (> (block:timestamp blk) (block:timestamp prevblk))
+                      (int= (block:prev-block-hash blk) (block:hash prevblk)))))
            (or (int= (node-pkey node) *leader*)
                (check-block-transactions blk)))
       ;; else - failure case
@@ -1050,7 +1084,9 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
      (or
-      (and (int= *leader* (block-leader-pkey blk))
+      (and (int= *leader*
+                 #-package-refactor (block-leader-pkey blk)
+                 #+package-refactor (block:leader-pkey blk))
            (check-block-multisignature blk)
            (progn
              (add-to-blockchain node blk)
@@ -1059,7 +1095,8 @@ check that each TXIN and TXOUT is mathematically sound."
               ;; database. Just remhash from the mempool all
               ;; transactions that made it into the block.
               (*newtx-p*
-               (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk))
+               #-package-refactor (cosi/proofs/newtx:clear-transactions-in-block-from-mempool blk)
+               #+package-refactor (mempool:clear-block-transactions blk))
               (t
                ;; clear out *mempool* and spent utxos
                (replay-remove-txs-from-mempool blk)
@@ -1092,10 +1129,11 @@ check that each TXIN and TXOUT is mathematically sound."
              ;; even if we don't, we stil give others in the group a chance
              ;; to decide for themselves
              (or (and (validate-cosi-message node consensus-stage blk)
-                      (progn
+                      (let ((witnesses #-package-refactor (block-witnesses blk)
+                                       #+package-refactor (block:witnesses blk)))
                         (pr "Block validated ~A" (short-id node))
-                        (pr "Block witnesses = ~A" (block-witnesses blk))
-                        (let ((pos (position (node-pkey node) (block-witnesses blk)
+                        (pr "Block witnesses = ~A" witnesses)
+                        (let ((pos (position (node-pkey node) witnesses
                                              :test 'int=)))
                           (when pos
                             (list (pbc:sign-hash blk-hash (node-skey node))
@@ -1205,7 +1243,8 @@ check that each TXIN and TXOUT is mathematically sound."
       ((list :answer :signature sig bits)
        (pr "Made it back from Cosi validate")
        (with-current-node node
-         (update-block-signature new-block sig bits)
+         #-package-refactor (update-block-signature new-block sig bits)
+         #+package-refactor (block:update-signature new-block sig bits)
          ;; we now have a fully assembled block with
          ;; multisignature.
          (ac:self-call :cosi-sign-commit
@@ -1228,7 +1267,8 @@ check that each TXIN and TXOUT is mathematically sound."
       )))
     
 (defun leader-exec (prepare-timeout commit-timeout)
-  (let ((trns  (get-transactions-for-new-block)))
+  (let ((trns  #-package-refactor (get-transactions-for-new-block)
+               #+package-refactor (block:new-transactions)))
     (pr "Leader see transactions: ~a" trns)
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)

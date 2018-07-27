@@ -19,12 +19,17 @@
   (let ((seed (ironclad:make-random-salt 32)))
     (make-wallet-from-seed seed)))
 
-(defun make-wallet-from-seed (seed)
-  (make-instance 'wallet
-                 :seed seed
-                 :salt (ironclad:make-random-salt 16)
-                 :keying-triple (cosi-keying:make-deterministic-keypair seed)
-                 :encrypted-private-key-p nil))
+(flet ((make-deterministic-keypair (seed)
+         ;; WARNING!! This version is for testing only. Two different users
+         ;; who type in the same seed will end up with the same keying. We
+         ;; can't allow that in the released system.
+         (pbc:make-key-pair seed)))
+  (defun make-wallet-from-seed (seed)
+    (make-instance 'wallet
+                   :seed seed
+                   :salt (ironclad:make-random-salt 16)
+                   :keying-triple (make-deterministic-keypair seed)
+                   :encrypted-private-key-p nil)))
 
 (defun copy-wallet (wallet)
   (with-slots (salt keying-triple encrypted-private-key-p encrypted-wallet-secret)
@@ -73,7 +78,7 @@ The default name for a wallet is *DEFAULT-WALLET-NAME*."
    (keying-triple wallet)))
 
 (defun key-phrase (wallet)
-  (cosi-keying:convert-int-to-wordlist
+  (convert-int-to-wordlist
    (vec-repr::convert-vec-to-int
     (vec-repr:bev-vec (secret-key wallet))
     :end 31)))
