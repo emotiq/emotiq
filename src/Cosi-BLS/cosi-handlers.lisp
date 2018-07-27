@@ -245,7 +245,6 @@ THE SOFTWARE.
   (let* ((bits  (block-signature-bitmap blk))
          (pkey  (composite-pkey blk bits)))
     (and (int= blkID (hash-block blk))            ;; is it really the block I think it is?
-         (>= (logcount bits) (bft-threshold blk)) ;; does it have BFT thresh signatures?
          (check-block-multisignature blk)         ;; does the signature check out?
          )))
 
@@ -943,8 +942,10 @@ check that each TXIN and TXOUT is mathematically sound."
   (let* ((bits  (block-signature-bitmap blk))
          (sig   (block-signature blk))
          (hash  (hash/256 (signature-hash-message blk))))
-    (and (check-hash-multisig hash sig bits blk)
-         (check-block-transactions-hash blk))
+    (and (find (block-leader-pkey blk) (block-witnesses blk) ;; is the purported Leader in the witness list?
+               :test 'int=)
+         (check-hash-multisig hash sig bits blk)  ;; does the multisignature validate?
+         (check-block-transactions-hash blk))     ;; do the transactions hash to the header Merkel hash?
     ))
 
 (defun call-for-punishment ()
