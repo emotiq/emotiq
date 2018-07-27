@@ -53,6 +53,7 @@ EOF
 
 if [[ $LISP = lispworks* ]] ; then
   echo '(setf system:*sg-default-size* 32000)' >> $rcfile
+fi
 
 $DIR/lisp-wrapper.bash -e '(format t "~&~A ~A up and running! (ASDF ~A)~2%"
                 (lisp-implementation-type)
