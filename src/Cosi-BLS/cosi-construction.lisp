@@ -174,7 +174,8 @@ THE SOFTWARE.
 
 ;; new for Gossip support, and conceptually cleaner...
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
-  (setf (node-self node) (make-node-dispatcher node))
+  (setf (node-self node) (make-node-dispatcher node)
+        *current-node*   node)
   (call-next-method))
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)
