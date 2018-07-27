@@ -1056,7 +1056,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    blocks of the blockchain (i.e., the value of cosi-simgen:*blockchain*)
    beginning the most recent minted and ending with the genesis block, with
    BLOCK-VAR bound during each iteration to the block."
-  `(loop for ,block-var in cosi-simgen:*blockchain*
+  `(loop for ,block-var in (cosi-simgen:block-list)
          do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)

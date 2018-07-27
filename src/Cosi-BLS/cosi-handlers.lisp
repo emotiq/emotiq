@@ -147,8 +147,9 @@ THE SOFTWARE.
   (pr "~A got genesis block" (short-id (current-node)))
   (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
-  (push blk *blockchain*)
-  (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk))
+  (let ((hashID (int (hash-block blk))))
+    (setf *blockchain* hashID
+          (gethash hashID *blockchain-tbl*) blk)))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction-new)) &key trn)
@@ -191,8 +192,19 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
   (pr "Block committed to blockchain")
-  (pr "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
-  (send-hold-election))
+  (pr "Block signatures = ~D" (logcount (block-signature-bitmap (latest-block))))
+  (send-blockchain-comment) ;; b'cast to everyone
+  (send-hold-election))     ;; b'cast to witness pool
+
+(defmethod node-dispatcher ((msg-sym (eql :blockchain-head)) &key pkey hashID sig)
+  (unless (eql *blockchain* hashID)
+    (setf *blockchain* hashID)
+    (sync-blockchain hashID)))
+
+(defmethod node-dispatcher ((msg-sym (eql :request-block)) &key replyTo hashId)
+  (let ((blk (gethash hashID *blockchain-tbl*)))
+    (when blk
+      (reply replyTo :block-you-requested hashID blk))))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
   ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
@@ -223,6 +235,27 @@ THE SOFTWARE.
           )))))
 
 ;; -------------------------------------------------------------------------------------
+
+(defun ask-neighbor-node (&rest msg)
+  (NYI "ask-neighbor-node"))
+
+(defun sync-blockchain (hashID)
+  (when hashID
+    (let* ((node  (current-node)))
+      (ask-neighbor-node :request-block :replyTo (current-actor) :hashID hashID)
+      (recv
+        ((list :answer :block-you-requested blkID blk)
+         (unless (gethash blkID *blockchain-tbl*)
+           (setf (gethash blkID *blockchain-tbl*) blk)
+           (let ((newID (block-prev-block-hash blk)))
+             (unless (gethash newID *blockchain-tbl*)
+               (sync-blockchain newID)))))
+
+        :TIMEOUT 60
+        :ON-TIMEOUT (error "No response to blockchain query")
+        ))))
+
+;; --------------------------------------------------------------------
 
 (defvar *election-proof*   nil) ;; NYI
 
@@ -886,7 +919,24 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun done-with-duties ()
   (setup-emergency-call-for-new-election))
-  
+
+;; ----------------------------------------------------------------------
+
+(defun make-blockchain-comment-message-skeleton (pkey hashID)
+  `(:blockchain-head
+    :pkey   ,pkey
+    :hashID ,hashID))
+
+(defun make-signed-blockchain-comment-message (pkey hashID)
+  (make-signed-message (make-blockchain-comment-message-skeleton pkey hashID)))
+
+(defun send-blockchain-comment ()
+  (gossip:broadcast (make-signed-blockchain-comment-message (node-pkey (current-node))
+                                                            *blockchain*)
+                    :graphID :UBER))
+
+;; ----------------------------------------------------------------------
+
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
     (:prepare
@@ -895,7 +945,7 @@ check that each TXIN and TXOUT is mathematically sound."
      (or
       (and (int= *leader* (block-leader-pkey blk))
            (check-block-transactions-hash blk)
-           (let ((prevblk (first *blockchain*)))
+           (let ((prevblk (latest-block)))
              (or (null prevblk)
                  (and (> (block-timestamp blk) (block-timestamp prevblk))
                       (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
@@ -913,9 +963,9 @@ check that each TXIN and TXOUT is mathematically sound."
      (or
       (and (int= *leader* (block-leader-pkey blk))
            (check-block-multisignature blk)
-           (progn
-             (push blk *blockchain*)
-             (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
+           (let ((hashID (int (hash-block blk))))
+             (setf *blockchain* hashID
+                   (gethash hashID *blockchain-tbl*) blk)
              (cond
               ;; For new tx: ultra simple for now: there's no UTXO
               ;; database. Just remhash from the mempool all
@@ -1054,7 +1104,7 @@ check that each TXIN and TXOUT is mathematically sound."
   (pr "Assemble new block")
   (let* ((node      (current-node))
          (self      (current-actor))
-         (new-block (cosi/proofs:create-block (first *blockchain*)
+         (new-block (cosi/proofs:create-block (latest-block)
                                               *election-proof* *leader*
                                               (coerce (get-witness-list) 'vector)
                                               trns)))
@@ -1095,7 +1145,9 @@ check that each TXIN and TXOUT is mathematically sound."
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else
-      (done-with-duties))
+      (progn
+        (send-blockchain-comment)
+        (done-with-duties)))
     ))
 
 ;; -----------------------------------------------------------------

@@ -329,6 +329,8 @@
    :set-nodes
    :get-witness-list
    :with-current-node
+   :block-list
+   :latest-block
    ))
 
 (defpackage :cosi-keying

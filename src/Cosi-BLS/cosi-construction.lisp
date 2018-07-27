@@ -76,8 +76,7 @@ THE SOFTWARE.
    (blockchain     :accessor node-blockchain
                    :initform nil)
    (blockchain-tbl :accessor node-blockchain-tbl
-                   :initform (make-hash-table
-                              :test 'equalp))
+                   :initform (make-hash-table))
    (mempool        :accessor  node-mempool
                    :initform  (make-hash-table
                                :test 'equalp))
@@ -161,6 +160,21 @@ THE SOFTWARE.
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
+
+;; --------------------------------------------------------------
+
+(defun latest-block ()
+  (and *blockchain*
+       (gethash *blockchain* *blockchain-tbl*)))
+
+(defun block-list ()
+  (um:accum acc
+    (um:nlet-tail iter ((id *blockchain*))
+      (unless (null id)
+        (let ((blk (gethash id *blockchain-tbl*)))
+          (acc blk)
+          (iter (int (block-prev-block-hash blk)))
+          )))))
 
 
 
