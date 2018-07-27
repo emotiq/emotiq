@@ -47,11 +47,6 @@ THE SOFTWARE.
   
 ;; -------------------------------------------------------
 
-(defvar *current-node*  nil)  ;; for sim = current node running
-
-(defun current-node ()
-  *current-node*)
-
 (defmacro with-current-node (node &body body)
   `(let ((*current-node* ,node))
      ,@body))

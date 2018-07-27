@@ -144,9 +144,15 @@ THE SOFTWARE.
   (declare (ignore args))
   (error "Need to specify..."))
 
+(defvar *current-node*  nil)  ;; for sim = current node running
+
+(defun current-node ()
+  *current-node*)
+
 ;; new for Gossip support, and conceptually cleaner...
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node))
+  (setf *current-node* node)
   (call-next-method))
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)

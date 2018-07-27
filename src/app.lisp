@@ -1,6 +1,7 @@
 (in-package :emotiq/app)
 
 ;; for testin
+(defparameter *tx0* nil)
 (defparameter *tx1* nil)
 (defparameter *tx2* nil)
 (defparameter *tx3* nil)
@@ -12,6 +13,7 @@
      (first public-private)
      (second public-private))))
 
+#|
 (defun make-history-1 ()
     (let ((alice (get-nth-key 0))
           (bob (get-nth-key 1)))
@@ -23,7 +25,9 @@
           (carol (get-nth-key 2)))
       (let ((txn-1 (emotiq/txn:make-spend-transaction bob (emotiq/txn:address carol (expt 10 4)))))
         (gossip:broadcast (list :new-transaction-new :trn txn-1) :graphid :uber))))
+|#
 
+(defparameter *genesis* nil)
 (defparameter *alice* nil)
 (defparameter *bob* nil)
 (defparameter *mary* nil)
@@ -58,10 +62,10 @@
     ;; make various transactions
     (send-all-genesis-coin-to *alice*)
     
-    (spend *alice* *bob* 490 fee)
-    (spend *bob* *mary* 290 fee)
-    (spend *alice* *mary* 190 fee)
-    (spend *alice* *james* 90 fee)))
+    #+nil(spend *alice* *bob* 490 fee)
+    #+nil(spend *bob* *mary* 290 fee)
+    #+nil(spend *alice* *mary* 190 fee)
+    #+nil(spend *alice* *james* 90 fee)))
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; api's
@@ -86,11 +90,16 @@
   (let ((txn (emotiq/txn:make-spend-transaction (get-genesis-key)
                                                 (emotiq/txn:address (account-triple dest))
                                                 *max-amount*)))
+    (setf *tx0* txn)
     (publish-transaction txn)))
 
 (defmacro with-current-node (&rest body)
   `(cosi-simgen:with-current-node (cosi-simgen:current-node)
      ,@body))
+
+;(defmacro with-current-node (&rest body)
+;  `(cosi-simgen:with-current-node cosi-simgen::*my-node*
+;     ,@body))
 
 (defmethod spend ((from account) (to account) amount fee)
   "make a transaction and publish it"
@@ -137,3 +146,19 @@
             txo-bob
             txo-mary
             txo-james)))
+
+(defun test-app1 ()
+  (emotiq:main)
+  (app2)
+  (let ((bal-genesis (get-balance (get-genesis-key))))
+    (format t "genesis balance(~a)~%" bal-genesis))
+  #+nil(let ((bal-alice (get-balance *alice*)))
+    #+nil(format t "balances alice(~a)~%" bal-alice )))
+
+
+;; verify that transactions can refer to themselves in same block
+;;
+;; initial: initial-coin-units * subunits-per-coin
+;;
+;; gossip:send node :kill-node
+;;
