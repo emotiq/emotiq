@@ -247,7 +247,6 @@ THE SOFTWARE.
          (pkey  (composite-pkey blk bits)))
     (and (int= blkID (hash-block blk))            ;; is it really the block I think it is?
          (>= (logcount bits) (bft-threshold blk)) ;; does it have BFT thresh signatures?
-         (int= pkey (composite-pkey blk bits))    ;; is the signature pkey properly formed?
          (pbc:check-hash blkid                    ;; does the signature check out?
                          (block-signature blk)
                          pkey)

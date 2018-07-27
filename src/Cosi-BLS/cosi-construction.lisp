@@ -68,9 +68,6 @@ THE SOFTWARE.
              :initform (make-subs))
    (bit      :accessor node-bit      ;; bit position in bitmap
              :initform 0)
-   (stake    :accessor node-stake
-             :initarg  :stake
-             :initform 0)
    ;; -------------------------------------
    ;; pseudo-globals per node
    (blockchain     :accessor node-blockchain
