@@ -197,11 +197,13 @@ THE SOFTWARE.
     (um:nlet-tail iter ((id from))
       (when id
         ;; terminate on null reference (from genesis block)
-          (um:when-let (blk (gethash (int id) *blockchain-tbl*))
-            ;; or terminate when missing the block
-            (acc blk)
-            (iter (block-prev-block-hash blk))
-            )))))
+          (um:if-let (blk (gethash (int id) *blockchain-tbl*))
+            (progn
+              ;; or terminate when missing the block
+              (acc blk)
+              (iter (block-prev-block-hash blk)))
+            (warn "Missing block ~A -- you might want to ask for a back-fill" (short-id id)))
+          ))))
 
 
 
