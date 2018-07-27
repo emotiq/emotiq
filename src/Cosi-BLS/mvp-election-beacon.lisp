@@ -209,11 +209,10 @@ based on their relative stake"
    
 (defvar *mvp-election-period*  20) ;; seconds between election rounds
 
-(defun my-stake (node)
-  (let* ((pkey (node-pkey node))
-         (pair (find pkey (emotiq/config:get-stakes)
-                     :key  'first
-                     :test 'int=)))
+(defun stake-for (pkey)
+  (let ((pair (find pkey (emotiq/config:get-stakes)
+                    :key  'first
+                    :test 'int=)))
     (and pair
          (cadr pair))))
 
@@ -232,8 +231,7 @@ based on their relative stake"
 
       (update-election-seed pkey)
 
-      (let* ((stake      (my-stake node)) ;; used only for diagnostic display
-             (winner     (hold-election n))
+      (let* ((winner     (hold-election n))
              (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
                                                   :key 'first
                                                   :test 'int=))))
@@ -246,7 +244,7 @@ based on their relative stake"
         (pr "~A got :hold-an-election ~A" (short-id node) n)
         (pr "election results ~A (stake = ~A)"
                      (if (int= pkey winner) " *ME* " " not me ")
-                     stake)
+                     (stake-for winner))
         (pr "winner ~A me=~A"
                      (short-id winner)
                      (short-id pkey))
