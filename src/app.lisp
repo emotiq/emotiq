@@ -73,7 +73,7 @@
     (sleep 30)
 
     (spend *alice* *bob* 490 :fee fee)
-    #+nil(spend *bob* *mary* 290 :fee fee)
+    (spend *bob* *mary* 290 :fee fee)
     #+nil(spend *alice* *mary* 190 :fee fee)
     #+nil(spend *alice* *james* 90 :fee fee)))
     
