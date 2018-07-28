@@ -12,6 +12,7 @@
 (defparameter *tx4* nil)
 
 (defun get-nth-key (n)
+  "return a keying triple from the config file for nth id"
   (let ((public-private (nth n (gossip/config:get-values))))
     (emotiq/config::make-keying-triple
      (first public-private)
@@ -67,10 +68,10 @@
     ;; make various transactions
     (send-all-genesis-coin-to *alice*)
     
-    #+nil(spend *alice* *bob* 490 fee)
-    #+nil(spend *bob* *mary* 290 fee)
-    #+nil(spend *alice* *mary* 190 fee)
-    #+nil(spend *alice* *james* 90 fee)))
+    (spend *alice* *bob* 490 :fee fee)
+    #+nil(spend *bob* *mary* 290 :fee fee)
+    #+nil(spend *alice* *mary* 190 :fee fee)
+    #+nil(spend *alice* *james* 90 :fee fee)))
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; api's
@@ -131,28 +132,44 @@
     result))
 
 (defun test-app ()
-  (emotiq:main)
-  (app2)
-  (let ((bal-genesis (get-balance (get-genesis-key))))
-    (format t "genesis balance(~a)~%" bal-genesis))
-  (let ((bal-alice (get-balance *alice*))
-        (bal-bob   (get-balance *bob*))
-        (bal-mary  (get-balance *mary*))
-        (bal-james (get-balance *james*)))
-    (format t "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james))
-  #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
-        (txo-bob (get-all-transactions-to-given-target-account *bob*))
-        (txo-mary (get-all-transactions-to-given-target-account *mary*))
-        (txo-james (get-all-transactions-to-given-target-account *james*)))
-    (format t "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-            txo-alice
-            txo-bob
-            txo-mary
-            txo-james))
-  (let ((emotiq:*notestream* *error-output*))
-    (with-current-node
-     (cosi/proofs/newtx:dump-txs :blockchain t)))
-  (ac:kill-executives))
+  (let ((strm emotiq:*notestream*))
+    (emotiq:main)
+    (app2)
+    (let ((bal-genesis (get-balance (get-genesis-key))))
+      (emotiq:note"genesis balance(~a)~%" bal-genesis))
+    (let ((bal-alice (get-balance *alice*))
+          (bal-bob   (get-balance *bob*))
+          (bal-mary  (get-balance *mary*))
+          (bal-james (get-balance *james*)))
+      (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
+      #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
+                 (txo-bob (get-all-transactions-to-given-target-account *bob*))
+                 (txo-mary (get-all-transactions-to-given-target-account *mary*))
+                 (txo-james (get-all-transactions-to-given-target-account *james*)))
+             (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
+                     txo-alice
+                     txo-bob
+                     txo-mary
+                     txo-james))
+      (setf emotiq:*notestream* *standard-output*) ;;; ?? I tried to dynamically bind emotiq:*notestream* with LET, but that didn't work (???)
+      (emotiq:note "sleeping again")
+      (setf emotiq:*notestream* strm)
+      (sleep 20)
+      (with-current-node
+       (setf emotiq:*notestream* *standard-output*)
+       (cosi/proofs/newtx:dump-txs :blockchain t)
+       (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
+       ;(ac:kill-executives)
+       (setf emotiq:*notestream* strm)
+       (values)))))
+
+(defun dtx ()
+  (with-current-node
+   (let ((strm emotiq:*notestream*))
+     (setf emotiq:*notestream* *standard-output*)
+     (cosi/proofs/newtx:dump-txs :blockchain t)
+     (setf emotiq:*notestream* strm)
+     (values))))
 
 ;;; ;; verify that transactions can refer to themselves in same block
 ;;
