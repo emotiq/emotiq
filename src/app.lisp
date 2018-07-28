@@ -58,7 +58,7 @@
 (defun app2 ()
   (wait-for-node-startup)
 
-  (setf *genesis-account* (make-genesis-account))
+  (setf *genesis* (make-genesis-account))
 
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
@@ -94,8 +94,12 @@
 
 (defmethod send-all-genesis-coin-to ((dest account))
   "all coins are assigned to the first node in the config files - move those coins to an account used by this app"
-  (let ((txn (spend *genesis* dest *max-amount*)))
-    (setf *tx0* txn)))
+  (let ((txn (emotiq/txn:make-spend-transaction
+              (get-genesis-key)
+              (emotiq/txn:address (account-triple dest)) 1000)))
+    (publish-transaction txn)
+    (setf *tx0* txn)
+    *tx0*))
 
 (defmacro with-current-node (&rest body)
   `(cosi-simgen:with-current-node (cosi-simgen:current-node)
@@ -173,7 +177,8 @@
      (setf emotiq:*notestream* strm)
      (values))))
 
-;;; ;; verify that transactions can refer to themselves in same block
+
+;;; ;; verify that transactions can refer to themselves in same block - apparently not
 ;;
 ;; initial: initial-coin-units * subunits-per-coin
 ;;
@@ -181,6 +186,10 @@
 ;;
 
 ;; stuff that worked a few days ago
+;; 
+;; (R2) works and produces 4 blocks.  The first block contains one txn - COINBASE.  The other 3 blocks contain 2 txns - a COLLECT (leader's reward) and a SPEND txn.
+;;
+;; I'm going to leave the code below in, until I can get the code above to work...
 
 (defun r2 ()
   (setf gossip::*debug-level* 0)
@@ -212,7 +221,7 @@
   (emotiq-rest:stop-server)
   (websocket/wallet::stop-server))
 
-;; to try:
+;; ideas to try:
 ;; - see if we get two successive hold-elections w/o intervening :prepares (means that leader found
 ;;   no work)
 ;; - maybe also check our own mempool for emptiness?
