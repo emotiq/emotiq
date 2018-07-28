@@ -69,48 +69,83 @@ Returns the enumeration of lists of public keys and staked amounts."
             (list pkey (random max-stake)))
           public-keys))
 
+(defun stakes/write (records &key path)
+  (with-open-file (o path
+                     :direction :output
+                     :if-exists :supersede)
+    (format o ";;; ~A~%" emotiq/config:*stakes-filename*)
+    (format o ";;; THIS FILE IS FOR TESTING ONLY~%")
+    (dolist (stake records)
+      (format o "~s~%" stake))))
+
+(defun generated-directory (configuration)
+  (let ((host
+         (alexandria:assoc-value configuration :hostname))
+        (ip
+         (alexandria:assoc-value configuration :ip))
+        (gossip-server-port
+         (alexandria:assoc-value configuration :gossip-server-port))
+        (rest-server-port
+         (alexandria:assoc-value configuration :rest-server-port))
+        (websocket-server-port
+         (alexandria:assoc-value configuration :websocket-server-port)))
+    (make-pathname
+     :directory `(:relative
+                  ,(format nil "~{~a~^-~}"
+                           (list host ip gossip-server-port rest-server-port websocket-server-port))))))
+
+(defun make-configuration (node &key address-for-coins stakes public private)
+  (let ((configuration
+         (copy-alist +default-configuration+)))
+    (loop
+       :for (key . value) :in (alexandria:plist-alist node)
+       :doing (setf (alexandria:assoc-value configuration key) value))
+    (when address-for-coins
+      (push (cons :address-for-coins
+                  address-for-coins)
+            configuration))
+    (when stakes
+      (push (cons :stakes
+                  stakes)
+            configuration))
+    (when public
+      (push (cons :public
+                  public)
+            configuration))
+    (when private
+      (push (cons :private
+                  private)
+            configuration))
+    configuration))
 
 (defun network/generate (&key
                            (root (emotiq/fs:tmp/))
                            (nodes-dns-ip *dns-ip-zt.emotiq.ch*)
                            (force nil)
                            (settings-key-value-alist nil))
-  "Generate a test network configuration"
+  "Generate a test network configuration
+
+Returns a list of directories in which configurations have been generated."
   (let* ((nodes (keys/generate nodes-dns-ip))
          (stakes (stakes/generate (mapcar (lambda (plist)
                                             (getf plist :public))
                                           nodes)))
-         directories)
+         directories
+         configurations)
     (dolist (node nodes)
       (let ((configuration
-             (copy-alist +default-configuration+))
-            (hostname
-             (getf node :hostname))
-            (ip
-             (getf node :ip)))
-        (push (cons :hostname hostname)
-              configuration)
-        (push (cons :ip ip)
-              configuration)
-        (push (cons :public
-                    (getf node :public))
-              configuration)
-        (push (cons :private
-                    (getf node :private))
-              configuration)
-        (push (cons :address-for-coins
-                    (getf (first nodes) :public))
-              configuration)
-        (push (cons :stakes
-                    stakes)
-              configuration)
+             (make-configuration
+              node
+              :address-for-coins (getf (first nodes) :public)
+              :public (getf node :public)
+              :private (getf node :private)
+              :stakes stakes)))
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
           (loop :for setting
              :in settings-key-value-alist
              :doing (push setting configuration)))
-
-        (let ((relative-path (emotiq/config:generated-directory configuration)))
+        (let ((relative-path (generated-directory configuration)))
           (let ((path (merge-pathnames relative-path root))
                 (configuration (copy-alist configuration)))
             (push
@@ -118,9 +153,11 @@ Returns the enumeration of lists of public keys and staked amounts."
                             configuration
                             :force force
                             :key-records nodes)
-             directories)))))
-    directories))
-
+             directories)
+            (push configuration configurations)))))
+    (values
+     directories
+     configurations)))
 
 (defun node/generate (directory
                       configuration
@@ -142,18 +179,19 @@ Returns the enumeration of lists of public keys and staked amounts."
                                     :type "json")
                      :if-exists :supersede
                      :direction :output)
-    (cl-json:encode-json configuration o))
-  (with-open-file (o (make-pathname :defaults directory
-                                    :name "stakes"
-                                    :type "conf")
-                     :direction :output
-                     :if-exists :supersede)
-    (format o ";;; ~A~%" emotiq/config:*stakes-filename*)
-    (format o ";;; THIS FILE IS FOR TESTING ONLY~%")
-    (dolist (stake (alexandria:assoc-value configuration :stakes))
-      (format o "~s~%" stake)))
-  (genesis/create configuration :directory directory :force t))
-
+    (cl-json:encode-json
+     ;;; configuration is an alist with later values overriding
+     ;;; earlier ones.  The CL-JSON serialization will not add keys
+     ;;; that have already been seen, so by reversing the alist we
+     ;;; should get the correct JSON serialization
+     (reverse configuration)
+     o))
+  (stakes/write (alexandria:assoc-value configuration :stakes)
+                :path (make-pathname :defaults directory
+                                     :name "stakes"
+                                     :type "conf"))
+  (genesis/create configuration :directory directory :force t)
+  directory)
 
 (defun genesis/create (configuration &key
                                        (directory (emotiq/fs:tmp/))
