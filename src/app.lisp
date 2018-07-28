@@ -193,9 +193,18 @@
       (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber)
       
       ;; adding this transaction gives an "insufficient funds" message
+      ;; obs - 3 blocks were created when I used the debugger - does this need more time
+      ;; to settle?
+      (sleep 30)
       (let ((mark (pbc:make-key-pair :mark)))
              (let ((txn2 (emotiq/txn:make-spend-transaction paul (emotiq/txn:address mark) 500)))
-               (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber)))))
+               (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber))
+             (sleep 30)
+             (let ((shannon (pbc:make-key-pair :shannon)))
+               (let ((txn3 (emotiq/txn:make-spend-transaction mark (emotiq/txn:address shannon) 50)))
+                 (gossip:broadcast (list :new-transaction-new :trn txn3) :graphID :uber)
+                 (sleep 30))))))
+
   ;; inspect this node to see resulting blockchain
   cosi-simgen:*my-node*)
 
@@ -203,3 +212,7 @@
   (emotiq-rest:stop-server)
   (websocket/wallet::stop-server))
 
+;; to try:
+;; - see if we get two successive hold-elections w/o intervening :prepares (means that leader found
+;;   no work)
+;; - maybe also check our own mempool for emptiness?
