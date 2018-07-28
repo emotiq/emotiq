@@ -1,10 +1,12 @@
+;; currently trying to track down "insuffient funds" on a second transaction
+;; using (emotiq/app::r2) to chip away at the problem
 ;;
 ;; test usage:
 ;; (emotiq/app::test-app)
 
 (in-package :emotiq/app)
 
-;; for testin
+;; for testing
 (defparameter *tx0* nil)
 (defparameter *tx1* nil)
 (defparameter *tx2* nil)
@@ -68,7 +70,7 @@
     ;; make various transactions
     (send-all-genesis-coin-to *alice*)
     
-    (spend *alice* *bob* 490 :fee fee)
+    #+nil(spend *alice* *bob* 490 :fee fee)
     #+nil(spend *bob* *mary* 290 :fee fee)
     #+nil(spend *alice* *mary* 190 :fee fee)
     #+nil(spend *alice* *james* 90 :fee fee)))
@@ -177,3 +179,21 @@
 ;;
 ;; gossip:send node :kill-node
 ;;
+
+;; stuff that worked a few days ago
+
+(defun r2 ()
+  (setf gossip::*debug-level* 0)
+  (emotiq:main)
+  (let ((from (emotiq/app::make-genesis-account))
+        (paul (pbc:make-key-pair :paul)))
+    (let ((txn (emotiq/txn:make-spend-transaction
+                (emotiq/app::account-triple from)
+                (emotiq/txn:address paul) 1000)))
+      (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber)
+      
+      #+nil(let ((mark (pbc:make-key-pair :mark)))
+             (let ((txn2 (emotiq/txn:make-spend-transaction paul (emotiq/txn:address mark) 500)))
+               (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber)))))
+  ;; inspect this node to see resulting blockchain
+  cosi-simgen:*my-node*)
