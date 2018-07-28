@@ -69,8 +69,10 @@
 
     ;; make various transactions
     (send-all-genesis-coin-to *alice*)
-    
-    #+nil(spend *alice* *bob* 490 :fee fee)
+
+    (sleep 30)
+
+    (spend *alice* *bob* 490 :fee fee)
     #+nil(spend *bob* *mary* 290 :fee fee)
     #+nil(spend *alice* *mary* 190 :fee fee)
     #+nil(spend *alice* *james* 90 :fee fee)))
@@ -89,14 +91,17 @@
 (defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
   (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber))
 
-(defparameter *max-amount* (cosi/proofs/newtx::initial-coin-units)
+(defparameter *max-amount* (* (cosi/proofs/newtx::initial-coin-units)
+                              (cosi/proofs/newtx::subunits-per-coin))
 "total amount of emtq's - is this correct?  or, does it need to multiplied by sub-units-per-coin?")
+
+(defparameter *min-fee* 10 "new-transactions.lisp requires a minimum fee of 10")
 
 (defmethod send-all-genesis-coin-to ((dest account))
   "all coins are assigned to the first node in the config files - move those coins to an account used by this app"
   (let ((txn (emotiq/txn:make-spend-transaction
               (get-genesis-key)
-              (emotiq/txn:address (account-triple dest)) 1000)))
+              (emotiq/txn:address (account-triple dest)) (- *max-amount* *min-fee*))))
     (publish-transaction txn)
     (setf *tx0* txn)
     *tx0*))
@@ -112,7 +117,7 @@
    (let ((txn (emotiq/txn:make-spend-transaction (account-triple from) (emotiq/txn:address (account-pkey to)) amount :fee fee)))
      (publish-transaction txn)
      (emotiq:note "sleeping to let txn propagate (is this necessary?)")
-     (sleep 5)
+     (sleep 20)
      txn)))
   
 (defmethod get-balance ((triple pbc:keying-triple))
@@ -164,6 +169,7 @@
       (with-current-node
        (setf emotiq:*notestream* *standard-output*)
        (cosi/proofs/newtx:dump-txs :blockchain t)
+       (emotiq:note "")
        (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
        ;(ac:kill-executives)
        (setf emotiq:*notestream* strm)
