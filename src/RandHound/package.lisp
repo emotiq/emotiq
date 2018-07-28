@@ -26,16 +26,37 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :randhound/common
+(defpackage :randhound
   (:use :common-lisp
    :core-crypto
    :pbc
-   :vec-repr)
-  (:import-from :cosi-keying
-   :need-integer-form
-   :published-form
-   :make-random-keypair
-   :validate-pkey)
+   :vec-repr
+   :hash
+   :actors)
+  (:import-from :cosi-simgen
+   :node
+   :current-node
+   :node-pkey
+   :node-skey
+   :node-short-pkey
+   :node-short-skey
+   :node-stake
+   :node-rh-state
+   :get-witness-list
+   ;; :broadcast+me
+   ;; :broadcast-to-others
+   :*leader*
+   :*beacon*
+   :*rh-state*
+   :rh-dispatcher
+   :get-witness-list
+   :*use-real-gossip*
+   :*local-epoch*
+   :*election-calls*
+   :make-signed-election-message
+   :with-current-node
+   )
+
   (:export
    :*max-bft*
    :node-assoc
@@ -52,6 +73,8 @@ THE SOFTWARE.
    :record-to-log
    :broadcast-message
    :send-message
+   :broadcast-grp
+   :broadcast-grp+me
    :get-timestamp
    :NYI
    :session-config
@@ -66,24 +89,5 @@ THE SOFTWARE.
    :subgroup-commit-encr-shares
    :subgroup-commit-proofs
    :make-subgroup-commit
-   ))
-
-(defpackage :randhound/client
-  (:use :common-lisp
-        :core-crypto
-        :randhound/common
-        :pbc
-        :vec-repr)
-  (:export
-   ))
-
-(defpackage :randhound/server
-  (:use :common-lisp
-        :core-crypto
-        :randhound/common
-        :vec-repr
-        :pbc
-        :actors)
-  (:export
    ))
 

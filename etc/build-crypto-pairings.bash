@@ -13,7 +13,8 @@
 # debug
 set -x
 
-EXTERNAL_LIBS_VERSION=release-0.1.8
+EXTERNAL_LIBS_VERSION=release-0.1.13
+# EXTERNAL_LIBS_VERSION=release-0.1.15
 
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -25,15 +26,18 @@ case ${uname_s} in
     Linux*)
         echo Building for Linux
         lib_suffix=linux
+	#        maketarget=makefile.linux.static
         maketarget=makefile.linux
         if [ "x${PENTIUM4}" == "xtrue" ] ; then
-          EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
+	    #          EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
+            EXTERNAL_LIBS_VERSION=release-0.1.8-p4-linux
         fi
         ;;
     Darwin*)
         echo Building for macOS
         lib_suffix=osx
-        maketarget=makefile.macos
+	#        maketarget=makefile.macos.static
+	maketarget=makefile.macos
         ;;
     *)
         maketarget=makefile.linux
@@ -51,7 +55,11 @@ mkdir -p ${var}/local
 prefix=${var}/local
 lib=${prefix}/lib
 inc=${prefix}/include
-pbcintf=${BASE}/src/Crypto/PBC-Intf
+pbcintf=${BASE}/src/Crypto/Crypto-Libraries/PBC-Intf
+
+# Remove shared libs (we use only statics)
+# -- not so fast, there are other dylibs we need...
+# rm ${lib}/*.dylib ${lib}/libgmp.so* ${lib}/libpbc.so*
 
 export CFLAGS=-I${inc}
 export CPPFLAGS=-I${inc}
@@ -60,3 +68,6 @@ export LDFLAGS=-L${lib}
 
 cd ${pbcintf} && \
     make --makefile=${maketarget} PREFIX=${prefix}
+
+#cd ${lib} && \
+#    rm -f libgmp* libpbc*

@@ -298,6 +298,8 @@
    :node
    :node-pkey
    :node-skey
+   :node-short-pkey
+   :node-short-skey
    :node-stake
    :node-self
    :node-blockchain
@@ -316,6 +318,8 @@
    :*pkey-node-tbl*
    :*pkey-skey-tbl*
    :*node-bit-tbl*
+   :*rh-state*
+   :*local-epoch*
    :send
    :reply
    :node-dispatcher
@@ -330,6 +334,12 @@
    :reset-nodes
    :forwarding
    :startup-elections
+
+   :broadcast+me
+   :broadcast-to-others
+   :get-witness-list
+   :*use-real-gossip*
+   :make-signed-election-message
    ))
 
 (defpackage :cosi-keying
