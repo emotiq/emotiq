@@ -198,3 +198,8 @@
                (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber)))))
   ;; inspect this node to see resulting blockchain
   cosi-simgen:*my-node*)
+
+(defun r2-shutdown ()
+  (emotiq-rest:stop-server)
+  (websocket/wallet::stop-server))
+
