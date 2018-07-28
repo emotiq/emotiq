@@ -192,7 +192,8 @@
                 (emotiq/txn:address paul) 1000)))
       (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber)
       
-      #+nil(let ((mark (pbc:make-key-pair :mark)))
+      ;; adding this transaction gives an "insufficient funds" message
+      (let ((mark (pbc:make-key-pair :mark)))
              (let ((txn2 (emotiq/txn:make-spend-transaction paul (emotiq/txn:address mark) 500)))
                (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber)))))
   ;; inspect this node to see resulting blockchain
