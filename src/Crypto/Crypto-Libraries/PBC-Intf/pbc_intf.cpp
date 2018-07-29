@@ -110,8 +110,7 @@ extern "C"
 int64_t set_g2(uint64_t ctxt,
 	    uint8_t* pbuf)
 {
-  // Changing G2 generator invalidates all keying,
-  // so remake default random key pair
+  // NOTE: Changing G1 and/or G2 generators invalidates all keying.
   return element_from_bytes_compressed(G2_gen(ctxt), pbuf);
 }
 
@@ -119,6 +118,7 @@ extern "C"
 int64_t set_g1(uint64_t ctxt,
 	    uint8_t* pbuf)
 {
+  // NOTE: Changing G1 and/or G2 generators invalidates all keying.
   return element_from_bytes_compressed(G1_gen(ctxt), pbuf);
 }
 
