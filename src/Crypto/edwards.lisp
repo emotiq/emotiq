@@ -801,6 +801,7 @@ THE SOFTWARE.
         ))))
 
 (defun windows-to-int (wins window-nbits)
+  ;; for debugging...
   (let ((ans 0))
     (loop for w in wins do
           (setf ans (+ w (ash ans window-nbits))))
@@ -820,11 +821,13 @@ THE SOFTWARE.
            :initarg  :pt*m1)))
 
 (defmethod make-bipolar-window-cache (&key nbits pt)
+  (declare (fixnum nbits))
   (let* ((nel    (ash 1 nbits))
          (precv  (make-array nel :initial-element nil))
          (offs   (ash nel -1))
          (pt*1   (ed-projective pt))
          (pt*m1  (ed-negate pt*1)))
+    (declare (fixnum nel offs))
     (setf (aref precv (1+ offs)) pt*1      ;; slot ix = 0 never referenced
           (aref precv (1- offs)) pt*m1)
     (make-instance 'bipolar-window-cache
