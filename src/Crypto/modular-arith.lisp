@@ -169,7 +169,12 @@ THE SOFTWARE.
     (declare (integer opnd))
     (setf arg (mmod (* arg opnd))))
   arg)
-    
+
+
+(defun msqr (x)
+  (declare (integer x))
+  (m* x x))
+
 ;; ------------------------------------------------------------
 
 (defun m+ (&rest args)
@@ -191,25 +196,33 @@ THE SOFTWARE.
         x
       ;; else
       (let* ((n     (integer-length exp))
-             (prec  (coerce
-                     (loop for ix fixnum from 0 below 16
-                           for xx = 1 then (m* x xx)
-                           collect xx)
-                     'vector))
-             (ans   1))
-        (declare (fixnum n)
-                 (integer ans)
-                 ((vector integer) prec))
-        (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
-              (setf ans (m* ans ans)
-                    ans (m* ans ans)
-                    ans (m* ans ans)
-                    ans (m* ans ans))
-              (let ((bits (ldb (byte 4 pos) exp)))
-                (declare (fixnum bits))
-                (unless (zerop bits)
-                  (setf ans (m* ans (aref prec bits))))
-                ))
+             (prec  (make-array 16
+                                :initial-element nil))
+             (ans   nil))
+        (declare (fixnum n))
+        (setf (aref prec 1) x)
+        (labels ((get-prec (ix)
+                   ;; on-demand precomputed x^n, n = 1..15
+                   (declare (fixnum ix))
+                   (or (aref prec ix)
+                       (setf (aref prec ix)
+                             (if (oddp ix)
+                                 (m* x (get-prec (1- ix)))
+                               (msqr (get-prec (ash ix -1))))
+                             ))
+                   ))
+          (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
+                (when ans
+                  (setf ans (msqr (msqr (msqr (msqr ans))))))
+                (let ((bits (ldb (byte 4 pos) exp)))
+                  (declare (fixnum bits))
+                  (unless (zerop bits)
+                    (let ((y (get-prec bits)))
+                      (declare (integer y))
+                      (setf ans (if ans
+                                    (m* (the integer ans) y)
+                                  y))))
+                  )))
         ans))))
 
 #|

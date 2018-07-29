@@ -42,6 +42,7 @@ THE SOFTWARE.
    :m=
    :m^
    :msqrt
+   :msqr
    :m+
    :m-
    :m*
