@@ -338,33 +338,43 @@ THE SOFTWARE.
               (iter (1+ a))
             (values a v))
           ))
-    (labels ((fq2* (a b)
-               ;; complex multiplication over the field q^2
-               (destructuring-bind (are . aim) a
-                 (destructuring-bind (bre . bim) b
-                   (cons
-                    (m+ (m* are bre)
-                        (m* aim bim im^2))
-                    (m+ (m* are bim)
-                        (m* aim bre)))
-                   )))
-             (fq2sqr (a)
-               (destructuring-bind (are . aim) a
+    (declare (integer re im^2))
+    ;; exponentiation in Fq^2: (a, sqrt(a^2 - x))^((q-1)/2)
+    (let* ((xx   (cons re 1))  ;; generator for Fq^2
+           (exp  (m/2u))
+           (n    (integer-length exp))
+           (prec (make-array 16 :initial-element nil))
+           (ans  nil))
+      (declare (fixnum n)
+               (integer exp))
+      (setf (aref prec 1) xx)
+      (labels
+          ((fq2* (a b)
+             ;; complex multiplication over the field q^2
+             (destructuring-bind (are . aim) a
+               (destructuring-bind (bre . bim) b
                  (cons
-                  (m+ (m* are are) (m* aim aim im^2))
-                  (m* 2 are aim)))))
-      
-      ;; exponentiation in Fq^2: (a, sqrt(a^2 - x))^((q-1)/2)
-      (let* ((xx   (cons re 1))  ;; generator for Fq^2
-             (exp  (m/2u))
-             (n    (integer-length exp))
-             (prec (coerce
-                    (cons nil
-                          (loop for ix from 1 below 16
-                                for v = xx then (fq2* xx v)
-                                collect v))
-                    'vector))
-             (ans   nil))
+                  (m+ (m* are bre)
+                      (m* aim bim im^2))
+                  (m+ (m* are bim)
+                      (m* aim bre)))
+                 )))
+           
+           (fq2sqr (a)
+             (destructuring-bind (are . aim) a
+               (cons
+                (m+ (m* are are) (m* aim aim im^2))
+                (m* 2 are aim))))
+           
+           (get-prec (ix)
+             ;; compute xx^n, n = 1..15 on demand
+             (declare (fixnum ix))
+             (or (aref prec ix)
+                 (setf (aref prec ix)
+                       (if (oddp ix)
+                           (fq2* xx (get-prec (1- ix)))
+                         (fq2sqr (get-prec (ash ix -1))))
+                       ))))
         
         (loop for pos from (* 4 (floor n 4)) downto 0 by 4 do
               (when ans
@@ -372,7 +382,7 @@ THE SOFTWARE.
               (let ((ix (ldb (byte 4 pos) exp)))
                 (declare (fixnum ix))
                 (unless (zerop ix)
-                  (let ((v  (aref prec ix)))
+                  (let ((v  (get-prec ix)))
                     (setf ans (if ans
                                   (fq2* ans v)
                                 v))))
