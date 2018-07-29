@@ -856,6 +856,8 @@ THE SOFTWARE.
 (defun generalized-bipolar-windowed-mul (pt n &key window-nbits)
   ;; ECC point-scalar multiplication using fixed-width bipolar window
   ;; algorithm
+  (declare (fixnum window-nbits)
+           (integer n))
   (let* ((ws  (windows n window-nbits))
          (wc  (make-bipolar-window-cache
                :nbits window-nbits
