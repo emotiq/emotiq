@@ -1637,6 +1637,11 @@ Certification includes a BLS Signature on the public key."
 ;;
 ;; But g is a large (e.g., 5,000+ bit value). We could also use the
 ;; hash of the randomness values for a more limited range.
+;;
+;; Note that, even with knowledge of a seed, its proof, the public key
+;; of the encrypter, and the resulting randomness, we could not
+;; produce randomness associated with any other seed. (by difficulty
+;; of ECDLP, and DLP in large paoiring field)
 
 (defstruct vrf
   seed x y proof)
