@@ -73,10 +73,21 @@
     (sleep 30)
 
     (spend *alice* *bob* 490 :fee fee)
+    (spend *alice* *mary* 190 :fee fee)
+    (spend *alice* *james* 90 :fee fee)
+
+    (sleep 30)
+
     (spend *bob* *mary* 290 :fee fee)
-    #+nil(spend *alice* *mary* 190 :fee fee)
-    #+nil(spend *alice* *james* 90 :fee fee)))
-    
+
+    (sleep 120)))
+
+
+;; alice should have 999...999,190
+;; bob 190
+;; mary 190
+;; james 90
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; api's
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -117,7 +128,7 @@
    (let ((txn (emotiq/txn:make-spend-transaction (account-triple from) (emotiq/txn:address (account-pkey to)) amount :fee fee)))
      (publish-transaction txn)
      (emotiq:note "sleeping to let txn propagate (is this necessary?)")
-     (sleep 20)
+     (sleep 30)
      txn)))
   
 (defmethod get-balance ((triple pbc:keying-triple))
@@ -146,35 +157,46 @@
   (let ((strm emotiq:*notestream*))
     (emotiq:main)
     (app2)
-    (let ((bal-genesis (get-balance (get-genesis-key))))
-      (emotiq:note"genesis balance(~a)~%" bal-genesis))
-    (let ((bal-alice (get-balance *alice*))
-          (bal-bob   (get-balance *bob*))
-          (bal-mary  (get-balance *mary*))
-          (bal-james (get-balance *james*)))
-      (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
-      #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
-                 (txo-bob (get-all-transactions-to-given-target-account *bob*))
-                 (txo-mary (get-all-transactions-to-given-target-account *mary*))
-                 (txo-james (get-all-transactions-to-given-target-account *james*)))
-             (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                     txo-alice
-                     txo-bob
-                     txo-mary
-                     txo-james))
-      (setf emotiq:*notestream* *standard-output*) ;;; ?? I tried to dynamically bind emotiq:*notestream* with LET, but that didn't work (???)
-      (emotiq:note "sleeping again")
-      (setf emotiq:*notestream* strm)
-      (sleep 20)
-      (with-current-node
-       (setf emotiq:*notestream* *standard-output*)
-       (cosi/proofs/newtx:dump-txs :blockchain t)
-       (emotiq:note "")
-       (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
-       ;(ac:kill-executives)
-       (setf emotiq:*notestream* strm)
-       (values)))))
+    (dump-results strm)))
 
+(defun dump-results (strm)
+  (let ((bal-genesis (get-balance (get-genesis-key))))
+    (emotiq:note"genesis balance(~a)~%" bal-genesis))
+  (let ((bal-alice (get-balance *alice*))
+        (bal-bob   (get-balance *bob*))
+        (bal-mary  (get-balance *mary*))
+        (bal-james (get-balance *james*)))
+    (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
+    #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
+               (txo-bob (get-all-transactions-to-given-target-account *bob*))
+               (txo-mary (get-all-transactions-to-given-target-account *mary*))
+               (txo-james (get-all-transactions-to-given-target-account *james*)))
+           (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
+                        txo-alice
+                        txo-bob
+                        txo-mary
+                        txo-james))
+    (setf emotiq:*notestream* *standard-output*) ;;; ?? I tried to dynamically bind emotiq:*notestream* with LET, but that didn't work (???)
+    (emotiq:note "sleeping again")
+    (setf emotiq:*notestream* strm)
+    (sleep 20)
+    (with-current-node
+     (setf emotiq:*notestream* *standard-output*)
+     (cosi/proofs/newtx:dump-txs :blockchain t)
+     (emotiq:note "")
+     (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
+     (dumpamounts)
+     (setf emotiq:*notestream* strm)
+     (values))))
+
+(defun dumpamounts ()
+  (let ((aliceamount (- (- *max-amount* 10) 30 490 190 90))
+        (bobamount  (- 490 300))
+        (maryamount (+ 290 190))
+        (jamesamount 90))
+    (emotiq:note "calculated balances alice(~a) bob(~a) mary(~a) james(~a)~%"
+                 aliceamount bobamount maryamount jamesamount)))
+    
 (defun dtx ()
   (with-current-node
    (let ((strm emotiq:*notestream*))
