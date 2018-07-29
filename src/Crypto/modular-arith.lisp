@@ -168,10 +168,12 @@ THE SOFTWARE.
 
 (defun m* (arg &rest args)
   (declare (integer arg))
-  (dolist (opnd args)
-    (declare (integer opnd))
-    (setf arg (mmod (* arg opnd))))
-  arg)
+  (let ((ans (mmod arg)))
+    (declare (integer ans))
+    (dolist (opnd args)
+      (declare (integer opnd))
+      (setf ans (mmod (* ans opnd))))
+    ans))
 
 
 (defun msqr (x)
