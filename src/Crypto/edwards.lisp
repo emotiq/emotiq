@@ -856,7 +856,7 @@ THE SOFTWARE.
   (let* ((ws  (windows n window-nbits))
          (wc  (make-bipolar-window-cache
                :nbits window-nbits
-               :pt    (ed-projective pt)))
+               :pt    (ed-projective pt))) ;; affine or projective in...
          (ans nil))
     (loop for w fixnum in ws do
           (when ans
@@ -868,7 +868,7 @@ THE SOFTWARE.
                             (ed-projective-add pw ans)
                           pw)))
             ))
-    (or ans
+    (or ans  ;; projective out...
         (ed-neutral-point))))
 
 (defun ed-basic-mul (pt n)
