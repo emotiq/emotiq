@@ -175,7 +175,6 @@ THE SOFTWARE.
       (setf ans (mmod (* ans opnd))))
     ans))
 
-
 (defun msqr (x)
   (declare (integer x))
   (m* x x))
@@ -189,6 +188,72 @@ THE SOFTWARE.
   (mmod (apply '- args)))
 
 ;; -----------------------------------------------------
+;; Precomputed powers cache
+
+(defclass window-cache ()
+  ((precv  :reader   window-cache-precv ;; precomp x^n cache
+           :initarg  :precv)
+   (x^1    :reader   window-cache-x^1
+           :initarg  :x^1)
+   (op-sqr :reader   window-cache-op-sqr
+           :initarg  :op-sqr)
+   (op-mul :reader   window-cache-op-mul
+           :initarg  :op-mul)))
+
+(defun make-window-cache (&key nbits x^1 op-mul op-sqr)
+  (let ((precv (make-array (ash 1 nbits) :initial-element nil)))
+    (setf (aref precv 1) x^1) ;; slot 0 never accessed
+    (make-instance 'window-cache
+                   :precv  precv
+                   :x^1    x^1
+                   :op-sqr op-sqr
+                   :op-mul op-mul)))
+
+(defmethod get-prec ((wc window-cache) (ix integer))
+  ;; compute powers of x^n, n = 1..(2^nbits-1) on demand
+  (declare (fixnum ix))
+  (with-accessors ((precv  window-cache-precv)
+                   (x^1    window-cache-x^1)
+                   (op-mul window-cache-op-mul)
+                   (op-sqr window-cache-op-sqr)) wc
+    (or (aref precv ix)
+        (setf (aref precv ix)
+              (if (oddp ix)
+                  (funcall op-mul x^1 (get-prec wc (1- ix)))
+                (funcall op-sqr (get-prec wc (ash ix -1))))
+              ))))
+
+;; -----------------------------------------------------
+;; Generalized fixed-window exponentiation algorithm
+;;
+;; Used by both modular exponentiation, and Cipolla algorithm for
+;; modular square roots.
+
+(defmethod generalized-windowed-exponentiation (x n &key window-nbits op-mul op-sqr)
+  ;; x^n using fixed-width window algorithm
+  (let* ((ans   nil)
+         (wc    (make-window-cache
+                 :nbits  window-nbits
+                 :x^1    x
+                 :op-mul op-mul
+                 :op-sqr op-sqr))
+         (nbits (integer-length n)))
+    (declare (fixnum nbits))
+    (loop for pos fixnum from (* window-nbits (floor nbits window-nbits)) downto 0 by window-nbits do
+          (when ans
+            (loop repeat window-nbits do
+                  (setf ans (funcall op-sqr ans))))
+          (let ((bits (ldb (byte window-nbits pos) n)))
+            (declare (fixnum bits))
+            (unless (zerop bits)
+              (let ((y (get-prec wc bits)))
+                (setf ans (if ans
+                              (funcall op-mul ans y)
+                            y)))
+              )))
+    ans))
+    
+;; -----------------------------------------------------
 ;; Prime-Field Arithmetic
 
 (defun m^ (base exp)
@@ -200,59 +265,11 @@ THE SOFTWARE.
     (if (< x 2)  ;; x = 0,1
         x
       ;; else
-      (let* ((n     (integer-length exp))
-             (prec  (make-array 16
-                                :initial-element nil))
-             (ans   nil))
-        (declare (fixnum n))
-        (setf (aref prec 1) x)
-        (labels ((get-prec (ix)
-                   ;; on-demand precomputed x^n, n = 1..15
-                   (declare (fixnum ix))
-                   (or (aref prec ix)
-                       (setf (aref prec ix)
-                             (if (oddp ix)
-                                 (m* x (get-prec (1- ix)))
-                               (msqr (get-prec (ash ix -1))))
-                             ))
-                   ))
-          (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
-                (when ans
-                  (setf ans (msqr (msqr (msqr (msqr ans))))))
-                (let ((bits (ldb (byte 4 pos) exp)))
-                  (declare (fixnum bits))
-                  (unless (zerop bits)
-                    (let ((y (get-prec bits)))
-                      (declare (integer y))
-                      (setf ans (if ans
-                                    (m* (the integer ans) y)
-                                  y))))
-                  )))
-        ans))))
-
-#|
-(defun m^ (base exp)
-  ;; base^exponent mod modulus, for any modulus
-  (declare (integer base exp))
-  (let ((x (mmod base)))
-    (declare (integer x))
-    (if (< x 2)  ;; x = 0,1
-        x
-      ;; else
-      (let* ((n  (integer-length exp)))
-        (declare (fixnum n)
-                 (integer exp))
-        (do ((b  x  (m* b b))
-             (p  1)
-             (ix 0  (1+ ix)))
-            ((>= ix n) (mmod p))
-          (declare (integer b p)
-                   (fixnum ix))
-          (when (logbitp ix exp)
-            (setf p (m* p b)))) ))
+      (generalized-windowed-exponentiation x exp
+                                           :window-nbits 4
+                                           :op-mul       'm*
+                                           :op-sqr       'msqr))
     ))
-|#
-
 ;; ------------------------------------------------------------
 
 (defun minv (a)
@@ -272,26 +289,6 @@ THE SOFTWARE.
           (shiftf v u r)
           (shiftf x2 x1 x))
         ))))
-
-#|
-(defun minv (a)
-  ;; modular inverse by Extended Euclidean algorithm
-  (declare (integer a))
-  (let* ((u  (mmod a))
-         (v  *m*)
-         (x1 1)
-         (x2 0))
-    (declare (integer u v x1 x2))
-    (do ((ct 1 (1+ ct)))
-        ((= u 1) (values x1 ct))
-      (multiple-value-bind (q r) (truncate v u)
-        (declare (integer q r))
-        (let ((x (m- x2 (m* q x1))))
-          (declare (integer x))
-          (shiftf v u r)
-          (shiftf x2 x1 x))
-        ))))
-|#
 
 (defun m/ (arg &rest args)
   (declare (integer arg))
@@ -339,113 +336,33 @@ THE SOFTWARE.
             (values a v))
           ))
     (declare (integer re im^2))
-    ;; exponentiation in Fq^2: (a, sqrt(a^2 - x))^((q-1)/2)
-    (let* ((xx   (cons re 1))  ;; generator for Fq^2
-           (exp  (m/2u))
-           (n    (integer-length exp))
-           (prec (make-array 16 :initial-element nil))
-           (ans  nil))
-      (declare (fixnum n)
-               (integer exp))
-      (setf (aref prec 1) xx)
-      (labels
-          ((fq2* (a b)
-             ;; complex multiplication over the field q^2
-             (destructuring-bind (are . aim) a
-               (declare (integer are aim))
-               (destructuring-bind (bre . bim) b
-                 (declare (integer bre bim))
-                 (cons
-                  (m+ (m* are bre)
-                      (m* aim bim im^2))
-                  (m+ (m* are bim)
-                      (m* aim bre)))
-                 )))
-           
-           (fq2sqr (a)
-             (destructuring-bind (are . aim) a
-               (declare (integer are aim))
+    (labels
+        ((fq2* (a b)
+           ;; complex multiplication over the field q^2
+           (destructuring-bind (are . aim) a
+             (declare (integer are aim))
+             (destructuring-bind (bre . bim) b
+               (declare (integer bre bim))
                (cons
-                (m+ (m* are are)
-                    (m* aim aim im^2))
-                (m* 2 are aim))))
-           
-           (get-prec (ix)
-             ;; compute xx^n, n = 1..15 on demand
-             (declare (fixnum ix))
-             (or (aref prec ix)
-                 (setf (aref prec ix)
-                       (if (oddp ix)
-                           (fq2* xx (get-prec (1- ix)))
-                         (fq2sqr (get-prec (ash ix -1))))
-                       ))))
-        
-        (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
-              (when ans
-                (setf ans (fq2sqr (fq2sqr (fq2sqr (fq2sqr ans))))))
-              (let ((ix (ldb (byte 4 pos) exp)))
-                (declare (fixnum ix))
-                (unless (zerop ix)
-                  (let ((v  (get-prec ix)))
-                    (setf ans (if ans
-                                  (fq2* ans v)
-                                v))))
-                ))
-        (car ans)
-        ))))
-
-#|
-(defvar *fq2-red*)
-
-(defstruct fq2
-  x y)
-
-(defun fq2* (a b)
-  ;; complex multiplication over the field q^2
-  (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
-             (declare (integer ax ay))
-             (:struct-accessors fq2 ((bx x) (by y)) b)
-             (declare (integer bx by)))
-    (make-fq2
-     :x (m+ (m* ax bx)
-            (m* ay by (cadr *fq2-red*)))
-     :y (m+ (m* ax by)
-            (m* ay bx))
-     )))
-
-(defun cipolla (x)
-  (declare (integer x))
-  ;; Cipolla method for finding square root of x over prime field m
-  (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
-                      ;; look for quadratic nonresidue (the imaginary base)
-                      ;; where we already know that x must be a quadratic residue
-                      (declare (integer a))
-                      (let ((v  (m- (m* a a) x)))
-                        (declare (integer v))
-                        (if (quadratic-residue-p v)
-                            (iter (1+ a))
-                          (list a v))
-                        )))
-         ;; exponentiation in Fq^2: (a, sqrt(a^2 - n))^((q-1)/2)
-         (xx   (make-fq2
-                :x (car *fq2-red*)
-                :y 1))
-         (exp  (m/2u))
-         (n    (integer-length exp)))
-    (declare (fixnum n)
-             (integer exp))
-    (do ((b  xx
-             (fq2* b b))
-         (p  (make-fq2 ;; start with complex unity
-              :x 1
-              :y 0))
-         (ix 0    (1+ ix)))
-        ((>= ix n) (fq2-x p))
-      (declare (fixnum ix))
-      (when (logbitp ix exp)
-        (setf p (fq2* p b))))
-    ))
-|#
+                (m+ (m* are bre)
+                    (m* aim bim im^2))
+                (m+ (m* are bim)
+                    (m* aim bre)))
+               )))
+         
+         (fq2sqr (a)
+           (destructuring-bind (are . aim) a
+             (declare (integer are aim))
+             (cons
+              (m+ (m* are are)
+                  (m* aim aim im^2))
+              (m* 2 are aim)))))
+      
+      (car (generalized-windowed-exponentiation (cons re 1) (m/2u)
+                                                :window-nbits  4
+                                                :op-mul        #'fq2*
+                                                :op-sqr        #'fq2sqr))
+      )))
 
 (defun get-msqrt-fn (base)
   (get-cached-symbol-data '*m* :msqrt base
