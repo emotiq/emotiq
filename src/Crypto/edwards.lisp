@@ -808,39 +808,40 @@ THE SOFTWARE.
           ((or (= nn 1)
                (ed-neutral-point-p pt)) pt)
           
-          (t (let ((ws   (windows4 nn))  ;; projective in...
+          (t (let ((ws   (windows4 nn))  ;; affine or projective in...
                    (ans  nil)
-                   (prec (let* ((p1 (ed-projective pt))
-                                (p2 (ed-add p1 p1))
-                                (p3 (ed-add p2 p1))
-                                (p4 (ed-add p3 p1))
-                                (p5 (ed-add p4 p1))
-                                (p6 (ed-add p5 p1))
-                                (p7 (ed-add p6 p1))
-                                (p8 (ed-add p7 p1)))
-                           ;; vector of points from -8*P, -7*P, ..., 7*P
-                           (vector (ed-negate p8)
-                                   (ed-negate p7)
-                                   (ed-negate p6)
-                                   (ed-negate p5)
-                                   (ed-negate p4)
-                                   (ed-negate p3)
-                                   (ed-negate p2)
-                                   (ed-negate p1)
-                                   nil
-                                   p1 p2 p3 p4 p5 p6 p7))))
+                   (prec (make-array 16 :initial-element nil))
+                   (p1   (ed-projective pt))
+                   (pm1  (ed-negate p1)))
+               
+               (setf (aref prec 9) p1
+                     (aref prec 7) pm1)
+               
+               (labels ((get-prec (ix)
+                          (declare (fixnum ix))
+                          (let ((jx (+ ix 8)))
+                            (declare (fixnum jx))
+                            (or (aref prec jx)
+                                (setf (aref prec jx)
+                                      (if (oddp ix)
+                                          (if (minusp ix)
+                                              (ed-add pm1 (get-prec (1+ ix)))
+                                            (ed-add p1 (get-prec (1- ix))))
+                                        (let ((pn/2 (get-prec (ash ix -1))))
+                                          (ed-add pn/2 pn/2)))
+                                      )))))
+                 
                (loop for w fixnum in ws do
                      (when ans
-                       (setf ans (ed-add ans ans)
-                             ans (ed-add ans ans)
-                             ans (ed-add ans ans)
-                             ans (ed-add ans ans)))
+                       (loop repeat 4 do
+                             (setf ans (ed-add ans ans))))
                      (unless (zerop w)
-                       (let ((pw  (aref prec (+ w 8))))
+                       (let ((pw  (get-prec w)))
                          (setf ans (if ans
                                        (ed-add ans pw)
                                      pw)))))
-               (or ans (ed-neutral-point)) ;; projective out...
+               (or ans
+                   (ed-neutral-point)) ;; projective out...
                ))
           )))
 
