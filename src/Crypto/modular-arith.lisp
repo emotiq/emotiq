@@ -340,22 +340,22 @@ THE SOFTWARE.
           ))
     (labels ((fq2* (a b)
                ;; complex multiplication over the field q^2
-               (destructuring-bind (are aim) a
-                 (destructuring-bind (bre bim) b
-                   (list
+               (destructuring-bind (are . aim) a
+                 (destructuring-bind (bre . bim) b
+                   (cons
                     (m+ (m* are bre)
                         (m* aim bim im^2))
                     (m+ (m* are bim)
                         (m* aim bre)))
                    )))
              (fq2sqr (a)
-               (destructuring-bind (are aim) a
-                 (list
+               (destructuring-bind (are . aim) a
+                 (cons
                   (m+ (m* are are) (m* aim aim im^2))
                   (m* 2 are aim)))))
       
       ;; exponentiation in Fq^2: (a, sqrt(a^2 - x))^((q-1)/2)
-      (let* ((xx   (list re 1))  ;; generator for Fq^2
+      (let* ((xx   (cons re 1))  ;; generator for Fq^2
              (exp  (m/2u))
              (n    (integer-length exp))
              (prec (coerce
@@ -368,10 +368,7 @@ THE SOFTWARE.
         
         (loop for pos from (* 4 (floor n 4)) downto 0 by 4 do
               (when ans
-                (setf ans (fq2sqr ans)
-                      ans (fq2sqr ans)
-                      ans (fq2sqr ans)
-                      ans (fq2sqr ans)))
+                (setf ans (fq2sqr (fq2sqr (fq2sqr (fq2sqr ans))))))
               (let ((ix (ldb (byte 4 pos) exp)))
                 (declare (fixnum ix))
                 (unless (zerop ix)
