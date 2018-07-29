@@ -369,7 +369,7 @@ THE SOFTWARE.
                           (lambda ()
                             (cond
                              ((= 3 (mod base 4))
-                              (let ((p (truncate (m+1) 4)))
+                              (let ((p (truncate (1+ base) 4)))
                                 (um:rcurry 'm^ p)))
                              #|
                              ((= 5 (mod base 8))
