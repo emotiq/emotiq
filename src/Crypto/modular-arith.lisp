@@ -325,46 +325,48 @@ THE SOFTWARE.
   ;; Fq non-squares.
   ;;
   (declare (integer x))
-  (multiple-value-bind (re im^2)
-      (um:nlet-tail iter ((a  2))
-        ;; look for quadratic nonresidue (the imaginary base)
-        ;; where we already know that x must be a quadratic residue
-        (declare (integer a))
-        (let ((v  (m- (m* a a) x)))
-          (declare (integer v))
+  (if (< x 2)
+      x
+    (multiple-value-bind (re im^2)
+        (um:nlet-tail iter ((a  2))
+          ;; look for quadratic nonresidue (the imaginary base)
+          ;; where we already know that x must be a quadratic residue
+          (declare (integer a))
+          (let ((v  (m- (m* a a) x)))
+            (declare (integer v))
           (if (quadratic-residue-p v)
               (iter (1+ a))
             (values a v))
           ))
-    (declare (integer re im^2))
-    (labels
-        ;; complex multiplication over the field Fq^2
-        ((fq2* (a b)
-           (destructuring-bind (are . aim) a
-             (declare (integer are aim))
-             (destructuring-bind (bre . bim) b
-               (declare (integer bre bim))
+      (declare (integer re im^2))
+      (labels
+          ;; complex multiplication over the field Fq^2
+          ((fq2* (a b)
+             (destructuring-bind (are . aim) a
+               (declare (integer are aim))
+               (destructuring-bind (bre . bim) b
+                 (declare (integer bre bim))
+                 (cons
+                  (m+ (m* are bre)
+                      (m* aim bim im^2))
+                  (m+ (m* are bim)
+                      (m* aim bre)))
+                 )))
+           
+           (fq2sqr (a)
+             (destructuring-bind (are . aim) a
+               (declare (integer are aim))
                (cons
-                (m+ (m* are bre)
-                    (m* aim bim im^2))
-                (m+ (m* are bim)
-                    (m* aim bre)))
-               )))
-         
-         (fq2sqr (a)
-           (destructuring-bind (are . aim) a
-             (declare (integer are aim))
-             (cons
-              (m+ (m* are are)
-                  (m* aim aim im^2))
-              (m* 2 are aim)))))
-      
-      (car (generalized-windowed-exponentiation (cons re 1) (m/2u)
-                                                :window-nbits  4
-                                                :op-mul        #'fq2*
+                (m+ (m* are are)
+                    (m* aim aim im^2))
+                (m* 2 are aim)))))
+        
+        (car (generalized-windowed-exponentiation (cons re 1) (m/2u)
+                                                  :window-nbits  4
+                                                  :op-mul        #'fq2*
                                                 :op-sqr        #'fq2sqr))
-      )))
-
+        ))))
+  
 (defun get-msqrt-fn (base)
   (get-cached-symbol-data '*m* :msqrt base
                           (lambda ()
