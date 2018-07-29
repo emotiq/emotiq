@@ -840,15 +840,17 @@ THE SOFTWARE.
                    (offs   bipolar-window-cache-offs)
                    (pt*1   bipolar-window-cache-pt*1)
                    (pt*m1  bipolar-window-cache-pt*m1)) wc
-    (or (aref precv (+ ix offs))
-        (setf (aref precv (+ ix offs))
-              (if (oddp ix)
-                  (if (minusp ix)
-                      (ed-projective-add pt*m1 (get-prec wc (1+ ix)))
-                    (ed-projective-add pt*1 (get-prec wc (1- ix))))
-                ;; else - ix even
-                (ed-projective-double (get-prec wc (ash ix -1))))
-              ))))
+    (let ((jx (+ ix offs)))
+      (declare (fixnum jx))
+      (or (aref precv jx)
+          (setf (aref precv jx)
+                (if (oddp ix)
+                    (if (minusp ix)
+                        (ed-projective-add pt*m1 (get-prec wc (1+ ix)))
+                      (ed-projective-add pt*1 (get-prec wc (1- ix))))
+                  ;; else - ix even
+                  (ed-projective-double (get-prec wc (ash ix -1))))
+                )))))
 
 (defun generalized-bipolar-windowed-mul (pt n &key window-nbits)
   ;; ECC point-scalar multiplication using fixed-width bipolar window
