@@ -75,12 +75,31 @@ THE SOFTWARE.
    :combine-signatures ;; for BLS MultiSigs
 
    :compute-pairing
-   :mul-pts  ;; bent nomenclature for ECC
+
+   :pbc=
+   
    :add-zrs
+   :sub-zrs
+   :mul-zrs
+   :div-zrs
+   :exp-zrs
+   :neg-zr
    :inv-zr
-   :expt-pt-zr
+
    :add-pts  ;; non-bent nomenclature for ECC
+   :sub-pts
+   :mul-pts  ;; bent nomenclature for ECC
+   :div-pts
+   :neg-pt
+   :inv-pt
+   
    :mul-pt-zr
+   :expt-pt-zr  ;; bent nom
+
+   :mul-gts
+   :div-gts
+   :expt-gt-zr
+   :inv-gt
    
    :keying-triple
    :keying-triple-pkey
@@ -128,174 +147,286 @@ THE SOFTWARE.
 
    :*curve*
    :*curve-name*
-   :*g1-zero*
-   :*g2-zero*
+   :with-curve
+   :set-curve
+   :list-all-curves
    ))
 
 (in-package :pbc-interface)
 
 ;; -----------------------------------------------------------------------
+;; Test the Lisp/C connection
+#|
+(cffi:defcfun ("echo" _echo) :uint64
+  (nel     :uint64)
+  (txt-out :pointer :char)
+  (txt-in  :pointer :char))
 
-;; The Lisp runtime load might help us do this differently, but explicit
-;; initialization is much easier to understand
-
-(defun load-dev-dlls ()
-  "loads the DLLs (.so and .dylib) at runtime, from pre-specified directories"
-  (pushnew (asdf:system-relative-pathname :emotiq "../var/local/lib/")
-           cffi:*foreign-library-directories*)
-  (cffi:define-foreign-library
-      libpbc 
-    (:darwin "libLispPBCIntf.dylib")
-    (:linux "libLispPBCIntf.so")
-    (t (:default "libLispPBCIntf"))))
-
-(defun load-production-dlls ()
-  "loads the DLLs (.so and .dylib) at runtime, from the current directory"
-  (cffi:define-foreign-library
-   libpbc
-   (:darwin "libLispPBCIntf.dylib")
-   (:linux  "./libLispPBCIntf.so")
-   (t (:default "libLispPBCIntf"))))
-
-(defun load-dlls()
-  "load the dev or production dlls at runtime"
-  (if (emotiq:production-p)
-      (load-production-dlls)
-      (load-dev-dlls))
-  (cffi:use-foreign-library libpbc))
-
+(defun echo (&optional (str "Hello There!"))
+  (cffi:with-foreign-string ((ctxt-in ntxt) str
+                             :encoding :ASCII)
+    (cffi:with-foreign-pointer (ctxt-out 80)
+      (let ((ans (_echo ntxt ctxt-in ctxt-out))
+            (out (make-array 80 :element-type '(signed-byte 8))))
+        (loop for ix from 0 below 80 do
+              (setf (aref out ix) (cffi:mem-aref ctxt-out :char ix)))
+        (print (list ans out (map 'string 'code-char (subseq out 0 ans))))
+        (force-output)))))
+|#
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("init_pairing" _init-pairing) :long
-  (param-text  :pointer :unsigned-char)
-  (ntext       :long)
-  (psizes      :pointer :long))
+(cffi:defcfun ("init_pairing" _init-pairing :library :libLispPBC) :int64
+  (context     :uint64)
+  (param-text  :pointer :char)
+  (ntext       :uint64)
+  (psizes      :pointer :uint64))
 
 ;; -------------------------------------------------
 ;; Query interface
 
-(cffi:defcfun ("get_g2" _get-g2) :long
+(cffi:defcfun ("get_g2" _get-g2) :uint64
+  (context     :uint64)
   (pbuf        :pointer :void)
-  (nbuf        :long))
+  (nbuf        :uint64))
 
-(cffi:defcfun ("get_g1" _get-g1) :long
+(cffi:defcfun ("get_g1" _get-g1) :uint64
+  (context     :uint64)
   (pbuf        :pointer :void)
-  (nbuf        :long))
+  (nbuf        :uint64))
 
 ;; -------------------------------------------------
 ;; Setter interface
 
-(cffi:defcfun ("set_g2" _set-g2) :long
-  (pbuf   :pointer :unsigned-char))
+(cffi:defcfun ("set_g2" _set-g2) :int64
+  (context   :uint64)
+  (pbuf      :pointer :uint8))
 
-(cffi:defcfun ("set_g1" _set-g1) :long
-  (pbuf   :pointer :unsigned-char))
+(cffi:defcfun ("set_g1" _set-g1) :int64
+  (context   :uint64)
+  (pbuf      :pointer :uint8))
 
 ;; -------------------------------------------------
 ;; Keying interface
 
 (cffi:defcfun ("make_key_pair" _make-key-pair) :void
-  (skbuf  :pointer :unsigned-char)
-  (pkbuf  :pointer :unsigned-char)
-  (hbuf   :pointer :unsigned-char)
-  (nhash  :long))
+  (context     :uint64)
+  (skbuf  :pointer :uint8)
+  (pkbuf  :pointer :uint8)
+  (hbuf   :pointer :uint8)
+  (nhash  :uint64))
 
 (cffi:defcfun ("make_public_subkey" _make-public-subkey) :void
-  (abuf   :pointer :unsigned-char)
-  (pbuf   :pointer :unsigned-char)
-  (hbuf   :pointer :unsigned-char)
-  (hlen   :long))
+  (context     :uint64)
+  (abuf   :pointer :uint8)
+  (pbuf   :pointer :uint8)
+  (hbuf   :pointer :uint8)
+  (hlen   :uint64))
 
 (cffi:defcfun ("make_secret_subkey" _make-secret-subkey) :void
-  (abuf   :pointer :unsigned-char)
-  (sbuf   :pointer :unsigned-char)
-  (hbuf   :pointer :unsigned-char)
-  (hlen   :long))
+  (context     :uint64)
+  (abuf   :pointer :uint8)
+  (sbuf   :pointer :uint8)
+  (hbuf   :pointer :uint8)
+  (hlen   :uint64))
 
 (cffi:defcfun ("sakai_kasahara_encrypt" _sakai-kasahara-encrypt) :void
   ;; aka SAKKE, IETF RFC 6508
-  (rbuf   :pointer :unsigned-char) ;; returned R point in G2
-  (pbuf   :pointer :unsigned-char) ;; returned pairing for encryption in GT
-  (pkey   :pointer :unsigned-char) ;; public subkey in G2
-  (hbuf   :pointer :unsigned-char) ;; hash(ID, msg)
-  (hlen   :long))
+  (context     :uint64)
+  (rbuf   :pointer :uint8) ;; returned R point in G2
+  (pbuf   :pointer :uint8) ;; returned pairing for encryption in GT
+  (pkey   :pointer :uint8) ;; public subkey in G2
+  (hbuf   :pointer :uint8) ;; hash(ID, msg)
+  (hlen   :uint64))
 
 (cffi:defcfun ("sakai_kasahara_decrypt" _sakai-kasahara-decrypt) :void
   ;; aka SAKKE, IETF RFC 6508
-  (pbuf   :pointer :unsigned-char)  ;; returned pairing for decryptin in GT
-  (rbuf   :pointer :unsigned-char)  ;; R point in G2
-  (skey   :pointer :unsigned-char)) ;; secret subkey in G1
+  (context     :uint64)
+  (pbuf   :pointer :uint8)  ;; returned pairing for decryptin in GT
+  (rbuf   :pointer :uint8)  ;; R point in G2
+  (skey   :pointer :uint8)) ;; secret subkey in G1
 
-(cffi:defcfun ("sakai_kasahara_check" _sakai-kasahara-check) :long
+(cffi:defcfun ("sakai_kasahara_check" _sakai-kasahara-check) :uint64
   ;; aka SAKKE, IETF RFC 6508
-  (rbuf   :pointer :unsigned-char)  ;; R point in G2
-  (pkey   :pointer :unsigned-char)  ;; public subkey in G2
-  (hbuf   :pointer :unsigned-char)  ;; hash(ID, msg)
-  (hlen   :long))
+  (context     :uint64)
+  (rbuf   :pointer :uint8)  ;; R point in G2
+  (pkey   :pointer :uint8)  ;; public subkey in G2
+  (hbuf   :pointer :uint8)  ;; hash(ID, msg)
+  (hlen   :uint64))
 
 ;; -------------------------------------------------
 ;; BLS Signatures
 
 (cffi:defcfun ("sign_hash" _sign-hash) :void
-  (sig    :pointer :unsigned-char)
-  (skbuf  :pointer :unsigned-char)
-  (pbuf   :pointer :unsigned-char)
-  (nbuf   :long))
+  (context     :uint64)
+  (sig    :pointer :uint8)
+  (skbuf  :pointer :uint8)
+  (pbuf   :pointer :uint8)
+  (nbuf   :uint64))
 
-(cffi:defcfun ("check_signature" _check-signature) :long
-  (psig   :pointer :unsigned-char)
-  (phash  :pointer :unsigned-char)
-  (nhash  :long)
-  (pkey   :pointer :unsigned-char))
+(cffi:defcfun ("check_signature" _check-signature) :int64
+  (context     :uint64)
+  (psig   :pointer :uint8)
+  (phash  :pointer :uint8)
+  (nhash  :uint64)
+  (pkey   :pointer :uint8))
 
 ;; -------------------------------------------------
 ;; Curve math ops
 
+(cffi:defcfun ("add_G1_pts" _add-g1-pts) :void
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
+(cffi:defcfun ("sub_G1_pts" _sub-g1-pts) :void
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
 (cffi:defcfun ("mul_G1_pts" _mul-g1-pts) :void
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
+(cffi:defcfun ("div_G1_pts" _div-g1-pts) :void
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
+(cffi:defcfun ("neg_G1_pt" _neg-g1-pt) :void
+  (context     :uint64)
+  (p1    :pointer :uint8))
+
+(cffi:defcfun ("inv_G1_pt" _inv-g1-pt) :void
+  (context     :uint64)
+  (p1    :pointer :uint8))
+
+(cffi:defcfun ("add_G2_pts" _add-g2-pts) :void
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
+(cffi:defcfun ("sub_G2_pts" _sub-g2-pts) :void
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
 
 (cffi:defcfun ("mul_G2_pts" _mul-g2-pts) :void
-  (p1    :pointer :unsigned-char)
-  (p2    :pointer :unsigned-char))
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
+(cffi:defcfun ("div_G2_pts" _div-g2-pts) :void
+  (context     :uint64)
+  (p1    :pointer :uint8)
+  (p2    :pointer :uint8))
+
+(cffi:defcfun ("neg_G2_pt" _neg-g2-pt) :void
+  (context     :uint64)
+  (p1    :pointer :uint8))
+
+(cffi:defcfun ("inv_G2_pt" _inv-g2-pt) :void
+  (context     :uint64)
+  (p1    :pointer :uint8))
 
 (cffi:defcfun ("add_Zr_vals" _add-zr-vals) :void
-  (z1    :pointer :unsigned-char)
-  (z2    :pointer :unsigned-char))
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("sub_Zr_vals" _sub-zr-vals) :void
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("mul_Zr_vals" _mul-zr-vals) :void
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("div_Zr_vals" _div-zr-vals) :void
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("exp_Zr_vals" _exp-zr-vals) :void
+  (context     :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("neg_Zr_val" _neg-zr-val) :void
+  (context     :uint64)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("inv_Zr_val" _inv-zr-val) :void
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (z     :pointer :uint8))
+
+(cffi:defcfun ("mul_G1z" _mul-G1z) :void
+  (context :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("exp_G1z" _exp-G1z) :void
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
+
+(cffi:defcfun ("mul_G2z" _mul-G2z) :void
+  (context     :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("exp_G2z" _exp-G2z) :void
-  (g     :pointer :unsigned-char)
-  (z     :pointer :unsigned-char))
+  (context     :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
 
 (cffi:defcfun ("compute_pairing" _compute-pairing) :void
-  (gtbuf :pointer :unsigned-char)  ;; result returned here
-  (hbuf  :pointer :unsigned-char)
-  (gbuf  :pointer :unsigned-char))
+  (context     :uint64)
+  (gtbuf :pointer :uint8)  ;; result returned here
+  (hbuf  :pointer :uint8)
+  (gbuf  :pointer :uint8))
+
+(cffi:defcfun ("mul_GT_vals" _mul-GT-vals) :void
+  (context :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("div_GT_vals" _div-GT-vals) :void
+  (context :uint64)
+  (z1    :pointer :uint8)
+  (z2    :pointer :uint8))
+
+(cffi:defcfun ("exp_GTz" _exp-GTz) :void
+  (context :uint64)
+  (g     :pointer :uint8)
+  (z     :pointer :uint8))
+
+(cffi:defcfun ("inv_GT_val" _inv-GT-val) :void
+  (context :uint64)
+  (g     :pointer :uint8))
 
 ;; ----------------------------------------------------
 
 (cffi:defcfun ("get_G1_from_hash" _get-g1-from-hash) :void
-  (g1buf :pointer :unsigned-char)
-  (hbuf  :pointer :unsigned-char)
-  (nhash :long))
+  (context     :uint64)
+  (g1buf :pointer :uint8)
+  (hbuf  :pointer :uint8)
+  (nhash :uint64))
 
 (cffi:defcfun ("get_G2_from_hash" _get-g2-from-hash) :void
-  (g2buf :pointer :unsigned-char)
-  (hbuf  :pointer :unsigned-char)
-  (nhash :long))
+  (context     :uint64)
+  (g2buf :pointer :uint8)
+  (hbuf  :pointer :uint8)
+  (nhash :uint64))
 
 (cffi:defcfun ("get_Zr_from_hash" _get-zr-from-hash) :void
-  (zrbuf :pointer :unsigned-char)
-  (hbuf  :pointer :unsigned-char)
-  (nhash :long))
+  (context     :uint64)
+  (zrbuf :pointer :uint8)
+  (hbuf  :pointer :uint8)
+  (nhash :uint64))
 
 ;; -------------------------------------------------
 ;; Abstract superclass for crypto objects. These are just wrappers
@@ -389,6 +520,7 @@ not belonging to any field"))
 (defstruct (full-curve-params
             (:include curve-params))
   ;; cached values filled in at init
+  context
   order g1-len g2-len zr-len gt-len)
 
 ;; ---------------------------------------------------------------------------------------
@@ -649,6 +781,7 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
 ;; ---------------------------------------------------------------------------------------
 (defparameter *curve-default-ar160-params*
   (make-curve-params
+   :name :curve-ar160
    :pairing-text
    (sbs
    #>.end
@@ -667,8 +800,7 @@ sign0 1
               :str "BirBvAoXsqMYtZCJ66wwCSFTZFaLWrAEhS5GLFrd96DGojc9xfp7beyDPxC5jSuta3yTMXQt7BXLTpam9dj1MVf7m"))
    :g2  (make-instance 'g2-cmpr
          :pt (make-instance 'base58
-              :str
-"FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8")))
+              :str "FXJJmcVJsYYG8Y89AZ9Z51kjVANBD68LQi7pD28EG92dxFoWijrcrDaVVYUgiB9yv4GazAAGg7ARg6FeDxCxetkY8")))
 "Ben Lynn's favorite default - 160 bits symmetric pairing.
 Unfortunately, we are a decade later than when these curves were
 developed and 80-bit security is no longer sufficient. But this curve
@@ -676,7 +808,7 @@ serves as a check on our implementation with his pbc-calc for
 comparison.")
 
 (defparameter *chk-curve-default-ar160-params*
-  "16e0d04684238b1aae7e828c795fa3dcd1c3d9e12abee5d72cfacff944b1bf38")
+  "FD0B8B456DB9C6DA1408D6DE0DCF3EEBDDBBC6D7AC99B3843188B01728833E29")
 
 ;; ---------------------------------------------------------------------------------------
 
@@ -686,11 +818,15 @@ comparison.")
 (define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
 (define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
 
+(define-symbol-macro *context*       (full-curve-params-context *curve*)) ;; which context of PBC? (0..15)
 (define-symbol-macro *curve-order*   (full-curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
 (define-symbol-macro *g1-size*       (full-curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
 (define-symbol-macro *g2-size*       (full-curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
 (define-symbol-macro *zr-size*       (full-curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
 (define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
+
+(defvar *contexts* (make-array 16 ;; holds copies of *curve* parameters from init-pairing
+                               :initial-element nil))
 
 ;; -------------------------------------------------
 ;; Coercion functions in case we are dealing with a client that only
@@ -721,10 +857,27 @@ comparison.")
 
 ;; -------------------------------------------------
 
+(defun list-all-curves ()
+  '(:curve-fr449 :curve-fr256 :curve-fr255 :curve-fr256 :curve-fr248 :curve-fr247 :curve-ar160))
+
+(defmethod %locate-raw-curve ((name symbol))
+  (ecase name
+    (:curve-fr449  *curve-fr449-params*)
+    (:curve-fr256  *curve-fr256-params*)
+    (:curve-fr255  *curve-fr255-params*)
+    (:curve-fr250  *curve-fr250-params*)
+    (:curve-fr248  *curve-fr248-params*)
+    (:curve-fr247  *curve-fr247-params*)
+    (:curve-ar160  *curve-default-ar160-params*)))
+
+(defmethod %locate-raw-curve ((curve curve-params))
+  curve)
+
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
 
-(defun init-pairing (&optional (params nil params-supplied-p))
+(defun init-pairing (&key (params nil params-supplied-p)
+                          (context (position nil *contexts*)))
   "Initialize the pairings lib.
 
   If params not specified and we haven't been called yet, or specified
@@ -739,33 +892,37 @@ state to prior cryptosystem.
 library, and we don't want inconsistent state. Calls to SET-GENERATOR
 also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
+  (check-type context (integer 0 15))
   (mpcompat:with-lock (*crypto-lock*)
     (let ((prev   *curve*)
-          (params (or params
-                      *curve-fr449-params*)))
+          (cparams (or (and params
+                            (%locate-raw-curve params))
+                       *curve-fr449-params*)))
       ;; If params not specified, and we have already been called,
       ;; just skip doing anything.
       (when (or params-supplied-p
                 (null *curve*))
         (setf *curve* nil) ;; in case we fail
-	(load-dlls)
         (with-accessors ((txt  curve-params-pairing-text)
                          (g1   curve-params-g1)
-                         (g2   curve-params-g2)) params
-          (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :long)))
+                         (g2   curve-params-g2)) cparams
+          (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :uint64)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
-              (assert (zerop (_init-pairing ctxt ntxt ansbuf)))
+              (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
+
               (setf *curve* (make-full-curve-params
-                             :name          (curve-params-name         params)
-                             :pairing-text  (curve-params-pairing-text params)
-                             :g1            (curve-params-g1           params)
-                             :g2            (curve-params-g2           params))
-                    *g1-size*  (cffi:mem-aref ansbuf :long 0)
-                    *g2-size*  (cffi:mem-aref ansbuf :long 1)
-                    *gt-size*  (cffi:mem-aref ansbuf :long 2)
-                    *zr-size*  (cffi:mem-aref ansbuf :long 3)
-                    *curve-order* nil)
+                             :name          (curve-params-name         cparams)
+                             :pairing-text  (curve-params-pairing-text cparams)
+                             :g1            (curve-params-g1           cparams)
+                             :g2            (curve-params-g2           cparams)
+                             :context       context)
+                    *g1-size*  (cffi:mem-aref ansbuf :uint64 0)
+                    *g2-size*  (cffi:mem-aref ansbuf :uint64 1)
+                    *gt-size*  (cffi:mem-aref ansbuf :uint64 2)
+                    *zr-size*  (cffi:mem-aref ansbuf :uint64 3)
+                    *curve-order* nil
+                    (aref *contexts* context) *curve*)
               (get-order) ;; fills in *curve-order* cached value
               ;; A cryptosystem is specified by curve params and
               ;; specific values for the G1 and G2 generators.
@@ -776,8 +933,37 @@ SMP access. Everything else should be SMP-safe."
               (if g2
                   (set-generator g2)
                 (get-g1)) ;; fill in cached value
-              ))))
+              ))) )
       prev))) ;; return previous *curve*
+
+;; -------------------------------------------------
+
+(defmethod %locate-curve ((name symbol))
+  ;; if a symbol name is given - typically a keyword name, like
+  ;; :CURVE-FR449
+  (or (find-if (lambda (slot)
+                 (and slot
+                      (eq (curve-params-name slot) name)))
+               *contexts*)
+      (let ((*curve* nil))
+        (init-pairing :params name)
+        *curve*)
+      (error "No curve named ~S in context cache" name)))
+
+(defmethod %locate-curve ((curve full-curve-params))
+  ;; if *curve* was saved after an init-pairing call
+  curve)
+
+(defun do-with-curve (name fn)
+  (let ((*curve* (%locate-curve name)))
+    (funcall fn)))
+
+(defmacro with-curve (curve-name &body body)
+  ;; use a name keyword like :CURVE-FR449 or :CURVE-FR256
+  `(do-with-curve ,curve-name (lambda () ,@body)))
+
+(defun set-curve (curve)
+  (setf *curve* (%locate-curve curve)))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
@@ -796,7 +982,7 @@ SMP access. Everything else should be SMP-safe."
 (defun xfer-foreign-to-lisp (fbuf nel)
   (let ((lbuf (make-ub8-vector nel)))
     (dotimes (ix nel)
-      (setf (aref lbuf ix) (cffi:mem-aref fbuf :unsigned-char ix)))
+      (setf (aref lbuf ix) (cffi:mem-aref fbuf :uint8 ix)))
     (construct-bev lbuf)))
 
 (defun ensure-bevn (buf nel)
@@ -805,7 +991,7 @@ SMP access. Everything else should be SMP-safe."
 (defun xfer-lisp-to-foreign (lbuf fbuf nel)
   (let ((llbuf  (ensure-bevn lbuf nel)))
     (dotimes (ix nel)
-      (setf (cffi:mem-aref fbuf :unsigned-char ix) (aref llbuf ix)))
+      (setf (cffi:mem-aref fbuf :uint8 ix) (aref llbuf ix)))
     ))
 
 (defmacro with-fli-buffers (buffers &body body)
@@ -830,7 +1016,7 @@ SMP access. Everything else should be SMP-safe."
   "Internal routine to read a (possibly compressed) element from the C
 library."
   (with-fli-buffers ((buf nb))
-    (assert (eql nb (funcall get-fn buf nb)))
+    (assert (eql nb (funcall get-fn *context* buf nb)))
     (xfer-foreign-to-lisp buf nb)))
               
 ;; -------------------------------------------------
@@ -894,7 +1080,7 @@ library."
   (let ((nb  (hash-length hash)))
     (with-fli-buffers ((ptbuf  *g1-size*)
                        (hbuf   nb  hash))
-      (_get-g1-from-hash ptbuf hbuf nb)
+      (_get-g1-from-hash *context* ptbuf hbuf nb)
       (make-instance 'g1-cmpr
                      :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
       )))
@@ -904,39 +1090,44 @@ library."
   (let ((nb (hash-length hash)))
   (with-fli-buffers ((ptbuf  *g2-size*)
                      (hbuf   nb  hash))
-    (_get-g2-from-hash ptbuf hbuf nb)
+    (_get-g2-from-hash *context* ptbuf hbuf nb)
     (make-instance 'g2-cmpr
                    :pt  (xfer-foreign-to-lisp ptbuf *g2-size*))
     )))
-                       
+
+(defmethod %zr ((zbuf bev))
+  ;; we take care here to keep %zr an internal-use-only function.
+  ;; we can't accept just any old BEV argument.
+  (make-instance 'zr
+                 :val zbuf))
+
 (defmethod zr-from-hash ((hash hash))
   "Return the hash value mapped into Zr"
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
                        (hbuf   nb  hash))
-      (_get-zr-from-hash zbuf hbuf nb)
-      (make-instance 'zr
-                     :val  (xfer-foreign-to-lisp zbuf *zr-size*))
+      (_get-zr-from-hash *context* zbuf hbuf nb)
+      (%zr (xfer-foreign-to-lisp zbuf *zr-size*))
       )))
                        
 ;; -------------------------------------------------
 
-(defmethod set-element ((x crypto-val) set-fn nb)
+(defmethod %set-element ((x crypto-val) set-fn nb)
   ;; internal routine
   (mpcompat:with-lock (*crypto-lock*)
     (let ((bytes (crypto-val-vec x)))
       (with-fli-buffers ((buf nb bytes))
-        (funcall set-fn buf)))))
+        (funcall set-fn *context* buf)))))
 
 (defmethod set-generator ((g1 g1-cmpr))
   "Set the cryptosystem G1 generator"
-  (setf *g1* g1)
-  (set-element g1 '_set-g1 *g1-size*))
+  (%set-element g1 '_set-g1 *g1-size*)
+  (setf *g1* g1))
 
 (defmethod set-generator ((g2 g2-cmpr))
   "Set the cryptosystem G2 generator"
-  (setf *g2* g2)
-  (set-element g2 '_set-g2 *g2-size*))
+  (%set-element g2 '_set-g2 *g2-size*)
+  (setf *g2* g2))
 
 ;; -------------------------------------------------
 
@@ -946,7 +1137,7 @@ library."
     (with-fli-buffers ((sigbuf *g1-size*)
                        (skbuf  *zr-size* skey)
                        (hbuf nhash hash))
-      (_sign-hash sigbuf skbuf hbuf nhash)
+      (_sign-hash *context* sigbuf skbuf hbuf nhash)
       (make-instance 'signature
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
@@ -964,7 +1155,7 @@ library."
     (with-fli-buffers ((sbuf *g1-size*  sig)
                        (hbuf nhash      hash)
                        (pbuf *g2-size*  pkey))
-      (zerop (_check-signature sbuf hbuf nhash pbuf))
+      (zerop (_check-signature *context* sbuf hbuf nhash pbuf))
       )))
 
 (defmethod check-hash ((hash hash) sig pkey)
@@ -1016,7 +1207,7 @@ Certification includes a BLS Signature on the public key."
     (with-fli-buffers ((sbuf *zr-size*)
                        (pbuf *g2-size*)
                        (hbuf hlen hsh))
-      (_make-key-pair sbuf pbuf hbuf hlen)
+      (_make-key-pair *context* sbuf pbuf hbuf hlen)
       (let* ((pkey (make-instance 'public-key
                                   :val (xfer-foreign-to-lisp pbuf *g2-size*)))
              (skey (make-instance 'secret-key
@@ -1047,7 +1238,7 @@ Certification includes a BLS Signature on the public key."
     (with-fli-buffers ((hbuf hlen      hsh)
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
-      (_make-public-subkey abuf pbuf hbuf hlen)
+      (_make-public-subkey *context* abuf pbuf hbuf hlen)
       (make-instance 'public-subkey
                      :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
@@ -1060,7 +1251,7 @@ Certification includes a BLS Signature on the public key."
     (with-fli-buffers ((hbuf hlen      hsh)
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
-      (_make-secret-subkey abuf sbuf hbuf hlen)
+      (_make-secret-subkey *context* abuf sbuf hbuf hlen)
       (make-instance 'secret-subkey
                      :val (xfer-foreign-to-lisp abuf *g1-size*)))))
 
@@ -1107,7 +1298,7 @@ Certification includes a BLS Signature on the public key."
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
-      (_sakai-kasahara-encrypt rbuf pbuf kbuf hbuf 32)
+      (_sakai-kasahara-encrypt *context* rbuf pbuf kbuf hbuf 32)
       (let* ((pval (get-hash-nbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
              (cmsg (make-instance 'crypto-text
                                   :vec (construct-bev
@@ -1137,7 +1328,7 @@ Certification includes a BLS Signature on the public key."
       (with-fli-buffers ((pbuf  *gt-size*)
                          (kbuf  *g1-size*  skid)
                          (rbuf  *g2-size*  rval))
-        (_sakai-kasahara-decrypt pbuf rbuf kbuf)
+        (_sakai-kasahara-decrypt *context* pbuf rbuf kbuf)
         (let* ((cmsg-bytes (raw-bytes cmsg))
                (nb         (length cmsg-bytes))
                (pval (get-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
@@ -1146,7 +1337,7 @@ Certification includes a BLS Signature on the public key."
                (hval (hash/256 id tstamp msg)))
           (with-fli-buffers ((hbuf 32        hval)
                              (kbuf *g2-size* pkey))
-            (when (zerop (_sakai-kasahara-check rbuf kbuf hbuf 32))
+            (when (zerop (_sakai-kasahara-check *context* rbuf kbuf hbuf 32))
               (loenc:decode (raw-bytes msg))))
           )))))
 
@@ -1159,7 +1350,7 @@ Certification includes a BLS Signature on the public key."
   (with-fli-buffers ((hbuf  *g1-size*  hval)
                      (gbuf  *g2-size*  gval)
                      (gtbuf *gt-size*))
-    (_compute-pairing gtbuf hbuf gbuf)
+    (_compute-pairing *context* gtbuf hbuf gbuf)
     (make-instance 'pairing
                    :val (xfer-foreign-to-lisp gtbuf *gt-size*))))
 
@@ -1169,12 +1360,19 @@ Certification includes a BLS Signature on the public key."
 ;; multiplication, curve point scalar multiplication is denoted as
 ;; group exponentiation.
 
+(defun unop (op x x-siz final)
+  ;; operate on operands a, b, returning in the buffer for a
+  ;; it is assumed that the a-siz is also the size of result.
+  (with-fli-buffers ((x-buf  x-siz  x))
+    (funcall op *context* x-buf) ;; result returned in first arg buffer
+    (funcall final (xfer-foreign-to-lisp x-buf x-siz))))
+
 (defun binop (op a b a-siz b-siz final)
   ;; operate on operands a, b, returning in the buffer for a
   ;; it is assumed that the a-siz is also the size of result.
   (with-fli-buffers ((a-buf  a-siz  a)
                      (b-buf  b-siz  b))
-    (funcall op a-buf b-buf) ;; result returned in first arg buffer
+    (funcall op *context* a-buf b-buf) ;; result returned in first arg buffer
     (funcall final (xfer-foreign-to-lisp a-buf a-siz))))
 
 (defun make-g1-ans (ans)
@@ -1186,91 +1384,182 @@ Certification includes a BLS Signature on the public key."
                  :pt ans))
 
 (defun make-zr-ans (ans)
-  (make-instance 'zr
+  (%zr ans))
+
+(defun make-gT-ans (ans)
+  (make-instance 'gt
                  :val ans))
 
 ;; -------------------------------
 
-(defmethod mul-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
-  ;; multiply two elements from G1 field (always the shorter field
+(defmethod pbc= ((a crypto-val) (b crypto-val))
+  (vec= a b))
+
+(defmethod pbc= (a b)
+  (int= a b))
+            
+;; -------------------------------
+
+(defmethod add-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; add two elements from G1 field (always the shorter field
   ;; rep)
   ;;
   ;; (should be obvious, but you can't mix G1 with G2, except by
   ;; pairing operations)
   ;;
-  (cond ((zerop (int pt1)) pt2)
-        ((zerop (int pt2)) pt1)
-        (t 
-         (binop '_mul-g1-pts pt1 pt2
-                *g1-size* *g1-size* 'make-g1-ans))
-        ))
+  (binop '_add-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
 
-(defun add-pts (pt1 pt2)
-  ;; for non-bent nomenclature
-  (mul-pts pt1 pt2))
+(defmethod sub-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; subtract two elements from G1 field (always the shorter field
+  ;; rep)
+  (binop '_sub-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
 
-(defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
-  ;; multiply two elements from G2 field
-  (cond ((zerop (int pt1)) pt2)
-        ((zerop (int pt2)) pt1)
-        (t 
-         (binop '_mul-g2-pts pt1 pt2
-                *g2-size* *g2-size* 'make-g2-ans))
-        ))
+(defmethod mul-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; multiply two elements from G1 field (always the shorter field
+  ;; rep)
+  (binop '_mul-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
+
+(defmethod div-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
+  ;; divide (bent nom) two elements from G1 field (always the shorter field
+  ;; rep)
+  (binop '_div-g1-pts pt1 pt2
+         *g1-size* *g1-size* 'make-g1-ans))
+
+(defmethod neg-pt ((pt g1-cmpr))
+  ;; compute negation of pt in group G1
+  (unop '_neg-G1-pt pt *g1-size* 'make-g1-ans))
+
+(defmethod inv-pt ((pt g1-cmpr))
+  ;; compute inverse of pt in group G1
+  (unop '_inv-G1-pt pt *g1-size* 'make-g1-ans))
+
+;;; ---------------------------
+
+(defmethod add-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; add two elements from G2 field
+  (binop '_add-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
         
-(defmethod add-zrs ((z1 zr) (z2 zr))
+(defmethod sub-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; subtract two elements from G2 field
+  (binop '_sub-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+        
+(defmethod mul-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; multiply (bent nom) two elements from G2 field
+  (binop '_mul-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+        
+(defmethod div-pts ((pt1 g2-cmpr) (pt2 g2-cmpr))
+  ;; divide (bent nom) two elements from G2 field
+  (binop '_div-g2-pts pt1 pt2
+         *g2-size* *g2-size* 'make-g2-ans))
+
+(defmethod neg-pt ((pt g2-cmpr))
+  ;; compute negation of pt in group G2
+  (unop '_neg-G2-pt pt *g2-size* 'make-g2-ans))
+
+(defmethod inv-pt ((pt g2-cmpr))
+  ;; compute inverse of pt in group G2
+  (unop '_inv-G2-pt pt *g2-size* 'make-g2-ans))
+
+;; ---------------------------
+
+(defmethod zr ((val zr))
+  val)
+
+(defmethod zr ((val integer))
+  ;; for ring Zr, any integer value (0 <= z < order) is valid
+  ;;
+  ;; Zr is the only group for which arbitrary integer values are
+  ;; valid. All others must be derived from extant group (subgroup)
+  ;; members.
+  (%zr (bev (mod val (get-order)))))
+
+(defmethod add-zrs (z1 z2)
   ;; add two elements from Zr ring
-  (binop '_add-zr-vals z1 z2
+  (binop '_add-zr-vals (zr z1) (zr z2)
          *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod add-zrs ((z1 integer) z2)
-  (add-zrs z2 (make-instance 'zr
-                             :val (mod z1 (get-order)))))
+(defmethod sub-zrs (z1 z2)
+  ;; add two elements from Zr ring
+  (binop '_sub-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod inv-zr ((z zr))
-  ;; compute inverse of z in ring Zr
-  (when (zerop (int z))
-    (error "Can't invert zero"))
-  (with-fli-buffers ((z-buf  *zr-size* z))
-    (_inv-zr-val z-buf)
-    (make-instance 'zr
-                   :val (xfer-foreign-to-lisp z-buf *zr-size*))))
+(defmethod mul-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  (binop '_mul-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defmethod inv-zr ((z integer))
-  (inv-zr (make-instance 'zr
-                         :val (mod z (get-order)))))
+(defmethod div-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  (binop '_div-zr-vals (zr z1) (zr z2)
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defvar *g1-zero*
-  (make-instance 'g1-cmpr
-                 :pt (bev 0)))
+(defmethod exp-zrs (z1 z2)
+  ;; mult two elements from Zr ring
+  ;; Careful here... z^(q-1) = 1, z^q = z
+  (binop '_exp-zr-vals
+         (zr z1)
+         (%zr (bev (mod (int z2) (1- (get-order)))))
+         *zr-size* *zr-size* 'make-zr-ans))
 
-(defvar *g2-zero*
-  (make-instance 'g2-cmpr
-                 :pt (bev 0)))
+(defmethod neg-zr (zr)
+  ;; compute negation of pt in group Zr
+  (unop '_neg-Zr-val zr *zr-size* 'make-zr-ans))
 
-(defmethod expt-pt-zr ((g1 g1-cmpr) (z zr))
+(defmethod inv-zr (zr)
+  ;; compute inverse of pt in group Zr
+  (unop '_inv-Zr-val zr *zr-size* 'make-zr-ans))
+
+;; --------------------------------------------------
+
+(defmethod mul-pt-zr ((g1 g1-cmpr) z)
   ;; exponentiate an element of G1 by element z of ring Zr
-  (cond ((zerop (int z)) *g1-zero*)
-        (t
-         (binop '_exp-G1z g1 z
-                *g1-size* *zr-size* 'make-g1-ans))
-        ))
+  (binop '_mul-G1z g1 (zr z)
+         *g1-size* *zr-size* 'make-g1-ans))
 
-(defmethod expt-pt-zr ((g2 g2-cmpr) (z zr))
+(defmethod expt-pt-zr ((g1 g1-cmpr) z)
+  ;; exponentiate an element of G1 by element z of ring Zr
+  (binop '_exp-G1z g1 (zr z)
+         *g1-size* *zr-size* 'make-g1-ans))
+
+
+(defmethod mul-pt-zr ((g2 g2-cmpr) z)
   ;; exponentiate an element of G2 by element z of ring Zr
-  (cond ((zerop (int z)) *g2-zero*)
-        (t 
-         (binop '_exp-G2z g2 z
-                *g2-size* *zr-size* 'make-g2-ans))
-        ))
+  (binop '_mul-G2z g2 (zr z)
+         *g2-size* *zr-size* 'make-g2-ans))
 
-(defmethod expt-pt-zr (g1 (z integer))
-  (expt-pt-zr g1 (make-instance 'zr
-                                :val (mod z (get-order)))))
+(defmethod expt-pt-zr ((g2 g2-cmpr) z)
+  ;; exponentiate an element of G2 by element z of ring Zr
+  (binop '_exp-G2z g2 (zr z)
+         *g2-size* *zr-size* 'make-g2-ans))
 
-(defun mul-pt-zr (pt z)
-  ;; for non-bent nomenclature
-  (expt-pt-zr pt z))
+;; --------------------------------------------------
+
+(defmethod expt-GT-zr ((gT gT) z)
+  ;; exponentiate an element of subgroup GT by element z of ring Zr
+  ;;
+  ;; Careful here... GT is a prime order subgroup of a large group of
+  ;; composite order. No reason to expect x^q = x, for x in GT, q =
+  ;; prime order.
+  (binop '_exp-GTz gT (zr z)
+         *gT-size* *zr-size* 'make-gT-ans))
+
+(defmethod mul-gts ((gt1 gt) (gt2 gt))
+  (binop '_mul-gt-vals gt1 gt2
+         *gt-size* *gt-size* 'make-gt-ans))
+  
+(defmethod div-gts ((gt1 gt) (gt2 gt))
+  (binop '_div-gt-vals gt1 gt2
+         *gt-size* *gt-size* 'make-gt-ans))
+
+(defmethod inv-GT ((gt gt))
+  ;; compute inverse of gt in group GT
+  (unop '_inv-GT-val gt *gt-size* 'make-gt-ans))
 
 ;; --------------------------------------------------------
 ;; BLS MultiSignatures
@@ -1493,7 +1782,11 @@ likely see an assertion failure"
 
 #-:lispworks
 (eval-when (:load-toplevel)
-  (init-pairing))
+  ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
+  ;; context slots available, (0 .. 15)
+  (init-pairing :params *curve-fr256-params* :context 0)
+  ;; do FR449 last so it becomes the default pairing
+  (init-pairing :params *curve-fr449-params* :context 1))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -1512,4 +1805,13 @@ likely see an assertion failure"
     
     (if building-binary-p
         nil                                          ;; do nothing, esp. don't try to init-pairing
-      (init-pairing))))                      ;; in all other cases, init-pairing at LOAD time.
+      (progn
+        ;; in all other cases, init-pairing at LOAD time.
+        ;;
+        ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
+        ;; context slots available, (0 .. 15)
+        (init-pairing :params *curve-fr256-params* :context 0)
+        ;; do FR449 last so it becomes the default pairing
+        (init-pairing :params *curve-fr449-params* :context 1)
+        ))))
+

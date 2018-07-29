@@ -37,9 +37,84 @@ THE SOFTWARE.
 (declaim (integer *m*)
          (inline mmod m-1 m/2l m+1 m/2u))
 
+#|
+;; this is not faster than the built-in MOD function...
+
+(defstruct moddescr
+  nbits rem)
+
+(defun make-mod-descr (base)
+  (let* ((nbits  (integer-length base))
+         (rem    (- (ash 1 nbits) base)))
+    (make-moddescr
+     :nbits nbits
+     :rem   rem)))
+
+(defvar *fastmod*  nil)
+
+(defun fastmod (x)
+  ;; full mod
+  (declare (integer x))
+  (let* ((nbits  (moddescr-nbits *fastmod*))
+         (rem    (moddescr-rem   *fastmod*))
+         (mnbits (- nbits))
+         (sgn    (minusp x)))
+    (declare (integer rem)
+             (fixnum  nbits mnbits))
+    (labels ((ret (x)
+               (declare (integer x))
+               (cond ((zerop x) 0)
+                     (sgn       (- *m* x))
+                     (t         x))))
+      (um:nlet-tail iter ((v (abs x)))
+        (declare (integer v))
+        (if (< v *m*)
+            (ret v)
+          ;; else
+          (let ((ve (ash v mnbits)))
+            (declare (integer ve))
+            (if (zerop ve)
+                (ret (- v *m*))
+              (let ((vf (ldb (byte nbits 0) v)))
+                (declare (integer vf))
+                (iter (+ vf (* rem ve)))
+                )))))
+      )))
+
+(defun get-fastmod (base)
+  (get-cached-symbol-data '*m* :fastmod base
+                          (lambda ()
+                            (make-mod-descr base))))
+
 (defmacro with-mod (base &body body)
-  `(let ((*m* ,base))
+  `(let* ((*m*       ,base)
+          (*fastmod* (get-fastmod *m*)))
      ,@body))
+
+(defun mmod (x)
+  (declare (integer x))
+  ;; (mod x *m*)
+  (fastmod x))
+
+(defun m! (m)
+  ;; for REPL convenience, so we don't have to keep doing WITH-MOD
+  (check-type m (integer 1))
+  (setf *m*       m
+        *fastmod* (get-fastmod m)))
+|#
+
+(defmacro with-mod (base &body body)
+  `(let ((*m*  ,base))
+     ,@body))
+
+(defun mod-base ()
+  *m*)
+
+#|
+(with-mod 13
+  (print (fastmod 43))
+  (print (fastmod -43)))
+ |#
 
 #+:LISPWORKS
 (editor:setup-indent "with-mod" 1)
@@ -67,6 +142,7 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------
 
+#|
 (defvar *blinders* (make-hash-table))
 
 (defun create-blinder (m)
@@ -81,100 +157,227 @@ THE SOFTWARE.
 
 (defun reset-blinders ()
   (clrhash *blinders*))
+|#
 
+;; ------------------------------------------------------------
+
+(defun m= (a b)
+  (= (mmod a) (mmod b)))
+
+;; ------------------------------------------------------------
+
+(defun m* (arg &rest args)
+  (declare (integer arg))
+  (let ((ans (mmod arg)))
+    (declare (integer ans))
+    (dolist (opnd args)
+      (declare (integer opnd))
+      (setf ans (mmod (* ans opnd))))
+    ans))
+
+(defun msqr (x)
+  (declare (integer x))
+  (m* x x))
+
+;; ------------------------------------------------------------
+
+(defun m+ (&rest args)
+  (mmod (apply '+ args)))
+
+(defun m- (&rest args)
+  (mmod (apply '- args)))
+
+;; -----------------------------------------------------
+;; Precomputed powers cache
+
+(defclass window-cache ()
+  ((precv  :reader   window-cache-precv ;; precomp x^n cache
+           :initarg  :precv)
+   (x^1    :reader   window-cache-x^1
+           :initarg  :x^1)
+   (op-sqr :reader   window-cache-op-sqr
+           :initarg  :op-sqr)
+   (op-mul :reader   window-cache-op-mul
+           :initarg  :op-mul)))
+
+(defun make-window-cache (&key nbits x^1 op-mul op-sqr)
+  (let ((precv (make-array (ash 1 nbits) :initial-element nil)))
+    (setf (aref precv 1) x^1) ;; slot 0 never accessed
+    (make-instance 'window-cache
+                   :precv  precv
+                   :x^1    x^1
+                   :op-sqr op-sqr
+                   :op-mul op-mul)))
+
+(defmethod get-prec ((wc window-cache) (ix integer))
+  ;; compute powers of x^n, n = 1..(2^nbits-1) on demand
+  (declare (fixnum ix))
+  (with-accessors ((precv  window-cache-precv)
+                   (x^1    window-cache-x^1)
+                   (op-mul window-cache-op-mul)
+                   (op-sqr window-cache-op-sqr)) wc
+    (or (aref precv ix)
+        (setf (aref precv ix)
+              (if (oddp ix)
+                  (funcall op-mul x^1 (get-prec wc (1- ix)))
+                (funcall op-sqr (get-prec wc (ash ix -1))))
+              ))))
+
+;; -----------------------------------------------------
+;; Generalized fixed-window exponentiation algorithm
+;;
+;; Used by both modular exponentiation, and Cipolla algorithm for
+;; modular square roots.
+
+(defmethod generalized-windowed-exponentiation (x n &key window-nbits op-mul op-sqr)
+  ;; modular x^n using fixed-width window algorithm
+  (let* ((ans   nil)
+         (wc    (make-window-cache
+                 :nbits  window-nbits
+                 :x^1    x
+                 :op-mul op-mul
+                 :op-sqr op-sqr))
+         (nbits (integer-length n)))
+    (declare (fixnum nbits))
+    (loop for pos fixnum from (* window-nbits (floor nbits window-nbits)) downto 0 by window-nbits do
+          (when ans
+            (loop repeat window-nbits do
+                  (setf ans (funcall op-sqr ans))))
+          (let ((bits (ldb (byte window-nbits pos) n)))
+            (declare (fixnum bits))
+            (unless (zerop bits)
+              (let ((y (get-prec wc bits)))
+                (setf ans (if ans
+                              (funcall op-mul ans y)
+                            y)))
+              )))
+    ans))
+    
 ;; -----------------------------------------------------
 ;; Prime-Field Arithmetic
 
-(defun m^ (base exponent)
+(defun m^ (base exp)
   ;; base^exponent mod modulus, for any modulus
-  (declare (integer base exponent))
+  ;; use a 4-bit fixed window algorithm
+  (declare (integer base exp))
   (let ((x (mmod base)))
     (declare (integer x))
     (if (< x 2)  ;; x = 0,1
         x
       ;; else
-      (let* ((exp (+ exponent (get-blinder (m-1))))
-             (n   (integer-length exp)))
-        (declare (fixnum n)
-                 (integer exp))
-        (do ((b  (+ x (get-blinder))
-                 (m* b b))
-             (p  1)
-             (ix 0    (1+ ix)))
-            ((>= ix n) p)
-          (declare (integer b p)
-                   (fixnum ix))
-          (when (logbitp ix exp)
-            (setf p (m* p b)))) ))
+      (generalized-windowed-exponentiation x exp
+                                           :window-nbits 4
+                                           :op-mul       'm*
+                                           :op-sqr       'msqr))
     ))
 
 ;; ------------------------------------------------------------
 
+(defun minv (a)
+  ;; modular inverse by Extended Euclidean algorithm
+  (declare (integer a))
+  (let* ((u  (mmod a))
+         (v  *m*)
+         (x1 1)
+         (x2 0))
+    (declare (integer u v x1 x2))
+    (do ()
+        ((= u 1) (mmod x1))
+      (multiple-value-bind (q r) (truncate v u)
+        (declare (integer q r))
+        (let ((x (- x2 (* q x1))))
+          (declare (integer x))
+          (shiftf v u r)
+          (shiftf x2 x1 x))
+        ))))
+
+(defun m/ (arg &rest args)
+  (declare (integer arg))
+  (if args
+      (m* arg (minv (apply 'm* args)))
+    (minv arg)))
+
+;; ------------------------------------------------------------
+
 (defun mchi (x)
-  ;; chi(x) -> {-1,+1}
+  ;; chi(x) -> {-1,0,+1}
   ;; = +1 when x is square residue
+  ;; =  0 when x = 0
+  ;; = -1 when x is non-square
   (m^ x (m/2l)))
 
 (defun quadratic-residue-p (x)
   ;; aka Legendre Symbol (x|m)
   (= 1 (mchi x)))
 
-(defvar *fq2-red*)
-
-(defstruct fq2
-  x y)
-
-(defun fq2* (a b)
-  (um:bind* ((:struct-accessors fq2 ((ax x) (ay y)) a)
-             (declare (integer ax ay))
-             (:struct-accessors fq2 ((bx x) (by y)) b)
-             (declare (integer bx by)))
-    (make-fq2
-     :x (m+ (m* ax bx)
-            (m* ay by (cadr *fq2-red*)))
-     :y (m+ (m* ax by)
-            (m* ay bx))
-     )))
-
-(defun cipolla (x)
-  (declare (integer x))
+(defun fast-cipolla (x)
   ;; Cipolla method for finding square root of x over prime field m
-  (let* ((*fq2-red* (um:nlet-tail iter ((a  2))
-                      (declare (integer a))
-                      (let ((v  (m- (m* a a) x)))
-                        (declare (integer v))
-                        (if (quadratic-residue-p v)
-                            (iter (1+ a))
-                          (list a v))
-                        )))
-         ;; exponentiation in Fq^2: (a, sqrt(a^2 - n))^((q-1)/2)
-         (xx   (make-fq2
-                :x (car *fq2-red*)
-                :y 1))
-         (exp  (m/2u))
-         (n    (integer-length exp)))
-    (declare (fixnum n)
-             (integer exp))
-    (do ((b  xx
-             (fq2* b b))
-         (p  (make-fq2
-              :x 1
-              :y 0))
-         (ix 0    (1+ ix)))
-        ((>= ix n) (fq2-x p))
-      (declare (fixnum ix))
-      (when (logbitp ix exp)
-        (setf p (fq2* p b))))
-    ))
+  ;; use fixed 4-bit window evaluation
+  ;;
+  ;; Cipolla defines a quadratic extnsion field, where every value in
+  ;; Fq^2 is a square, albeit possibly "imaginary". If a value is a
+  ;; square in Fq then it has zero imaginary component in its square
+  ;; root in Fq^2. Otherwise, it has zero real part and finite
+  ;; imaginary part.
+  ;;
+  ;; This routine will work happily on every field value in Fq, but it
+  ;; only returns the real part of the result, which will be zero for
+  ;; Fq non-squares.
+  ;;
+  (declare (integer x))
+  (multiple-value-bind (re im^2)
+      (um:nlet-tail iter ((a  2))
+        ;; look for quadratic nonresidue (the imaginary base)
+        ;; where we already know that x must be a quadratic residue
+        (declare (integer a))
+        (let ((v  (m- (m* a a) x)))
+          (declare (integer v))
+          (if (quadratic-residue-p v)
+              (iter (1+ a))
+            (values a v))
+          ))
+    (declare (integer re im^2))
+    (labels
+        ;; complex multiplication over the field Fq^2
+        ((fq2* (a b)
+           (destructuring-bind (are . aim) a
+             (declare (integer are aim))
+             (destructuring-bind (bre . bim) b
+               (declare (integer bre bim))
+               (cons
+                (m+ (m* are bre)
+                    (m* aim bim im^2))
+                (m+ (m* are bim)
+                    (m* aim bre)))
+               )))
+         
+         (fq2sqr (a)
+           (destructuring-bind (are . aim) a
+             (declare (integer are aim))
+             (cons
+              (m+ (m* are are)
+                  (m* aim aim im^2))
+              (m* 2 are aim)))))
+      
+      (car (generalized-windowed-exponentiation (cons re 1) (m/2u)
+                                                :window-nbits  4
+                                                :op-mul        #'fq2*
+                                                :op-sqr        #'fq2sqr))
+      )))
 
-(defun get-msqrt-fn ()
-  (get-cached-symbol-data '*m* :msqrt *m*
+(defun get-msqrt-fn (base)
+  (get-cached-symbol-data '*m* :msqrt base
                           (lambda ()
                             (cond
-                             ((= 3 (mod *m* 4))
-                              (let ((p  (truncate (m+1) 4)))
+                             ((= 3 (mod base 4))
+                              (let ((p (truncate (1+ base) 4)))
                                 (um:rcurry 'm^ p)))
-                             (t 'cipolla)))))
+                             #|
+                             ((= 5 (mod base 8))
+                              (let ((p (truncate (+ base 3) 8)))
+                                  (um:rcurry 'm^ p)))
+                             |#
+                             (t 'fast-cipolla)))))
 
 (defun msqrt (x)
   ;; assumes m is prime
@@ -190,80 +393,18 @@ THE SOFTWARE.
     (if (< xx 2)
         xx
       ;; else
-      (let ((ix (isqrt xx)))
-        (declare (integer ix))
-        (cond ((= xx (* ix ix)) ix)
-              ((quadratic-residue-p xx)
-               (let* ((fn (get-msqrt-fn))
-                      (xr (funcall fn xx)))
-                 (declare (integer xr))
-                 (assert (= xx (m* xr xr)))
-                 xr))
-              
-              (t (error "not a square"))
-              )))
+      (cond ((let ((ix (isqrt xx)))
+               (declare (integer ix))
+               (and (= xx (* ix ix))
+                    ix)))
+
+            ((quadratic-residue-p xx)
+             (funcall (get-msqrt-fn *m*) xx))
+            
+            (t (error "not a square"))
+            ))
     ))
 
-;; ------------------------------------------------------------
+;; -----------------------------------------------------------
 
-(defun m* (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder)))
-    (declare (integer blinder))
-    (dolist (opnd args)
-      (declare (integer opnd))
-      (setf arg (mmod (* arg (+ opnd blinder))))))
-  arg)
-    
-
-
-;; ------------------------------------------------------------
-
-(defun m+ (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (+ arg blinder)))
-    (declare (integer blinder ans))
-    (dolist (opnd args)
-      (declare (integer opnd))
-      (incf ans (+ opnd blinder)))
-    (mmod ans)))
-
-(defun m- (arg &rest args)
-  (declare (integer arg))
-  (let* ((blinder (get-blinder))
-         (ans     (- arg blinder)))
-    (declare (integer blinder ans))
-    (if args
-        (dolist (opnd args)
-          (declare (integer opnd))
-          (decf ans (+ opnd blinder)))
-      (setf ans (- ans)))
-    (mmod ans)))
-
-;; ------------------------------------------------------------
-
-(defun minv (a)
-  (declare (integer a))
-  (let* ((u  (mmod a))
-         (v  *m*)
-         (x1 1)
-         (x2 0))
-    (declare (integer u v x1 x2))
-    (do ()
-        ((= u 1) x1)
-      (multiple-value-bind (q r) (truncate v u)
-        (declare (integer q r))
-        (let ((x (m- x2 (m* q x1))))
-          (declare (integer x))
-          (shiftf v u r)
-          (shiftf x2 x1 x)) ))))
-
-
-(defun m/ (arg &rest args)
-  (declare (integer arg))
-  (dolist (opnd args)
-    (declare (integer opnd))
-    (setf arg (m* arg (minv opnd))))
-  (if args arg (minv arg)))
 

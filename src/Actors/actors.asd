@@ -32,27 +32,9 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 #-:lispworks
                 (:file "ansi-timer")
                 (:file "actors")
-                ;; (:file "actors-mb")
                 (:file "actors-machines")
                 (:file "actors-schedule")
-                (:file "actors-startup")
-                #+(AND :COM.RAL :LISPWORKS) (:file "futures")
-                #+(AND :COM.RAL :LISPWORKS) (:file "linda-tuples")
-                #|
-                (:file "actors-macros")
-                (:file "actors-globals")
-                (:file "actors")
-                (:file "actors-mbox-queue")
-                (:file "actors-comms")
-                (:file "actors-executive")
-                ;; (:file "actors-user-pandoric")
-                (:file "actors-user-clos")
-                (:file "actors-startup")
-                (:file "actors-data-structs")
-                (:file "actors-components")
-                (:file "actors-machines")
-                (:file "futures")
-                |#)
+                (:file "actors-startup"))
   :SERIAL T
   :depends-on   ("data-objects"
                  "trivia"

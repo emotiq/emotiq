@@ -167,11 +167,11 @@ THE SOFTWARE.
 
 (defun short-str (str)
   (let ((len (length str)))
-    (if (< len 40)
+    (if (< len 16)
         str
       (format nil "~A...~A"
-              (subseq str 0 20)
-              (subseq str (- len 20)))
+              (subseq str 0 7)
+              (subseq str (- len 7)))
       )))
 
 ;; ----------------------------------------------------------
