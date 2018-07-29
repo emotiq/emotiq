@@ -38,6 +38,7 @@ THE SOFTWARE.
   (:nicknames :modmath)
   (:export
    :with-mod
+   :mod-base   
    :reset-blinders
    :m=
    :m^

@@ -107,6 +107,9 @@ THE SOFTWARE.
   `(let ((*m*  ,base))
      ,@body))
 
+(defun mod-base ()
+  *m*)
+
 #|
 (with-mod 13
   (print (fastmod 43))
