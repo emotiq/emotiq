@@ -825,7 +825,7 @@ THE SOFTWARE.
          (offs   (ash nel -1))
          (pt*1   (ed-projective pt))
          (pt*m1  (ed-negate pt*1)))
-    (setf (aref precv (1+ offs)) pt*1      ;; zeroeth slot never referenced
+    (setf (aref precv (1+ offs)) pt*1      ;; slot ix = 0 never referenced
           (aref precv (1- offs)) pt*m1)
     (make-instance 'bipolar-window-cache
                    :precv  precv
