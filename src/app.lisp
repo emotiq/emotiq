@@ -102,8 +102,9 @@
 (defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
   (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber))
 
-(defparameter *max-amount* (* (cosi/proofs/newtx::initial-coin-units)
-                              (cosi/proofs/newtx::subunits-per-coin))
+;(defparameter *max-amount* (* (cosi/proofs/newtx::initial-coin-units)
+;                              (cosi/proofs/newtx::subunits-per-coin))
+(defparameter *max-amount* (cosi/proofs/newtx:initial-total-coin-amount)
 "total amount of emtq's - is this correct?  or, does it need to multiplied by sub-units-per-coin?")
 
 (defparameter *min-fee* 10 "new-transactions.lisp requires a minimum fee of 10")
@@ -253,3 +254,25 @@
 ;; - see if we get two successive hold-elections w/o intervening :prepares (means that leader found
 ;;   no work)
 ;; - maybe also check our own mempool for emptiness?
+
+
+;; 
+;; potentially useful functions in new-transactions.lisp
+;;
+; find-transaction-per-id
+; make-transaction-inputs
+; verify-transaction
+; check-public-keys-for-transaction-inputs
+; utxo-p
+; find-tx
+
+
+#+nil
+(defun block-explorer ()
+  (for-all-blocks (b)
+     (for-all-transactions-in-block (tx b)
+        (explore-transaction (tx))))
+
+(defun 
+    (multiple-value-bind (from to-list)
+      
