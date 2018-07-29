@@ -136,7 +136,9 @@
        ;;   thread the output comes from. Besides causing visual chaos on the screen, it's impossible to
        ;;   see a coherent, serialized log in this environment. Which is why gossip::*log* exists in the first place.
        #-OPENMCL
-       (setf emotiq:*notestream* *error-output*)
+       (setf emotiq:*notestream*
+             #-LISPWORKS *error-output*
+             #+LISPWORKS hcl:*background-output*)
        (setf *logging-actor* (ac:make-actor 'actor-logger-fn))
        (setf *hmac-keypair-actor* (ac:make-actor 'actor-keypair-fn))
        (archive-log)
