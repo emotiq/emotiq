@@ -1624,12 +1624,14 @@ Certification includes a BLS Signature on the public key."
 ;; If we guess the seed value, and also had a list of proofs, we might
 ;; be able to find a match by looking for when:
 ;;
-;;   e(Proof, x*V + Pkey) = e(U,V) = g, where x = hash of seed, U is
-;;   generator for G1, and V is generator for G2, and g is the
-;;   corresponding generator pairing in GT.
+;;   e(Proof, x*V + Pkey) = e(U,V) = g
+;;
+;;   where x = hash of seed, U is generator for G1, and V is generator
+;;   for G2, and g is the corresponding generator pairing in GT.
 ;;
 ;; So, for safety, the databse cannot be showing proof values, when
 ;; presumably the PKey of the database writer is public knowledge.
+;;
 ;; Instead, the database must show only random values detached from
 ;; proofs:
 ;;
