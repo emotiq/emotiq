@@ -1683,7 +1683,7 @@ Certification includes a BLS Signature on the public key."
 
 (defmethod validate-vrf ((proof g1-cmpr) (randomness hash) &key &allow-other-keys)
   ;; randomness could be a hash value or an integer
-  (let ((hashfn (class-name (class-of randomness))))
+  (let ((hashfn (hash-function-of-hash randomness)))
     (hash= (funcall hashfn (compute-pairing proof (get-g2)))
           randomness)))
 
