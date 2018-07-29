@@ -325,6 +325,7 @@ THE SOFTWARE.
   ;; Fq non-squares.
   ;;
   (declare (integer x))
+  (check-type x (integer 0)) ;; should be >= 0
   (if (< x 2)
       x
     (multiple-value-bind (re im^2)
@@ -364,7 +365,7 @@ THE SOFTWARE.
         (car (generalized-windowed-exponentiation (cons re 1) (m/2u)
                                                   :window-nbits  4
                                                   :op-mul        #'fq2*
-                                                :op-sqr        #'fq2sqr))
+                                                  :op-sqr        #'fq2sqr))
         ))))
   
 (defun get-msqrt-fn (base)
