@@ -1590,11 +1590,12 @@ Certification includes a BLS Signature on the public key."
 ;; ------------------------------------------------------
 ;; VRF - Publicly Verifiable Random Functions
 ;;
-;; Produce a deterministic random mapping from input seeds that cannot
-;; be attacked with pre-images. This prevents an attacker from trying
-;; every seed item from a set of limited cardinality to locate the
-;; associated randomness value. Also prevent attackers from forging or
-;; predicting the randomness associated with new seeds.
+;; Produce a deterministic 1:1 random mapping from input seeds of low
+;; entropy that cannot be attacked with pre-images. This prevents an
+;; attacker from trying every seed item from a set of limited
+;; cardinality to locate the associated randomness value. Also prevent
+;; attackers from forging or predicting the randomness associated with
+;; new seeds.
 ;;
 ;; Can serve as unpredictable deterministic mappings of sensitive
 ;; database information.
@@ -1644,6 +1645,10 @@ Certification includes a BLS Signature on the public key."
 ;; of the encrypter, and the resulting randomness, we could not
 ;; produce randomness associated with any other seed. (by difficulty
 ;; of ECDLP, and DLP in large paoiring field)
+;;
+;; Code adapted from descriptions in:
+;;   "A Verifiable Random Function With Short Proofs and Keys"
+;;  by Yevgeniy Dodis, and Aleksandr Yampolskiy
 
 (defstruct vrf
   seed x y proof)
