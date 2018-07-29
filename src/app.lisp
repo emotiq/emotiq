@@ -267,12 +267,33 @@
 ; find-tx
 
 
-#+nil
 (defun block-explorer ()
   (for-all-blocks (b)
      (for-all-transactions-in-block (tx b)
-        (explore-transaction (tx))))
+        (explore-transaction (txid))))
 
-(defun 
-    (multiple-value-bind (from to-list)
-      
+(defun explore-transaction (txid)
+  (let ((tx (cosi/proofs/newtx:find-tx txid)))
+    (let ((from-list (get-transaction-tx-outs tx)))
+      (let ((to-list (get-transaction-tx-inss tx)))
+        (let (out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id from-txid-list))
+          (let (in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id to-txid-list))
+            ;; at this point, 
+            ;; tx == the given transaction CLOS object
+            ;; txid == string txid for this transaction
+            ;; out-list == list of CLOS objects this tx gets inputs from
+            ;; out-txid-list == list of string id's this tx gets inputs from
+            ;; in-list == list of tx CLOS objects that this tx outputs to
+            ;; in-txid-list == list of string id's that this tx outputs to
+            (emotiq:note "[txids] tx=~A from=~A to=~A" txid)))))))
+
+(defun get-transaction-txid-outs (tx)
+  "return a list of CLOS transactions that are outputs of this transaction"
+  (cosi/proofs/newtx:transaction-outputs tx))
+
+(defun get-transaction-txid-ins (tx)
+  "return a list of CLOS transactions that are inputs of this transaction"
+  (cosi/proofs/newtx:transaction-inputs tx))
+
+
+  
