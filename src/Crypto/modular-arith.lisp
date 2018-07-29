@@ -352,7 +352,9 @@ THE SOFTWARE.
           ((fq2* (a b)
              ;; complex multiplication over the field q^2
              (destructuring-bind (are . aim) a
+               (declare (integer are aim))
                (destructuring-bind (bre . bim) b
+                 (declare (integer bre bim))
                  (cons
                   (m+ (m* are bre)
                       (m* aim bim im^2))
@@ -362,8 +364,10 @@ THE SOFTWARE.
            
            (fq2sqr (a)
              (destructuring-bind (are . aim) a
+               (declare (integer are aim))
                (cons
-                (m+ (m* are are) (m* aim aim im^2))
+                (m+ (m* are are)
+                    (m* aim aim im^2))
                 (m* 2 are aim))))
            
            (get-prec (ix)
@@ -376,7 +380,7 @@ THE SOFTWARE.
                          (fq2sqr (get-prec (ash ix -1))))
                        ))))
         
-        (loop for pos from (* 4 (floor n 4)) downto 0 by 4 do
+        (loop for pos fixnum from (* 4 (floor n 4)) downto 0 by 4 do
               (when ans
                 (setf ans (fq2sqr (fq2sqr (fq2sqr (fq2sqr ans))))))
               (let ((ix (ldb (byte 4 pos) exp)))
