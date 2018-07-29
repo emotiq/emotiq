@@ -1591,8 +1591,10 @@ Certification includes a BLS Signature on the public key."
 ;; VRF - Publicly Verifiable Random Functions
 ;;
 ;; Produce a deterministic random mapping from input seeds that cannot
-;; be attacked with pre-images in an attempt to find out what the seed
-;; was, and that cannot be forged or predicted by anyone for other seeds.
+;; be attacked with pre-images. This prevents an attacker from trying
+;; every seed item from a set of limited cardinality to locate the
+;; associated randomness value. Also prevent attackers from forging or
+;; predicting the randomness associated with new seeds.
 ;;
 ;; Can serve as unpredictable deterministic mappings of sensitive
 ;; database information.
@@ -1614,10 +1616,10 @@ Certification includes a BLS Signature on the public key."
 ;; items might come from a set of limited cardinality.
 ;;
 ;; Now imagine trying to reverse engineer this data, assuming you know
-;; the elements of the original data set. What we know is that the
-;; field is a random value that cannot be constructed by simply
-;; guessing the data value and hashing to see if it yields the same
-;; random value.
+;; the elements of the original set of limited cardinality. What we
+;; know is that the field is a random value that cannot be constructed
+;; by simply guessing the data value and hashing to see if it yields
+;; the same random value.
 ;;
 ;; If we guess the seed value, and also had a list of proofs, we might
 ;; be able to find a match by looking for when:
