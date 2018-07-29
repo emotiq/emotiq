@@ -119,6 +119,7 @@ THE SOFTWARE.
    :hashable
    :hash-check
    :hash=
+   :hash-function-of-hash
    ))
 
 (defpackage :ecc-crypto-b571

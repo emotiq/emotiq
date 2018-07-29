@@ -139,3 +139,10 @@ THE SOFTWARE.
             (short-str (hex-str obj)))
     ))
 
+;; -----------------------------------------------------
+
+(defmethod hash-function-of-hash ((h hash))
+  ;; many of the hash functions are named the same as their
+  ;; correspdonding class wrappers. So given a hash object, we can
+  ;; find the hash to produce another like it.
+  (symbol-function (class-name (class-of h))))
