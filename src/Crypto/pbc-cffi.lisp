@@ -127,6 +127,7 @@ THE SOFTWARE.
 
    :compute-vrf
    :validate-vrf
+   :validate-vrf-mapping
    :vrf
    :vrf-seed
    :vrf-x
@@ -1588,38 +1589,112 @@ Certification includes a BLS Signature on the public key."
 
 ;; ------------------------------------------------------
 ;; VRF - Publicly Verifiable Random Functions
+;;
+;; Produce a deterministic random mapping from input seeds that cannot
+;; be attacked with pre-images in an attempt to find out what the seed
+;; was, and that cannot be forged or predicted by anyone for other seeds.
+;;
+;; Can serve as unpredictable deterministic mappings of sensitive
+;; database information.
+;;
+;; Anyone can who has the proof can verify the randomness as computed
+;; properly, even without knowledge of the generator's public key.
+;;
+;; If you know the seed, along with the proof and public key, you can
+;; verify the mapping.
+;;
+;; So users could ask for the randomness that represents, e.g., their
+;; name, assuming they proved that they have the right to this
+;; information. Nobody else could discover that mapping, and so others
+;; would just see a consistently used random value in place of a name.
+;;
+;; So, imagine a publicly viewable database containing cloaked
+;; information. Each sensitive item is replaced by some deterministic
+;; random value so that nobody can discern what it says. The sensitive
+;; items might come from a set of limited cardinality.
+;;
+;; Now imagine trying to reverse engineer this data, assuming you know
+;; the elements of the original data set. What we know is that the
+;; field is a random value that cannot be constructed by simply
+;; guessing the data value and hashing to see if it yields the same
+;; random value.
+;;
+;; If we guess the seed value, and also had a list of proofs, we might
+;; be able to find a match by looking for when:
+;;
+;;   e(Proof, x*V + Pkey) = e(U,V) = g, where x = hash of seed, U is
+;;   generator for G1, and V is generator for G2, and g is the
+;;   corresponding generator pairing in GT.
+;;
+;; So, for safety, the databse cannot be showing proof values, when
+;; presumably the PKey of the database writer is public knowledge.
+;; Instead, the database must show only random values detached from
+;; proofs:
+;;
+;;  r = e(Proof, V) = e(U,V)^(1/(x + skey)) = g^(1/(x + skey))
+;;
+;; But g is a large (e.g., 5,000+ bit value). We could also use the
+;; hash of the randomness values for a more limited range.
 
 (defstruct vrf
   seed x y proof)
 
-(defmethod compute-vrf (seed (skey secret-key))
-  (let* ((x      (zr-from-hash (hash:hash/256 seed)))
+(defmethod compute-vrf (seed (skey secret-key)
+                             &key
+                             (seed-hash 'hash/256)
+                             randomness-hash)
+  (let* ((x      (zr-from-hash (funcall seed-hash seed)))
          (1/x+s  (with-mod (get-order)
                    (m/ (m+ (int x) (int skey)))))
          (g1     (mul-pt-zr (get-g1) 1/x+s))
          (y      (compute-pairing g1 (get-g2))))
+    ;; NOTE: while we return everything to caller, it is expected that
+    ;; caller will make only select items available to the public.
     (make-vrf
-     :seed  seed
-     :x     x
-     :y     y
-     :proof g1)))
+     :seed  seed   ;; seed -> x via hash, both generally kept secret
+     :x     x    
+     :y     (if randomness-hash  ;; y is public randomness produced by skey = e(U,V)^(1/(x+skey))
+                (funcall randomness-hash y)
+              y)
+     :proof g1)))  ;; public proof that we generated randomness = U^(1/(x+skey))
 
-(defmethod comptue-vrf (seed skey)
-  (compute-vrf seed (secret-key skey)))
+(defmethod comptue-vrf (seed skey &rest args &key &allow-other-keys)
+  (apply 'compute-vrf seed (secret-key skey) args))
 
 
-(defmethod validate-vrf ((vrf vrf) (pkey public-key))
-  (let* ((x   (zr-from-hash (hash:hash/256 (vrf-seed vrf))))
-         (g2  (add-pts (mul-pt-zr (get-g2) x) pkey))
-         (c   (compute-pairing (vrf-proof vrf) g2))
-         (y   (compute-pairing (vrf-proof vrf) (get-g2)))
-         (chk (compute-pairing (get-g1) (get-g2))))
-    (and (= (int c) (int chk))
-         (= (int x) (int (vrf-x vrf)))
-         (= (int y) (int (vrf-y vrf))))))
+(defmethod validate-vrf ((proof g1-cmpr) (randomness gt) &key &allow-other-keys)
+  ;; verify randomness y = e(Proof, V), i.e., that it was computed properly
+  (int= (compute-pairing proof (get-g2))
+        randomness))
 
-(defmethod validate-vrf ((vrf vrf) pkey)
-  (validate-vrf vrf (public-key pkey)))
+(defmethod validate-vrf ((proof g1-cmpr) (randomness hash) &key &allow-other-keys)
+  ;; randomness could be a hash value or an integer
+  (let ((hashfn (class-name (class-of randomness))))
+    (hash= (funcall hashfn (compute-pairing proof (get-g2)))
+          randomness)))
+
+(defmethod validate-vrf ((proof g1-cmpr) (randomness integer) &key (randomness-hash 'hash/256) &allow-other-keys)
+  ;; randomness could be a hash value or an integer
+  (int= (funcall randomness-hash (compute-pairing proof (get-g2)))
+        randomness))
+
+
+(defmethod validate-vrf-mapping (seed (proof g1-cmpr) (pkey public-key) randomness
+                                      &rest args
+                                      &key
+                                      (seed-hash 'hash/256)
+                                      &allow-other-keys)
+  ;; verify that e(Proof, x*V + PKey) = e(U,V), i.e., that skey generated it
+  ;; see -> x, via hashing
+  (and (apply 'validate-vrf proof randomness args) ;; validate mapping from proof to randomness
+       (let* ((x   (zr-from-hash (funcall seed-hash seed)))
+              (g2  (add-pts (mul-pt-zr (get-g2) x) pkey))
+              (c   (compute-pairing proof g2))
+              (chk (compute-pairing (get-g1) (get-g2))))
+         (int= c chk)))) ;; check the proof for having been derived from the seed
+
+(defmethod validate-vrf-mapping (seed (proof g1-cmpr) pkey randomness &rest args &key &allow-other-keys)
+  (apply 'validate-vrf-mapping seed proof (public-key pkey) randomness args))
 
 ;; --------------------------------------------------------
 ;; Confidential Purchases - cloak a purchase by providing a
