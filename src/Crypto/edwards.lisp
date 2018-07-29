@@ -850,7 +850,7 @@ THE SOFTWARE.
                 (ed-projective-double (get-prec wc (ash ix -1))))
               ))))
 
-(defun generalized-windowed-mul (pt n &key window-nbits)
+(defun generalized-bipolar-windowed-mul (pt n &key window-nbits)
   ;; ECC point-scalar multiplication using fixed-width bipolar window
   ;; algorithm
   (let* ((ws  (windows n window-nbits))
@@ -885,8 +885,8 @@ THE SOFTWARE.
 
           ;; use a 4-bit bipolar fixed-window algorithm
           (t
-           (generalized-windowed-mul pt nn
-                                     :window-nbits 4))
+           (generalized-bipolar-windowed-mul pt nn
+                                             :window-nbits 4))
           )))
 
 ;; --------------------------------------------------------------------------------
