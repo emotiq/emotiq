@@ -1617,12 +1617,12 @@ Certification includes a BLS Signature on the public key."
 ;;
 ;; Now imagine trying to reverse engineer this data, assuming you know
 ;; the elements of the original set of limited cardinality. What we
-;; know is that the field is a random value that cannot be constructed
-;; by simply guessing the data value and hashing to see if it yields
-;; the same random value.
+;; know is that the field is a random value that cannot be simply
+;; constructed by guessing the data value and hashing to see if it
+;; yields the same random value.
 ;;
-;; If we guess the seed value, and also had a list of proofs, we might
-;; be able to find a match by looking for when:
+;; But if we guess the seed value, and also had a list of proofs, we
+;; might be able to find a match by looking for when:
 ;;
 ;;   e(Proof, x*V + Pkey) = e(U,V) = g
 ;;
@@ -1637,7 +1637,7 @@ Certification includes a BLS Signature on the public key."
 ;;
 ;;  r = e(Proof, V) = e(U,V)^(1/(x + skey)) = g^(1/(x + skey))
 ;;
-;; But g is a large (e.g., 5,000+ bit value). We could also use the
+;; But g is a large (e.g., 5,000+ bit) value. We could as well use the
 ;; hash of the randomness values for a more limited range.
 ;;
 ;; Note that, even with knowledge of a seed, its proof, the public key
