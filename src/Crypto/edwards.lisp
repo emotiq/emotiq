@@ -807,43 +807,48 @@ THE SOFTWARE.
           
           ((or (= nn 1)
                (ed-neutral-point-p pt)) pt)
-          
-          (t (let ((ws   (windows4 nn))  ;; affine or projective in...
-                   (ans  nil)
-                   (prec (make-array 16 :initial-element nil))
-                   (p1   (ed-projective pt))
-                   (pm1  (ed-negate p1)))
+
+          ;; use a 4-bit fixed window algorithm
+          (t
+           (let* ((ws    (windows4 nn))  ;; affine or projective in...
+                  (ans   nil)
+                  (precv (make-array 16 :initial-element nil))
+                  (p1    (ed-projective pt))
+                  (pm1   (ed-negate p1)))
+             
+             (labels ((pvref (ix)
+                        (declare (fixnum ix))
+                        (aref precv (+ ix 8)))
+                      (set-pvref (ix val)
+                        (declare (fixnum ix))
+                        (setf (aref precv (+ ix 8)) val))
+                      (get-prec (ix)
+                        (declare (fixnum ix))
+                        (or (pvref ix)
+                            (set-pvref ix
+                                       (if (oddp ix)
+                                           (if (minusp ix)
+                                               (ed-projective-add pm1 (get-prec (1+ ix)))
+                                             (ed-projective-add p1 (get-prec (1- ix))))
+                                         (let ((pn/2 (get-prec (ash ix -1))))
+                                           (ed-projective-add pn/2 pn/2)))
+                                       ))))
+               (set-pvref  1 p1) ;; init precomp cache
+               (set-pvref -1 pm1)
                
-               (setf (aref prec 9) p1
-                     (aref prec 7) pm1)
-               
-               (labels ((get-prec (ix)
-                          (declare (fixnum ix))
-                          (let ((jx (+ ix 8)))
-                            (declare (fixnum jx))
-                            (or (aref prec jx)
-                                (setf (aref prec jx)
-                                      (if (oddp ix)
-                                          (if (minusp ix)
-                                              (ed-add pm1 (get-prec (1+ ix)))
-                                            (ed-add p1 (get-prec (1- ix))))
-                                        (let ((pn/2 (get-prec (ash ix -1))))
-                                          (ed-add pn/2 pn/2)))
-                                      )))))
-                 
                (loop for w fixnum in ws do
                      (when ans
                        (loop repeat 4 do
-                             (setf ans (ed-add ans ans))))
+                             (setf ans (ed-projective-add ans ans))))
                      (unless (zerop w)
                        (let ((pw  (get-prec w)))
                          (setf ans (if ans
-                                       (ed-add ans pw)
+                                       (ed-projective-add ans pw)
                                      pw)))))
                (or ans
                    (ed-neutral-point)) ;; projective out...
                ))
-          )))
+           ))))
 
 ;; --------------------------------------------------------------------------------
 #|
