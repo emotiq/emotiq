@@ -230,7 +230,7 @@ THE SOFTWARE.
 ;; modular square roots.
 
 (defmethod generalized-windowed-exponentiation (x n &key window-nbits op-mul op-sqr)
-  ;; x^n using fixed-width window algorithm
+  ;; modular x^n using fixed-width window algorithm
   (let* ((ans   nil)
          (wc    (make-window-cache
                  :nbits  window-nbits
@@ -337,8 +337,8 @@ THE SOFTWARE.
           ))
     (declare (integer re im^2))
     (labels
+        ;; complex multiplication over the field Fq^2
         ((fq2* (a b)
-           ;; complex multiplication over the field q^2
            (destructuring-bind (are . aim) a
              (declare (integer are aim))
              (destructuring-bind (bre . bim) b
