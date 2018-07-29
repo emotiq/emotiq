@@ -808,7 +808,7 @@ THE SOFTWARE.
           ((or (= nn 1)
                (ed-neutral-point-p pt)) pt)
 
-          ;; use a 4-bit bipolar fixed window algorithm
+          ;; use a 4-bit bipolar fixed-window algorithm
           (t
            (let* ((ws    (windows4 nn))  ;; affine or projective in...
                   (ans   nil)
