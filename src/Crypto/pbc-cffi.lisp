@@ -1698,8 +1698,16 @@ Certification includes a BLS Signature on the public key."
                                       &key
                                       (seed-hash 'hash/256)
                                       &allow-other-keys)
-  ;; verify that e(Proof, x*V + PKey) = e(U,V), i.e., that skey generated it
-  ;; see -> x, via hashing
+  ;; verify that e(Proof, V) = g^(1/(x + skey)) = y randomness
+  ;; and verify that e(Proof, x*V + PKey) = e(U,V), i.e., that skey generated it
+  ;; seed -> x, via hashing,
+  ;;
+  ;; Supposing that you have the right to know, you offer your seed,
+  ;; the proof and public key provided to you, and the associated
+  ;; randomness, and then verify that the randomness is in fact
+  ;; associated with your seed, and that the randomness was generated
+  ;; in the prescribed manner.
+  ;;
   (and (apply 'validate-vrf proof randomness args) ;; validate mapping from proof to randomness
        (let* ((x   (zr-from-hash (funcall seed-hash seed)))
               (g2  (add-pts (mul-pt-zr (get-g2) x) pkey))
