@@ -823,13 +823,14 @@ THE SOFTWARE.
   (let* ((nel    (ash 1 nbits))
          (precv  (make-array nel :initial-element nil))
          (offs   (ash nel -1))
-         (pt*m1  (ed-negate pt)))
-    (setf (aref precv (1+ offs)) pt      ;; zeroeth slot never referenced
+         (pt*1   (ed-projective pt))
+         (pt*m1  (ed-negate pt*1)))
+    (setf (aref precv (1+ offs)) pt*1      ;; zeroeth slot never referenced
           (aref precv (1- offs)) pt*m1)
     (make-instance 'bipolar-window-cache
                    :precv  precv
                    :offs   offs
-                   :pt*1   pt
+                   :pt*1   pt*1
                    :pt*m1  pt*m1)))
 
 (defmethod get-prec ((wc bipolar-window-cache) (ix integer))
@@ -858,7 +859,7 @@ THE SOFTWARE.
   (let* ((ws  (windows n window-nbits))
          (wc  (make-bipolar-window-cache
                :nbits window-nbits
-               :pt    (ed-projective pt))) ;; affine or projective in...
+               :pt    pt))  ;; affine or projective in...
          (ans nil))
     (loop for w fixnum in ws do
           (when ans
