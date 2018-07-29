@@ -772,29 +772,104 @@ THE SOFTWARE.
     (loop for pos fixnum from limt downto 0 by 4 collect
           (ldb (byte 4 pos) n))))
   
-(defun windows4 (n)
+(defun windows (n window-nbits)
   ;; return a big-endian list of balanced bipolar window values for
-  ;; each nibble in the number. E.g., 123 -> (1 -8 -5), where each
-  ;; value is in the set (-8, -7, ..., 7)
-  (declare (integer n))
+  ;; each window-nbits nibble in the number. E.g., for window-nbits = 4,
+  ;; (windows 123 4) -> (1 -8 -5),
+  ;; where each values is in the set (-8, -7, ..., 7)
+  (declare (integer n)
+           (fixnum window-nbits))
   (let* ((nbits (integer-length n))
-         (limt  (* 4 (floor nbits 4))))
-    (declare (fixnum nbits limt))
+         (limt  (* window-nbits (floor nbits window-nbits)))
+         (2^wn  (ash 1 window-nbits))
+         (wnlim (1- (ash 2^wn -1))))
+    (declare (fixnum nbits limt 2^wn wnlim))
     (um:nlet-tail iter ((pos 0)
                         (ans nil)
                         (cy  0))
       (declare (fixnum pos cy))
-      (let* ((byt (ldb (byte 4 pos) n))
+      (let* ((byt (ldb (byte window-nbits pos) n))
              (x   (+ byt cy)))
         (declare (fixnum byt x))
         (multiple-value-bind (nxt nxtcy)
-            (if (> x 7)
-                (values (- x 16) 1)
+            (if (> x wnlim)
+                (values (- x 2^wn) 1)
               (values x 0))
           (if (< pos limt)
-              (iter (+ pos 4) (cons nxt ans) nxtcy)
+              (iter (+ pos window-nbits) (cons nxt ans) nxtcy)
             (list* nxtcy nxt ans)))
         ))))
+
+(defun windows-to-int (wins window-nbits)
+  (let ((ans 0))
+    (loop for w in wins do
+          (setf ans (+ w (ash ans window-nbits))))
+    ans))
+
+(defun ed-projective-double (pt)
+  (ed-projective-add pt pt))
+
+(defclass bipolar-window-cache ()
+  ((precv  :reader   bipolar-window-cache-precv
+           :initarg  :precv)
+   (offs   :reader   bipolar-window-cache-offs
+           :initarg  :offs)
+   (pt*1   :reader   bipolar-window-cache-pt*1
+           :initarg  :pt*1)
+   (pt*m1  :reader   bipolar-window-cache-pt*m1
+           :initarg  :pt*m1)))
+
+(defmethod make-bipolar-window-cache (&key nbits pt)
+  (let* ((nel    (ash 1 nbits))
+         (precv  (make-array nel :initial-element nil))
+         (offs   (ash nel -1))
+         (pt*m1  (ed-negate pt)))
+    (setf (aref precv (1+ offs)) pt      ;; zeroeth slot never referenced
+          (aref precv (1- offs)) pt*m1)
+    (make-instance 'bipolar-window-cache
+                   :precv  precv
+                   :offs   offs
+                   :pt*1   pt
+                   :pt*m1  pt*m1)))
+
+(defmethod get-prec ((wc bipolar-window-cache) (ix integer))
+  ;; get cached pt*n, for n = -2^wn, -2^wn+1, ...,-1, 0, 1, ... 2^wn-2, 2^wn-1
+  ;; each cached entry computed on demand if necessary
+  (declare (fixnum ix))
+  (with-accessors ((precv  bipolar-window-cache-precv)
+                   (offs   bipolar-window-cache-offs)
+                   (pt*1   bipolar-window-cache-pt*1)
+                   (pt*m1  bipolar-window-cache-pt*m1)) wc
+    (or (aref precv (+ ix offs))
+        (setf (aref precv (+ ix offs))
+              (if (oddp ix)
+                  (if (minusp ix)
+                      (ed-projective-add pt*m1 (get-prec wc (1+ ix)))
+                    (ed-projective-add pt*1 (get-prec wc (1- ix))))
+                ;; else - ix even
+                (ed-projective-double (get-prec wc (ash ix -1))))
+              ))))
+
+(defun generalized-windowed-mul (pt n &key window-nbits)
+  ;; ECC point-scalar multiplication using fixed-width bipolar window
+  ;; algorithm
+  (let* ((ws  (windows n window-nbits))
+         (wc  (make-bipolar-window-cache
+               :nbits window-nbits
+               :pt    (ed-projective pt)))
+         (ans nil))
+    (loop for w fixnum in ws do
+          (when ans
+            (loop repeat window-nbits do
+                  (setf ans (ed-projective-double ans))))
+          (unless (zerop w)
+            (let ((pw  (get-prec wc w)))
+              (setf ans (if ans
+                            (ed-projective-add pw ans)
+                          pw)))
+            ))
+    (or ans
+        (ed-neutral-point))))
 
 (defun ed-basic-mul (pt n)
   (declare (integer n))
@@ -810,45 +885,9 @@ THE SOFTWARE.
 
           ;; use a 4-bit bipolar fixed-window algorithm
           (t
-           (let* ((ws    (windows4 nn))  ;; affine or projective in...
-                  (ans   nil)
-                  (precv (make-array 16 :initial-element nil))
-                  (p1    (ed-projective pt))
-                  (pm1   (ed-negate p1)))
-             
-             (labels ((pvref (ix)
-                        (declare (fixnum ix))
-                        (aref precv (+ ix 8)))
-                      (set-pvref (ix val)
-                        (declare (fixnum ix))
-                        (setf (aref precv (+ ix 8)) val))
-                      (get-prec (ix)
-                        (declare (fixnum ix))
-                        (or (pvref ix)
-                            (set-pvref ix
-                                       (if (oddp ix)
-                                           (if (minusp ix)
-                                               (ed-projective-add pm1 (get-prec (1+ ix)))
-                                             (ed-projective-add p1 (get-prec (1- ix))))
-                                         (let ((pn/2 (get-prec (ash ix -1))))
-                                           (ed-projective-add pn/2 pn/2)))
-                                       ))))
-               (set-pvref  1 p1) ;; init precomp cache
-               (set-pvref -1 pm1)
-               
-               (loop for w fixnum in ws do
-                     (when ans
-                       (loop repeat 4 do
-                             (setf ans (ed-projective-add ans ans))))
-                     (unless (zerop w)
-                       (let ((pw  (get-prec w)))
-                         (setf ans (if ans
-                                       (ed-projective-add ans pw)
-                                     pw)))))
-               (or ans
-                   (ed-neutral-point)) ;; projective out...
-               ))
-           ))))
+           (generalized-windowed-mul pt nn
+                                     :window-nbits 4))
+          )))
 
 ;; --------------------------------------------------------------------------------
 #|
