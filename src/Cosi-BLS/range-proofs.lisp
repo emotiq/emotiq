@@ -154,7 +154,7 @@ nbits pts will become right vectors."
                (loop repeat nel
                      for h  = (hash/256 *digits-of-pi*) then (hash/256 h)
                      collect
-                     (ed-from-hash h)))
+                     (ed-pt-from-hash h)))
              (no-duplicates (lst)
                (delete-duplicates lst
                                   :test 'ed-pt=)))

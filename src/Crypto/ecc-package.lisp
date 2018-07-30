@@ -225,7 +225,7 @@ THE SOFTWARE.
    :ed-valid-point-p
    :ed-random-pair
    :ed-random-generator
-   :ed-from-hash
+   :ed-pt-from-hash
    
    :elligator-random-pt
    :elligator-tau-vector
@@ -256,6 +256,11 @@ THE SOFTWARE.
    :elligator-ed-dsa-validate
 
    :make-ecc-pt
+
+   :ed-safe-random
+   :ed-vrf
+   :ed-prove-vrf
+   :ed-check-vrf
    ))
 
 (defpackage :lagrange-4-square

@@ -1080,7 +1080,7 @@ THE SOFTWARE.
 ;; -----------------------------------------------------
 ;; Hashing onto curve
 
-(defun ed-from-hash (h)
+(defun ed-pt-from-hash (h)
   "Hash onto curve. Treat h as X coord with sign indication,
 just like a compressed point. Then if Y is a quadratic residue
 we are done. Else re-probe with (X^2 + 1)."
@@ -1117,8 +1117,8 @@ we are done. Else re-probe with (X^2 + 1)."
             ))))))
 
 (defun ed-random-generator ()
-  (ed-from-hash (get-hash-nbits (1+ (ed-nbits))
-                                (field-random *ed-q*))))
+  (ed-pt-from-hash (get-hash-nbits (1+ (ed-nbits))
+                                   (field-random *ed-q*))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
@@ -1175,7 +1175,66 @@ we are done. Else re-probe with (X^2 + 1)."
                      )))))
 
 ;; -----------------------------------------------------------
+;; VRF on Elliptic Curves
 
+(defun ed-vrf (seed skey)
+    (let* ((h    (ed-pt-from-hash (hash/256 seed)))
+           (vrf  (ed-mul h skey)))
+      (ed-compress-pt vrf)))
+           
+
+(defun ed-safe-random (&optional (base *ed-r*))
+  ;; generate a "safe" random value in the field described by base, r in (1 .. base-1)
+  ;; it is safe by virtue of using a deterministic nonce value
+  (let ((nbits  (1- (integer-length base))))
+    (um:nlet-tail iter ()
+      (let ((r (int
+                (get-hash-nbits nbits
+                                (list (uuid:make-v1-uuid)
+                                      (field-random base))
+                                ))))
+        (if (zerop r)
+            (iter)
+          r)))))
+
+(defun ed-prove-vrf (seed skey)
+    (let* ((h    (ed-pt-from-hash (hash/256 seed)))
+           (vrf  (ed-compress-pt (ed-mul h skey)))
+           
+           (r    (ed-safe-random))
+           (s    (int   ;; s = H(g, h, P, v, g^r, h^r)
+                  (hash/256 (ed-compress-pt *ed-gen*)         ;; g
+                            (ed-compress-pt h)                ;; h = H(m)
+                            (ed-compress-pt (ed-nth-pt skey)) ;; pkey
+                            vrf                               ;; v
+                            (ed-compress-pt (ed-nth-pt r))    ;; g^r
+                            (ed-compress-pt (ed-mul h r)))))  ;; h^r
+           (tt   (with-mod *ed-r*                             ;; tt = r - s * skey
+                   (m- r (m* s skey)))))
+
+      (list vrf s tt)))
+
+
+(defun ed-check-vrf (seed prf pkey)
+  (destructuring-bind (v s tt) prf
+    (let* ((h    (ed-pt-from-hash (hash/256 seed)))
+           (schk (int ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
+                  (hash/256 (ed-compress-pt *ed-gen*)
+                            (ed-compress-pt h)
+                            (ed-compress-pt pkey)
+                            v
+                            (ed-compress-pt
+                             (ed-add
+                              (ed-nth-proj-pt tt)
+                              (ed-mul pkey s)))
+                            (ed-compress-pt
+                             (ed-add
+                              (ed-mul h tt)
+                              (ed-mul (ed-decompress-pt v) s)))
+                            ))))
+      (= schk s))))
+
+;; -----------------------------------------------------------
 #|
 (let* ((*edcurve* *curve41417*)
        ;; (*edcurve* *curve1174*)
