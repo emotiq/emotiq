@@ -10,5 +10,11 @@
                (:file "transport")
                (:file "transport-blocking")
                (:file "transport-async")
-               (:file "transport-test")))
+               (:file "transport-test"))
+#|
+  XXX Get lisp-unit working
+  :perform (test-op (o s)
+                    (symbol-call :lisp-unit :run-tests :all :transport))
+|#
+  )
 

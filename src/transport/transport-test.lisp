@@ -1,5 +1,31 @@
 (in-package :transport/test)
 
+;;;
+;;; Lispunit frontend.
+;;;
+
+;; XXX Get lisp-unit working
+#|
+(define-test mesh-blocking
+    (assert-true (unit-test-mesh :backends '(:tcp) :endpoints 1 :secs 1)))
+
+(define-test mesh-async
+    (assert-true (unit-test-mesh :backends '(:tcp-async) :endpoints 1 :secs 1)))
+
+(define-test mesh-blocking+async
+    (assert-true (unit-test-mesh :backends '(:tcp :tcp-async) :endpoints 2 :secs 1)))
+|#
+
+(defun unit-test-mesh (&rest args)
+  "Unit test a transport mesh. 
+  Make sure that *some* messages are being delivered.
+  Return true on success."
+  (let* ((results (apply #'test-mesh args))
+         (msgs (cdr (assoc :msg (alexandria:plist-alist results)))))
+    (> msgs 50)))
+
+;;; Test and benchmark utility functions.
+
 (defun test-open-close (&key (backend :tcp) port)
   (let ((transport (start-transport :backend backend :address "localhost" :port port
                                     :message-received-hook (lambda (&rest msg) (format t "~&Msg: ~A~%" msg)))))
