@@ -37,7 +37,7 @@
 
 (defsystem "emotiq/filesystem"
   :depends-on (uiop
-               emotiq)
+               emotiq/delivery)
   :components ((:module source
                 :pathname "./"
                 :serial t
