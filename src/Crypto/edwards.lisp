@@ -1187,7 +1187,7 @@ we are done. Else re-probe with (X^2 + 1)."
 ;;
 ;; Adapted from Appendix A of paper:
 ;;  "CONIKS: Bringing Key Transparency to End Users"
-;;   by Melara, Blankstein, Bonneau, Felten, and Feedman
+;;   by Melara, Blankstein, Bonneau, Felten, and Freedman
 
 (defun ed-vrf (seed skey)
     (let* ((h    (ed-pt-from-hash (hash/256 seed)))
