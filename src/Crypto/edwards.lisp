@@ -1235,15 +1235,16 @@ we are done. Else re-probe with (X^2 + 1)."
            ;; - deterministic, to avoid attacks, yet unpredictable via hash
            ;; - a "nothing up my sleeve" proof value
            (r    (compute-schnorr-deterministic-random seed skey))
-           (s    (int   ;; s = H(g, h, P, v, g^r, h^r)
-                  (hash-to-range *ed-r*
-                                 (ed-compress-pt *ed-gen*)         ;; g
-                                 (ed-compress-pt h)                ;; h = H(m)
-                                 (ed-compress-pt (ed-nth-pt skey)) ;; P = pkey
-                                 vrf                               ;; v
-                                 (ed-compress-pt (ed-nth-pt r))    ;; g^r
-                                 (ed-compress-pt (ed-mul h r)))))  ;; h^r
-           (tt   (with-mod *ed-r*                             ;; tt = r - s * skey
+           ;; s = H(g, h, P, v, g^r, h^r)
+           (s    (int
+                  (hash-to-grp-range
+                   (ed-compress-pt *ed-gen*)         ;; g
+                   (ed-compress-pt h)                ;; h = H(m)
+                   (ed-compress-pt (ed-nth-pt skey)) ;; P = pkey
+                   vrf                               ;; v
+                   (ed-compress-pt (ed-nth-pt r))    ;; g^r
+                   (ed-compress-pt (ed-mul h r)))))  ;; h^r
+           (tt   (with-mod *ed-r*                    ;; tt = r - s * skey
                    (m- r (m* s skey)))))
 
       (list :v vrf   ;; the VRF value (a compressed pt)
@@ -1259,20 +1260,20 @@ we are done. Else re-probe with (X^2 + 1)."
          (h    (ed-pt-from-hash (hash-to-pt-range seed)))
          ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
          (schk (int
-                (hash-to-range *ed-r*
-                               (ed-compress-pt *ed-gen*)
-                               (ed-compress-pt h)
-                               pkey
-                               v
-                               (ed-compress-pt
-                                (ed-add
-                                 (ed-nth-proj-pt tt)
-                                 (ed-mul (ed-decompress-pt pkey) s)))
-                               (ed-compress-pt
-                                (ed-add
-                                 (ed-mul h tt)
-                                 (ed-mul (ed-decompress-pt v) s)))
-                               ))))
+                (hash-to-grp-range
+                 (ed-compress-pt *ed-gen*)
+                 (ed-compress-pt h)
+                 pkey
+                 v
+                 (ed-compress-pt
+                  (ed-add
+                   (ed-nth-proj-pt tt)
+                   (ed-mul (ed-decompress-pt pkey) s)))
+                 (ed-compress-pt
+                  (ed-add
+                   (ed-mul h tt)
+                   (ed-mul (ed-decompress-pt v) s)))
+                 ))))
     (= schk s)))
 
 ;; -----------------------------------------------------------
