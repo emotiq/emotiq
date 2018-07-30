@@ -1222,7 +1222,8 @@ we are done. Else re-probe with (X^2 + 1)."
     (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
            (vrf  (ed-compress-pt (ed-mul h skey)))
            
-           (r    (ed-safe-random)) ;; the random challenge value for Fiat-Shamir sigma proof
+           ;; r = the random challenge value for Fiat-Shamir sigma proof
+           (r    (compute-schnorr-deterministic-random seed skey))
            (s    (int   ;; s = H(g, h, P, v, g^r, h^r)
                   (hash-to-range *ed-r*
                                  (ed-compress-pt *ed-gen*)         ;; g
