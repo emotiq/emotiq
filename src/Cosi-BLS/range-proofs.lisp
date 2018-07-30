@@ -708,7 +708,7 @@ nbits pts will become right vectors."
 
 ;; then copy and paste into here...
 |#
-
+#|
 (defvar *bp-basis*
   ;; NOTE: For Ed3363 there is a >20% speedup by starting out with Affine coordinates
   (make-bp-basis :CURVE :CURVE-ED3363
@@ -980,7 +980,7 @@ nbits pts will become right vectors."
   ;; = (hex-str (HASH/256 *bp-basis*))
   "A67E8B48750559A9CFA30B27E094E98DD8BC6BA22C1606AAECD7B9EA00E9B457")
 
-#||#
+|#
 ;; ---------------------------------------------------------------------------
 ;;
 ;; for 128 bit security |#
@@ -995,7 +995,7 @@ nbits pts will become right vectors."
 
 ;; then copy and paste into here...
 |#
-#|
+#||#
 (defvar *bp-basis*
   ;; define fully here for default basis so we have comparable proofs
   ;; across blockchain
@@ -1266,7 +1266,7 @@ nbits pts will become right vectors."
 (defvar *chk-bp-basis*
   ;; = (hex-str (HASH/256 *bp-basis*))
   "EA28D0212180691D9A50C07BC822C582BDEDA20857F2C241CA08B55EBDC701F9")
-|#
+#||#
 
 ;; --------------------------------------------------------------------------------
 
