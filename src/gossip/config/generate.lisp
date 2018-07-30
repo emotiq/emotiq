@@ -36,7 +36,7 @@
                      :direction :output
                      :if-exists :supersede)
     (dolist (record records)
-      (format o "~s~&" `(,(getf record :hostname)
+      (format o "~s~&" `(,(getf record :ip)
                          ,(getf record :gossip-server-port))))))
 
 (defun write-keypairs-conf (path records)

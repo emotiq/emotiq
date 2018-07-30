@@ -88,32 +88,6 @@
    #:wallet #:make-wallet
    #:salt #:keying-triple #:encrypted-private-key-p))
 
-(defpackage emotiq/sim
-  (:use #:cl)
-
-  (:export
-   #:initialize
-
-   #:run
-   #:run-new-tx
-
-   #:blocks
-   #:nodes
-   #:keys-and-stakes
-
-   #:create-transaction
-   #:force-epoch-end
-
-
-   #:*user-1* #:*user-2* #:*user-3*
-   #:*tx-1* #:*tx-2*
-
-   #:eassert
-
-   #:prdebug
-
-   #:node-repl))
-
 (defpackage emotiq/elections
   (:use #:cl)
   (:export
@@ -151,15 +125,6 @@
    #:query-current-state
    #:track))
 
-(defpackage emotiq/ate
-  (:use #:cl)
-  (:export
-   #:begin
-   #:wind-down
-   #:begin-sim
-   #:wind-down-sim
-   #:introspect))
-
 (defpackage emotiq/config
   (:use #:cl)
   (:export
@@ -180,3 +145,17 @@
    #:stakes/generate
    #:network/generate
    #:ensure-defaults))
+
+(defpackage emotiq/app
+  (:use #:cl)
+  (:export
+   #:account
+   #:make-account
+   #:wait-for-node-startup
+   #:publish-transaction
+   #:send-all-genesis-coin-to
+   #:spend
+   #:get-transactions
+   #:get-balance))
+
+

@@ -30,7 +30,6 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------
 
 (defvar *use-gossip*      t)     ;; use Gossip graphs instead of Cosi Trees
-(defvar *use-real-gossip* t)     ;; set to T for real Gossip mode, NIL = simulation mode
 
 ;; ---------------------------------------------------------------
 
@@ -47,11 +46,6 @@ THE SOFTWARE.
   "Timeout in seconds that represents the longest witness idle period before setting up an emergency call-for-new-election.")
   
 ;; -------------------------------------------------------
-
-(defvar *current-node*  nil)  ;; for sim = current node running
-
-(defun current-node ()
-  *current-node*)
 
 (defmacro with-current-node (node &body body)
   `(let ((*current-node* ,node))
@@ -128,7 +122,7 @@ THE SOFTWARE.
                
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (emotiq/tracker:track :reset)
-  (reset-nodes))
+  (reset-from-on-high))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
   (ac:pr args))
@@ -170,8 +164,21 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key trn)
   (node-check-transaction trn))
 
-(defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
+(defmethod node-dispatcher ((msg-sym (eql :signing))
+                            &key reply-to consensus-stage blk seq timeout)
   ;; witness nodes receive this message to participate in a multi-signing
+  ;;;
+  ;;; prophylactic so leader does not sign its own messages
+  ;;; TODO determine whether this is no necessary
+  (unless (int= (node-pkey (current-node))
+                *leader*)
+    (setf *had-work* t)
+    (node-cosi-signing reply-to
+                       consensus-stage blk seq timeout)))
+
+(defmethod node-dispatcher ((msg-sym (eql :leader-signing))
+                            &key reply-to consensus-stage blk seq timeout)
+  ;; Leader node receives this message to start a Cosi multi-signing
   (setf *had-work* t)
   (node-cosi-signing reply-to
                      consensus-stage blk seq timeout))
@@ -197,6 +204,7 @@ THE SOFTWARE.
                )))
     (make-actor
      (lambda (&rest msg)
+       ;;; Source of majority of messages on screen makes it fairly verbose
        (pr "Cosi MSG: ~A" msg)
        (um:dcase msg
          (:actor-callback (aid &rest ans)
@@ -515,20 +523,8 @@ topo-sorted partial order"
       )))
                
 (defun get-transactions-for-new-block ()
-  (when *newtx-p*
-    (return-from get-transactions-for-new-block
-      (cosi/proofs/newtx:get-transactions-for-new-block
-       :max *max-transactions*)))
-  (let ((tx-pairs (get-candidate-transactions)))
-    (pr "Trimming transactions")
-    (multiple-value-bind (hd tl)
-        (um:split *max-transactions* tx-pairs)
-      (dolist (tx tl)
-        ;; put these back in the pond for next round
-        (back-out-transaction tx))
-      ;; now hd represents the actual transactions going into the next block
-      (pr "~D Transactions" (length hd))
-      hd)))
+  (cosi/proofs/newtx:get-transactions-for-new-block
+   :max *max-transactions*))
       
 ;; ----------------------------------------------------------------------
 ;; Code run by Cosi block validators...
@@ -622,18 +618,19 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; debug init
 
 (defun reset-system ()
-  (send-real-nodes :reset))
+  (gossip:broadcast :reset-from-on-high
+                    :graphID :UBER)
+  (reset-from-on-high))
 
-(defun reset-nodes ()
-  (loop for node across *node-bit-tbl* do
-        (setf (node-bad        node) nil
-              (node-blockchain node) nil)
-
-        (setf (node-current-leader node) (node-pkey *top-node*))
-        (clrhash (node-blockchain-tbl node))
-        (clrhash (node-mempool        node))
-        (clrhash (node-utxo-table     node))
-        ))
+(defun reset-from-on-high ()
+  (let ((node (current-node)))
+    (setf (node-bad        node) nil
+          (node-blockchain node) nil)
+    
+    (clrhash (node-blockchain-tbl node))
+    (clrhash (node-mempool        node))
+    (clrhash (node-utxo-table     node))
+    ))
 
 ;; -------------------------------------------------------------------
 
@@ -644,10 +641,6 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun group-subs (node)
   (um:accum acc
     (iter-subs node #'acc)))
-
-(defun send-real-nodes (&rest msg)
-  (loop for ip in *real-nodes* do
-        (apply 'send (node-pkey (gethash ip *ip-node-tbl*)) msg)))
 
 (defmethod short-id ((node node))
   (short-id (node-pkey node)))
@@ -719,33 +712,21 @@ check that each TXIN and TXOUT is mathematically sound."
       (setf *cosi-gossip-neighborhood-graph*
             (or :UBER ;; for now while debugging
                 (gossip:establish-broadcast-group
-                 (mapcar 'first (get-witness-list))
+                 (get-witness-list)
                  :graphID :cosi)))
       ))
 
 (defun gossip-neighborcast (my-node &rest msg)
   "Gossip-neighborcast - send message to all witness nodes."
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :style :neighborcast
-                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
-
-        (t
-         (loop for node across *node-bit-tbl* do
-               (unless (eql node my-node)
-                 (apply 'send (node-pkey node) msg))))
-        ))
+  (gossip:broadcast msg
+                    :style :neighborcast
+                    :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
 
 (defun broadcast+me (msg)
-  (let ((my-pkey (node-pkey (current-node))))
-    ;; make sure our own Node gets the message too
-    (gossip:singlecast msg my-pkey
-                       :graphID nil) ;; force send to ourselves
-    ;; this really should go to everyone
-    (gossip:broadcast msg
-                      :startNodeID my-pkey ;; need this or else get an error sending to NIL destnode
-                      :graphID :UBER)))
+  "Always goes to all local real nodes automatically"
+  (gossip:broadcast msg
+                    :graphID :UBER))
 
 ;; -----------------------------------------------------------
 
@@ -863,7 +844,10 @@ check that each TXIN and TXOUT is mathematically sound."
 (defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 null))
   pkey1)
 
-(defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
+(defmethod add-pkeys (pkey1 pkey2)
+  (%add-pkeys (pbc:public-key pkey2) (pbc:public-key pkey1)))
+
+(defmethod %add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
   (change-class (pbc:add-pts pkey1 pkey2)
                 'pbc:public-key))
 
@@ -893,12 +877,10 @@ check that each TXIN and TXOUT is mathematically sound."
 (defun call-for-punishment ()
   ;; a witness detected a problem with a block handed by the leader... hmmm...
   ;; for now, just call for new election
-  (when *use-real-gossip*
-    (call-for-new-election)))
+  (call-for-new-election))
 
 (defun done-with-duties ()
-  (when *use-real-gossip*
-    (setup-emergency-call-for-new-election)))
+  (setup-emergency-call-for-new-election))
   
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
@@ -1031,7 +1013,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self (current-actor))
          (hash (hash/256 (signature-hash-message blk)))
          (sess (int hash)))
-    (ac:self-call :signing
+    (ac:self-call :leader-signing
                   :reply-to        self
                   :consensus-stage consensus-stage
                   :blk             blk
@@ -1069,7 +1051,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (first *blockchain*)
                                               *election-proof* *leader*
-                                              (map 'vector 'first (get-witness-list))
+                                              (coerce (get-witness-list) 'vector)
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
@@ -1114,5 +1096,4 @@ check that each TXIN and TXOUT is mathematically sound."
 ;; -----------------------------------------------------------------
 
 (defun init-sim ()
-  (reconstruct-tree)
   (reset-system))

@@ -158,8 +158,7 @@ THE SOFTWARE.
   (if *print-readably*
       (format out-stream "#.(make-instance '~W :value ~A)"
               (class-name (class-of obj))
-              (with-output-to-string (s)
-                (print-object (ub8v-repr obj) s)))
+              (ub8v-repr obj) s)
     ;; else
     (format out-stream "#<~A ~A >"
             (class-name (class-of obj))

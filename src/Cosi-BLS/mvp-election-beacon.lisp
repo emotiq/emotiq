@@ -31,41 +31,11 @@ THE SOFTWARE.
 ;; ---------------------------------------------------------------------------
 ;; list of (pubkey stake) associations for all witness nodes
 
-(defvar *all-nodes*  nil) 
-
-(defun set-nodes (node-list)
-  "NODE-LIST is a list of (public-key stake-amount) pairs"
-  (ac:pr (format nil "election set-nodes ~A" node-list))
-  (assert node-list)
-  (setf *all-nodes* (mapcar (lambda (pair)
-                              (destructuring-bind (pkey stake) pair
-                                (list (pbc:public-key pkey)
-                                      stake)))
-                            node-list)))
-
 (defun get-witness-list ()
-  (cond (*use-real-gossip*
-         *all-nodes*)
-        (t
-         ;; other sim
-         (or *all-nodes*
-             (setf *all-nodes*
-                   (um:accum acc
-                     (maphash (lambda (k node)
-                                (declare (ignore k))
-                                (acc (list (node-pkey node)
-                                           (node-stake node))))
-                              *ip-node-tbl*)))))
-        ))
-
-(defun get-witnesses-sans-pkey (pkey)
-  (remove pkey (get-witness-list)
-          :key  'first
-          :test 'int=))
+  (gossip:get-live-uids))
 
 (defun witness-p (pkey)
   (find pkey (get-witness-list)
-        :key  'first
         :test 'int=))
 
 ;; ---------------------------------------------------------------------------------------
@@ -108,10 +78,11 @@ THE SOFTWARE.
       ;; else
       l)))
 
-(defun hold-election (nfrac &optional (nodes (get-witness-list)))
+(defun hold-election (nfrac &optional (nodes (emotiq/config:get-stakes)))
   "Given a fraction (0 < nfrac < 1) arrange all stakeholders into a
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
+  (emotiq/tracker:track :election)
   (let* ((tree    (car (um:nlet-tail iter ((nodes nodes)) ;; tail recursive, scheme-like, named let
                          (if (= 1 (length nodes))
                              nodes
@@ -199,15 +170,18 @@ based on their relative stake"
 
 ;; ---------------------------------------------------------------------------
 
+(defun make-signed-message (msg)
+  (append msg (list :sig (pbc:sign-hash msg (node-skey (current-node))))))
+
+;; ---------------------------------------------------------------------------
+
 (defun make-election-message-skeleton (pkey seed)
   `(:hold-an-election
        :n      ,seed
-       :beacon ,pkey
-       :sig))
+       :beacon ,pkey))
 
-(defun make-signed-election-message (pkey seed skey)
-  (let ((skel (make-election-message-skeleton pkey seed)))
-    (um:conc1 skel (pbc:sign-hash (hash/256 skel) skey))))
+(defun make-signed-election-message (pkey seed)
+  (make-signed-message (make-election-message-skeleton pkey seed)))
 
 (defun validate-election-message (n beacon sig)
   (and (or (and (null *beacon*)      ;; it would be nil at startup
@@ -218,10 +192,8 @@ based on their relative stake"
 
 (defun send-hold-election ()
   (with-election-reply (seed) :next
-    (with-accessors ((pkey  node-pkey)
-                     (skey  node-skey)) (current-node)
-      (broadcast+me (make-signed-election-message pkey seed skey)))
-    ))
+    (broadcast+me (make-signed-election-message (node-pkey (current-node))
+                                                seed))))
 
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
@@ -255,7 +227,9 @@ based on their relative stake"
       (update-election-seed pkey)
 
       (let* ((winner     (hold-election n))
-             (new-beacon (hold-election n (get-witnesses-sans-pkey winner))))
+             (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
+                                                  :key 'first
+                                                  :test 'int=))))
 
         (setf *leader*           winner
               *beacon*           new-beacon
@@ -303,36 +277,6 @@ based on their relative stake"
       ;; go gather keys and stakes.
       ;; *local-epoch* will also not have
       ;; changed
-      (unless (get-witness-list)
-        (cond (*use-real-gossip*
-               (let* ((nodes/stakes (emotiq/config:get-stakes))
-                      (my-pair      (find (node-pkey node) nodes/stakes
-                                          :test 'int=
-                                          :key  'first)))
-                 (setf (node-stake node) (cadr my-pair))
-                 (set-nodes nodes/stakes)))
-
-              (t
-               (unless (node-blockchain node)
-                 (error "There is no blockchain. Cannot continue."))
-               (let* ((genesis-block (first (node-blockchain node)))
-                      (witnesses-and-stakes
-                       (cosi/proofs:block-witnesses-and-stakes genesis-block))
-                      (node-stake
-                       (second (assoc (node-pkey node) witnesses-and-stakes
-                                      :test 'int=))))
-                 ;;; FIXME: this probably won't work for unstaked nodes.
-                 ;;; They shouldn't be participating in elections, but as I
-                 ;;; understand it, everyone is currently see this call.
-                 (when (null node-stake)
-                   (error "Stake is nil for this node. Cannot continue."))
-                 (unless (cosi/proofs/newtx:in-legal-stake-range-p node-stake)
-                   (error "Stake value ~s is not valid for a stake." node-stake))
-                 
-                 (set-nodes witnesses-and-stakes)
-                 (setf (node-stake node) node-stake)))
-              ))
-      
       (when (= *local-epoch* old-epoch) ;; anything changed?
         (call-for-new-election)))
     ))
@@ -340,10 +284,13 @@ based on their relative stake"
 ;; ----------------------------------------------------------------
 ;; Startup Init Stuff...
 
+(defmethod node-dispatcher ((msg-sym (eql :startup-system)) &key &allow-other-keys)
+  (setup-emergency-call-for-new-election))
+
 (defun startup-elections ()
   ;; call this from global init after all housekeeping
-  (with-current-node *my-node*
-    (setup-emergency-call-for-new-election)))
+  (gossip:broadcast :startup-system
+                    :graphID :UBER))
 
 (defmethod gossip:make-node ((kind (eql :cosi)) &key pkey skey)
   (setf *my-node* (make-instance 'node
@@ -362,12 +309,10 @@ based on their relative stake"
 (Defun make-call-for-election-message-skeleton (pkey epoch)
   `(:call-for-new-election
     :pkey  ,pkey
-    :epoch ,epoch
-    :sig))
+    :epoch ,epoch))
 
-(defun make-signed-call-for-election-message (pkey epoch skey)
-  (let ((skel  (make-call-for-election-message-skeleton pkey epoch)))
-    (um:append1 skel (pbc:sign-hash (hash/256 skel) skey))))
+(defun make-signed-call-for-election-message (pkey epoch)
+  (make-signed-message (make-call-for-election-message-skeleton pkey epoch)))
 
 (defun validate-call-for-election-message (pkey epoch sig)
   (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?
@@ -379,12 +324,12 @@ based on their relative stake"
        (push pkey *election-calls*)))
   
 (defun call-for-new-election ()
-  (with-accessors ((pkey  node-pkey)
-                   (skey  node-skey)) (current-node)
+  (pr "Node ~A Calling for New Election" (short-id (current-node)))
+  (with-accessors ((pkey  node-pkey)) (current-node)
     (unless (find pkey *election-calls* ;; prevent repeated calls
                   :test 'int=)
       (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
-      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
+      (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch*)
                         :graphID :UBER))))
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
