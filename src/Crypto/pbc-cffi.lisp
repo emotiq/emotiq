@@ -449,7 +449,7 @@ Usually, they are in big-endian representation for PBC library."
   (if *print-readably*
       (call-next-method)
     ;; else
-    (print-unreadable-object (obj out-stream :typep t)
+    (print-unreadable-object (obj out-stream :type t)
       (princ (short-str (hex-str obj)) out-stream))
     ))
 
