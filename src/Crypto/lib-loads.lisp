@@ -50,7 +50,7 @@
       (define-production-dlls)
     (define-dev-dlls))
   ;; (format t "DYLD_LIBRARY_PATH = ~S" (getenv "DYLD_LIBRARY_PATH"))
-  (format t "cffi:*foreign-library-directories* = ~S"
+  (format t "~%cffi:*foreign-library-directories* = ~S"
           (mapcar (lambda (item)
                     (if (consp item)
                         (apply (first item) (rest item))
