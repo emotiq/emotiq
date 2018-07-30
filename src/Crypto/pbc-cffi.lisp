@@ -1191,7 +1191,7 @@ library."
   "BLS Signature packet"
   (make-instance 'signed-message
                  :msg  msg
-                 :sig  (sign-hash (hash-to-grp-range msg) skey)
+                 :sig  (sign-hash (hash-to-pbc-range msg) skey)
                  :pkey pkey))
 
 (defmethod check-message ((sm signed-message))

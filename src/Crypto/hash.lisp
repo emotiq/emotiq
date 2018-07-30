@@ -136,7 +136,7 @@ THE SOFTWARE.
   (make-bare-hash (apply 'get-raw-hash-nbits nbits seeds)))
 
 (defun hash-to-range (range &rest args)
-  (apply 'get-hash-nbits (um:floor-pwr2 range) args))
+  (apply 'get-hash-nbits (um:floor-log2 range) args))
 
 ;; -----------------------------------------------------
 
