@@ -103,7 +103,8 @@ THE SOFTWARE.
 
 (defpackage :hash
   (:use :common-lisp
-        :vec-repr)
+        :vec-repr
+        :cached-var)
   (:export
    :hash
    :hash-val

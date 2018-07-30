@@ -47,6 +47,10 @@ THE SOFTWARE.
 (defclass hash/512 (hash)
   ())
 
+(defclass hash/var (hash)
+  ((hashfn  :reader  hash-fn
+            :initarg :hashfn)))
+
 ;; -------------------------------------------------
 
 (defmethod ub8v-repr ((x hash))
@@ -117,15 +121,20 @@ THE SOFTWARE.
       (ironclad:update-digest dig (hashable seed)))
     (ironclad:produce-digest dig)))
 
-(defun make-bare-hash (vec)
+(defun make-bare-hash (vec fn)
   (values
-   (make-instance 'hash
+   (make-instance 'hash/var
                   :val (make-instance 'bev
-                                      :vec vec))
+                                      :vec vec)
+                  :hashfn fn)
    (length vec)))
 
 (defun get-hash-nbytes (nb &rest seeds)
-  (make-bare-hash (apply 'get-raw-hash-nbytes nb seeds)))
+  (make-bare-hash (apply 'get-raw-hash-nbytes nb seeds)
+                  (get-cached-symbol-data 'get-hash-nbytes :hashfn nb
+                                          (lambda ()
+                                            (um:curry 'get-hash-nbytes nb)))
+                  ))
 
 (defun get-raw-hash-nbits (nbits &rest seeds)
   "Concatenated SHA3 until we collect enough bits"
@@ -135,7 +144,10 @@ THE SOFTWARE.
       vec)))
 
 (defun get-hash-nbits (nbits &rest seeds)
-  (make-bare-hash (apply 'get-raw-hash-nbits nbits seeds)))
+  (make-bare-hash (apply 'get-raw-hash-nbits nbits seeds)
+                  (get-cached-symbol-data 'get-hash-nbits :hashfn nbits
+                                          (lambda ()
+                                            (um:curry 'get-hash-nbits nbits)))))
 
 (defun hash-to-range (range &rest args)
   (apply 'get-hash-nbits (um:floor-log2 range) args))
@@ -164,4 +176,9 @@ THE SOFTWARE.
   ;; many of the hash functions are named the same as their
   ;; correspdonding class wrappers. So given a hash object, we can
   ;; find the hash to produce another like it.
-  (symbol-function (class-name (class-of h))))
+  (let ((sym (class-name (class-of h))))
+    (when (fboundp sym)
+      (symbol-function sym))))
+
+(defmethod hash-function-of-hash ((h hash/var))
+  (hash-fn h))

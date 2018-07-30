@@ -1691,11 +1691,15 @@ Certification includes a BLS Signature on the public key."
   (int= (compute-pairing proof (get-g2))
         randomness))
 
-(defmethod validate-vrf ((proof g1-cmpr) (randomness hash:hash) &key &allow-other-keys)
+(defmethod validate-vrf ((proof g1-cmpr) (randomness hash:hash)
+                         &key
+                         (randomness-hash 'pbc-hash)
+                         &allow-other-keys)
   ;; randomness could be a hash value or an integer
-  (let ((hashfn (hash-function-of-hash randomness)))
+  (let ((hashfn (or (hash-function-of-hash randomness)
+                    randomness-hash)))
     (hash= (funcall hashfn (compute-pairing proof (get-g2)))
-          randomness)))
+           randomness)))
 
 (defmethod validate-vrf ((proof g1-cmpr) (randomness integer)
                          &key
