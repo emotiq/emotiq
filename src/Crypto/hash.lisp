@@ -118,9 +118,11 @@ THE SOFTWARE.
     (ironclad:produce-digest dig)))
 
 (defun make-bare-hash (vec)
-  (make-instance 'hash
-                 :val (make-instance 'bev
-                                     :vec vec)))
+  (values
+   (make-instance 'hash
+                  :val (make-instance 'bev
+                                      :vec vec))
+   (length vec)))
 
 (defun get-hash-nbytes (nb &rest seeds)
   (make-bare-hash (apply 'get-raw-hash-nbytes nb seeds)))
