@@ -76,8 +76,7 @@
 
 (defsystem "emotiq/blockchain"
   :depends-on (emotiq
-               emotiq/wallet
-               cosi-bls)
+               emotiq/wallet)
   :components ((:module source
                 :pathname "blockchain/"
                 :serial t
