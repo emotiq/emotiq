@@ -1176,6 +1176,14 @@ we are done. Else re-probe with (X^2 + 1)."
 
 ;; -----------------------------------------------------------
 ;; VRF on Elliptic Curves
+;;
+;; Unlike the situation with pairing curves and BLS signatures, we
+;; must use a Schnorr-like scheme, with a deterministic nonce
+;; protected random challenge value, to guard the secret key.
+;;
+;; If you ever happened to use the same random challenge value on a
+;; different message seed then it becomes possible to compute the
+;; secret key.
 
 (defun ed-vrf (seed skey)
     (let* ((h    (ed-pt-from-hash (hash/256 seed)))
@@ -1201,11 +1209,11 @@ we are done. Else re-probe with (X^2 + 1)."
     (let* ((h    (ed-pt-from-hash (hash/256 seed)))
            (vrf  (ed-compress-pt (ed-mul h skey)))
            
-           (r    (ed-safe-random))
+           (r    (ed-safe-random)) ;; the random challenge value for Fiat-Shamir sigma proof
            (s    (int   ;; s = H(g, h, P, v, g^r, h^r)
                   (hash/256 (ed-compress-pt *ed-gen*)         ;; g
                             (ed-compress-pt h)                ;; h = H(m)
-                            (ed-compress-pt (ed-nth-pt skey)) ;; pkey
+                            (ed-compress-pt (ed-nth-pt skey)) ;; P = pkey
                             vrf                               ;; v
                             (ed-compress-pt (ed-nth-pt r))    ;; g^r
                             (ed-compress-pt (ed-mul h r)))))  ;; h^r
