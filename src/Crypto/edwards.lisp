@@ -1227,8 +1227,8 @@ we are done. Else re-probe with (X^2 + 1)."
       (list vrf s tt)))
 
 
-(defun ed-check-vrf (seed prf pkey)
-  (destructuring-bind (v s tt) prf
+(defun ed-check-vrf (seed proof pkey)
+  (destructuring-bind (v s tt) proof
     (let* ((h    (ed-pt-from-hash (hash/256 seed)))
            (schk (int ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
                   (hash/256 (ed-compress-pt *ed-gen*)
