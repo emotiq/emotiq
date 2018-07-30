@@ -16,16 +16,13 @@
   (let ((d (if (not (emotiq:production-p))
                (asdf:system-relative-pathname :emotiq "../var/etc/") ;; TODO rename other than etc
                #+:windows
-               (error "Not implemented on Windows")
+               (merge-pathnames "Emotiq/" (user-homedir-pathname))
                #+:linux
-               (let ((root (merge-pathnames ".emotiq/" (user-homedir-pathname))))
-                 (uiop:if-let (subpath (subpath))
-                   (setf root (merge-pathnames subpath root)))
-                 root)
+               (merge-pathnames ".emotiq/" (user-homedir-pathname))
                #+:darwin
-               (let ((root (merge-pathnames "Emotiq/"
-                                            (merge-pathnames "Library/Application Support/"
-                                                             (user-homedir-pathname)))))))))
+               (merge-pathnames "Emotiq/"
+                                (merge-pathnames "Library/Application Support/"
+                                                 (user-homedir-pathname))))))
     (ensure-directories-exist d)
     d))
 
