@@ -1139,9 +1139,11 @@ we are done. Else re-probe with (X^2 + 1)."
             (iter (1+ (m* x x)))
             ))))))
 
+(defun ed-pt-from-seeds (&rest seeds)
+  (ed-pt-from-hash (apply 'hash-to-pt-range seeds)))
+
 (defun ed-random-generator ()
-  (ed-pt-from-hash (hash-to-pt-range 
-                    (field-random *ed-q*))))
+  (ed-pt-from-seeds (field-random *ed-q*)))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
@@ -1222,13 +1224,13 @@ we are done. Else re-probe with (X^2 + 1)."
 ;;   by Melara, Blankstein, Bonneau, Felten, and Freedman
 
 (defun ed-vrf (seed skey)
-    (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
+    (let* ((h    (ed-pt-from-seeds seed))
            (vrf  (ed-mul h skey)))
       (ed-compress-pt vrf)))
            
 
 (defun ed-prove-vrf (seed skey)
-    (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
+    (let* ((h    (ed-pt-from-seeds seed))
            (vrf  (ed-compress-pt (ed-mul h skey)))
            
            ;; r = the random challenge value for Fiat-Shamir sigma proof
@@ -1257,7 +1259,7 @@ we are done. Else re-probe with (X^2 + 1)."
   (let* ((v    (getf proof :v))
          (s    (getf proof :s))
          (tt   (getf proof :t))
-         (h    (ed-pt-from-hash (hash-to-pt-range seed)))
+         (h    (ed-pt-from-seeds seed))
          ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
          (schk (int
                 (hash-to-grp-range
