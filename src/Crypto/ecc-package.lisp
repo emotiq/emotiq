@@ -115,6 +115,7 @@ THE SOFTWARE.
    :hash/256
    :hash/384
    :hash/512
+   :hash/var
    :get-raw-hash-nbytes
    :get-raw-hash-nbits
    :get-hash-nbytes

@@ -131,7 +131,7 @@ THE SOFTWARE.
 
 (defun get-hash-nbytes (nb &rest seeds)
   (make-bare-hash (apply 'get-raw-hash-nbytes nb seeds)
-                  (get-cached-symbol-data 'get-hash-nbytes :hashfn nb
+                  (get-cached-symbol-data 'hash/var :hash-bytes-fn nb
                                           (lambda ()
                                             (um:curry 'get-hash-nbytes nb)))
                   ))
@@ -145,7 +145,7 @@ THE SOFTWARE.
 
 (defun get-hash-nbits (nbits &rest seeds)
   (make-bare-hash (apply 'get-raw-hash-nbits nbits seeds)
-                  (get-cached-symbol-data 'get-hash-nbits :hashfn nbits
+                  (get-cached-symbol-data 'hash/var :hash-bits-fn nbits
                                           (lambda ()
                                             (um:curry 'get-hash-nbits nbits)))))
 
