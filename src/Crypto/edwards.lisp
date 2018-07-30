@@ -1184,6 +1184,10 @@ we are done. Else re-probe with (X^2 + 1)."
 ;; If you ever happened to use the same random challenge value on a
 ;; different message seed then it becomes possible to compute the
 ;; secret key.
+;;
+;; Adapted from Appendix A of paper:
+;;  "CONIKS: Bringing Key Transparency to End Users"
+;;   by Melara, Blankstein, Bonneau, Felten, and Feedman
 
 (defun ed-vrf (seed skey)
     (let* ((h    (ed-pt-from-hash (hash/256 seed)))
