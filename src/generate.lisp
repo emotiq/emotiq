@@ -116,7 +116,8 @@ Returns the enumeration of lists of public keys and staked amounts."
     (push (cons :stakes
                 stakes)
           configuration)
-    configuration))
+    (reverse
+     (remove-duplicates (reverse configuration) :test #'(lambda (x y) (eq (car x) (car y)))))))
 
 (defun generate-node (directory
                       configuration
@@ -248,7 +249,7 @@ The genesis block for the node is returned as the second value.
                           (nodes-dns-ip *dns-ip-zt.emotiq.ch*))
   "Ensure that configuration will start up, even in the absence of explicit configuration
 
-With FORCE true, overwright destination without warning. 
+With FORCE true, overwrite destination without warning. 
 
 With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
   (let ((root (emotiq/fs:new-temporary-directory))
