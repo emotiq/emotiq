@@ -1163,6 +1163,7 @@ we are done. Else re-probe with (X^2 + 1)."
          (pkey-cmpr (ed-compress-pt pkey)))
     ;; r = the random challenge value for Fiat-Shamir sigma proof
     ;; - deterministic, to avoid attacks, yet unpredictable via hash
+    ;; - a "nothing up my sleeve" proof value
     (multiple-value-bind (r rpt)
         (compute-schnorr-deterministic-random msg-enc skey)
       (let* ((rpt-cmpr  (ed-compress-pt rpt))
@@ -1226,6 +1227,7 @@ we are done. Else re-probe with (X^2 + 1)."
            
            ;; r = the random challenge value for Fiat-Shamir sigma proof
            ;; - deterministic, to avoid attacks, yet unpredictable via hash
+           ;; - a "nothing up my sleeve" proof value
            (r    (compute-schnorr-deterministic-random seed skey))
            (s    (int   ;; s = H(g, h, P, v, g^r, h^r)
                   (hash-to-range *ed-r*
