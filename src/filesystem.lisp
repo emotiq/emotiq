@@ -73,3 +73,15 @@
     wallet))
 
 
+(defun new-temporary-directory (&key (root #p"/var/tmp/emotiq/"))
+  (loop
+     :with sub-directory = (make-pathname
+                            :defaults root
+                            :directory (append (pathname-directory root)
+                                               (list (symbol-name (gensym)))))
+     :until (not (probe-file sub-directory))
+     :finally (progn
+                (ensure-directories-exist sub-directory)
+                (return sub-directory))))
+       
+       

@@ -129,8 +129,10 @@ THE SOFTWARE.
    :*curve*
    :*curve-name*
    :*g1-zero*
-   :*g2-zero*
-   ))
+   :*g2-zero*)
+  (:export
+   :make-keying-triple
+   :make-keying-integers))
 
 (in-package :pbc-interface)
 

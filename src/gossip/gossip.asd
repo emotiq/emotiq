@@ -4,7 +4,7 @@
   :author "Shannon Spires <svs@emotiq.ch>"
   :version "0.2.3"
   :maintainer "Shannon Spires <svs@emotiq.ch>"
-  :depends-on (gossip/config
+  :depends-on (emotiq/config
                emotiq/logging
                quicklisp
 	       uiop
@@ -12,8 +12,7 @@
                key-value-store
                actors
                crypto-pairings
-               usocket
-               illogical-pathnames)
+               usocket)
   :in-order-to ((test-op (test-op "gossip-test")))
   :serial t
   :components ((:file "package")
@@ -29,7 +28,10 @@
                (:file "http-fetch")
                (:file "graphviz")
                (:file "gossip-startup")))
+                      
 
+
+#+(or)
 (defsystem "gossip/config"
   :depends-on (emotiq/filesystem
                emotiq/logging

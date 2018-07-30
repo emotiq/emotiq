@@ -1798,3 +1798,4 @@ of type TYPE."
 ;; Modularity issue: note that this should not really "know" that
 ;; block-transactions is list. It is now specified as sequence, and it's left
 ;; open for it to become a merkle tree; clean up later!  -mhd, 6/20/18
+

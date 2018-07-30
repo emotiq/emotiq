@@ -15,8 +15,8 @@
 
 (defun get-nth-key (n)
   "return a keying triple from the config file for nth id"
-  (let ((public-private (nth n (gossip/config:get-values))))
-    (emotiq/config::make-keying-triple
+  (let ((public-private (nth n (emotiq/config:get-keypairs))))
+    (pbc:make-keying-triple
      (first public-private)
      (second public-private))))
 
@@ -56,6 +56,7 @@
     a))
 
 (defun app2 ()
+  #+(or)
   (wait-for-node-startup)
 
   (setf *genesis* (make-genesis-account))
@@ -266,12 +267,12 @@
 ; utxo-p
 ; find-tx
 
-
 (defun block-explorer ()
   (for-all-blocks (b)
      (for-all-transactions-in-block (tx b)
-        (explore-transaction (txid))))
+        (explore-transaction (txid)))))
 
+#+(or)
 (defun explore-transaction (txid)
   (let ((tx (cosi/proofs/newtx:find-tx txid)))
     (let ((from-list (get-transaction-tx-outs tx)))

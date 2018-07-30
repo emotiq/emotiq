@@ -206,5 +206,12 @@ THE SOFTWARE.
             (warn "Missing block ~A -- you might want to ask for a back-fill" (short-id id)))
           ))))
 
+(defmacro with-block-list ((blockchain-list) &body body)
+  `(let ((block-list (symbol-function 'cosi-simgen:block-list)))
+     (setf (symbol-function 'cosi-simgen:block-list)
+           (lambda () ,blockchain-list))
+     (multiple-value-prog1
+         (progn ,@body)
+       (setf (symbol-function 'cosi-simgen:block-list) block-list))))
 
 

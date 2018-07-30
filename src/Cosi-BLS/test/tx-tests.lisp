@@ -33,7 +33,7 @@
   ;;     as the public key of the node, same as :public.
   ;;   :public - bignum representing public key of the node
   ;;   :private - bignum representing private key of the node
-  (let ((config-settings (emotiq/config:settings/read)))
+  (let ((config-settings (emotiq/config:setting)))
     (flet ((config-get (name) (cdr (assoc name config-settings))))
       (let* ((address-for-coin (config-get :address-for-coins))
              (public-key (config-get :public))
