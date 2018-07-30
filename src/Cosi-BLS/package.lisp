@@ -51,7 +51,7 @@
    :ed-compress-pt
    :ed-decompress-pt
    :with-ed-curve
-   :ed-from-hash
+   :ed-pt-from-hash
    :ed-random-generator
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
