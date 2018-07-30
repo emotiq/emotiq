@@ -114,8 +114,11 @@ THE SOFTWARE.
    :hash/256
    :hash/384
    :hash/512
+   :get-raw-hash-nbytes
+   :get-raw-hash-nbits
    :get-hash-nbytes
    :get-hash-nbits
+   :hash-to-range
    :hashable
    :hash-check
    :hash=
@@ -225,6 +228,8 @@ THE SOFTWARE.
    :ed-valid-point-p
    :ed-random-pair
    :ed-random-generator
+   :hash-to-pt-range
+   :hash-to-grp-range
    :ed-pt-from-hash
    
    :elligator-random-pt

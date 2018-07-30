@@ -110,19 +110,33 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------
 
-(defun get-hash-nbytes (nb &rest seeds)
+(defun get-raw-hash-nbytes (nb &rest seeds)
   ;; returns a vector of nb raw-bytes
   (let ((dig (ironclad:make-digest :shake256 :output-length nb)))
     (dolist (seed seeds)
       (ironclad:update-digest dig (hashable seed)))
     (ironclad:produce-digest dig)))
 
-(defun get-hash-nbits (nbits seed)
+(defun make-bare-hash (vec)
+  (make-instance 'hash
+                 :val (make-instance 'bev
+                                     :vec vec)))
+
+(defun get-hash-nbytes (nb &rest seeds)
+  (make-bare-hash (apply 'get-raw-hash-nbytes nb seeds)))
+
+(defun get-raw-hash-nbits (nbits &rest seeds)
   "Concatenated SHA3 until we collect enough bits"
   (multiple-value-bind (nbw nbf) (ceiling nbits 8)
-    (let ((vec (get-hash-nbytes nbw seed)))
+    (let ((vec (apply 'get-raw-hash-nbytes nbw seeds)))
       (setf (aref vec 0) (ldb (byte (+ 8 nbf) 0) (aref vec 0)))
       vec)))
+
+(defun get-hash-nbits (nbits &rest seeds)
+  (make-bare-hash (apply 'get-raw-hash-nbits nbits seeds)))
+
+(defun hash-to-range (range &rest args)
+  (apply 'get-hash-nbits (um:floor-pwr2 range) args))
 
 ;; -----------------------------------------------------
 

@@ -51,6 +51,8 @@
    :ed-compress-pt
    :ed-decompress-pt
    :with-ed-curve
+   :hash-to-range
+   :hash-to-pt-range
    :ed-pt-from-hash
    :ed-random-generator
    :ed-random-pair)

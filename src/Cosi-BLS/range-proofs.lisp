@@ -152,7 +152,7 @@ nbits pts will become right vectors."
   (let ((nel (+ 2 (* 2 nbits))))
     (labels ((gen ()
                (loop repeat nel
-                     for h  = (hash/256 *digits-of-pi*) then (hash/256 h)
+                     for h  = (hash-to-pt-range *digits-of-pi*) then (hash-to-pt-range h)
                      collect
                      (ed-pt-from-hash h)))
              (no-duplicates (lst)
@@ -1417,8 +1417,8 @@ lock it to the recipient."
                 
                 ;; publish Acmt, Scmt
                 
-                (y          (int (hash/256 vcmt-cmpr acmt-cmpr scmt-cmpr)))
-                (z          (int (hash/256 y)))
+                (y          (int (hash-to-range *ed-r* vcmt-cmpr acmt-cmpr scmt-cmpr)))
+                (z          (int (hash-to-range *ed-r* y)))
                 
                 (poly_l0    (vec-decr a_l z))
                 (poly_l1    s_l)
@@ -1586,7 +1586,7 @@ lock it to the recipient."
              ;; publish L,R
              (lcmpr (ed-compress-pt l))
              (rcmpr (ed-compress-pt r))
-             (x     (int (hash/256 lcmpr rcmpr))) ;; challenge x
+             (x     (int (hash-to-range *ed-r* lcmpr rcmpr))) ;; challenge x
              
              (invx  (m/ x))
              (gp    (map 'vector

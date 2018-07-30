@@ -111,6 +111,8 @@ THE SOFTWARE.
    :signed-message-sig
    :signed-message-pkey
 
+   :pbc-hash
+   :hash-to-pbc-range
    :sign-hash
    :check-hash
 
@@ -1076,7 +1078,7 @@ library."
 ;; pseudo-random reprobing if needed.
 ;;
 
-(defmethod g1-from-hash ((hash hash))
+(defmethod g1-from-hash ((hash hash:hash))
   "Return the hash value mapped into G1"
   (let ((nb  (hash-length hash)))
     (with-fli-buffers ((ptbuf  *g1-size*)
@@ -1086,7 +1088,7 @@ library."
                      :pt  (xfer-foreign-to-lisp ptbuf *g1-size*))
       )))
                        
-(defmethod g2-from-hash ((hash hash))
+(defmethod g2-from-hash ((hash hash:hash))
   "Return the hash value mapped into G2"
   (let ((nb (hash-length hash)))
   (with-fli-buffers ((ptbuf  *g2-size*)
@@ -1102,7 +1104,7 @@ library."
   (make-instance 'zr
                  :val zbuf))
 
-(defmethod zr-from-hash ((hash hash))
+(defmethod zr-from-hash ((hash hash:hash))
   "Return the hash value mapped into Zr"
   (let ((nb (hash-length hash)))
     (with-fli-buffers ((zbuf   *zr-size*)
@@ -1132,7 +1134,15 @@ library."
 
 ;; -------------------------------------------------
 
-(defmethod sign-hash ((hash hash) (skey secret-key))
+(defun hash-to-pbc-range (&rest args)
+  (apply 'hash-to-range (get-order) args))
+
+(defun pbc-hash (&rest args)
+  (apply 'hash-to-pbc-range args))
+
+;; -------------------------------------------------
+
+(defmethod sign-hash ((hash hash:hash) (skey secret-key))
   "Bare-bones BLS Signature"
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sigbuf *g1-size*)
@@ -1143,14 +1153,14 @@ library."
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
 
-(defmethod sign-hash ((hash hash) skey)
+(defmethod sign-hash ((hash hash:hash) skey)
   (sign-hash hash (secret-key skey)))
 
 (defmethod sign-hash (arg skey)
-  (sign-hash (hash/256 arg) skey))
+  (sign-hash (hash-to-pbc-range arg) (secret-key skey)))
 
 
-(defmethod check-hash ((hash hash) (sig signature) (pkey public-key))
+(defmethod check-hash ((hash hash:hash) (sig signature) (pkey public-key))
   "Check bare-bones BLS Signature"
   (let ((nhash (hash-length hash)))
     (with-fli-buffers ((sbuf *g1-size*  sig)
@@ -1159,11 +1169,11 @@ library."
       (zerop (_check-signature *context* sbuf hbuf nhash pbuf))
       )))
 
-(defmethod check-hash ((hash hash) sig pkey)
+(defmethod check-hash ((hash hash:hash) sig pkey)
   (check-hash hash (signature sig) (public-key pkey)))
 
 (defmethod check-hash (arg sig pkey)
-  (check-hash (hash/256 arg) sig pkey))
+  (check-hash (hash-to-pbc-range arg) (signature sig) (public-key pkey)))
 
 ;; --------------------------------------------------------------
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
@@ -1181,12 +1191,12 @@ library."
   "BLS Signature packet"
   (make-instance 'signed-message
                  :msg  msg
-                 :sig  (sign-hash (hash/256 msg) skey)
+                 :sig  (sign-hash (hash-to-grp-range msg) skey)
                  :pkey pkey))
 
 (defmethod check-message ((sm signed-message))
   "Check BLS Signature"
-  (check-hash (hash/256 (signed-message-msg sm))
+  (check-hash (hash-to-pbc-range (signed-message-msg sm))
               (signed-message-sig       sm)
               (signed-message-pkey      sm)))
 
@@ -1204,7 +1214,7 @@ library."
 (defun make-key-pair (seed)
   "Return a certified keying pair. Seed can be literally anything.
 Certification includes a BLS Signature on the public key."
-  (multiple-value-bind (hsh hlen) (hash/256 seed)
+  (multiple-value-bind (hsh hlen) (hash-to-pbc-range seed)
     (with-fli-buffers ((sbuf *zr-size*)
                        (pbuf *g2-size*)
                        (hbuf hlen hsh))
@@ -1213,7 +1223,7 @@ Certification includes a BLS Signature on the public key."
                                   :val (xfer-foreign-to-lisp pbuf *g2-size*)))
              (skey (make-instance 'secret-key
                                   :val (xfer-foreign-to-lisp sbuf *zr-size*)))
-             (sig  (sign-hash (hash/256 pkey) skey))) ;; signature on public key
+             (sig  (sign-hash (hash-to-pbc-range pkey) skey))) ;; signature on public key
         ;; return 3 values: public key, signature on public key, secret key
         (make-instance 'keying-triple
                        :pkey pkey
@@ -1224,7 +1234,7 @@ Certification includes a BLS Signature on the public key."
 
 (defmethod check-public-key ((pkey public-key) (psig signature))
   "Validate a public key from its BLS Signature"
-  (check-hash (hash/256 pkey)
+  (check-hash (hash-to-pbc-range pkey)
               psig
               pkey))
 
@@ -1235,7 +1245,7 @@ Certification includes a BLS Signature on the public key."
 ;; Sakai-Haskara Encryption
 
 (defmethod make-public-subkey ((pkey public-key) seed)
-  (multiple-value-bind (hsh hlen) (hash/256 seed)
+  (multiple-value-bind (hsh hlen) (hash-to-pbc-range seed)
     (with-fli-buffers ((hbuf hlen      hsh)
                        (pbuf *g2-size* (public-key-val pkey))
                        (abuf *g2-size*))
@@ -1248,7 +1258,7 @@ Certification includes a BLS Signature on the public key."
 
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
-  (multiple-value-bind (hsh hlen) (hash/256 seed)
+  (multiple-value-bind (hsh hlen) (hash-to-pbc-range seed)
     (with-fli-buffers ((hbuf hlen      hsh)
                        (sbuf *zr-size* (secret-key-val skey))
                        (abuf *g1-size*))
@@ -1294,7 +1304,7 @@ Certification includes a BLS Signature on the public key."
                       ;; else
                       msg-bytes))
          (xmsg      (construct-bev xbytes))
-         (rhsh      (hash/256 id tstamp xmsg)))
+         (rhsh      (hash-to-pbc-range id tstamp xmsg)))
     (with-fli-buffers ((hbuf  32         rhsh)   ;; hash value
                        (pbuf  *gt-size*)         ;; returned pairing
                        (kbuf  *g2-size*  pkid)   ;; public key
@@ -1335,7 +1345,7 @@ Certification includes a BLS Signature on the public key."
                (pval (get-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
                (msg  (construct-bev
                       (map-into pval 'logxor pval cmsg-bytes)))
-               (hval (hash/256 id tstamp msg)))
+               (hval (hash-to-pbc-range id tstamp msg)))
           (with-fli-buffers ((hbuf 32        hval)
                              (kbuf *g2-size* pkey))
             (when (zerop (_sakai-kasahara-check *context* rbuf kbuf hbuf 32))
@@ -1655,7 +1665,7 @@ Certification includes a BLS Signature on the public key."
 
 (defmethod compute-vrf (seed (skey secret-key)
                              &key
-                             (seed-hash 'hash/256)
+                             (seed-hash 'hash-to-pbc-range)
                              randomness-hash)
   (let* ((x      (zr-from-hash (funcall seed-hash seed)))
          (1/x+s  (with-mod (get-order)
@@ -1681,13 +1691,16 @@ Certification includes a BLS Signature on the public key."
   (int= (compute-pairing proof (get-g2))
         randomness))
 
-(defmethod validate-vrf ((proof g1-cmpr) (randomness hash) &key &allow-other-keys)
+(defmethod validate-vrf ((proof g1-cmpr) (randomness hash:hash) &key &allow-other-keys)
   ;; randomness could be a hash value or an integer
   (let ((hashfn (hash-function-of-hash randomness)))
     (hash= (funcall hashfn (compute-pairing proof (get-g2)))
           randomness)))
 
-(defmethod validate-vrf ((proof g1-cmpr) (randomness integer) &key (randomness-hash 'hash/256) &allow-other-keys)
+(defmethod validate-vrf ((proof g1-cmpr) (randomness integer)
+                         &key
+                         (randomness-hash 'hash-to-pbc-range)
+                         &allow-other-keys)
   ;; randomness could be a hash value or an integer
   (int= (funcall randomness-hash (compute-pairing proof (get-g2)))
         randomness))
@@ -1696,7 +1709,7 @@ Certification includes a BLS Signature on the public key."
 (defmethod validate-vrf-mapping (seed (proof g1-cmpr) (pkey public-key) randomness
                                       &rest args
                                       &key
-                                      (seed-hash 'hash/256)
+                                      (seed-hash 'hash-to-pbc-range)
                                       &allow-other-keys)
   ;; verify that e(Proof, V) = g^(1/(x + skey)) = y randomness
   ;; and verify that e(Proof, x*V + PKey) = e(U,V), i.e., that skey generated it

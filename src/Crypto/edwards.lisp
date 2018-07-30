@@ -1061,7 +1061,7 @@ THE SOFTWARE.
   (let* ((nbits (1- (integer-length *ed-r*)))
          (h     (int
                  (get-hash-nbits nbits
-                                 (list seed :generate-private-key index))))
+                                 seed :generate-private-key index)))
          (s     (dpb 1 (byte 1 (1- nbits)) h))   ;; set high bit
          (skey  (- s (mod s *ed-h*))))
     (if (< skey *ed-r*) ;; will be true with overwhelming probability (failure ~1e-38)
@@ -1175,6 +1175,28 @@ we are done. Else re-probe with (X^2 + 1)."
                      )))))
 
 ;; -----------------------------------------------------------
+
+(defun hash-to-grp-range (&rest args)
+  (apply 'hash-to-range *ed-r* args))
+
+(defun hash-to-pt-range (&rest args)
+  (apply 'hash-to-range *ed-q* args))
+
+(defun ed-safe-random (&optional (base *ed-r*))
+  ;; generate a "safe" random value in the field described by base, r in (1 .. base-1)
+  ;; it is safe by virtue of using a deterministic nonce value
+  (let ((nbits  (1- (integer-length base))))
+    (um:nlet-tail iter ()
+      (let ((r (int
+                (get-hash-nbits nbits
+                                (uuid:make-v1-uuid)
+                                (field-random base)
+                                ))))
+        (if (zerop r)
+            (iter)
+          r)))))
+
+;; -----------------------------------------------------------
 ;; VRF on Elliptic Curves
 ;;
 ;; Unlike the situation with pairing curves and BLS signatures, we
@@ -1190,37 +1212,24 @@ we are done. Else re-probe with (X^2 + 1)."
 ;;   by Melara, Blankstein, Bonneau, Felten, and Freedman
 
 (defun ed-vrf (seed skey)
-    (let* ((h    (ed-pt-from-hash (hash/256 seed)))
+    (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
            (vrf  (ed-mul h skey)))
       (ed-compress-pt vrf)))
            
 
-(defun ed-safe-random (&optional (base *ed-r*))
-  ;; generate a "safe" random value in the field described by base, r in (1 .. base-1)
-  ;; it is safe by virtue of using a deterministic nonce value
-  (let ((nbits  (1- (integer-length base))))
-    (um:nlet-tail iter ()
-      (let ((r (int
-                (get-hash-nbits nbits
-                                (list (uuid:make-v1-uuid)
-                                      (field-random base))
-                                ))))
-        (if (zerop r)
-            (iter)
-          r)))))
-
 (defun ed-prove-vrf (seed skey)
-    (let* ((h    (ed-pt-from-hash (hash/256 seed)))
+    (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
            (vrf  (ed-compress-pt (ed-mul h skey)))
            
            (r    (ed-safe-random)) ;; the random challenge value for Fiat-Shamir sigma proof
            (s    (int   ;; s = H(g, h, P, v, g^r, h^r)
-                  (hash/256 (ed-compress-pt *ed-gen*)         ;; g
-                            (ed-compress-pt h)                ;; h = H(m)
-                            (ed-compress-pt (ed-nth-pt skey)) ;; P = pkey
-                            vrf                               ;; v
-                            (ed-compress-pt (ed-nth-pt r))    ;; g^r
-                            (ed-compress-pt (ed-mul h r)))))  ;; h^r
+                  (hash-to-range *ed-r*
+                                 (ed-compress-pt *ed-gen*)         ;; g
+                                 (ed-compress-pt h)                ;; h = H(m)
+                                 (ed-compress-pt (ed-nth-pt skey)) ;; P = pkey
+                                 vrf                               ;; v
+                                 (ed-compress-pt (ed-nth-pt r))    ;; g^r
+                                 (ed-compress-pt (ed-mul h r)))))  ;; h^r
            (tt   (with-mod *ed-r*                             ;; tt = r - s * skey
                    (m- r (m* s skey)))))
 
@@ -1229,21 +1238,22 @@ we are done. Else re-probe with (X^2 + 1)."
 
 (defun ed-check-vrf (seed proof pkey)
   (destructuring-bind (v s tt) proof
-    (let* ((h    (ed-pt-from-hash (hash/256 seed)))
+    (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
            (schk (int ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
-                  (hash/256 (ed-compress-pt *ed-gen*)
-                            (ed-compress-pt h)
-                            (ed-compress-pt pkey)
-                            v
-                            (ed-compress-pt
-                             (ed-add
-                              (ed-nth-proj-pt tt)
-                              (ed-mul pkey s)))
-                            (ed-compress-pt
-                             (ed-add
-                              (ed-mul h tt)
-                              (ed-mul (ed-decompress-pt v) s)))
-                            ))))
+                  (hash-to-range *ed-r*
+                                 (ed-compress-pt *ed-gen*)
+                                 (ed-compress-pt h)
+                                 (ed-compress-pt pkey)
+                                 v
+                                 (ed-compress-pt
+                                  (ed-add
+                                   (ed-nth-proj-pt tt)
+                                   (ed-mul pkey s)))
+                                 (ed-compress-pt
+                                  (ed-add
+                                   (ed-mul h tt)
+                                   (ed-mul (ed-decompress-pt v) s)))
+                                 ))))
       (= schk s))))
 
 ;; -----------------------------------------------------------
