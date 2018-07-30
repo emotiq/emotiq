@@ -2007,11 +2007,12 @@ gets sent back, and everything will be copacetic.
   automatically."
   (when (null *transport*)
     (setf *transport*
-          (gossip/transport:start-transport :address address
-                                            :port port
-                                            :message-received-hook 'transport-message-received
-                                            :peer-up-hook 'transport-peer-up
-                                            :peer-down-hook 'transport-peer-down))
+          (transport:start-transport :address address
+                                     :port port
+                                     :message-received-hook 'transport-message-received
+                                     :peer-up-hook 'transport-peer-up
+                                     :peer-down-hook 'transport-peer-down
+                                     :transport-failed-hook 'transport-failed))
     (setf *actual-tcp-gossip-port* port)
     *transport*))
 
@@ -2045,10 +2046,15 @@ gets sent back, and everything will be copacetic.
   "Callback for transport layer event."
   (log-event :TRANSPORT "Transport connection to peer failed" peer-address peer-port reason))
 
+(defun transport-failed (reason)
+  "Callback for failure of the transport backend."
+  (log-event :TRANSPORT "Transport backend failed" reason)
+  (setf *transport* nil))
+
 (defun shutdown-gossip-server ()
   "Stop the Gossip Transport network endpoint (if currently running)."
   (unless (null *transport*)
-    (gossip/transport:stop-transport *transport*)
+    (transport:stop-transport *transport*)
     (setf *transport* nil)))
 
 ;; ------------------------------------------------------------------------------
@@ -2094,7 +2100,7 @@ gets sent back, and everything will be copacetic.
 
 (defmethod deliver-gossip-msg (gossip-msg (node proxy-gossip-node) srcuid)
   "This node is a standin for a remote node. Transmit message across network."
-  (gossip/transport:transmit *transport*
+  (transport:transmit *transport*
                              (real-address node)
                              (real-port node) 
                              ;; Pack message in a signed envelope containing Gossip metadata.
