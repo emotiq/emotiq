@@ -1896,7 +1896,8 @@ likely see an assertion failure"
   ;; context slots available, (0 .. 15)
   (init-pairing :params *curve-fr256-params* :context 0)
   ;; do FR449 last so it becomes the default pairing
-  (init-pairing :params *curve-fr449-params* :context 1))
+  (init-pairing :params *curve-fr449-params* :context 1)
+  (set-curve :curve-fr256))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -1923,5 +1924,6 @@ likely see an assertion failure"
         (init-pairing :params *curve-fr256-params* :context 0)
         ;; do FR449 last so it becomes the default pairing
         (init-pairing :params *curve-fr449-params* :context 1)
+        (set-curve :curve-fr256)
         ))))
 
