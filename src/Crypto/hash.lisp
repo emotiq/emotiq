@@ -119,7 +119,10 @@ THE SOFTWARE.
 
 (defun get-hash-nbits (nbits seed)
   "Concatenated SHA3 until we collect enough bits"
-  (get-hash-nbytes (ceiling nbits 8) seed))
+  (multiple-value-bind (nbw nbf) (ceiling nbits 8)
+    (let ((vec (get-hash-nbytes nbw seed)))
+      (setf (aref vec 0) (ldb (byte (+ 8 nbf) 0) (aref vec 0)))
+      vec)))
 
 ;; -----------------------------------------------------
 

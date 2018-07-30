@@ -1058,12 +1058,11 @@ THE SOFTWARE.
   "Return a value based on seed, to be used for generating a public
   key, (aka, a secret key), which is in the upper range of the
   *ed-r* field, and which avoids potential small-group attacks"
-  (let* ((nbits (integer-length *ed-r*))
+  (let* ((nbits (1- (integer-length *ed-r*)))
          (h     (int
                  (get-hash-nbits nbits
                                  (list seed :generate-private-key index))))
-         (s     (dpb 1 (byte 1 (1- nbits)) ;; set hi bit
-                     (ldb (byte nbits 0) h)))
+         (s     (dpb 1 (byte 1 (1- nbits)) h))   ;; set high bit
          (skey  (- s (mod s *ed-h*))))
     (if (< skey *ed-r*) ;; will be true with overwhelming probability (failure ~1e-38)
         skey
