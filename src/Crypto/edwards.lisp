@@ -1151,9 +1151,12 @@ we are done. Else re-probe with (X^2 + 1)."
 
 (defun compute-schnorr-deterministic-random (msgv k-priv)
   (um:nlet-tail iter ((ix 0))
+    ;; randomness r from hash to group range of (CTR | SKEY | MSG)
+    ;; to make deterministic to avoid PlayStation attacks, yet
+    ;; random because of hash - nothing up my sleeve...
     (let ((r   (int (hash-to-grp-range
                      (levn ix 4)
-                     (levn k-priv (um:floor-log2 *ed-r*))
+                     (levn k-priv (um:floor-log2 *ed-q*)) ;; we want *ed-q* here to avoid truncating skey
                      msgv))))
       (if (plusp r)
           (values r (ed-nth-pt r) ix)
