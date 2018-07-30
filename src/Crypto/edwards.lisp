@@ -1052,18 +1052,41 @@ THE SOFTWARE.
 (defmethod hashable ((x ed-proj-pt))
   (hashable (ed-affine x)))
 
+;; -----------------------------------------------------------
+
+(defun hash-to-grp-range (&rest args)
+  (apply 'hash-to-range *ed-r* args))
+
+(defun hash-to-pt-range (&rest args)
+  (apply 'hash-to-range *ed-q* args))
+
+(defun ed-safe-random (&optional (base *ed-r*))
+  ;; generate a "safe" random value in the field described by base, r in (1 .. base-1)
+  ;; it is safe by virtue of using a deterministic nonce value
+  ;; use these for Schnorr-like signatures to protect the secret key
+  (let ((nbits  (1- (integer-length base))))
+    (um:nlet-tail iter ()
+      (let ((r (int
+                (get-hash-nbits nbits
+                                (uuid:make-v1-uuid)
+                                (field-random base)
+                                ))))
+        (if (zerop r)
+            (iter)
+          r)))))
+
 ;; -------------------------------------------------
 
 (defun compute-deterministic-skey (seed &optional (index 0))
   "Return a value based on seed, to be used for generating a public
   key, (aka, a secret key), which is in the upper range of the
   *ed-r* field, and which avoids potential small-group attacks"
-  (let* ((nbits (1- (integer-length *ed-r*)))
+  (let* ((nbits (um:floor-log2 *ed-r*))
          (h     (int
-                 (get-hash-nbits nbits
-                                 seed :generate-private-key index)))
+                 (hash-to-grp-range
+                  seed :generate-private-key index)))
          (s     (dpb 1 (byte 1 (1- nbits)) h))   ;; set high bit
-         (skey  (- s (mod s *ed-h*))))
+         (skey  (- s (logand s (1- *ed-h*)))))   ;; *ed-h* is always 2^n = (1, 4, 8, ...)
     (if (< skey *ed-r*) ;; will be true with overwhelming probability (failure ~1e-38)
         skey
       (compute-deterministic-skey seed (1+ index)))
@@ -1072,7 +1095,7 @@ THE SOFTWARE.
 (defun ed-random-pair ()
   "Select a random private and public key from the curve, abiding by
   the precautions discussed for COMPUTE-DETERMINISTIC-SKEY"
-  (let* ((seed (ctr-drbg 256))
+  (let* ((seed (ctr-drbg (um:floor-log2 *ed-r*)))
          (skey (compute-deterministic-skey seed))
          (pt   (ed-nth-pt skey)))
     (values skey pt)))
@@ -1117,21 +1140,18 @@ we are done. Else re-probe with (X^2 + 1)."
             ))))))
 
 (defun ed-random-generator ()
-  (ed-pt-from-hash (get-hash-nbits (1+ (ed-nbits))
-                                   (field-random *ed-q*))))
+  (ed-pt-from-hash (hash-to-pt-range 
+                    (field-random *ed-q*))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
 
 (defun compute-schnorr-deterministic-random (msgv k-priv)
   (um:nlet-tail iter ((ix 0))
-    (let ((r   (with-mod *ed-r*
-                 (mmod
-                  (int
-                   (bev (hash/512 
-                          (levn ix 4)
-                          (levn k-priv (ed-compressed-nbytes))
-                          msgv)))))))
+    (let ((r   (int (hash-to-grp-range
+                     (levn ix 4)
+                     (levn k-priv (um:floor-log2 *ed-r*))
+                     msgv))))
       (if (plusp r)
           (values r (ed-nth-pt r) ix)
         (iter (1+ ix)))
@@ -1149,11 +1169,11 @@ we are done. Else re-probe with (X^2 + 1)."
                           (m+ r
                               (m* skey
                                   (int
-                                   (bev (hash/512
-                                         (levn rpt-cmpr nbcmpr)
-                                         (levn pkey-cmpr nbcmpr)
-                                         msg-enc))
-                                   ))))))
+                                   (hash-to-grp-range
+                                    (levn rpt-cmpr  nbcmpr)
+                                    (levn pkey-cmpr nbcmpr)
+                                    msg-enc))
+                                  )))))
         (list
          :msg   msg
          :pkey  pkey-cmpr
@@ -1162,46 +1182,27 @@ we are done. Else re-probe with (X^2 + 1)."
         ))))
 
 (defun ed-dsa-validate (msg pkey r s)
+  ;; pkey should be presented in compressed pt form
+  ;; r is likewise a compressed pt
+  ;; s is a group scalar
   (let ((nbcmpr (ed-compressed-nbytes)))
     (ed-pt=
      (ed-nth-pt s)
      (ed-add (ed-decompress-pt r)
              (ed-mul (ed-decompress-pt pkey)
                      (int
-                      (bev (hash/512
-                            (levn r nbcmpr)
-                            (levn pkey nbcmpr)
-                            (lev  (loenc:encode msg)))))
-                     )))))
-
-;; -----------------------------------------------------------
-
-(defun hash-to-grp-range (&rest args)
-  (apply 'hash-to-range *ed-r* args))
-
-(defun hash-to-pt-range (&rest args)
-  (apply 'hash-to-range *ed-q* args))
-
-(defun ed-safe-random (&optional (base *ed-r*))
-  ;; generate a "safe" random value in the field described by base, r in (1 .. base-1)
-  ;; it is safe by virtue of using a deterministic nonce value
-  (let ((nbits  (1- (integer-length base))))
-    (um:nlet-tail iter ()
-      (let ((r (int
-                (get-hash-nbits nbits
-                                (uuid:make-v1-uuid)
-                                (field-random base)
-                                ))))
-        (if (zerop r)
-            (iter)
-          r)))))
+                      (hash-to-grp-range
+                       (levn r    nbcmpr)
+                       (levn pkey nbcmpr)
+                       (loenc:encode msg)))))
+     )))
 
 ;; -----------------------------------------------------------
 ;; VRF on Elliptic Curves
 ;;
 ;; Unlike the situation with pairing curves and BLS signatures, we
-;; must use a Schnorr-like scheme, with a deterministic nonce
-;; protected random challenge value, to guard the secret key.
+;; must use a Schnorr-like scheme, with a deterministic
+;; nonce-protected random challenge value, to guard the secret key.
 ;;
 ;; If you ever happened to use the same random challenge value on a
 ;; different message seed then it becomes possible to compute the
@@ -1233,28 +1234,34 @@ we are done. Else re-probe with (X^2 + 1)."
            (tt   (with-mod *ed-r*                             ;; tt = r - s * skey
                    (m- r (m* s skey)))))
 
-      (list vrf s tt)))
+      (list :v vrf   ;; the VRF value (a compressed pt)
+            :s s     ;; a check scalar
+            :t tt))) ;; a check scalar
 
 
 (defun ed-check-vrf (seed proof pkey)
-  (destructuring-bind (v s tt) proof
-    (let* ((h    (ed-pt-from-hash (hash-to-pt-range seed)))
-           (schk (int ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
-                  (hash-to-range *ed-r*
-                                 (ed-compress-pt *ed-gen*)
-                                 (ed-compress-pt h)
-                                 (ed-compress-pt pkey)
-                                 v
-                                 (ed-compress-pt
-                                  (ed-add
-                                   (ed-nth-proj-pt tt)
-                                   (ed-mul pkey s)))
-                                 (ed-compress-pt
-                                  (ed-add
-                                   (ed-mul h tt)
-                                   (ed-mul (ed-decompress-pt v) s)))
-                                 ))))
-      (= schk s))))
+  ;; pkey should be presented in compressed pt form
+  (let* ((v    (getf proof :v))
+         (s    (getf proof :s))
+         (tt   (getf proof :t))
+         (h    (ed-pt-from-hash (hash-to-pt-range seed)))
+         ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
+         (schk (int
+                (hash-to-range *ed-r*
+                               (ed-compress-pt *ed-gen*)
+                               (ed-compress-pt h)
+                               pkey
+                               v
+                               (ed-compress-pt
+                                (ed-add
+                                 (ed-nth-proj-pt tt)
+                                 (ed-mul (ed-decompress-pt pkey) s)))
+                               (ed-compress-pt
+                                (ed-add
+                                 (ed-mul h tt)
+                                 (ed-mul (ed-decompress-pt v) s)))
+                               ))))
+    (= schk s)))
 
 ;; -----------------------------------------------------------
 #|
