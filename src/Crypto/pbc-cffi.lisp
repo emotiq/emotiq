@@ -449,9 +449,8 @@ Usually, they are in big-endian representation for PBC library."
   (if *print-readably*
       (call-next-method)
     ;; else
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (short-str (hex-str obj)))
+    (print-unreadable-object (obj out-stream :typep t)
+      (princ (short-str (hex-str obj)) out-stream))
     ))
 
 ;; -------------------------------------------------

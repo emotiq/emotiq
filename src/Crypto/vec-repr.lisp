@@ -149,9 +149,9 @@ THE SOFTWARE.
         (prin1 `(,(class-name (class-of obj)) (hex ,(hex-str (hex obj))))
                out-stream))
     ;; else
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (ub8v-vec obj))))
+    (print-unreadable-object (obj out-stream :type t)
+      (princ (ub8v-vec obj) out-stream))
+    ))
 
 (defmethod print-object ((obj ub8v-repr) out-stream)
   ;; subclasses of UB8V-REPR mixin should feel free to override this
@@ -161,9 +161,9 @@ THE SOFTWARE.
               (with-output-to-string (s)
                 (print-object (ub8v-repr obj) s)))
     ;; else
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (ub8v-repr obj))))
+    (print-unreadable-object (obj out-stream :type t)
+      (princ (ub8v-repr obj) out-stream))
+    ))
 
 (defun short-str (str)
   (let ((len (length str)))

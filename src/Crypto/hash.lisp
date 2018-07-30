@@ -165,10 +165,8 @@ THE SOFTWARE.
 (defmethod print-object ((obj hash) out-stream)
   (if *print-readably*
       (call-next-method)
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (short-str (hex-str obj)))
-    ))
+    (print-unreadable-object (obj out-stream :type t)
+      (princ (short-str (hex-str obj)) out-stream))))
 
 ;; -----------------------------------------------------
 
