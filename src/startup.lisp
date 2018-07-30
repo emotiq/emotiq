@@ -23,19 +23,22 @@
 
 (in-package "EMOTIQ")
 
-;; "Entry Point" for development - does nothing, just load and go
-(defun main (&key etc how-started-message?)
-  (when etc
+(defun main (&key etc-and-wallets how-started-message?)
+  "Main loop for Emotiq daemon"
+  (when etc-and-wallets
     (setf (symbol-function 'emotiq/fs:etc/)
-          (lambda () (pathname etc))))
+          (lambda () (pathname etc-and-wallets))))
   (message-running-state how-started-message?)
+
   ;; Create a default wallet on disk if one doesn't already exist
   (emotiq/wallet:create-wallet)
+
   ;; Start the websocket interface for the Electron wallet
   ;; listening <ws://localhost:PORT/wallet> .
   (when (string-equal "true"
                       (emotiq/config:setting :websocket-server))
     (websocket/wallet:start-server :port (emotiq/config:setting :websocket-server-port)))
+
   ;; Start the REST server which provides support for testing the
   ;; WebSocket implementation at <http://localhost:PORT/client/>
   (when (string-equal "true"
@@ -46,8 +49,7 @@
   (emotiq:start-node)
   (cosi-simgen:startup-elections))
 
-;; Entry Point for binary version of the system.
-
+;; Entry Point for binary (aka "production" version of the system.
 (defun start ()
   ;; This is for running in the binary command line only. For now, if we're
   ;; starting from the command line, we assume it's for

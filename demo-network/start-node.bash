@@ -27,7 +27,7 @@ TMPFILE=`mktemp /tmp/${tempfoo}.XXXXXX` || exit 1
 
 cat >$TMPFILE <<EOF
 (ql:quickload :emotiq/startup)
-(emotiq:main :config-subpath "node${node_id}/")
+(emotiq:main :etc-and-wallets "node${node_id}/")
 EOF
 
 echo Starting node${node_id} ...
