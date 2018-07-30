@@ -108,6 +108,7 @@ THE SOFTWARE.
   (:export
    :hash
    :hash-val
+   :hash-fn
    :hash-bytes
    :hash-length
    :hash/ripemd/160
