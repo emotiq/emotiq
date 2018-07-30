@@ -1145,6 +1145,9 @@ we are done. Else re-probe with (X^2 + 1)."
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
+;;
+;; From IETF specifications
+;; (we tend toward BEV values everywhere, but IETF dictates LEV)
 
 (defun compute-schnorr-deterministic-random (msgv k-priv)
   (um:nlet-tail iter ((ix 0))
