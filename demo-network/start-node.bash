@@ -25,9 +25,13 @@ rc=0
 tempfoo=`basename $0`
 TMPFILE=`mktemp /tmp/${tempfoo}.XXXXXX` || exit 1
 
+
+node_name="node${node_id}"
+etc_and_wallets="${BASE}/node-configs/${node_name}/"
+
 cat >$TMPFILE <<EOF
 (ql:quickload :emotiq/startup)
-(emotiq:main :etc-and-wallets "node${node_id}/")
+(emotiq:main :etc-and-wallets "${etc_and_wallets}")
 EOF
 
 echo Starting node${node_id} ...

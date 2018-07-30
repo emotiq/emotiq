@@ -1,8 +1,7 @@
 (in-package :emotiq-config-generate-test)
  
 (defun create-genesis-block ()
-  (let ((directory
-         (emotiq/filesystem:new-temporary-directory)))
+  (let ((d (emotiq/filesystem:new-temporary-directory)))
     (let* ((nodes (emotiq/config/generate::generate-keys
                    emotiq/config/generate::*dns-ip-zt.emotiq.ch*))
            (stakes (emotiq/config/generate::generate-stakes
@@ -11,18 +10,18 @@
                             nodes)))
            (configuration 
             (emotiq/config/generate::make-configuration (first nodes) nodes stakes)))
-      (emotiq/config/generate::generate-node directory configuration
+      (emotiq/config/generate::generate-node d configuration
                                              :key-records nodes)
       (let* ((genesis-block
               (emotiq/config:get-genesis-block
                :configuration configuration
-               :root directory))
+               :root d))
              (keypair
-              (emotiq/config:get-nth-key 0 :root directory)))
+              (emotiq/config:get-nth-key 0 :root d)))
         (values
          (cosi-simgen:with-block-list ((list genesis-block))
            (cosi/proofs/newtx:get-balance (emotiq/txn:address keypair)))
-         directory)))))
+         d)))))
 
 (defun verify-genesis-block (&key (root (emotiq/fs:etc/)))
   (let* ((genesis-block
@@ -37,10 +36,12 @@
      root)))
 
 (define-test genesis-block ()
-   (multiple-value-bind (coinbase-amount directory)
-       (create-genesis-block)
-     (assert-true (equal coinbase-amount
-                         (cosi/proofs/newtx:initial-total-coin-amount)))))
+  (multiple-value-bind (coinbase-amount directory)
+      (create-genesis-block)
+    (emotiq:note "Created genesis block with coinbase-amount ~a in '~a'."
+                 coinbase-amount directory)
+    (assert-true (equal coinbase-amount
+                        (cosi/proofs/newtx:initial-total-coin-amount)))))
 
 
 
