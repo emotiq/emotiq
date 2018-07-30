@@ -1198,14 +1198,16 @@ we are done. Else re-probe with (X^2 + 1)."
   ;; s is a group scalar
   (let ((nbcmpr (ed-compressed-nbytes)))
     (ed-pt=
-     (ed-nth-pt s)
-     (ed-add (ed-decompress-pt r)
-             (ed-mul (ed-decompress-pt pkey)
-                     (int
-                      (hash-to-grp-range
-                       (levn r    nbcmpr)
-                       (levn pkey nbcmpr)
-                       (loenc:encode msg)))))
+     (ed-mul (ed-nth-pt s) *ed-h*)
+     (ed-add (ed-mul (ed-decompress-pt r) *ed-h*)
+             (ed-mul
+              (ed-mul (ed-decompress-pt pkey)
+                      (int
+                       (hash-to-grp-range
+                        (levn r    nbcmpr)
+                        (levn pkey nbcmpr)
+                        (loenc:encode msg))))
+              *ed-h*))
      )))
 
 ;; -----------------------------------------------------------
