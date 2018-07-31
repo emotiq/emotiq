@@ -2033,15 +2033,17 @@ gets sent back, and everything will be copacetic.
 
 (defmethod ensure-proxy-from-ad ((monad augmented-data))
   "Given an augmented-data, make a proxy from it if it contains enough metadata to do so.
-   [Calling bind here is cheating because we're not returning another monad.
-    We're side-effecting, not composing. But it's easy.]"
-  (bind (lambda (data metadata)
-          (let* ((address (when metadata (cdr (assoc :eripa metadata))))
-                 (port    (when metadata (cdr (assoc :port metadata)))))
-            (when (and address port)
-              (dolist (uid data) ; this will usually be a singleton list, but it doesn't have to be
-                (ensure-proxy-node :TCP address port uid nil)))))
-        monad))
+  [Calling bind here is cheating because we're not returning another monad.
+  We're side-effecting, not composing. But it's easy.]"
+  (let ((proxies nil)) ; just so we have some output data to trace
+    (bind (lambda (data metadata)
+            (let* ((address (when metadata (cdr (assoc :eripa metadata))))
+                   (port    (when metadata (cdr (assoc :port metadata)))))
+              (when (and address port)
+                (dolist (uid data) ; this will usually be a singleton list, but it doesn't have to be
+                  (pushnew (ensure-proxy-node :TCP address port uid nil) proxies)))))
+          monad)
+    proxies))
 
 (defun ensure-proxies (adlist)
   "Ensures a proxy exists for each UID in each augmented-datum in adlist"
