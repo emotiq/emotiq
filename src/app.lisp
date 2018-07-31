@@ -1,6 +1,3 @@
-;; currently trying to track down "insuffient funds" on a second transaction
-;; using (emotiq/app::r2) to chip away at the problem
-;;
 ;; test usage:
 ;; (emotiq/app::test-app)
 
@@ -15,8 +12,8 @@
 
 (defun get-nth-key (n)
   "return a keying triple from the config file for nth id"
-  (let ((public-private (nth n (emotiq/config:get-keypairs))))
-    (pbc:make-keying-triple
+  (let ((public-private (nth n (gossip/config:get-values))))
+    (emotiq/config::make-keying-triple
      (first public-private)
      (second public-private))))
 
@@ -55,8 +52,16 @@
           (account-name a) name)
     a))
 
+(defun test-app ()
+  "entry point for tests"
+  (let ((strm emotiq:*notestream*))
+    (emotiq:main)
+    (app2)
+    (dump-results strm)))
+
 (defun app2 ()
-  #+(or)
+  "helper for tests"
+
   (wait-for-node-startup)
 
   (setf *genesis* (make-genesis-account))
@@ -86,7 +91,7 @@
 
 ;; alice should have 999...999,190
 ;; bob 190
-;; mary 190
+;; mary 480
 ;; james 90
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -96,8 +101,7 @@
 (defun wait-for-node-startup ()
   "do whatever it takes to get this node's blockchain to be current"
   ;; currently - nothing - don't care
-  (emotiq:note "sleeping to let blockchain start up (is this necessary?)")
-  (sleep 5)
+  ;; no-op
   )
 
 (defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
@@ -140,26 +144,6 @@
 
 (defmethod get-balance ((a account))
   (get-balance (account-triple a)))
-
-(defmethod get-all-transactions-to-given-target-account ((a account))
-  "return a list of transactions that SPEND (and COLLET) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
-  (let ((account-address (emotiq/txn:address (account-pkey a)))
-        (result nil))
-    (cosi-simgen:with-current-node (cosi-simgen:current-node)
-      (cosi/proofs/newtx::do-blockchain (block) ;; TODO: optimize this
-        (cosi/proofs/newtx::do-transactions (tx block)
-          (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
-                    (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
-            (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
-              (when (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
-                (push tx result)))))))
-    result))
-
-(defun test-app ()
-  (let ((strm emotiq:*notestream*))
-    (emotiq:main)
-    (app2)
-    (dump-results strm)))
 
 (defun dump-results (strm)
   (let ((bal-genesis (get-balance (get-genesis-key))))
@@ -220,7 +204,10 @@
 ;; (R2) works and produces 4 blocks.  The first block contains one txn - COINBASE.  The other 3 blocks contain 2 txns - a COLLECT (leader's reward) and a SPEND txn.
 ;;
 ;; I'm going to leave the code below in, until I can get the code above to work...
+;; 
+;; I'm keeping this code until everything works - 
 
+#+nil
 (defun r2 ()
   (setf gossip::*debug-level* 0)
   (emotiq:main)
@@ -237,6 +224,7 @@
       (sleep 30)
       (let ((mark (pbc:make-key-pair :mark)))
              (let ((txn2 (emotiq/txn:make-spend-transaction paul (emotiq/txn:address mark) 500)))
+
                (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber))
              (sleep 30)
              (let ((shannon (pbc:make-key-pair :shannon)))
@@ -267,26 +255,36 @@
 ; utxo-p
 ; find-tx
 
+
 (defun block-explorer ()
   (for-all-blocks (b)
      (for-all-transactions-in-block (tx b)
-        (explore-transaction (txid)))))
+        (explore-transaction (txid))))
 
-#+(or)
 (defun explore-transaction (txid)
   (let ((tx (cosi/proofs/newtx:find-tx txid)))
-    (let ((from-list (get-transaction-tx-outs tx)))
-      (let ((to-list (get-transaction-tx-inss tx)))
-        (let (out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id from-txid-list))
-          (let (in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id to-txid-list))
-            ;; at this point, 
-            ;; tx == the given transaction CLOS object
-            ;; txid == string txid for this transaction
-            ;; out-list == list of CLOS objects this tx gets inputs from
-            ;; out-txid-list == list of string id's this tx gets inputs from
-            ;; in-list == list of tx CLOS objects that this tx outputs to
-            ;; in-txid-list == list of string id's that this tx outputs to
-            (emotiq:note "[txids] tx=~A from=~A to=~A" txid)))))))
+    (let ((my-address (my-address tx)))
+      (let ((out-list (get-transaction-tx-outs tx)))
+        (let ((in-list (get-transaction-tx-inss tx)))
+          (let (out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id out-txid-list))
+            (let (in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id in-txid-list))
+              (let ((in-address-list (mapcar #'my-address from-txid-list)))
+                (let ((out-address-list (mapcar #'my-address from-txid-list)))
+                  ;; at this point, 
+                  ;; tx == the given transaction CLOS object
+                  ;; txid == string txid for this transaction
+                  ;; in-list == list of CLOS objects this tx gets inputs from
+                  ;; in-txid-list == list of string id's this tx gets inputs from
+                  ;; in-address-list == list of string address id's this tx gets inputs from
+                  ;; out-list == list of tx CLOS objects that this tx outputs to
+                  ;; out-txid-list == list of string id's that this tx outputs to
+                  ;; out-address-list == list of string addrsss id's that this tx outputs to
+                  ;;
+                  ;; N.B. txid (string) is different from address (string) - txid refers to the transaction, address
+                  ;; refers to the hashed-pkey of a Node
+                  (emotiq:note "[txids] tx=~A in=~A out=~A, [addresses] tx=~A from=~A to=~A"
+                               txid in-txid-list out-txid-list
+                               my-address in-address-list out-address-list))))))))))
 
 (defun get-transaction-txid-outs (tx)
   "return a list of CLOS transactions that are outputs of this transaction"
@@ -296,5 +294,21 @@
   "return a list of CLOS transactions that are inputs of this transaction"
   (cosi/proofs/newtx:transaction-inputs tx))
 
+(defmethod my-address ((tx cosi/proofs/newtx::transaction))
+  "return the string address for a given tx (derived from address in inputs), return empty string for tx's that have no inputs (i.e. coinbase txn)"
+  (if (eq :coinbase (cosi/proofs/newtx::transaction-type tx))
+      ""
+    (let ((ins (cosi/proofs/newtx:transaction-inputs tx)))
+      (unless (not (null ins))
+        (emotiq:note "ERROR: empty inputs for tx=~A"))xs
+      (let ((addr (cosi/proofs/newtx::tx-out-public-key-hash (first ins))))
+        ;; all tx-ins must point to this address
+        ;; this check is probably a no-op for most testing transactions
+        (unless (every #'(lambda (in-tx)
+                           (string= addr (cosi/proofs/newtx::tx-out-public-key-hash in-tx)))
+                       (rest ins))
+          (emotiq:note "ERROR: not all txins ~A refer to the same address ~A"
+                       ins addr))
+        addr))))
 
   
