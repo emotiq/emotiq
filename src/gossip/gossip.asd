@@ -30,20 +30,3 @@
                (:file "gossip-startup")))
                       
 
-
-#+(or)
-(defsystem "gossip/config"
-  :depends-on (emotiq/filesystem
-               emotiq/logging
-               crypto-pairings)
-    :in-order-to ((test-op (test-op "gossip-config-tests")))
-  :components ((:module package :pathname "."
-                        :components ((:file "package")))
-               (:module config :pathname "config/"
-                        :depends-on (package)
-                        :components ((:file "read")
-                                     (:file "generate")))))
-
-
-
-  
