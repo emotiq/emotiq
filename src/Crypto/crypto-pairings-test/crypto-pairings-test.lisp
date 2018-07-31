@@ -58,7 +58,11 @@
 (define-test vrf
   (let* ((k    (make-key-pair :test))
         (vrf   (compute-vrf :test-seed (keying-triple-skey k))))
-    (assert-true (validate-vrf vrf (keying-triple-pkey k)))))
+    (assert-true (validate-vrf (vrf-proof vrf) (vrf-y vrf)))
+    (assert-true (validate-vrf-mapping :test-seed
+                                       (vrf-proof vrf)
+                                       (keying-triple-pkey k)
+                                       (vrf-y vrf)))))
 
 (define-test pedersen-proof
   (let* ((proof (make-pedersen-proof 15)))

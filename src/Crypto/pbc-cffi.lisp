@@ -1312,7 +1312,7 @@ Certification includes a BLS Signature on the public key."
                        (kbuf  *g2-size*  pkid)   ;; public key
                        (rbuf  *g2-size*))        ;; returned R value
       (_sakai-kasahara-encrypt *context* rbuf pbuf kbuf hbuf 32)
-      (let* ((pval (get-hash-nbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
+      (let* ((pval (get-raw-hash-nbytes xlen (xfer-foreign-to-lisp pbuf *gt-size*)))
              (cmsg (make-instance 'crypto-text
                                   :vec (construct-bev
                                         (map-into pval 'logxor pval xbytes))))
@@ -1344,7 +1344,7 @@ Certification includes a BLS Signature on the public key."
         (_sakai-kasahara-decrypt *context* pbuf rbuf kbuf)
         (let* ((cmsg-bytes (raw-bytes cmsg))
                (nb         (length cmsg-bytes))
-               (pval (get-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
+               (pval (get-raw-hash-nbytes nb (xfer-foreign-to-lisp pbuf *gt-size*)))
                (msg  (construct-bev
                       (map-into pval 'logxor pval cmsg-bytes)))
                (hval (hash-to-pbc-range id tstamp msg)))
