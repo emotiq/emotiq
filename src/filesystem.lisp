@@ -14,18 +14,26 @@
 (defun emotiq/user/root/ ()
   "The root of all user persistence"
   (let ((d (if (not (emotiq:production-p))
-               (asdf:system-relative-pathname :emotiq "../var/etc/") ;; TODO rename other than etc
-               #+:windows
-               (merge-pathnames "Emotiq/" (user-homedir-pathname))
-               #+:linux
-               (merge-pathnames ".emotiq/" (user-homedir-pathname))
-               #+:darwin
-               (merge-pathnames "Emotiq/"
-                                (merge-pathnames "Library/Application Support/"
-                                                 (user-homedir-pathname))))))
+               ;; TODO rename other than etc, as etc should not be
+               ;; writable by the process, and we currently root our
+               ;; wallets here as well
+               (asdf:system-relative-pathname :emotiq "../var/etc/")
+               ;;; TODO figure out API for localized names for
+               ;;; Windows/OSX configuration file roots, i.e. the
+               ;;; macOS directory "Application Support" might be "Anwendung
+               ;;; Unterstützung" in a German locale. 
+               (cond
+                 ((uiop:os-windows-p)
+                  (merge-pathnames "Emotiq/" (user-homedir-pathname)))
+                 ;;; N.b. Darwin is both OS-MACOSX-P and OS-UNIX-P
+                 ((uiop:os-macosx-p)
+                   (merge-pathnames "Emotiq/"
+                                    (merge-pathnames "Library/Application Support/"
+                                                     (user-homedir-pathname))))
+                 ((uiop:os-unix-p)
+                   (merge-pathnames ".emotiq/" (user-homedir-pathname)))))))
     (ensure-directories-exist d)
     d))
-
 
 (defun var/log/ ()
   "Absolute cl:pathname of the directory to persist logs and traces of system activity."
@@ -43,7 +51,6 @@
     (ensure-directories-exist d)
     d))
   
-
 (defun emotiq/wallet/ ()
   "The pathname for the directory containing wallets"
   (let ((wallets-directory (merge-pathnames "wallet/" (emotiq/user/root/))))
