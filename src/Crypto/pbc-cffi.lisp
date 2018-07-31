@@ -153,6 +153,9 @@ THE SOFTWARE.
    :with-curve
    :set-curve
    :list-all-curves
+
+   :make-keying-triple
+   :make-keying-integers
    ))
 
 (in-package :pbc-interface)
