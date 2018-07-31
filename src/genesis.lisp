@@ -5,9 +5,9 @@
                             (root (emotiq/fs:etc/)))
   (let* ((genesis-block-file (alexandria:assoc-value configuration
                                                      :genesis-block-file))
-         (p (make-pathname :name (pathname-name genesis-block-file)
-                           :type "loenc"
-                           :defaults root)))
+         (p (merge-pathnames (make-pathname :name (pathname-name genesis-block-file)
+                                            :type "loenc")
+                             root)))
     (with-open-file (o p
                      :element-type '(unsigned-byte 8)
                      :direction :input)
