@@ -21,7 +21,6 @@
                                              :key-records nodes)
       (let* ((genesis-block
               (emotiq/config:get-genesis-block
-               :configuration configuration
                :root d))
              (keypair
               (emotiq/config:get-nth-key 0 :root d)))

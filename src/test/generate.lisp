@@ -23,8 +23,12 @@
      (assert-eq (length devops-plist)
                 (length directories))
      (dolist (d directories)
-       (assert-true (emotiq/config:get-stakes :root d))
-       (assert-true (emotiq/config:get-genesis-block :root d)))))
+       (let ((configuration (emotiq/config:settings :root d)))
+         (assert-true configuration)
+         (assert-true (emotiq/config:get-stakes
+                       :root d))
+         (assert-true (emotiq/config:get-genesis-block
+                       :root d))))))
 
 (define-test generate-localhost-many-ports ()
   (let ((root (emotiq/fs:new-temporary-directory))

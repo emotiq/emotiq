@@ -139,6 +139,7 @@
    #:*local-machine-filename*
    #:*stakes-filename*
    #:*keypairs-filename*
+   #:*genesis-block-filename*
 
    #:generated-directory
    #:get-genesis-block

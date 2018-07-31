@@ -9,6 +9,9 @@
 (defparameter *local-machine-filename*
   (make-pathname :name "local-machine"
                  :type "conf"))
+(defparameter *genesis-block-filename*
+  (make-pathname :name "emotiq-genesis-block"
+                 :type "json"))
 
 (defun settings (&key (root (emotiq/fs:etc/)))
   (let ((p (merge-pathnames *conf-filename* root)))

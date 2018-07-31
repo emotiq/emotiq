@@ -1,10 +1,9 @@
 (in-package :emotiq/config)
 
 (defun get-genesis-block (&key
-                            (configuration (settings))
                             (root (emotiq/fs:etc/)))
-  (let* ((genesis-block-file (alexandria:assoc-value configuration
-                                                     :genesis-block-file))
+  ;;; This is wrong:  use a special rather than the pathname
+  (let* ((genesis-block-file emotiq/config:*genesis-block-filename*)
          (p (merge-pathnames (make-pathname :name (pathname-name genesis-block-file)
                                             :type "loenc")
                              root)))
