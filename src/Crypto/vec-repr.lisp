@@ -149,27 +149,26 @@ THE SOFTWARE.
         (prin1 `(,(class-name (class-of obj)) (hex ,(hex-str (hex obj))))
                out-stream))
     ;; else
-    (print-unreadable-object (obj out-stream :type t)
-      (princ (ub8v-vec obj) out-stream))
-    ))
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (ub8v-vec obj))))
 
 (defmethod print-object ((obj ub8v-repr) out-stream)
   ;; subclasses of UB8V-REPR mixin should feel free to override this
   (if *print-readably*
       (format out-stream "#.(make-instance '~W :value ~A)"
               (class-name (class-of obj))
-              (with-output-to-string (s)
-                (print-object (ub8v-repr obj) s)))
+              (ub8v-repr obj) s)
     ;; else
-    (print-unreadable-object (obj out-stream :type t)
-      (princ (ub8v-repr obj) out-stream))
-    ))
+    (format out-stream "#<~A ~A >"
+            (class-name (class-of obj))
+            (ub8v-repr obj))))
 
 (defun short-str (str)
   (let ((len (length str)))
-    (if (< len 16)
+    (if (< len 17)
         str
-      (format nil "~A...~A"
+      (format nil "~A..~A"
               (subseq str 0 7)
               (subseq str (- len 7)))
       )))

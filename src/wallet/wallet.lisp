@@ -69,10 +69,8 @@ The default name for a wallet is *DEFAULT-WALLET-NAME*."
                     (first (last (pathname-directory directory)))))))
 
 (defun primary-address (wallet)
-  (vec-repr:hex-str
-   (vec-repr:hex
-   (pbc:keying-triple-pkey
-    (emotiq/wallet:keying-triple wallet)))))
+  (emotiq/txn:address
+   (keying-triple wallet)))
 
 (defun key-phrase (wallet)
   (cosi-keying:convert-int-to-wordlist

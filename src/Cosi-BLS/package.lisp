@@ -51,9 +51,7 @@
    :ed-compress-pt
    :ed-decompress-pt
    :with-ed-curve
-   :hash-to-range
-   :hash-to-pt-range
-   :ed-pt-from-hash
+   :ed-from-hash
    :ed-random-generator
    :ed-random-pair)
   (:import-from :ecc-crypto-b571
@@ -185,9 +183,6 @@
    :compute-input-script-merkle-root-hash
    :compute-witness-merkle-root-hash
 
-   :ith-witness-signed-p
-   :set-ith-witness-signed-p
-
    :block-epoch
    :block-prev-block-hash
    :block-timestamp
@@ -214,16 +209,21 @@
    :edec
    :pbc)
   (:shadow block)            ; used internally, not required for users
+  (:import-from :actors
+   pr)
   (:export 
    transaction-id
    make-genesis-transaction
    transaction-outputs
    transaction-inputs
    make-transaction
+   sign-transaction
    make-and-maybe-sign-transaction
    make-transaction-outputs
    make-transaction-inputs
    initial-total-coin-amount
+   in-legal-money-range-p
+   in-legal-stake-range-p
    validate-transaction
    get-transactions-for-new-block
    check-block-transactions
@@ -297,11 +297,10 @@
   (:export
    :*current-node*
    :current-node
+   :gossip-neighborcast
    :node
    :node-pkey
    :node-skey
-   :node-short-pkey
-   :node-short-skey
    :node-stake
    :node-self
    :node-blockchain
@@ -310,38 +309,33 @@
    :node-utxo-table
    :node-current-leader
    :*my-node*
-   :*top-node*
    :*leader*
    :*blockchain*
    :*blockchain-tbl*
    :*mempool*
    :*utxo-table*
-   :*ip-node-tbl*
-   :*pkey-node-tbl*
-   :*pkey-skey-tbl*
-   :*node-bit-tbl*
    :*rh-state*
-   :*local-epoch*
    :send
    :reply
    :node-dispatcher
    :*cosi-prepare-timeout*
    :*cosi-commit-timeout*
    :leader-exec
-   :*default-data-file*
-   :*default-key-file*
-   :generate-tree
-   :reconstruct-tree
    :init-sim
    :reset-nodes
    :forwarding
    :startup-elections
-
-   :broadcast+me
-   :broadcast-to-others
+   :short-id
+   :node-id-str
+   :set-nodes
    :get-witness-list
-   :*use-real-gossip*
-   :make-signed-election-message
+   :with-current-node
+   :block-list
+   :latest-block
+   :with-block-list
+   :kill-node
+   :enable-node
+   :start-backfill
    ))
 
 (defpackage :cosi-keying

@@ -8,7 +8,6 @@
    #:gossip-handler-case
    #:cosi-loaded-p
    #:initialize-node
-   #:*nominal-gossip-port*
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*
@@ -40,6 +39,8 @@
    #:visualize-nodes
    #:uid
    #:gossip-init
+   #:lookup-node
+   #:ensure-pinger-daemon
 
    ; API
    #:locate-local-uid-for-graph
@@ -57,6 +58,7 @@
 
 (defpackage gossip/config
   (:use #:cl)
+  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
   (:export
    #:generate-network
    #:generate-node

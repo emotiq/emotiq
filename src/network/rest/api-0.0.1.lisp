@@ -26,9 +26,9 @@
             *swagger-ui-uri* *swagger-ui-dist*)
     (prog1 
         (uiop:run-program
-         (format nil "git clone ~a" *swagger-ui-uri*
-                 :output :string :error-output :string
-                 :directory *swagger-ui-dist*))
+         (format nil "git clone ~a" *swagger-ui-uri*)
+         :output :string :error-output :string
+         :directory *swagger-ui-dist*)
       (format *standard-output* " done!~&"))))
   
   

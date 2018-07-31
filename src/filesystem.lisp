@@ -11,53 +11,67 @@
 ;;;; time, we have to somehow "walk" their reference to copy them for
 ;;;; a "resource bundle" that can then be distributed.
 
-(defparameter *subpath* nil "Directory subpath to be added to each of the below. Must end with /. Useful for testing.")
+(defun emotiq/user/root/ ()
+  "The root of all user persistence"
+  (let ((d (if (not (emotiq:production-p))
+               ;; TODO rename other than etc, as etc should not be
+               ;; writable by the process, and we currently root our
+               ;; wallets here as well
+               (asdf:system-relative-pathname :emotiq "../var/etc/")
+               ;;; TODO figure out API for localized names for
+               ;;; Windows/OSX configuration file roots, i.e. the
+               ;;; macOS directory "Application Support" might be "Anwendung
+               ;;; Unterstützung" in a German locale.
+               (cond
+                 ((uiop:os-windows-p)
+                  (merge-pathnames "Emotiq/" (user-homedir-pathname)))
+                 ;;; N.b. Darwin is both OS-MACOSX-P and OS-UNIX-P
+                 ((uiop:os-macosx-p)
+                   (merge-pathnames "Emotiq/"
+                                    (merge-pathnames "Library/Application Support/"
+                                                     (user-homedir-pathname))))
+                 ((uiop:os-unix-p)
+                   (merge-pathnames ".emotiq/" (user-homedir-pathname)))))))
+    (ensure-directories-exist d)
+    d))
 
 (defun var/log/ ()
   "Absolute cl:pathname of the directory to persist logs and traces of system activity."
-  (let ((d (asdf:system-relative-pathname :emotiq "../var/log/")))
-    (when *subpath*
-      (setf d (merge-pathnames *subpath* d)))
-    (ensure-directories-exist d)
-    d))
+  (merge-pathnames "var/log/" (emotiq/user/root/)))
+
 
 (defun etc/ ()
   "All configuration files for a node"
-  (let ((d (asdf:system-relative-pathname :emotiq "../var/etc/")))
-    (when *subpath*
-      (setf d (merge-pathnames *subpath* d)))
-    (ensure-directories-exist d)
-    d))
+  (emotiq/user/root/)) ;;; FIXME: use a read-only directory structure
+                       ;;; underneath main user persistence
 
 (defun tmp/ ()
   "Writable filesystem for temporary output"
-  (let ((d  #p"/var/tmp/emotiq/"))
-    (when *subpath*
-      (setf d (merge-pathnames *subpath* d)))
-    (ensure-directories-exist d)))
-  
-(defun emotiq/user/root/ ()
-  #+:windows
-  (error "Not implemented on Windows")
-  #+:linux
-  (if *subpath*
-      (merge-pathnames *subpath* (merge-pathnames ".emotiq/" (user-homedir-pathname)))
-      (merge-pathnames ".emotiq/" (user-homedir-pathname)))
-  #+:darwin
-  (if *subpath*
-      (merge-pathnames *subpath* (merge-pathnames "Emotiq/"
-                                                  (merge-pathnames "Library/Application Support/"
-                                                                   (user-homedir-pathname))))
-      (merge-pathnames "Emotiq/"
-                       (merge-pathnames "Library/Application Support/"
-                                        (user-homedir-pathname)))))
+  (let ((d "#p/var/tmp/emotiq/"))
+    (ensure-directories-exist d)
+    d))
 
 (defun emotiq/wallet/ ()
   "The pathname for the directory containing wallets"
-  (if *subpath*
-      (merge-pathnames *subpath* (merge-pathnames (make-pathname :directory '(:relative "wallet"))
-                                                  (emotiq/user/root/)))
-      (merge-pathnames (make-pathname :directory '(:relative "wallet"))
-                       (emotiq/user/root/))))
+  (let ((wallets-directory (merge-pathnames "wallet/" (emotiq/user/root/))))
+    (ensure-directories-exist wallets-directory)
+    wallets-directory))
 
 
+(defun ensure-relative-directory (path)
+  "Ensure str represents a relative directory path"
+  (let ((dir (uiop:ensure-directory-pathname path)))
+    ; now force it to be relative
+    (make-pathname :directory `(:relative ,@(cdr (pathname-directory dir))))))
+
+
+(defun new-temporary-directory (&key (root #p"/var/tmp/emotiq/"))
+  (loop
+     :for sub-directory = (make-pathname
+                            :defaults root
+                            :directory (append (pathname-directory root)
+                                               (list (symbol-name (gensym)))))
+     :until (not (probe-file sub-directory))
+     :finally (progn
+                (ensure-directories-exist sub-directory)
+                (return sub-directory))))

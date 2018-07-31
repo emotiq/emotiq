@@ -25,7 +25,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 ;;;; Transaction Types
 
-;;; A `transaction' in Emotiq Lisp software is implemented an instance of class
+;;; A `transaction' in Emotiq Lisp software is implemented as an instance of class
 ;;; TRANSACTION. The Lisp type of an instance of this class is TRANSACTION. In
 ;;; the following discussion, however, the word "type" is used in its generic
 ;;; meaning, not Lisp/programming-language sense.
@@ -65,8 +65,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; as a so-called "change address".
 
 (defclass transaction ()
-  ((transaction-type
-    :reader transaction-type :initarg :transaction-type :initform :spend)
+  ((transaction-type :reader transaction-type :initarg :transaction-type :initform :spend)
 
    ;; [First put outputs, since they start out at first unspent until a
    ;; later transaction arrives with inputs authorized to redeem them.]
@@ -74,7 +73,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    ;; sequence of transaction-output structures (see below)
    (transaction-outputs :reader transaction-outputs :initarg :transaction-outputs)
 
-   ;; sequence of transaction-input structions (see below)
+   ;; sequence of transaction-input structures (see below)
    (transaction-inputs :reader transaction-inputs :initarg :transaction-inputs)
 
 
@@ -379,7 +378,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                function-name))))))
 
 (defun eval-x-error (type &rest additional-args)
-  (warn "Error in eval-x of type ~a: additional info: ~s"
+  (emotiq:em-warn "Error in eval-x of type ~a: additional info: ~s"
         type additional-args)
   (fail-script))
     
@@ -472,7 +471,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   (cond
     (*current-transaction*
      (require-transaction-script-context)
-     (warn "Failure in script.")        ; bind current script?
+     (emotiq:em-warn "Failure in script.")        ; bind current script?
      (throw *transaction-script-catch-tag*
        nil))
     (t
@@ -492,7 +491,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
      (require-transaction-script-op-context)
      (if *debugging-chainlisp*
          (cerror "Continue" "Failure in script op ~a" *current-script-op*)
-         (warn "Failure in script op ~a" *current-script-op*))
+         (emotiq:em-warn "Failure in script op ~a" *current-script-op*))
      (throw *transaction-script-catch-tag*
        nil))
     (t
@@ -516,26 +515,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    transmitted via gossip network.  The following checks are done:
 
    (Items in square brackets ([]) are not yet implemented and may be somewhat in doubt.)
-
    - Reject if transaction-inputs or transaction-outputs are nil.
-
    [- Reject if any output amount or the total is outside the legal money range.]
-
    - Reject if this appears to be a coinbase transaction (created by block creator only).
-
    - Reject if we have a matching transaction in the mempool or in a block of the blockchain.
-
    - For each input, if the referenced output exists in any other tx in the mempool, reject this transaction.
-
    - For each input, if the referenced output does not exist or has already been spent, reject this transaction.
-
    - Reject if the sum of input values < sum of output values.
-
    - Reject if transaction fee (= sum of input values minus sum of output values) would be too low.
-
    - Reject if input missing witness data (i.e., transaction has not
      been signed, i.e., signature and public-key slots are unbound).
-
    - For each input, apply the unlock script function to no args,
      check that the result is a valid arg list (typically the
      list (signature public-key)), then apply the result to the lock
@@ -546,10 +535,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    - Add the transaction to the mempool."
 
   (when (null (transaction-inputs transaction))
-    (warn "Transaction with no inputs rejected")
+    (emotiq:em-warn "Transaction with no inputs rejected")
     (return-from validate-transaction nil))
   (when (null (transaction-outputs transaction))
-    (warn "Transaction with no outputs rejected")
+    (emotiq:em-warn "Transaction with no outputs rejected")
     (return-from validate-transaction nil))
 
   (let ((txid (transaction-id transaction)))
@@ -558,7 +547,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       ;; a message to that effect. This corresponds to above rule
       ;; 'Reject if we have a matching transaction in the mempool or
       ;; in a block of the blockchain'
-      (warn "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
+      (emotiq:em-warn "Double-spend attempt: a transaction with this ID (~a) is already in the mempool or on the blockchain. Rejected."
             (txid-string txid))
       (return-from validate-transaction nil))
     (loop with succeed-p
@@ -569,8 +558,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
           as input-tx-outputs 
             = (cond
                 ((null input-tx)
-                 (warn
-                  "~%Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
+                 (emotiq:em-warn
+                  "Input transaction with presumed UTXO does not exist: no transaction with TxID ~a found in the mempool or on the blockchain." 
                   (txid-string id))
                  (return nil))
                 (t (transaction-outputs input-tx)))
@@ -578,26 +567,26 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             = (let ((tx-out
                       (or (nth index input-tx-outputs)
                           (unless (tx-ids= id (transaction-id input-tx))
-                            (warn "TX ~a output does not match input spec [~a/~d]."
+                            (emotiq:em-warn "TX ~a output does not match input spec [~a/~d]."
                                   input-tx id index)
                             (return nil))
                           ;; debugging:
                           (error "TX ~a output [~a/~d] lost - likely programming error"
                                  input-tx id index))))
                 (when (double-spend-tx-out-p id index t)
-                  (warn "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
+                  (emotiq:em-warn "Double-spend attempt: TxID: ~a. Index: ~a. Rejected."
                         (txid-string id) index)
                   (return nil))
                 tx-out)
           as input-subamount = (tx-out-amount utxo)
           when (coinbase-transaction-input-p tx-in)
-            do (warn "Transaction with coinbase input - rejected")
+            do (emotiq:em-warn "Transaction with coinbase input - rejected")
                (return nil)
           when (or (not (slot-boundp tx-in '%tx-in-signature))
                    (null (%tx-in-signature tx-in))
                    (not (slot-boundp tx-in '%tx-in-public-key))
                    (null (%tx-in-public-key tx-in)))
-            do (warn "Transaction missing witness data. Forgot to sign? Rejected.")
+            do (emotiq:em-warn "Transaction missing witness data. Forgot to sign? Rejected.")
                (return nil)                 
           do (setq succeed-p (run-chainlisp-script transaction tx-in utxo))
           when (not succeed-p)
@@ -607,15 +596,15 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                           (loop for tx-out in (transaction-outputs transaction)
                                 sum (tx-out-amount tx-out))))
                     (when (< sum-of-inputs sum-of-outputs)
-                      (warn "TX sum of inputs values < sum of output values. Rejected.")
+                      (emotiq:em-warn "TX sum of inputs values < sum of output values. Rejected.")
                       (return nil))
                     (when (transaction-fee-too-low-p 
                            (- sum-of-inputs sum-of-outputs))
-                      (warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
+                      (emotiq:em-warn "TX transaction fee ~d would be too low. Minimum = ~d. Rejected."
                             (- sum-of-inputs sum-of-outputs)
                             *minimum-transaction-fee*)
                       (return nil))
-                    (emotiq:note "~%Node ~a declares successful transaction ~a~%  TxID = ~a~%"
+                    (pr "Node ~a declares successful transaction ~a  TxID = ~a"
                                  (cosi-simgen:current-node)
                                  transaction
                                  (txid-string (transaction-id transaction)))
@@ -732,8 +721,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun hash-transaction-id (tx)
-  (let ((message (serialize-transaction tx)))
-    (transaction-hash message)))
+  (transaction-hash (serialize-transaction tx)))
 
 (defun hash-transaction-input-scripts-id (tx)
   (transaction-hash 
@@ -760,11 +748,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (def-script-op public-key-equal-verify (public-key public-key-hash)
   (cond
     ((not (typep public-key 'pbc:public-key))
-     (format t "~%Arg public-key (~s) is not of correct type: ~s~%"
+     (pr "Arg public-key (~s) is not of correct type: ~s"
              public-key 'pbc:public-key)
      (fail-script-op))
     ((not (stringp public-key-hash))
-     (format t "~%Public-key-hash ~s not a string but string expected~%"
+     (pr "Public-key-hash ~s not a string but string expected"
              public-key-hash)
      (fail-script-op))
     (t
@@ -774,11 +762,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             (l2 (length public-key-hash-from-public-key)))
        (cond
          ((not (stringp public-key-hash-from-public-key))
-          (format t "~%Public-key hash ~s derived from public-key ~s not a string but string expected~%"
+          (pr "Public-key hash ~s derived from public-key ~s not a string but string expected"
                   public-key-hash-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
-          (format t "~%Public key hash ~s length ~s ~%  not same as public key ~s hash ~s length ~s~%"
+          (pr "Public key hash ~s length ~s not same as public key ~s hash ~s length ~s"
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
@@ -791,7 +779,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (def-script-op check-signature (public-key signature)
   (check-hash
-   (hash:hash/256 (serialize-current-transaction))
+   (transaction-hash (serialize-current-transaction))
    signature public-key))
 
 
@@ -871,7 +859,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             as first-time = t then nil
             when (not first-time)
               do (format stream ", ")
-            do (format stream "~d/~a" amt public-key-hash-string amt)))))
+            do (format stream "~d/~a" amt public-key-hash-string)))))
 
 
 
@@ -992,13 +980,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defparameter *minimum-spend-amount* 0) ; ---!!! review!!
-(defparameter *maximmum-spend-amount* (initial-total-coin-amount))
+(defparameter *maximum-spend-amount* (initial-total-coin-amount))
 
 (defun in-legal-money-range-p (amount)
   (and (>= amount *minimum-spend-amount*)
-       (<= amount *maximmum-spend-amount*)))
+       (<= amount *maximum-spend-amount*)))
 
+(defun in-legal-stake-range-p (amount)
+  (in-legal-money-range-p amount))
 
+;; ---!!! Above forms need review!!  -mhd, 7/5/18
 
 
 ;;; The next two values to initialize the id and index of the input for a coinbase transaction
@@ -1043,7 +1034,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (defun make-genesis-transaction (public-key-hash)
-  (make-transaction
+  (make-newstyle-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
           public-key-hash 
@@ -1065,7 +1056,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    blocks of the blockchain (i.e., the value of cosi-simgen:*blockchain*)
    beginning the most recent minted and ending with the genesis block, with
    BLOCK-VAR bound during each iteration to the block."
-  `(loop for ,block-var in cosi-simgen:*blockchain*
+  `(loop for ,block-var in (cosi-simgen:block-list)
          do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
@@ -1161,7 +1152,7 @@ returns the block the transaction was found in as a second value."
                ;; indicating we have an usnpent transaction output
                ;; (UTXO)
                (when (tx-ids= (transaction-id tx) id)
-                 (format t "~%Hey look: the TxID~%  ~a~%is the same as the arg TxID~%  ~a~%Wow!~%"
+                 (pr "Hey look: the TxID  ~a is the same as the arg TxID  ~a Wow!"
                          (txid-string (transaction-id tx))
                          (txid-string id))
                  (return-from double-spend-tx-out-p
@@ -1169,13 +1160,13 @@ returns the block the transaction was found in as a second value."
 
 
 (defun trace-compare-all-tx-ids (id)
-  (format t "~%Trace:~%")
+  (pr "Trace:")
   (do-blockchain (blk)
     (do-transactions (tx blk)
-      (format t "~%TX id = ~s   vs~%  ~s [~a]"
+      (pr "TX id = ~s vs  ~s [~a]"
               (transaction-id tx) id
               (tx-ids= (transaction-id tx) id))))
-  (format t "~&end trace~%"))
+  (pr "end trace"))
     
 
 
@@ -1306,19 +1297,19 @@ returns the block the transaction was found in as a second value."
 ;; ---*** transaction cloaked. Review later!  -mhd, 6/26/18
 
 
-(defun check-private-keys-for-transaction-inputs (private-keys tx-inputs)
-  (unless (= (length private-keys) (length tx-inputs))
-    (warn 
-     "Unequal-length private-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
-     private-keys
-     (length private-keys)
+(defun check-secret-keys-for-transaction-inputs (secret-keys tx-inputs)
+  (unless (= (length secret-keys) (length tx-inputs))
+    (emotiq:em-warn 
+     "Unequal-length secret-keys/tx-input hashes ~a length = ~d vs. ~a length = ~d. Programming error likely!"
+     secret-keys
+     (length secret-keys)
      tx-inputs
      (length tx-inputs))))
 
 (defun check-public-keys-for-transaction-inputs (public-keys tx-inputs)
   (unless (= (length public-keys) (length tx-inputs))
-    (warn 
-     "Unequal-length public-keys/tx-input hashes~%  ~a~%  length = ~d~%vs.~%  ~a~%  length = ~d.~%Programming error likely!"
+    (emotiq:em-warn 
+     "Unequal-length public-keys/tx-input hashes ~a length = ~d vs. ~a length = ~d. Programming error likely!"
      public-keys
      (length public-keys)
      tx-inputs
@@ -1328,13 +1319,13 @@ returns the block the transaction was found in as a second value."
 (defun make-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys (type :spend))
   "Create a transaction. Then, if keyword keys is provided non-nil,
 the transaction is signed. In the signing case, keys should supply one
-private key for each input, either as a single private atomic private
+secret key for each input, either as a single secret atomic secret
 key or singleton list in the case of a single input or as a list of
 keys in the case of two or more inputs. Normally, all transactions
 should be signed, and only coinbase transactions are not
 signed. Keyword TYPE, if provided, should a transaction type keyword,
 or else it defaults to :SPEND for an uncloaked spend transaction."
-  (let* ((transaction (make-transaction tx-inputs tx-outputs type)))
+  (let* ((transaction (make-newstyle-transaction tx-inputs tx-outputs type)))
     ;; Got keys? Sign transaction if so:
     (when skeys
       (sign-transaction transaction skeys pkeys))
@@ -1342,7 +1333,7 @@ or else it defaults to :SPEND for an uncloaked spend transaction."
 
 
 
-(defun make-transaction (tx-inputs tx-outputs type)
+(defun make-newstyle-transaction (tx-inputs tx-outputs type)
   "Create a transaction with inputs TX-INPUTS, outputs TX-OUTPUTS, and
 of type TYPE."
   (make-instance
@@ -1352,7 +1343,7 @@ of type TYPE."
    :transaction-outputs tx-outputs))
 
 (defun sign-transaction (transaction skeys pkeys)
-  "Sign transactions with private and public key or keys SKEYS and PKEYS,
+  "Sign transactions with secret and public key or keys SKEYS and PKEYS,
    respectively. SKEYS/PKEYS should be supplied as either a single atomic key or
    a singleton list in the case of a single input or as a list of two or more
    keys in the case of two or more inputs. Normally, all transactions should be
@@ -1361,14 +1352,14 @@ of type TYPE."
    that the signature stores and makes accessible its corresponding public key."
   (with-slots (transaction-inputs) transaction
     (let* ((message (serialize-transaction transaction))
-           (private-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
-      (check-private-keys-for-transaction-inputs private-keys transaction-inputs)
+           (secret-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
+      (check-secret-keys-for-transaction-inputs secret-keys transaction-inputs)
       (let ((public-keys (if (and pkeys (atom pkeys)) (list pkeys) pkeys)))
         (check-public-keys-for-transaction-inputs public-keys transaction-inputs)
         (loop for tx-input in transaction-inputs
-              as private-key in private-keys
+              as secret-key in secret-keys
               as public-key in public-keys
-              as signature = (sign-hash (hash:hash/256 message) private-key)
+              as signature = (sign-hash (transaction-hash message) secret-key)
               do (setf (%tx-in-signature tx-input) signature)
                  (setf (%tx-in-public-key tx-input) public-key))))))
   
@@ -1430,11 +1421,22 @@ of type TYPE."
 
 
 (defun get-utxos-per-account (address)
-  "Return the UTXOs for ADDRESS as list of n-tuples of the form
+  "Return the UTXOs for ADDRESS as a list of two elements of the form
 
-  (TXO PARENT-TX ...)
+     (TXO OUTPOINT AMT)
 
-ADDRESS here is taken to mean the same thing as the public key hash."
+   Here, TXO is a transaction-output instance that pays ADDRESS, and
+   OUTPOINT is a list of the form
+
+     (TxID INDEX)
+
+   where TxID is the transaction ID of the parent transaction, i.e.,
+   the transaction containing TXO, and INDEX is the zero-based index
+   of TXO in the sequence of the parent's transaction outputs. And
+   where AMT is an integer amount of coin subunits.
+
+   ADDRESS here is taken to mean the same thing as the public key
+   hash."
   (let ((utxos-so-far '()))
     (do-blockchain (block)
       (do-transactions (tx block)
@@ -1443,11 +1445,16 @@ ADDRESS here is taken to mean the same thing as the public key hash."
               as index from 0
               when (and (account-addresses= public-key-hash address)
                         (utxo-p tx index))
-                collect (list txo tx)   ; ... addition entries maybe later?
+                collect `(,txo (,(transaction-id tx) ,index) 
+                               ,(tx-out-amount txo))
                   into result
               finally (setq utxos-so-far
                             (nconc utxos-so-far result)))))
     utxos-so-far))
+
+;; Potential source of confusion: the above does not include the
+;; mempool. I.e., it considers a TXO that was spent in a transaction
+;; sitting in the mempool to be a UTXO.
 
 
 
@@ -1456,8 +1463,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
    value returned is a non-negative integer that indicates the number
    of UTXOs associated with the address."
   (let ((utxos (get-utxos-per-account address)))
-    (loop for (txo) in utxos
-          as amount = (tx-out-amount txo)
+    (loop for (nil nil amount) in utxos
           collect amount into amounts
           finally (return
                     (values
@@ -1480,40 +1486,40 @@ ADDRESS here is taken to mean the same thing as the public key hash."
 
 (defun dump-tx (tx &key out-only)
   (unless (eq (transaction-type tx) ':spend)
-    (format t "~&  ~a Transaction~%" (transaction-type tx)))
-  (format t "~&  TxID: ~a~%" (txid-string (transaction-id tx)))
+    (pr "  ~a Transaction" (transaction-type tx)))
+  (pr "  TxID: ~a" (txid-string (transaction-id tx)))
   (unless (or out-only
               (member (transaction-type tx)
                       '(:coinbase :collect))) ; no-input tx types
     (loop for tx-in in (transaction-inputs tx)
-          do (format t "    input outpoint: index = ~a/TxID = ~a~%"
+          do (pr "    input outpoint: index = ~a/TxID = ~a"
                      (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
-  (format t "    outputs:~%")
+  (pr "    outputs:")
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
-        do (format t "      [~d] amt = ~a (out to) addr = ~a~%"
+        do (pr "      [~d] amt = ~a (out to) addr = ~a"
                    i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
            (when block
-             (format t "~%Dump txs in block = ~s:~%" block)
+             (pr "Dump txs in block = ~s:" block)
              (do-transactions (tx block)
                (dump-tx tx)))
            (when mempool
-             (format t "~%Dump txs in mempool:~%")
+             (pr "Dump txs in mempool:")
              (loop for tx being each hash-value of cosi-simgen:*mempool*
                    do (dump-tx tx)))
            (when blockchain
-             (format t "~%Dump txs on blockchain:~%")
+             (pr "Dump txs on blockchain:")
              (do-blockchain (block)
-               (format t " Dump txs in block = ~s:~%" block)
+               (pr " Dump txs in block = ~s:" block)
                (do-transactions (tx block)
                  (dump-tx tx))))))
-    (let ((cosi-simgen:*current-node*
-            (or node 
-                cosi-simgen:*current-node*
-                cosi-simgen:*top-node*)))
+    (cosi-simgen:with-current-node
+        (or node 
+            (cosi-simgen:current-node)
+            cosi-simgen:*my-node*)
       (if file
           (with-open-file (*standard-output*
                            file
@@ -1598,7 +1604,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
         with cosi-simgen:*current-node*
           = (or node 
                 cosi-simgen:*current-node*
-                cosi-simgen:*top-node*)
+                cosi-simgen:*my-node*)
         as count                        ; see note!
           = (let ((count-so-far 0))
               (do-all-transactions (tx)
@@ -1607,7 +1613,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
               count-so-far)
         as time-through from 0
         initially
-           (format t "~%Awaiting ~d ~a txs.~%"
+           (pr "Awaiting ~d ~a txs."
                    n                   
                    (if (spend-tx-types-p tx-types) 
                        "spend"
@@ -1646,31 +1652,32 @@ ADDRESS here is taken to mean the same thing as the public key hash."
         count t into tx-count
         collect tx into transactions
         finally
-           ;; topologically sort transactions:
-           (setq transactions (sort transactions #'transaction-must-precede-p))
-           (when (and max (> max 0) (> tx-count max))
-             ;; Now, if necessary, it's safe to remove from
-             ;; back. Reverse the list, then remove from the back
-             ;; until down to max, then rereverse the list, leaving
-             ;; variable transactions shortened from the back. Note
-             ;; that the mempool is not altered (no transactions added
-             ;; or removed).
-             (let ((rev-txs (nreverse transactions)))
-               (loop do (pop rev-txs)
-                     while (> tx-count max)
-                     do (decf tx-count))
-               (setq transactions (nreverse rev-txs))))
-           ;; #+development (assert (= (length transactions) tx-count))
-           (emotiq:note "~D Transactions for new block" tx-count)
-           ;; Now, compute the fees, and add a collect transaction,
-           ;; which must precede all the other transactions.
-           (let* ((total-fee
-                    (loop for tx in transactions
-                          sum (compute-transaction-fee tx)))
-                  (collect-transaction
-                    (make-collect-transaction total-fee)))
-             (push collect-transaction transactions))
-           (return transactions)))
+        (when (> tx-count 0)
+          ;; topologically sort transactions:
+          (setq transactions (sort transactions #'transaction-must-precede-p))
+          (when (and max (> max 0) (> tx-count max))
+            ;; Now, if necessary, it's safe to remove from
+            ;; back. Reverse the list, then remove from the back
+            ;; until down to max, then rereverse the list, leaving
+            ;; variable transactions shortened from the back. Note
+            ;; that the mempool is not altered (no transactions added
+            ;; or removed).
+            (let ((rev-txs (nreverse transactions)))
+              (loop do (pop rev-txs)
+                    while (> tx-count max)
+                    do (decf tx-count))
+              (setq transactions (nreverse rev-txs))))
+          ;; #+development (assert (= (length transactions) tx-count))
+          (pr "~D Transactions for new block" tx-count)
+          ;; Now, compute the fees, and add a collect transaction,
+          ;; which must precede all the other transactions.
+          (let* ((total-fee
+                  (loop for tx in transactions
+                        sum (compute-transaction-fee tx)))
+                 (collect-transaction
+                  (make-collect-transaction total-fee)))
+            (push collect-transaction transactions))
+          (return transactions))))
 
 ;; Note: new transactions currently do not use UTXO database, only
 ;; mempool and blockchain.
@@ -1703,7 +1710,7 @@ ADDRESS here is taken to mean the same thing as the public key hash."
   (let* ((leader-public-key cosi-simgen:*leader*)
          (leader-address
            (cosi/proofs:public-key-to-address leader-public-key)))
-    (make-transaction
+    (make-newstyle-transaction
      (list (make-coinbase-transaction-input))
      (list (make-coinbase-transaction-output leader-address fee))
      ':collect)))
@@ -1784,10 +1791,11 @@ ADDRESS here is taken to mean the same thing as the public key hash."
         count (remove-transaction-from-mempool transaction mempool)
           into n-removed
         finally
-           (format t "~%Removed ~d transaction~p from mempool.~%"
+           (pr "Removed ~d transaction~p from mempool."
                    n-removed n-removed)
            (cosi/proofs/newtx:dump-txs :mempool t)))
 
 ;; Modularity issue: note that this should not really "know" that
 ;; block-transactions is list. It is now specified as sequence, and it's left
 ;; open for it to become a merkle tree; clean up later!  -mhd, 6/20/18
+
