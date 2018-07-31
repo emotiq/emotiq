@@ -8,7 +8,6 @@
    #:gossip-handler-case
    #:cosi-loaded-p
    #:initialize-node
-   #:*nominal-gossip-port*
    #:gossip-startup
    #:ping-other-machines
    #:*nodes*

@@ -1,42 +1,67 @@
 (in-package :emotiq/config)
 
-(defun emotiq-conf ()
-  (make-pathname :defaults (emotiq/fs:etc/)
-                 :name "emotiq-conf"
+(defparameter *conf-filename*
+  (make-pathname :name "emotiq-conf"
+                 :type "json"))
+(defparameter *hosts-filename*
+  (make-pathname :name "hosts"
+                 :type "conf"))
+(defparameter *local-machine-filename*
+  (make-pathname :name "local-machine"
+                 :type "conf"))
+(defparameter *genesis-block-filename*
+  (make-pathname :name "emotiq-genesis-block"
                  :type "json"))
 
-(defun generated-directory (configuration)
-  (let ((host
-         (alexandria:assoc-value configuration :hostname))
-        (ip
-         (alexandria:assoc-value configuration :ip))
-        (gossip-server-port
-         (alexandria:assoc-value configuration :gossip-server-port))
-        (rest-server-port
-         (alexandria:assoc-value configuration :rest-server-port))
-        (websocket-server-port
-         (alexandria:assoc-value configuration :websocket-server-port)))
-    (make-pathname
-     :directory `(:relative
-                  ,(format nil "~{~a~^-~}"
-                           (list host ip gossip-server-port rest-server-port websocket-server-port))))))
+(defun settings (&key (root (emotiq/fs:etc/)))
+  (let ((p (merge-pathnames *conf-filename* root)))
+    (unless (probe-file p)
+      (emotiq:note "No configuration able to be read from '~a'" p)
+      (return-from settings nil))
+    (cl-json:decode-json-from-source p)))
+
+(defun setting (key &key (root (emotiq/fs:etc/)))
+  (let ((c (settings :root root)))
+    (alexandria:assoc-value c key)))
+
+(defun gossip-get-values (&key (root (emotiq/fs:etc/)))
+  "Return the values for the current network configuration.
+
+  The first value is the database of all keypairs in the test network.
+
+  The second value contains all hosts.
+
+  The third value contains the gossip local machine configuration of this node."
+  (handler-case
+      (let ((keypairs (get-keypairs :root root))
+            (hosts (read-pairs-database
+                    (merge-pathnames *hosts-filename* root)))
+            (gossip (read-gossip-configuration
+                     (merge-pathnames *local-machine-filename* root))))
+        (values
+         keypairs hosts gossip))
+    (error (e)
+      (emotiq:note "Configuration strategy failed because ~a" e)
+      nil)))
+
+(defun read-gossip-configuration (pathname)
+  (when (probe-file pathname)
+    (with-open-file (s pathname :direction :input :if-does-not-exist :error)
+      (let ((form (read s nil nil nil)))
+        form))))
 
 
-(defun settings/read (&optional key)
-  (unless (probe-file (emotiq-conf))
-    (emotiq:note "No configuration able to be read from '~a'" (emotiq-conf))
-    (return-from settings/read nil))
-  ;;; TODO: do gossip/configuration sequence
-  (let ((c (cl-json:decode-json-from-source (emotiq-conf))))
-    (if key
-        (alexandria:assoc-value c key)
-        c)))
+(defun local-machine (&key (root (emotiq/fs:etc/)))
+  (let ((form (with-open-file (o (merge-pathnames *local-machine-filename* root))
+                (read o))))
+    (destructuring-bind (&key eripa
+                              (gossip-port
+                               (emotiq/config:setting :gossip-server-port))
+                              pubkeys)
+        form
+      (values `(:eripa ,eripa :gossip-port ,gossip-port :pubkeys ,pubkeys)))))
 
-(defun make-keying-triple (pkey-bigint skey-bigint &optional signature)
-  (let* ((pkey (pbc:public-key pkey-bigint))
-         (skey (pbc:secret-key skey-bigint)))
-    (make-instance 'pbc:keying-triple
-                   :pkey pkey
-                   :skey skey
-                   :sig (or signature (pbc:sign-hash (hash:hash/256 pkey) skey)))))
+
+  
+  
 
