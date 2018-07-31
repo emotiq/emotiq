@@ -21,7 +21,7 @@
                ;;; TODO figure out API for localized names for
                ;;; Windows/OSX configuration file roots, i.e. the
                ;;; macOS directory "Application Support" might be "Anwendung
-               ;;; Unterstützung" in a German locale. 
+               ;;; Unterstützung" in a German locale.
                (cond
                  ((uiop:os-windows-p)
                   (merge-pathnames "Emotiq/" (user-homedir-pathname)))
@@ -38,7 +38,7 @@
 (defun var/log/ ()
   "Absolute cl:pathname of the directory to persist logs and traces of system activity."
   (merge-pathnames "var/log/" (emotiq/user/root/)))
-    
+
 
 (defun etc/ ()
   "All configuration files for a node"
@@ -50,7 +50,7 @@
   (let ((d "#p/var/tmp/emotiq/"))
     (ensure-directories-exist d)
     d))
-  
+
 (defun emotiq/wallet/ ()
   "The pathname for the directory containing wallets"
   (let ((wallets-directory (merge-pathnames "wallet/" (emotiq/user/root/))))
@@ -67,7 +67,7 @@
 
 (defun new-temporary-directory (&key (root #p"/var/tmp/emotiq/"))
   (loop
-     :with sub-directory = (make-pathname
+     :for sub-directory = (make-pathname
                             :defaults root
                             :directory (append (pathname-directory root)
                                                (list (symbol-name (gensym)))))
@@ -75,7 +75,3 @@
      :finally (progn
                 (ensure-directories-exist sub-directory)
                 (return sub-directory))))
-       
-       
-
-
