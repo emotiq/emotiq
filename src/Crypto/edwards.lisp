@@ -1143,7 +1143,7 @@ we are done. Else re-probe with (X^2 + 1)."
   (ed-pt-from-hash (apply 'hash-to-pt-range seeds)))
 
 (defun ed-random-generator ()
-  (ed-pt-from-seeds (field-random *ed-q*)))
+  (ed-pt-from-hash (field-random *ed-q*)))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
