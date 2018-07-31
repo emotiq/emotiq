@@ -39,8 +39,7 @@
     :reader block-signature-bitmap
     :initform 0
     :documentation 
-    "Use methods ith-witness-signed-p and set-ith-witness-signed-p OR,
-     to access directly, supply a bitmap represented by an
+    "Supply a bitmap represented by an
      integer (potentially a bignum), where each position of the bitmap
      corresponds to a vector index, such that its state tells you
      whether that particular potential witness signed.")
@@ -177,7 +176,7 @@ added to the blockchain."
       (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
       (setf election-proof block-election-proof)
       (setf leader-pkey block-leader-pkey)
-      (setf witnesses block-witnesses)
+      (setf witnesses (coerce block-witnesses 'vector))
       (setf transactions block-transactions)
       (setf merkle-root-hash (compute-merkle-root-hash blk))
       (setf input-script-merkle-root-hash (compute-input-script-merkle-root-hash blk))
@@ -185,7 +184,7 @@ added to the blockchain."
       (when prev-block? 
         (with-slots (prev-block-hash)
             blk
-          (setf prev-block-hash (hash-block prev-block?))))
+          (setf prev-block-hash (int (hash-block prev-block?)))))
       blk)))
 
 
@@ -241,7 +240,7 @@ added to the blockchain."
         collect `(,public-key . ,stake-info)))
 
 ;; Currently, our config system gives us public keys as bignums
-;; (function get-stakes in package gossip), while the simulator
+;; (function get-stakes), while the simulator
 ;; (function keys-and-stakes in package emotiq/sim) supplies them as
 ;; instances.
     
@@ -395,21 +394,6 @@ added to the blockchain."
             collect (hash-256 a b)
               into row
             finally (return (compute-merkle-pairs row)))))
-
-
-
-(defmethod ith-witness-signed-p (block i)
-  "Return true or false (nil) according to whether the ith witness has signed."
-  (with-slots (signature-bitmap) block
-    (logbitp i signature-bitmap)))
-
-(defmethod set-ith-witness-signed-p (block i signed-p)
-  "Set signed-p to either true or false (nil) for witness at position i."
-  (with-slots (signature-bitmap) block
-    (setf signature-bitmap
-          (dpb (if signed-p 1 0)
-               (byte 1 i)
-               signature-bitmap))))
 
 
 

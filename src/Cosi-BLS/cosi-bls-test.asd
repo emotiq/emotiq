@@ -12,6 +12,7 @@
                 :depends-on (package)
                 :components ((:file "cosi-tests")
                              (:file "address-tests")
-                             (:file "ranges")))))
+                             (:file "ranges")
+                             (:file "tx-tests")))))
 
   

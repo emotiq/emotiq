@@ -93,6 +93,27 @@
 ;;; TCP transport implementation based on thread-per-connection model.
 ;;;
 
+;;; To see open sockets:
+;;; (gossip/transport::sockets gossip::*transport*)
+
+(defun socket-info (socket)
+  (append (multiple-value-list (usocket::get-local-name socket))
+          (multiple-value-list (usocket::get-peer-name socket))))
+
+(defun sockets-matching (pred)
+  (when pred
+    (loop for socket in (gossip/transport::sockets gossip::*transport*)
+      when (or (eq t pred)
+               (funcall pred socket))
+      collect socket)))
+
+; (dolist (socket (gossip/transport::sockets-matching t)) (print (gossip/transport::socket-info socket)))
+
+(defun sockets-to (peer-address)
+  "Returns a list of sockets connected to given peer-address"
+  (sockets-matching (lambda (socket)
+                      (gossip::gossip-equalp peer-address (usocket::get-peer-address socket)))))
+
 (defclass tcp-threads-transport ()
   (;; Operational state.
    (listen-socket :initarg :listen-socket :initform nil :accessor listen-socket
@@ -121,6 +142,17 @@
   ip port
   ;; Queue of messages waiting to be delivered.
   transmit-queue)
+
+(defun canonicalize-address (address)
+  "Always return a string representation of address."
+  (usocket::host-to-hostname address))
+
+(defun canonicalize-port (port)
+  "Always return an integer for port"
+  (if (integerp port)
+      port
+      ; Eventually we should be able to look ports up by name
+      (error "Cannot deal with non-integer ports yet")))
 
 (defmethod start (address port mrh peer-up peer-down
                           (backend (eql :tcp)) backend-parameters)
@@ -198,6 +230,8 @@
 
 (defun run-tcp-write-thread (transport address port mailbox)
   "Transfer objects from MAILBOX to the remote endpoint ADDRESS:PORT."
+  (setf address (canonicalize-address address)
+        port    (canonicalize-port    port))
   (with-slots (lock message-queues peer-down-hook sockets) transport
     (gossip-handler-case
         ;; Establish new connection.
@@ -236,9 +270,13 @@
                           :local-host local-host))
 
 (defmethod transmit-message ((transport tcp-threads-transport) address port message)
+  (setf address (canonicalize-address address)
+        port    (canonicalize-port    port))
   (mpcompat:mailbox-send (get-message-queue transport address port) message))
 
 (defun get-message-queue (transport address port)
+  (setf address (canonicalize-address address)
+        port    (canonicalize-port    port))
   (with-slots (lock message-queues writers) transport
     ;; Check if the writer for this endpoint was already created.
     (or (gethash (list address port) message-queues)

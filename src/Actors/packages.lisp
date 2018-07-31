@@ -50,6 +50,7 @@ THE SOFTWARE.
    #:prio-mailbox
    #:make-prio-mailbox
    #:mailbox-read
+   #:mailbox-peek
    #:mailbox-send
    #:mailbox-empty-p
    #:make-unsafe-fifo

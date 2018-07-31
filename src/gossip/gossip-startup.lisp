@@ -4,7 +4,8 @@
 
 (in-package :gossip)
 
-(defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
+(defparameter *hosts* nil
+  "Cached hosts as read from configuration (minus the local machine)")
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
@@ -13,25 +14,24 @@
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
-  (declare (special gossip/config::*keypairs-filename*))
   (when local-machine
     (destructuring-bind (&key eripa
-                              (gossip-port *nominal-gossip-port*)
+                              (gossip-port
+                               (emotiq/config:setting :gossip-server-port))
                               pubkeys)
-                        local-machine
+        local-machine
       (when eripa (process-eripa-value eripa))
-      (cond ((typep gossip-port '(unsigned-byte 16))
-             (setf *nominal-gossip-port* gossip-port))
-            (t (error "Invalid gossip-port ~S" gossip-port)))
+      (unless (typep gossip-port '(unsigned-byte 16))
+        (error "Invalid gossip-port ~S" gossip-port))
       (cond ((consp pubkeys)
-             (clear-local-nodes)) ; kill local nodes
+             (clear-local-nodes)) ; kill local nodes ;; FIXME should be part of shutdown routine
             (t (error "Invalid or unspecified public keys ~S" pubkeys)))
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
-                       (unless (member local-pubkey keypairs :test 'eql :key 'car)
-                 (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
-                       t)
-                     pubkeys)
+               (unless (member local-pubkey keypairs :test 'eql :key 'car)
+                 (error "Pubkey ~S is not present in keypairs database" local-pubkey))
+               t)
+             pubkeys)
       ;; make local nodes
       (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
           (mapc (lambda (pubkey)
@@ -40,23 +40,38 @@
           (mapc (lambda (pubkey)
                   (make-node ':gossip :uid pubkey))
                 pubkeys))
-      ;; clear log and start server
-      (run-gossip)
+      ;; keep existing log and start server
+      (run-gossip nil)
       t)))
+
+(defun ensure-pinger-daemon ()
+  "Ensure the existence of a background daemon that pings other machines until we're
+  convinced we're connected to the outside world."
+  (unless (find-process "Pinger")
+    (mpcompat:process-run-function "Pinger"
+      nil
+      (lambda ()
+        (let ((interval (+ 20 (random 40)))) ; minimum 20 seconds; maximum 60
+          (loop
+            (unless (> (length (remote-real-uids))
+                       ; sqrt is just a heuristic about whether we're connected to the outside world.
+                       ;  Needs to be more sophisticated if *hosts* can vary over time,
+                       ;   and if we begin to cause (remote-real-uids) to decrease over time
+                       ;   when nodes disappear.
+                       (sqrt (length *hosts*)))
+              (ping-other-machines))
+            (sleep interval)))))))
 
 (defun ping-other-machines (&optional (hosts *hosts*))
   "Find what other machines are alive.
    Returns a list of augmented-data or exception monads about live UIDs on other machines.
    You can map unwrap on these things to get at the real data.
-   Stashes result along with time of acquisition at *live-uids*>"
+   Result can be queried by using #'remote-real-uids."
   (when hosts
     (multiple-list-uids hosts)))
 
-(defun gossip-startup (&key root-path (ping-others nil))
+(defun gossip-startup (&key (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test
-  
-  ROOT-PATH specifies a specific root the configuration as opposed to
-  the use of the autoconfiguration mechanism.
   
   If PING-OTHERS is true, returns list of augmented-data or exception
   monads about live public keys on other machines.
@@ -67,15 +82,13 @@
   The network connectivity test can be invoked via PING-OTHER-MACHINES
   with this list if desired."
   ; if we're given a root-path, use that instead of the global one
-  (emotiq:note "Starting gossip configuration for testnet…")
+  (edebug 1 "Starting gossip configuration for testnet…")
   (handler-bind 
       ((error (lambda (e)
-                (emotiq:note "Cannot configure local machine: ~a" e))))
-    (when root-path 
-      (gossip/config:initialize :root-path root-path))
+                (edebug 1 :WARN "Cannot configure local machine: ~a" e))))
     (gossip-init ':maybe)
     (multiple-value-bind (keypairs hosts local-machine)
-                         (gossip/config:get-values)
+        (emotiq/config:gossip-get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
       (setq *hosts*
@@ -84,16 +97,16 @@
                   for host-pair in hosts
                   as host-hbo = (host-to-hbo (first host-pair))
                   when (not (and (= eripa-host-hbo host-hbo)
-                                 (= *nominal-gossip-port* (second host-pair))))
+                                 (= (emotiq/config:setting :gossip-server-port) (second host-pair))))
                     collect host-pair))
-      (emotiq:note "Gossip init finished.")
+      (edebug 1 "Gossip init finished.")
       (if ping-others
           (handler-bind 
               ((error (lambda (e)
-                        (emotiq:note "Failed to run connectivity tests: ~a" e))))
+                        (edebug 1 :WARN "Failed to run connectivity tests: ~a" e))))
             (let ((other-machines (ping-other-machines hosts)))
               (unless other-machines
-                (emotiq:note "No other hosts to check for ping others routine."))
+                (edebug 1 :WARN "No other hosts to check for ping others routine."))
               other-machines))
           hosts))))
 
@@ -111,14 +124,16 @@
       (:init
        #+OPENMCL
        (if (find-package :gui) ; CCL IDE is running
-           (setf emotiq:*notestream* nil) ; just use gossip::*log* in this case
+           (when (eql *error-output* emotiq:*notestream*) (setf emotiq:*notestream* nil)) ; just use gossip::*log* in this case
            ; (setf emotiq:*notestream* (hemlock-ext:top-listener-output-stream)) ; another possibility
            (setf emotiq:*notestream* *error-output*))
        ;; In the OpenMCL IDE, outputs to *standard-output* and *error-output* go to a separate listener for the
        ;;   thread the output comes from. Besides causing visual chaos on the screen, it's impossible to
        ;;   see a coherent, serialized log in this environment. Which is why gossip::*log* exists in the first place.
        #-OPENMCL
-       (setf emotiq:*notestream* *error-output*)
+       (setf emotiq:*notestream*
+             #-LISPWORKS *error-output*
+             #+LISPWORKS hcl:*background-output*)
        (setf *logging-actor* (ac:make-actor 'actor-logger-fn))
        (setf *hmac-keypair-actor* (ac:make-actor 'actor-keypair-fn))
        (archive-log)

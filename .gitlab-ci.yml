@@ -73,7 +73,7 @@ test:macos:ccl:
 .test_chain: &test_chain_definition
   stage: test_chain
   script:
-    - ci/tests/test-chain.bash
+    - ci/tests/run-and-ping-emotiq-chain.bash
 
 test_chain:linux:ccl:
   <<: *test_chain_definition

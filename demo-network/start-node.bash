@@ -18,22 +18,6 @@ case $(uname -s) in
         ;;
 esac
 
-case ${LISP} in
-    lispworks*)
-        ls=''
-        ;;
-    ccl*)
-        lisp_cli="$HOME/bin/ccl"
-        ;;
-    sbcl*)
-        lisp_cli="/usr/local/bin/sbcl --disable-debugger"
-        ;;
-    *)
-        echo "Unknown Lisp dialect: $LISP, falling back to CCL"
-        lisp_cli="$HOME/bin/ccl"
-        ;;
-esac
-
 start_timeout=30
 node_id=${1:-1}
 rc=0
@@ -41,9 +25,13 @@ rc=0
 tempfoo=`basename $0`
 TMPFILE=`mktemp /tmp/${tempfoo}.XXXXXX` || exit 1
 
+
+node_name="node${node_id}"
+etc_and_wallets="${BASE}/node-configs/${node_name}/"
+
 cat >$TMPFILE <<EOF
 (ql:quickload :emotiq/startup)
-(emotiq:main :config-subpath "node${node_id}/")
+(emotiq:main :etc-and-wallets "${etc_and_wallets}")
 EOF
 
 echo Starting node${node_id} ...

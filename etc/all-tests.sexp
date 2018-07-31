@@ -1,7 +1,9 @@
 (:emotiq-test
  :gossip-test
  :crypto-pairings-test
- :emotiq-config-test
  :cosi-bls-test
- :emotiq-sim-test)
+ :wallet-test
+ :test-generate)
+ 
+
  

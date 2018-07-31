@@ -49,6 +49,11 @@
                     nodeID                   ; destination
                     nil)))))
 
+(defun ensure-list (thing)
+  (if (listp thing)
+      thing
+      (list thing)))
+
 ; Normally you wouldn't call this as a high-level application programmer. Call broadcast instead.
 (defun gossipcast (message &key (graphID +default-graphid+) startnodeID (howmany 2) (kind ':k-multicast))
   "Sends message via traditional gossip.
@@ -58,7 +63,7 @@
                        :kind kind
                        :forward-to howmany ; traditional gossip
                        :graphID graphID
-                       :args message)))
+                       :args (ensure-list message))))
     (send-msg solicitation
               startnodeID                   ; destination
               nil)))
@@ -80,6 +85,12 @@
     ((integerp style)           (gossipcast message :graphID graphID :startnodeID startnodeID :howmany style :kind kind))
     (t (error "Invalid style ~S" style))))
 
+; This needs to replace ping-other-machines for bootstrapping. Need to invent a singlecast hello message mechanism.
+(defun request-hello ()
+  "Ask other hosts (not nodes, but hosts) to respond to me (my node) with a singlecast (not broadcast) hello message"
+  )
+
+; This should probably just send an augmented-data object
 (defun hello (pkey ipaddr ipport &key (style ':neighborcast) (graphID +default-graphid+) startnodeID)
   "Announce the presence of pkey (node UID) at ipaddr and ipport to a graph. Nodes traversed will
    add the pkey/ipaddr pair to their knowledge of the :uber graph.

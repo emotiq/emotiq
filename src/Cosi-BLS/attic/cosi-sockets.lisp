@@ -177,7 +177,7 @@ THE SOFTWARE.
 (defun shutdown-server (&optional (port *cosi-port*))
   (when *my-node*
     (setf *shutting-down* :SHUTDOWN-SERVER)
-    (internal-send-socket *local-ip* port "ShutDown")))
+    (internal-send-socket *local-ip* port (loenc:encode "ShutDown"))))
 
 (defun socket-send (ip real-ip real-port msg)
   (let ((packet (make-hmac (list* ip msg)

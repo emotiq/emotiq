@@ -84,15 +84,29 @@
                  (augment (funcall dc (data ad1) (data ad2)) (metadata ad1))
                  (list ad1 ad2)))))))
 
+; fix a pretty horrible bug in this function in usocket
+;  where
+;  (USOCKET:IP= "127.0.0.1" #(127 0 0 1)) = T
+;  but
+;  (USOCKET:IP= #(127 0 0 1) "127.0.0.1") = NIL
+(defun usocket::ip= (ip1 ip2)
+  (etypecase ip1
+    (string (string= ip1 (usocket::host-to-hostname ip2)))
+    ((or (vector t 4)
+         (array (unsigned-byte 8) (4))
+         (vector t 16)
+         (array (unsigned-byte 8) (16)))
+     (equalp ip1 (usocket::host-to-vector-quad ip2)))
+    (integer (= ip1 (usocket::host-byte-order ip2)))))
+
 (defun gossip-equalp (d1 d2)
-  "Like equalp but also tests for ip addresses"
+  "Like equalp but also tests for ip addresses and DNS names"
   (or (equalp d1 d2)
-      (and (integerp d1)
-           (integerp d2)
-           (usocket:ip= d1 d2))))
+      (ignore-errors (usocket:ip= d1 d2))
+      (ignore-errors (= (usocket::host-to-hbo d1) (usocket::host-to-hbo d2)))))
 
 (defun metadata-match? (md1 md2)
-  "Returns true if the two metadatas match, or nil if not.
+  "Returns true if the two metadata match, or nil if not.
    Metadata match if they are both nil, or if they both have identical keys and values,
    but possibly in different orders."
   (null (set-exclusive-or md1 md2 :test 'gossip-equalp)))
