@@ -1262,7 +1262,7 @@ we are done. Else re-probe with (X^2 + 1)."
          (s    (getf proof :s))
          (tt   (getf proof :t))
          (h    (ed-pt-from-seeds seed))
-         ;; check s = H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
+         ;; check s ?= H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
          (schk (int
                 (hash-to-grp-range
                  (ed-compress-pt *ed-gen*)
