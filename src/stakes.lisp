@@ -16,9 +16,8 @@
     (when (probe-file p)
       (with-open-file (o p
                          :direction :input)
-        (let ((*read-suppress* t))
-          (loop :with form
-             :while (setf form (read o nil nil nil)) :collecting form))))))
+        (loop :with form
+           :while (setf form (read o nil nil nil)) :collecting form)))))
 
 (defparameter *keypairs-filename*
   (make-pathname :name "keypairs" :type "conf"))

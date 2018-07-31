@@ -157,7 +157,8 @@
 (defpackage emotiq/config/generate
   (:use #:cl)
   (:export
-   #:*dns-ip-zt.emotiq.ch*
+   #:*eg-config-zerotier*
+   #:*eg-config-localhost*
 
    #:+default-configuration+
 

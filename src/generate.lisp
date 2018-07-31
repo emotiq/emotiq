@@ -18,28 +18,11 @@
       (:gossip-server-port
        . 65002)
       (:genesis-block-file
-       . "emotiq-genesis-block.json")))
+       . "emotiq-genesis-block.json"))
+  "The default configuration alist
 
-;;; A list of plists drives the generation routines, as this is what the
-;;; devops-ansible hook passes the network generation routines
-(defparameter *dns-ip-zt.emotiq.ch*
-  '((:hostname "zt-emq-01.zt.emotiq.ch"
-     :ip "10.178.2.166"
-     ;;; The ports take the default values if not otherwise specified
-     :gossip-server-port 65002
-     :rest-server-port 3140
-     :websocket-server-port 3145)
-    (:hostname "zt-emq-02.zt.emotiq.ch"
-     :ip "10.178.0.71")
-    (:hostname "zt-emq-03.zt.emotiq.ch"
-     :ip "10.178.15.71")))
-
-(defparameter *config-localhost*
-  '((:hostname :localhost
-     :local-process-nodes 4
-     :gossip-server-port 65002
-     :rest-server-port 3140
-     :websocket-server-port 3145)))
+Values are changed by pushing key value cons at the beginning of the list,
+where they override any later identical keys according to the semantics of CL:ASSOC")
 
 (defun generate-keys (records)
   "Generate keys for a list of plist RECORDS"
@@ -61,21 +44,52 @@ Returns the enumeration of lists of public keys and staked amounts."
             (list pkey (random max-stake)))
           public-keys))
 
+;;; A list of plists drives the generation routines, as this is what the
+;;; devops-ansible hook passes the network generation routines
+(defparameter *eg-config-zerotier*
+  '((:hostname "zt-emq-01.zt.emotiq.ch"
+     :ip "10.178.2.166"
+     ;;; The ports take the default values if not otherwise specified
+     :gossip-server-port 65002
+     :rest-server-port 3140
+     :websocket-server-port 3145)
+    (:hostname "zt-emq-02.zt.emotiq.ch"
+     :ip "10.178.0.71")
+    (:hostname "zt-emq-03.zt.emotiq.ch"
+     :ip "10.178.15.71"))
+  "An example of the syntax to generate network artifacts for a Zerotier testnet configuration")
+
+(defparameter *eg-config-localhost*
+  '((:hostname "localhost"
+     :local-process-nodes 4
+     :gossip-server-port 65002
+     :rest-server-port 3140
+     :websocket-server-port 3145))
+  "An example of the syntax to generate a purely local process 4 node network")
+
 (defun generate-network (&key
-                           (root (emotiq/fs:tmp/))
-                           (nodes-dns-ip *dns-ip-zt.emotiq.ch*)
+                           (root (emotiq/fs:new-temporary-directory))
+                           (nodes-dns-ip *eg-config-zerotier*)
                            (force nil)
                            (settings-key-value-alist nil))
-  "Generate a test network configuration"
-  (let* ((nodes (generate-keys nodes-dns-ip))
+  "Generate a test network configuration
+
+Files are generated under the ROOT directory.
+
+NODES-DNS-IP contains a plist of keys describing the tcp/udp service
+endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
+*EG-CONFIG-ZEROTIER* for examples of the configuration syntax."
+  (let* ((nodes-with-keys (generate-keys nodes-dns-ip))
          (stakes (generate-stakes (mapcar (lambda (plist)
                                             (getf plist :public))
-                                          nodes)))
-         directories)
-    (dolist (node nodes)
+                                          nodes-with-keys)))
+         (address-for-coins (getf (first nodes-with-keys) :public))
+         directories configurations)
+    (dolist (node nodes-with-keys)
       (let ((configuration
-             (make-configuration node nodes stakes)))
-
+             (make-configuration node
+                                 :address-for-coins address-for-coins
+                                 :stakes stakes)))
         ;;; Override by pushing ahead in alist
         (when settings-key-value-alist
           (loop :for setting
@@ -89,35 +103,27 @@ Returns the enumeration of lists of public keys and staked amounts."
              (generate-node path
                             configuration
                             :force force
-                            :key-records nodes)
-             directories)))))
-    directories))
+                            :key-records nodes-with-keys)
+             directories)
+            (push configuration configurations)))))
+    (values 
+     directories
+     configurations)))
 
-(defun make-configuration (node nodes stakes)
+(defun make-configuration (node
+                           &key
+                             address-for-coins
+                             stakes)
   (let ((configuration
-         (copy-alist +default-configuration+))
-        (hostname
-         (getf node :hostname))
-        (ip
-         (getf node :ip)))
-    (push (cons :hostname hostname)
-          configuration)
-    (push (cons :ip ip)
-          configuration)
-    (push (cons :public
-                (getf node :public))
-          configuration)
-    (push (cons :private
-                (getf node :private))
-          configuration)
-    (push (cons :address-for-coins
-                (getf (first nodes) :public))
-          configuration)
-    (push (cons :stakes
-                stakes)
-          configuration)
-    (reverse
-     (remove-duplicates (reverse configuration) :test #'(lambda (x y) (eq (car x) (car y)))))))
+         (copy-alist +default-configuration+)))
+    (loop
+       :for key-value-cons :in (alexandria:plist-alist node)
+       :doing (push key-value-cons configuration))
+    (when address-for-coins
+      (push (cons :address-for-coins address-for-coins) configuration))
+    (when stakes 
+      (push (cons :stakes stakes) configuration))
+    configuration))
 
 (defun generate-node (directory
                       configuration
@@ -131,6 +137,8 @@ Returns the directory in which the node configuration was written as the primary
 The genesis block for the node is returned as the second value.
 "
   (declare (ignore force)) ;; FIXME code explicit re-generation
+  (emotiq:note "Writing node configuration to '~a'." directory)
+
   (generate-gossip-node
    :root directory
    :host (alexandria:assoc-value configuration :hostname)
@@ -141,7 +149,10 @@ The genesis block for the node is returned as the second value.
   (with-open-file (o (merge-pathnames emotiq/config:*conf-filename* directory)
                      :if-exists :supersede
                      :direction :output)
-    (cl-json:encode-json configuration o))
+    (cl-json:encode-json 
+     (alexandria:alist-hash-table configuration)
+     o))
+
   (output-stakes directory (alexandria:assoc-value configuration :stakes))
   (output-keypairs directory key-records)
   (values
@@ -162,7 +173,6 @@ The genesis block for the node is returned as the second value.
              (cosi/proofs:create-genesis-block
               (alexandria:assoc-value configuration :address-for-coins)
               (alexandria:assoc-value configuration :stakes))))
-        (emotiq:note "Writing genesis block as JSON to ~a" genesis-block-path)
         (with-open-file (o genesis-block-path
                            :direction :output
                            :if-exists :supersede)
@@ -175,8 +185,7 @@ The genesis block for the node is returned as the second value.
                              :element-type '(unsigned-byte 8)
                              :direction :output
                              :if-exists :supersede)
-            (lisp-object-encoder:serialize genesis-block o))
-          (emotiq:note "Writing genesis block as LOENC to ~a" p))
+            (lisp-object-encoder:serialize genesis-block o)))
         genesis-block))))
 
 (defun output-stakes (directory stakes)
@@ -195,8 +204,8 @@ The genesis block for the node is returned as the second value.
     (dolist (node nodes)
       (format o "~s~%" (list (getf node :public) (getf node :private))))))
 
-
 (defun generated-directory (configuration)
+  "For CONFIGURATION return a uniquely named relative directory for the network generation process"
   (let ((host
          (alexandria:assoc-value configuration :hostname))
         (ip
@@ -210,13 +219,13 @@ The genesis block for the node is returned as the second value.
     (make-pathname
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
-                           (list host ip gossip-server-port rest-server-port websocket-server-port))))))
+                           (list host ip
+                                 gossip-server-port rest-server-port websocket-server-port))))))
 
 
 (defun generate-gossip-node (&key root host eripa gossip-port public key-records)
   (declare (ignore host)) ;; Hmm?
   (ensure-directories-exist root)
-  (emotiq:note "Writing gossip configuration to '~a'." root)
   (write-gossip-conf root
                      :eripa eripa :port gossip-port :public-key-or-keys public)
   (write-hosts-conf root
@@ -225,7 +234,6 @@ The genesis block for the node is returned as the second value.
 
 (defun write-gossip-conf (directory &key eripa port public-key-or-keys)
   (let ((p (merge-pathnames emotiq/config:*local-machine-filename* directory)))
-    (emotiq:note "Writing gossip local machine configuration to '~a'" p)
     (with-open-file (o p
                        :direction :output
                        :if-exists :supersede)
@@ -246,7 +254,7 @@ The genesis block for the node is returned as the second value.
 (defun ensure-defaults (&key
                           force
                           (for-purely-local nil)
-                          (nodes-dns-ip *dns-ip-zt.emotiq.ch*))
+                          (nodes-dns-ip *eg-config-zerotier*))
   "Ensure that configuration will start up, even in the absence of explicit configuration
 
 With FORCE true, overwrite destination without warning. 
@@ -259,7 +267,6 @@ With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
                   (length (directory
                            (make-pathname :name :wild :type :wild
                                            :defaults destination))))))
-
       (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
       (return-from ensure-defaults (emotiq/config:settings)))
     (ensure-directories-exist root)

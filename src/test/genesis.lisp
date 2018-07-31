@@ -2,14 +2,21 @@
  
 (defun create-genesis-block ()
   (let ((d (emotiq/filesystem:new-temporary-directory)))
-    (let* ((nodes (emotiq/config/generate::generate-keys
-                   emotiq/config/generate::*dns-ip-zt.emotiq.ch*))
-           (stakes (emotiq/config/generate::generate-stakes
-                    (mapcar (lambda (plist)
-                              (getf plist :public))
-                            nodes)))
+    (let* ((nodes
+            (emotiq/config/generate::generate-keys
+             emotiq/config/generate::*eg-config-zerotier*))
+           (stakes
+            (emotiq/config/generate::generate-stakes
+             (mapcar (lambda (plist)
+                       (getf plist :public))
+                     nodes)))
+           (address-for-coins
+            (getf (first nodes) :public))
            (configuration 
-            (emotiq/config/generate::make-configuration (first nodes) nodes stakes)))
+            (emotiq/config/generate::make-configuration
+             (first nodes)
+             :address-for-coins address-for-coins
+             :stakes stakes)))
       (emotiq/config/generate::generate-node d configuration
                                              :key-records nodes)
       (let* ((genesis-block
