@@ -206,6 +206,12 @@ THE SOFTWARE.
   (setf *dead-node-pkeys* (delete pkey *dead-node-pkeys*
                                   :test 'int=)))
 
+;; ------------------------------------------------------------------------------------
+
+(defgeneric rh-dispatcher (msg-sym &key &allow-other-keys))
+
+;; ------------------------------------------------------------------------------------
+
 (defun make-node-dispatcher (node)
   ;; We define two separate Actors for this node, plus one super Actor
   ;; for quick dispatching of incoming messages. The dispatcher
