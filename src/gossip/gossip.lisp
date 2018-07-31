@@ -396,6 +396,14 @@ are in place between nodes.
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-KILL for this system."))
 
+(defun stream-eofp (stream)
+  "Returns true if stream is at EOF"
+  #+OPENMCL
+  (handler-case (ccl:stream-eofp stream) ; could be a bad-fd error if other end got closed
+    (error () t))
+  #+LISPWORKS
+  (stream:stream-check-eof-no-hang stream))
+
 (defun find-process (name)
   "Returns a process with given name, if any."
   (find-if (lambda (process) (ignore-errors (string-equal name (subseq (process-name process) 0 (length name))))) (all-processes)))
@@ -901,9 +909,9 @@ dropped on the floor.
 
 (defun actor-send (&rest args)
   "Error-safe version of ac:send. Returns nil if successful; otherwise returns error object"
-      (gossip-handler-case (progn (apply 'ac:send args)
-                      nil)
-        (error (e) e)))
+  (gossip-handler-case (progn (apply 'ac:send args)
+                         nil)
+                       (error (e) e)))
 
 ;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
