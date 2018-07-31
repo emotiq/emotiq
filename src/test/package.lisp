@@ -6,8 +6,4 @@
   (:nicknames #:test-generate) ;;; The road to madness
   (:use #:cl #:emotiq #:lisp-unit))
 
-(defpackage #:emotiq-sim-test
-  (:use #:cl #:lisp-unit))
-
-
 
