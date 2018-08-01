@@ -69,7 +69,9 @@
                                   
 (defun transactions-2 ()
   "Return the model for mock of transactions from the current wallet open on the node"
-  (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))
+  (let ((address "46DE0C63763A650FCA37C8F1BF9440F017E"
+          #+(or)
+          (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))
     `(:array
       (:object (:id . "C9746DE0C63763A650FCA")
                (:timestamp . 1527591324) (:type . "spend") (:epoch . 314) (:fee . 10)
