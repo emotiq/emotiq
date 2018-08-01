@@ -78,8 +78,8 @@
        :for option-or-value = (pop parsing)
        :doing (cond
                 ((or
-                  (string-equals option-or-value "--user-store")
-                  (string-equals option-or-value "-c"))
+                  (string-equal option-or-value "--user-store")
+                  (string-equal option-or-value "-c"))
                  (push (cons :emotiq-user-home (pop parsing))
                          result))))
     (values

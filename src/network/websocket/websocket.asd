@@ -13,6 +13,7 @@
                                      (:file "hunchensocket-serve")))))
 (defsystem websocket/wallet
   :depends-on (model/wallet
+               emotiq/wallet
                emotiq/logging
                cl-who
                parenscript
