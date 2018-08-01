@@ -64,11 +64,14 @@
                     (transaction (alexandria:assoc-value parameters :transaction))
                     (name (alexandria:assoc-value parameters :name))
                     (address (alexandria:assoc-value parameters :address)))
-               (setf result
-                     (emotiq/wallet:submit-transaction
-                      transaction
-                      :wallet-name name
-                      :address address))))
+               (declare (ignore transaction name))
+               (let ((transaction-result
+                      (model/wallet::submit-new-transaction
+                       :address address
+                       :amount 1000)))
+                 (declare (ignore transaction-result))
+                 ;;; TODO return value
+                 (setf result '(:true)))))
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")

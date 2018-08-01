@@ -46,8 +46,11 @@
     (emotiq-rest:start-server :port (emotiq/config:setting :rest-server-port)))
 
   (emotiq/tracker:start-tracker)
-  (emotiq:start-node)
-  (cosi-simgen:startup-elections))
+
+  (when (string-equal "true"
+                      (emotiq/config:setting :gossip-server))
+    (emotiq:start-node)
+    (cosi-simgen:startup-elections)))
 
 ;; Entry Point for binary (aka "production" version of the system.
 (defun start ()

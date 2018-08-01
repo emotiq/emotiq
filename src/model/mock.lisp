@@ -1,32 +1,73 @@
 ;;;; Wherein we mock the reports of consensus status from a modeled EMTQ chain
 (in-package :model/wallet)
 
+(defvar *local-epoch* 0)
+
 (defun mock (notify-hook)
   "Run a service that sends json messages to the function of one argument specified via NOTIFY-HOOK"
   (let ((epoch (+ 1000 (random 10000)))
-        (local-epoch 0)
-        (iterations-until-sync 20)
+        (iterations-until-sync 2)
         (i 0))
     (flet ((advance ()
              (setf epoch
                    (+ epoch (random 2)))
-             (setf local-epoch 
+             (setf *local-epoch*
                    (if (> i iterations-until-sync)
                        epoch
-                       (+ local-epoch
-                          (random (- epoch local-epoch)))))
+                       (+ *local-epoch*
+                          (random (- epoch *local-epoch*)))))
              (setf i (1+ i))))
       (loop
          :do (let ((notification
                     `(:object
                       (:epoch . ,epoch)
-                      (:local-epoch . ,local-epoch)
-                      (:synchronized . ,(cl-json:json-bool (= local-epoch epoch))))))
+                      (:local-epoch . ,*local-epoch*)
+                      (:synchronized . ,(cl-json:json-bool (= *local-epoch* epoch))))))
                (funcall notify-hook notification))
          :do (sleep (random 5))
          :do (advance)))))
 
+(defun current-posix-time ()
+  (- (get-universal-time) (encode-universal-time 0 0 0 1 1 1970 0)))
+
+(defun new-transaction-id ()
+  (gensym))
+
+(defun submit-new-transaction (&key (address "Payee address") (amount 1000))
+  (setf *amount* (- *amount* amount))
+  (let ((txn (create-new-spend-transaction :address address :amount amount)))
+    (setf *transactions* `(:array
+                           ,@(rest *transactions*)
+                           ,txn))))
+
+(defun create-new-spend-transaction (&key (address "Payee address") (amount 1000))
+  `(:object (:id . ,(new-transaction-id))
+            (:timestamp . ,(current-posix-time))
+            (:type . "spend")
+            (:epoch . ,*local-epoch*)
+            (:fee . 10)
+            (:inputs
+             . (:array
+                (:object
+                 (:cloaked . (:false))
+                 (:address . "my wallet address")
+                 (:amount . ,amount))))
+            (:outputs
+             . (:array
+                (:object
+                 (:cloaked . (:false))
+                 (:address . ,address)
+                 (:amount . ,amount))
+                (:object
+                 (:cloaked . (:false))
+                 (:address . "my wallet address")
+                 (:amount . 1))))))
+
+
 (defun transactions ()
+  *transactions*)
+                                  
+(defun transactions-2 ()
   "Return the model for mock of transactions from the current wallet open on the node"
   (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))
     `(:array
@@ -107,5 +148,8 @@
                            (:address . ,address)
                            (:amount . 1000))))))))
 
+(defvar *transactions*
+  (transactions-2))
 
 
+(defvar *amount* (expt 10 11))

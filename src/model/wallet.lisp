@@ -15,10 +15,11 @@
   "Return the representation of wallet with NAME at the node"
   `(:object
     (:address . ,(emotiq/wallet:primary-address (emotiq/wallet:get-wallet-named name)))
-    (:amount . 0)))
+    (:amount . ,*amount*)))
 
 (defun get-wallet-addresses (name)
   "Return the addresses used by wallet NAME"
   (let ((wallet (emotiq/wallet:get-wallet-named name)))
     `(:array
       ,(emotiq/wallet:primary-address wallet))))
+
