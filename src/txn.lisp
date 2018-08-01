@@ -3,13 +3,12 @@
 (defparameter *transaction-fee* 10)
 
 ;;;; ADDRESS method could ideally be placed in EMOTIQ or EMOTIQ/USER package?
-(defmethod address ((account pbc:keying-triple))
-  (address (pbc:keying-triple-pkey account)))
 (defmethod address ((pkey pbc:public-key))
   (cosi/proofs:public-key-to-address pkey))
+(defmethod address ((account pbc:keying-triple))
+  (address (pbc:keying-triple-pkey account)))
 (defmethod address ((integers cons))
-  (pbc:make-keying-triple (first integers) (second integers)))
-
+  (address (pbc:make-keying-triple (first integers) (second integers))))
 
 (defmethod get-utxos ((account pbc:keying-triple))
   (get-utxos (address account)))
