@@ -16,4 +16,5 @@
                 :depends-on (package)
                 :pathname "./"
                 :components ((:file "genesis")
+                             (:file "verify-genesis-block")
                              (:file "generate")))))
