@@ -2,6 +2,7 @@
  
 (defun create-genesis-block ()
   (let ((d (emotiq/filesystem:new-temporary-directory)))
+    (pbc:init-pairing)
     (let* ((nodes
             (emotiq/config/generate::generate-keys
              emotiq/config/generate::*eg-config-zerotier*))
@@ -42,6 +43,7 @@
      root)))
 
 (define-test genesis-block ()
+  (pbc:init-pairing)
   (multiple-value-bind (coinbase-amount directory)
       (create-genesis-block)
     (emotiq:note "Created genesis block with coinbase-amount ~a in '~a'."
