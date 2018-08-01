@@ -10,13 +10,6 @@
 (defparameter *tx3* nil)
 (defparameter *tx4* nil)
 
-(defun get-nth-key (n)
-  "return a keying triple from the config file for nth id"
-  (let ((public-private (nth n (gossip/config:get-values))))
-    (emotiq/config::make-keying-triple
-     (first public-private)
-     (second public-private))))
-
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
 (defparameter *bob* nil)
@@ -30,7 +23,7 @@
    (name :accessor account-name)))
 
 (defun get-genesis-key ()
-  (get-nth-key 0))
+  (emotiq/config:get-nth-key 0))
 
 (defun make-genesis-account ()
   (let ((r (make-instance 'account))
@@ -264,8 +257,8 @@
 (defun explore-transaction (tx)
   (let ((txid (cosi/proofs/newtx:transaction-id tx)))
     (let ((my-address (my-address tx)))
-      (let ((out-list (get-transaction-tx-outs tx)))
-        (let ((in-list (get-transaction-tx-inss tx)))
+      (let ((out-list (get-transaction-outs tx)))
+        (let ((in-list (get-transaction-ins tx)))
           (let ((out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id out-list)))
             (let ((in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id in-list)))
               (let ((in-address-list (mapcar #'my-address in-list)))
