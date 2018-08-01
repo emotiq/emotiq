@@ -50,7 +50,6 @@ THE SOFTWARE.
    :*rh-state*
    :rh-dispatcher
    :get-witness-list
-   :*use-real-gossip*
    :*local-epoch*
    :*election-calls*
    :make-signed-election-message

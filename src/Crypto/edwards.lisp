@@ -257,7 +257,7 @@ THE SOFTWARE.
   ;; a curve using WITH-ED-CURVE
   (mapcar 'ed-curve-name *known-curves*))
 
-(defun set-curve (curve)
+(defun set-ed-curve (curve)
   (setf *edcurve* (select-curve curve)))
 
 ;; -----------------------------------------------------------------------
@@ -637,7 +637,6 @@ THE SOFTWARE.
     (setf (cffi:mem-aref cvec :uint64 4) (ldb (byte 64 256) val)
           (cffi:mem-aref cvec :uint64 5) (ldb (byte 64 320) val))
     ))
-  
 
 (defun xfer-from-c (cvec)
   ;; retrieve val from C vector in 6 8-byte words
@@ -650,8 +649,7 @@ THE SOFTWARE.
     (when (eql *edcurve* *curve-ed3363*)
       (setf v (dpb (cffi:mem-aref cvec :uint64 4) (byte 64 256) v)
             v (dpb (cffi:mem-aref cvec :uint64 5) (byte 64 320) v)))
-    (with-mod *ed-q*
-      (mmod v))))
+    (mod v *ed-q*)))
 
 (defmacro with-fli-buffers (buffers &body body)
   (if (endp buffers)

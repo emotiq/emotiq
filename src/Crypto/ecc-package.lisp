@@ -203,7 +203,7 @@ THE SOFTWARE.
   (:export
    :ed-curve
    :with-ed-curve
-   :set-curve
+   :set-ed-curve
    :ed-curves
    :*ed-gen*
    :*ed-r*
@@ -356,6 +356,7 @@ THE SOFTWARE.
    :hash/sha2/256
    ;; from edwards-ecc
    :with-ed-curve
+   :set-ed-curve
    :*edcurve*
    :*ed-r*
    :*ed-q*

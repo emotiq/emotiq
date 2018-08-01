@@ -148,11 +148,11 @@ THE SOFTWARE.
    :confidential-purchase-rsell
    :check-confidential-purchase
 
-   :*curve*
-   :*curve-name*
-   :with-curve
-   :set-curve
-   :list-all-curves
+   :*pairing*
+   :*pairing-name*
+   :with-pairing
+   :set-pairing
+   :list-all-pairings
 
    :make-keying-triple
    :make-keying-integers
@@ -517,13 +517,13 @@ not belonging to any field"))
 
 ;; -------------------------------------------------
 
-(defstruct curve-params
+(defstruct pairing-params
   name
   pairing-text
   g1 g2)
 
-(defstruct (full-curve-params
-            (:include curve-params))
+(defstruct (full-pairing-params
+            (:include pairing-params))
   ;; cached values filled in at init
   context
   order g1-len g2-len zr-len gt-len)
@@ -531,9 +531,9 @@ not belonging to any field"))
 ;; ---------------------------------------------------------------------------------------
 
 ;; from modified genfparam 449
-(defparameter *curve-fr449-params*
-  (make-curve-params
-   :name :curve-fr449
+(defparameter *pairing-fr449-params*
+  (make-pairing-params
+   :name :pairing-fr449
    :pairing-text
    (sbs
    #>.end
@@ -556,7 +556,7 @@ alpha1 9476715580407735251767803811432601203461520366585714647829339610866164227
                 :str "00e4d7941297819a73c6218cf286aa008015aa7d5705d174aa2b60fe2f264ca7bf36d74aa9398921d16d332636cbe79b188812a2dc2d268c5a01db8f3931b3303a5fddeb4b75064a0172f8c26c40066e83be75a6638a04249df3a86999f311d55b4c8eadf4527de05923aeb0ea434a57ca8700")))
 )
 
-  "Curve parameters adapted to ensure q is as large as possible within
+  "Pairing parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^449, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.
@@ -565,15 +565,15 @@ Barreto and Naehrig.
 Size of q^12 is 5388 bits.
 Was shooting for q ~ 2^448, but Lynn's library chokes on that. Works fine on 2^449.")
 
-(defparameter *chk-curve-fr449-params*
-  ;; = (hex-str (hash/256 *curve-fr449-params*))
-  "d7d23d0f93cf297e2f10da33cfc1425bd43b72089e6e8522807e97dc13243fef")
+(defparameter *chk-pairing-fr449-params*
+  ;; = (hex-str (hash/256 *pairing-fr449-params*))
+  "0211B88787A03BA1D2E6C712A7721243824D684D08F7F5570E6EC0582AAFAC22")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 256
-(defparameter *curve-fr256-params*
-  (make-curve-params
-   :name :curve-fr256
+(defparameter *pairing-fr256-params*
+  (make-pairing-params
+   :name :pairing-fr256
    :pairing-text
    (sbs
    #>.end
@@ -595,7 +595,7 @@ alpha1 6636717311640939225221773794025903824279396271512712979193178803283298759
               (make-instance 'hex
                 :str "e20543135c81c67051dc263a2bc882b838da80b05f3e1d7efa420a51f5688995e0040a12a1737c80def47c1a16a2ecc811c226c17fb61f446f3da56c420f38cc01"))))
 
-  "Curve parameters adapted to ensure q is as large as possible within
+  "Pairing parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^256, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.  This curve will wrap 1 in 92 trillion hash/256.
@@ -603,14 +603,15 @@ Algorithm from 'Pairing-Friendly Elliptic Curves of Prime Order' by
 Barreto and Naehrig
 Size of q^12 is 3072 bits.")
 
-(defparameter *chk-curve-fr256-params*
-  "b937a11b2d71b08fecddfdd2be170ed1dfab1bd8891d45914f071cc63cd28443")
+(defparameter *chk-pairing-fr256-params*
+  ;; = (hex-str (hash/256 *pairing-fr256-params*))
+  "0E0F49A1373C5FCE50FD085F6E4EF337EB3FC2FACD4C884273D790ED426A649F")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from modified genfparam 255
-(defparameter *curve-fr255-params*
-  (make-curve-params
-   :name  :curve-fr255
+(defparameter *pairing-fr255-params*
+  (make-pairing-params
+   :name  :pairing-fr255
    :pairing-text
    (sbs
    #>.end
@@ -635,7 +636,7 @@ alpha1 4846306509135197722626130231530699996263396894940761743309363556183851578
 |#
 )
 
-  "Curve parameters adapted to ensure q is as large as possible within
+  "Pairing parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^255, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.  This curve will wrap 1 in 68 trillion hash/256,
@@ -644,9 +645,9 @@ Curves of Prime Order' by Barreto and Naehrig")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from: genfparam 250
-(defparameter *curve-fr250-params*
-  (make-curve-params
-   :name  :curve-fr250
+(defparameter *pairing-fr250-params*
+  (make-pairing-params
+   :name  :pairing-fr250
    :pairing-text
    (sbs
    #>.end
@@ -671,7 +672,7 @@ alpha1 2842595934937549310622048831018115941786647673109572122772923852932920186
 |#
 )
 
-  "Curve parameters adapted to ensure q is as large as possible within
+  "Pairing parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^250, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.  This curve will wrap 1 in 23 trillion hash/256,
@@ -681,9 +682,9 @@ Curves of Prime Order' by Barreto and Naehrig")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from: genfparam 248
-(defparameter *curve-fr248-params*
-  (make-curve-params
-   :name :curve-fr248
+(defparameter *pairing-fr248-params*
+  (make-pairing-params
+   :name :pairing-fr248
    :pairing-text
    (sbs
    #>.end
@@ -708,7 +709,7 @@ alpha1 3457062278036935090605497712914356157720398864201376877014371651154620662
 |#
 )
 
-  "Curve parameters adapted to ensure q is as large as possible within
+  "Pairing parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^248, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.  This curve will wrap 1 in 40 trillion hash/256,
@@ -718,9 +719,9 @@ Curves of Prime Order' by Barreto and Naehrig")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from: genfparam 247
-(defparameter *curve-fr247-params*
-  (make-curve-params
-   :name :curve-fr247
+(defparameter *pairing-fr247-params*
+  (make-pairing-params
+   :name :pairing-fr247
    :pairing-text
    (sbs
    #>.end
@@ -745,7 +746,7 @@ alpha1 1834762267872627615913576713739874445842189413874826238298856794223727710
 |#
 )
 
-  "Curve parameters adapted to ensure q is as large as possible within
+  "Pairing parameters adapted to ensure q is as large as possible within
 the constraints that q < 2^247, q and r prime, q = 3 mod 4, q = 4 mod
 9, and b = 3. Bitlengths of q and r are the same. Easy cube roots and
 square roots.  This curve will wrap 1 in 51 trillion hash/256,
@@ -754,8 +755,8 @@ Curves of Prime Order' by Barreto and Naehrig")
 
 ;; ---------------------------------------------------------------------------------------
 ;; from: genfparam 256
-(defparameter *curve-fr256-params-old*
-  (make-curve-params
+(defparameter *pairing-fr256-params-old*
+  (make-pairing-params
    :pairing-text
    (sbs
    #>.end
@@ -780,13 +781,14 @@ alpha1 3001017353864017826546717979647202832842709824816594729108687826591920660
   "Ben Lynn's quick and dirty F-type generation. This curve will wrap
 3 out of 4 hash/256")
 
-(defparameter *chk-curve-fr256-params-old*
-  "ec9f36b197a11280f6cc4b47a8a3dc7b8663ccbb3975c3068c9069803673361d")
+(defparameter *chk-pairing-fr256-params-old*
+  ;; = (hex-str (hash/256 *pairing-fr256-params-old*)) 
+  "659F19A5857410227DB8650FB72F227A9E5D80CD39BBB0BFE02C516AD0C87343")
 
 ;; ---------------------------------------------------------------------------------------
-(defparameter *curve-default-ar160-params*
-  (make-curve-params
-   :name :curve-ar160
+(defparameter *pairing-default-ar160-params*
+  (make-pairing-params
+   :name :pairing-ar160
    :pairing-text
    (sbs
    #>.end
@@ -812,25 +814,26 @@ developed and 80-bit security is no longer sufficient. But this curve
 serves as a check on our implementation with his pbc-calc for
 comparison.")
 
-(defparameter *chk-curve-default-ar160-params*
-  "FD0B8B456DB9C6DA1408D6DE0DCF3EEBDDBBC6D7AC99B3843188B01728833E29")
+(defparameter *chk-pairing-default-ar160-params*
+  ;; = (hex-str (hash/256 *pairing-default-ar160-params*)) 
+  "89DACDBD695829EE59A0DF5EDA97D9EB65CB4FFC2B17270E61FD8521BA3B1376")
 
 ;; ---------------------------------------------------------------------------------------
 
-(defparameter *curve*      nil)
+(defparameter *pairing*  nil)
 
-(define-symbol-macro *curve-name*    (curve-params-name    *curve*)) ;; symbolic name of curve
-(define-symbol-macro *g1*            (curve-params-g1      *curve*)) ;; generator for G1
-(define-symbol-macro *g2*            (curve-params-g2      *curve*)) ;; generator for G2
+(define-symbol-macro *pairing-name*  (pairing-params-name         *pairing*)) ;; symbolic name of pairing
+(define-symbol-macro *g1*            (pairing-params-g1           *pairing*)) ;; generator for G1
+(define-symbol-macro *g2*            (pairing-params-g2           *pairing*)) ;; generator for G2
 
-(define-symbol-macro *context*       (full-curve-params-context *curve*)) ;; which context of PBC? (0..15)
-(define-symbol-macro *curve-order*   (full-curve-params-order   *curve*)) ;; order of all groups (G1,G2,Zr,Gt)
-(define-symbol-macro *g1-size*       (full-curve-params-g1-len  *curve*)) ;; G1 corresponds to the h curve
-(define-symbol-macro *g2-size*       (full-curve-params-g2-len  *curve*)) ;; G2 corresponds to the g curve for keying
-(define-symbol-macro *zr-size*       (full-curve-params-zr-len  *curve*)) ;; Zr corresponds to the secret-key
-(define-symbol-macro *gt-size*       (full-curve-params-gt-len  *curve*)) ;; GT corresponds to the pairings
+(define-symbol-macro *context*       (full-pairing-params-context *pairing*)) ;; which context of PBC? (0..15)
+(define-symbol-macro *pairing-order* (full-pairing-params-order   *pairing*)) ;; order of all groups (G1,G2,Zr,Gt)
+(define-symbol-macro *g1-size*       (full-pairing-params-g1-len  *pairing*)) ;; G1 corresponds to the h curve
+(define-symbol-macro *g2-size*       (full-pairing-params-g2-len  *pairing*)) ;; G2 corresponds to the g curve for keying
+(define-symbol-macro *zr-size*       (full-pairing-params-zr-len  *pairing*)) ;; Zr corresponds to the secret-key
+(define-symbol-macro *gt-size*       (full-pairing-params-gt-len  *pairing*)) ;; GT corresponds to the pairings
 
-(defvar *contexts* (make-array 16 ;; holds copies of *curve* parameters from init-pairing
+(defvar *contexts* (make-array 16 ;; holds copies of *pairing* parameters from init-pairing
                                :initial-element nil))
 
 ;; -------------------------------------------------
@@ -862,21 +865,21 @@ comparison.")
 
 ;; -------------------------------------------------
 
-(defun list-all-curves ()
-  '(:curve-fr449 :curve-fr256 :curve-fr255 :curve-fr256 :curve-fr248 :curve-fr247 :curve-ar160))
+(defun list-all-pairings ()
+  '(:pairing-fr449 :pairing-fr256 :pairing-fr255 :pairing-fr256 :pairing-fr248 :pairing-fr247 :pairing-ar160))
 
-(defmethod %locate-raw-curve ((name symbol))
+(defmethod %locate-raw-pairing ((name symbol))
   (ecase name
-    (:curve-fr449  *curve-fr449-params*)
-    (:curve-fr256  *curve-fr256-params*)
-    (:curve-fr255  *curve-fr255-params*)
-    (:curve-fr250  *curve-fr250-params*)
-    (:curve-fr248  *curve-fr248-params*)
-    (:curve-fr247  *curve-fr247-params*)
-    (:curve-ar160  *curve-default-ar160-params*)))
+    (:pairing-fr449  *pairing-fr449-params*)
+    (:pairing-fr256  *pairing-fr256-params*)
+    (:pairing-fr255  *pairing-fr255-params*)
+    (:pairing-fr250  *pairing-fr250-params*)
+    (:pairing-fr248  *pairing-fr248-params*)
+    (:pairing-fr247  *pairing-fr247-params*)
+    (:pairing-ar160  *pairing-default-ar160-params*)))
 
-(defmethod %locate-raw-curve ((curve curve-params))
-  curve)
+(defmethod %locate-raw-pairing ((pairing pairing-params))
+  pairing)
 
 (defvar *crypto-lock*  (mpcompat:make-lock)
   "Used to protect internal startup routines from multiple access")
@@ -899,37 +902,37 @@ also mutate the state of the lib, and so are similarly protected from
 SMP access. Everything else should be SMP-safe."
   (check-type context (integer 0 15))
   (mpcompat:with-lock (*crypto-lock*)
-    (let ((prev   *curve*)
+    (let ((prev   *pairing*)
           (cparams (or (and params
-                            (%locate-raw-curve params))
-                       *curve-fr449-params*)))
+                            (%locate-raw-pairing params))
+                       *pairing-fr449-params*)))
       ;; If params not specified, and we have already been called,
       ;; just skip doing anything.
       (when (or params-supplied-p
-                (null *curve*))
-        (setf *curve* nil) ;; in case we fail
-        (with-accessors ((txt  curve-params-pairing-text)
-                         (g1   curve-params-g1)
-                         (g2   curve-params-g2)) cparams
+                (null *pairing*))
+        (setf *pairing* nil) ;; in case we fail
+        (with-accessors ((txt  pairing-params-pairing-text)
+                         (g1   pairing-params-g1)
+                         (g2   pairing-params-g2)) cparams
           (cffi:with-foreign-pointer (ansbuf #.(* 4 (cffi:foreign-type-size :uint64)))
             (cffi:with-foreign-string ((ctxt ntxt) txt
                                        :encoding :ASCII)
               (assert (zerop (_init-pairing context ctxt ntxt ansbuf)))
 
-              (setf *curve* (make-full-curve-params
-                             :name          (curve-params-name         cparams)
-                             :pairing-text  (curve-params-pairing-text cparams)
-                             :g1            (curve-params-g1           cparams)
-                             :g2            (curve-params-g2           cparams)
+              (setf *pairing* (make-full-pairing-params
+                             :name          (pairing-params-name         cparams)
+                             :pairing-text  (pairing-params-pairing-text cparams)
+                             :g1            (pairing-params-g1           cparams)
+                             :g2            (pairing-params-g2           cparams)
                              :context       context)
                     *g1-size*  (cffi:mem-aref ansbuf :uint64 0)
                     *g2-size*  (cffi:mem-aref ansbuf :uint64 1)
                     *gt-size*  (cffi:mem-aref ansbuf :uint64 2)
                     *zr-size*  (cffi:mem-aref ansbuf :uint64 3)
-                    *curve-order* nil
-                    (aref *contexts* context) *curve*)
-              (get-order) ;; fills in *curve-order* cached value
-              ;; A cryptosystem is specified by curve params and
+                    *pairing-order* nil
+                    (aref *contexts* context) *pairing*)
+              (get-order) ;; fills in *pairing-order* cached value
+              ;; A cryptosystem is specified by pairing params and
               ;; specific values for the G1 and G2 generators.
               ;; By default these are randomly generated in the above call
               (if g1
@@ -939,36 +942,36 @@ SMP access. Everything else should be SMP-safe."
                   (set-generator g2)
                 (get-g1)) ;; fill in cached value
               ))) )
-      prev))) ;; return previous *curve*
+      prev))) ;; return previous *pairing*
 
 ;; -------------------------------------------------
 
-(defmethod %locate-curve ((name symbol))
+(defmethod %locate-pairing ((name symbol))
   ;; if a symbol name is given - typically a keyword name, like
-  ;; :CURVE-FR449
+  ;; :PAIRING-FR449
   (or (find-if (lambda (slot)
                  (and slot
-                      (eq (curve-params-name slot) name)))
+                      (eq (pairing-params-name slot) name)))
                *contexts*)
-      (let ((*curve* nil))
+      (let ((*pairing* nil))
         (init-pairing :params name)
-        *curve*)
-      (error "No curve named ~S in context cache" name)))
+        *pairing*)
+      (error "No pairing named ~S in context cache" name)))
 
-(defmethod %locate-curve ((curve full-curve-params))
-  ;; if *curve* was saved after an init-pairing call
-  curve)
+(defmethod %locate-pairing ((pairing full-pairing-params))
+  ;; if *pairing* was saved after an init-pairing call
+  pairing)
 
-(defun do-with-curve (name fn)
-  (let ((*curve* (%locate-curve name)))
+(defun do-with-pairing (name fn)
+  (let ((*pairing* (%locate-pairing name)))
     (funcall fn)))
 
-(defmacro with-curve (curve-name &body body)
-  ;; use a name keyword like :CURVE-FR449 or :CURVE-FR256
-  `(do-with-curve ,curve-name (lambda () ,@body)))
+(defmacro with-pairing (pairing-name &body body)
+  ;; use a name keyword like :PAIRING-FR449 or :PAIRING-FR256
+  `(do-with-pairing ,pairing-name (lambda () ,@body)))
 
-(defun set-curve (curve)
-  (setf *curve* (%locate-curve curve)))
+(defun set-pairing (pairing)
+  (setf *pairing* (%locate-pairing pairing)))
 
 ;; -------------------------------------------------
 ;; PBC lib expects all values as big-endian
@@ -1043,7 +1046,7 @@ library."
             )))
 
 (defun parse-order-from-init-text ()
-  (let ((txt (curve-params-pairing-text *curve*)))
+  (let ((txt (pairing-params-pairing-text *pairing*)))
     (multiple-value-bind (start end gstart gend)
         ;; assumes the "r ..." line is preceded and followed by
         ;; newline chars.  This will always be true for the prefix,
@@ -1057,8 +1060,8 @@ library."
 
 (defun get-order ()
   "Return the integer value that represents the field and group orders."
-  (or *curve-order*
-      (setf *curve-order* (parse-order-from-init-text))))
+  (or *pairing-order*
+      (setf *pairing-order* (parse-order-from-init-text))))
 
 ;; -------------------------------------------------
 ;; NOTE: Mapping hash values to Elliptic curves by first mapping to
@@ -1807,7 +1810,7 @@ and then checking the pairing relation:
         ))))
 
 ;; --------------------------------------------------------
-;; (init-pairing *curve-default-ar160-params*)
+;; (init-pairing *pairing-default-ar160-params*)
 ;(init-pairing)
 ;; --------------------------------------------------------
 #|
@@ -1898,12 +1901,12 @@ likely see an assertion failure"
 
 #-:lispworks
 (eval-when (:load-toplevel)
-  ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
+  ;; THe last init-pairing executed leaves *pairing* set. Up to 16
   ;; context slots available, (0 .. 15)
-  (init-pairing :params *curve-fr256-params* :context 0)
+  (init-pairing :params *pairing-fr256-params* :context 0)
   ;; do FR449 last so it becomes the default pairing
-  (init-pairing :params *curve-fr449-params* :context 1)
-  (set-curve :curve-fr256))
+  (init-pairing :params *pairing-fr449-params* :context 1)
+  (set-pairing :pairing-fr256))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -1925,11 +1928,11 @@ likely see an assertion failure"
       (progn
         ;; in all other cases, init-pairing at LOAD time.
         ;;
-        ;; THe last init-pairing executed leaves *CURVE* set. Up to 16
+        ;; THe last init-pairing executed leaves *pairing* set. Up to 16
         ;; context slots available, (0 .. 15)
-        (init-pairing :params *curve-fr256-params* :context 0)
+        (init-pairing :params *pairing-fr256-params* :context 0)
         ;; do FR449 last so it becomes the default pairing
-        (init-pairing :params *curve-fr449-params* :context 1)
-        (set-curve :curve-fr256)
+        (init-pairing :params *pairing-fr449-params* :context 1)
+        (set-pairing :pairing-fr256)
         ))))
 

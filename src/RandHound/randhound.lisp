@@ -33,7 +33,7 @@ THE SOFTWARE.
 
 ;; ---------------------------------------------------------------
 
-(defvar *randhound-curve*  :curve-ar160) ;; fast 160-bit symmetric pairing
+(defvar *randhound-pairing*  :curve-ar160) ;; fast 160-bit symmetric pairing
 
 (defun max-byz-fails (ngrp)
   ;; offer up answers in one place so all are on same footing...
@@ -147,72 +147,31 @@ THE SOFTWARE.
 
 (defun gossip-neighborcast (my-node &rest msg)
   "Gossip-neighborcast - send message to all witness nodes."
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :style :neighborcast
-                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
-
-        (t
-         (let ((me (node-pkey (current-node))))
-           (mapc (lambda (pair)
-                   (destructuring-bind (pkey _) pair
-                     (declare (ignore _))
-                     (unless (int= pkey me)
-                       (apply 'send pkey msg))))
-                 (get-witness-list))))
-        ))
+  (gossip:broadcast msg
+                    :style :neighborcast
+                    :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
 (defun broadcast+me (msg)
-  (cond (*use-real-gossip*
-         ;; make sure our own Node gets the message too
-         (gossip:singlecast msg
-                            :graphID nil) ;; force send to ourselves
-         ;; this really should go to everyone
-         (gossip:broadcast msg
-                           :graphID :UBER))
-
-        (t
-         (mapc (lambda (pair)
-                 (destructuring-bind (pkey _) pair
-                   (declare (ignore _))
-                   (apply 'send pkey msg)))
-               (get-witness-list)))
-        ))
+  ;; make sure our own Node gets the message too
+  (gossip:singlecast msg
+                     :graphID nil) ;; force send to ourselves
+  ;; this really should go to everyone
+  (gossip:broadcast msg
+                    :graphID :UBER))
 
 (defun broadcast-to-others (msg)
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :graphID :UBER))
-
-        (t
-         (let ((me (node-pkey (current-node))))
-           (mapc (lambda (pair)
-                   (destructuring-bind (pkey _) pair
-                     (declare (ignore _))
-                     (unless (int= pkey me)
-                       (apply 'send pkey msg))))
-                 (get-witness-list))))
-        ))
+  (gossip:broadcast msg
+                    :graphID :UBER))
 
 ;; -------------------------------------------------------------------
 (defun establish-broadcast-group (pkeys &key graphID)
-  (cond (*use-real-gossip*
-         (or :UBER ;; for now...
-             (gossip:establish-broadcast-group pkeys
-                                               :graphID graphID)))
-
-        (t  pkeys)))
+  (or :UBER ;; for now...
+      (gossip:establish-broadcast-group pkeys
+                                        :graphID graphID)))
 
 (defun broadcast-grp+me (msg &key graphID)
-  (cond (*use-real-gossip*
-         (gossip:singlecast msg :graphID nil)
-         (gossip:broadcast  msg :graphID graphID))
-        
-        (t
-         (let ((me (node-pkey (current-node))))
-           (dolist (pkey (cons me (remove me graphID :test 'pbc=)))
-             (apply 'send pkey msg))))
-        ))
+  (gossip:singlecast msg :graphID nil)
+  (gossip:broadcast  msg :graphID graphID))
 
 ;; ------------------------------------------------------------------
 ;; Debug Instrumentation
@@ -383,7 +342,7 @@ THE SOFTWARE.
                 (rh-group-info-beacon-thr *rh-state*) (1+ grp-fails))
           ))
 
-      (let* ((commit (pbc:with-curve *randhound-curve*
+      (let* ((commit (pbc:with-pairing *randhound-pairing*
                        (let* ((q          (pbc:get-order))
                               (xvals      (um:range 1 (1+ ngrp)))
                               (coffs      (loop repeat share-thresh collect (random-between 1 q)))
@@ -456,7 +415,7 @@ THE SOFTWARE.
         (eshares     (subgroup-commit-encr-shares commit))
         (proofs      (subgroup-commit-proofs      commit))
         (short-pkeys (mapcar 'second pkeys)))
-    (pbc:with-curve *randhound-curve*
+    (pbc:with-pairing *randhound-pairing*
       (and (every (lambda (eshare proof pkey)
                     ;; check pairing relations between encrypted shares and proofs
                     (let ((p1  (compute-pairing proof pkey))
@@ -610,7 +569,7 @@ THE SOFTWARE.
       (let* ((node         (current-node))
              (me           (node-pkey node))
              (rands        nil))
-        (pbc:with-curve *randhound-curve*
+        (pbc:with-pairing *randhound-pairing*
           (loop for (poly share) in shares do
                 (when (validate-share share) ;; refuse invalid decryptions
                   (let* ((key  (int poly))
@@ -697,7 +656,7 @@ THE SOFTWARE.
                          (when (< npoly share-thresh)
                            (tally :incr-polynomial)
                            (push from (rand-entry-froms rec))
-                           (with-curve *randhound-curve*
+                           (with-pairing *randhound-pairing*
                              (setf (rand-entry-rand rec)
                                    ;; (mul-gts (rand-entry-rand rec) rand)
                                    (add-pts (rand-entry-rand rec) rand)))
@@ -711,7 +670,7 @@ THE SOFTWARE.
                                    (when (< ngrpr share-thresh)
                                      (tally :incr-group)
                                      (push poly (rand-entry-froms my-entropy))
-                                     (with-curve *randhound-curve*
+                                     (with-pairing *randhound-pairing*
                                        (setf (rand-entry-rand my-entropy)
                                              ;; (mul-gts (rand-entry-rand my-entropy)
                                              ;;          (rand-entry-rand rec))
@@ -794,7 +753,7 @@ THE SOFTWARE.
           (if tentropy
               (progn
                 (push from entropy-froms)
-                (pbc:with-curve *randhound-curve*
+                (pbc:with-pairing *randhound-pairing*
                   (setf entropy-rand
                         ;; (mul-gts rand entropy-rand)
                         (add-pts rand entropy-rand))))

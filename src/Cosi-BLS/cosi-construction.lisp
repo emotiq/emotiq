@@ -191,7 +191,7 @@ THE SOFTWARE.
   ;; This should likely be changed for production. The code here is
   ;; good'nuff for simulation
   ;;
-  (let ((short-keys (pbc:with-curve :CURVE-AR160
+  (let ((short-keys (pbc:with-pairing :CURVE-AR160
                       (pbc:make-key-pair (list :RANDHOUND skey)))
                     ;; will be the hash of skey
                     ))
