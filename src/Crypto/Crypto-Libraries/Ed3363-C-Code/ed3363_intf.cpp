@@ -43,6 +43,7 @@ static const int    kBPW      = 56;
    }
 
 // w=x+y
+static
 void gadd(type64 *x,type64 *y,type64 *w)
 {
 	w[0]=x[0]+y[0];
@@ -54,6 +55,7 @@ void gadd(type64 *x,type64 *y,type64 *w)
 }
 
 // w=x-y
+static
 void gsub(type64 *x,type64 *y,type64 *w)
 {
 	w[0]=x[0]-y[0];
@@ -65,6 +67,7 @@ void gsub(type64 *x,type64 *y,type64 *w)
 }
 
 // w-=x
+static
 void gdec(type64 *x,type64 *w)
 {
 	w[0]-=x[0];
@@ -76,6 +79,7 @@ void gdec(type64 *x,type64 *w)
 }
 
 // w=x
+static
 void gcopy(type64 *x,type64 *w)
 {
 	w[0]=x[0];
@@ -87,6 +91,7 @@ void gcopy(type64 *x,type64 *w)
 }
 
 // w*=2
+static
 void gmul2(type64 *w)
 {
 	w[0]*=2;
@@ -98,6 +103,7 @@ void gmul2(type64 *w)
 }
 
 // w-=2*x
+static
 void gsb2(type64 *x,type64 *w)
 {
 	w[0]-=2*x[0];
@@ -109,6 +115,7 @@ void gsb2(type64 *x,type64 *w)
 }
 
 // reduce w - Short Coefficient Reduction
+static
 void scr(type64 *w)
 {
 	type64 t0,t1,t2;
@@ -135,6 +142,7 @@ void scr(type64 *w)
 
 // multiply w by a constant, w*=i
 
+static
 void gmuli(type64 *w,int i)
 {
 	type128 t;
@@ -163,6 +171,7 @@ void gmuli(type64 *w,int i)
 
 // z=x^2
 
+static
 void gsqr(type64 *x,type64 *z)
 {
 	type128 t0,t1;
@@ -194,6 +203,7 @@ void gsqr(type64 *x,type64 *z)
 
 // z=x*y - Granger's method
 
+static
 void gmul(type64 *x,type64 *y,type64 *z)
 {
 	type128 t0,t1,t2;
@@ -244,6 +254,7 @@ void gmul(type64 *x,type64 *y,type64 *z)
 //  = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB"
 // (83 F's)
 
+static
 void ginv(type64 *x)
 {
 	int i;
@@ -343,6 +354,7 @@ type64 t[6];
 
 // P+=P
 
+static
 void double_1(ECp *P)
 {
 	type64 a[6],b[6],e[6],f[6],g[6],h[6];
@@ -361,6 +373,7 @@ void double_1(ECp *P)
 	scr(P->z);
 }
 
+static
 void double_2(ECp *P)
 {
 	type64 a[6],b[6],c[6],e[6],f[6],g[6],h[6];
@@ -376,6 +389,7 @@ void double_2(ECp *P)
 	gmul(f,g,P->z); 
 }
 
+static
 void double_3(ECp *P)
 {
 	type64 a[6],b[6],c[6],e[6],f[6],g[6],h[6];
@@ -394,6 +408,7 @@ void double_3(ECp *P)
 
 //P+=Q;
 
+static
 void add_1(ECp *Q,ECp *P)
 {
 	type64 a[6],b[6],c[6],d[6],e[6],f[6],g[6],h[6];
@@ -410,6 +425,7 @@ void add_1(ECp *Q,ECp *P)
 	gmul(e,h,P->t); 
 }
 
+static
 void add_2(ECp *Q,ECp *P)
 {
 	type64 a[6],b[6],c[6],d[6],e[6],f[6],g[6],h[6];
@@ -428,6 +444,7 @@ void add_2(ECp *Q,ECp *P)
 
 //P=0
 
+static
 void inf(ECp *P)
 {
 	for (int i=0;i<=5;i++)
@@ -437,6 +454,7 @@ void inf(ECp *P)
 
 // Initialise P
 
+static
 void init(type64 *x,type64 *y,ECp *P)
 {
 	for (int i=0;i<=5;i++)
@@ -451,6 +469,7 @@ void init(type64 *x,type64 *y,ECp *P)
 
 //P=Q
 
+static
 void copy(ECp *Q,ECp *P)
 {
 	for (int i=0;i<=5;i++)
@@ -464,6 +483,7 @@ void copy(ECp *Q,ECp *P)
 
 // P=-Q
 
+static
 void neg(ECp *Q,ECp *P)
 {
 	for (int i=0;i<=5;i++)
@@ -477,6 +497,7 @@ void neg(ECp *Q,ECp *P)
 
 /* Make Affine */
 
+static
 void norm(ECp *P)
 {
 	type64 w[6],t[6];
@@ -490,6 +511,7 @@ void norm(ECp *P)
 
 /* Precomputation */
 
+static
 void precomp(ECp *P,ECp W[])
 {
 	inf(&W[0]);
@@ -516,6 +538,7 @@ void precomp(ECp *P,ECp W[])
 
 /* Window of width 4 */
 
+static
 void window(ECp *Q,ECp *P)
 {
 	double_2(P);
@@ -529,6 +552,7 @@ void window(ECp *Q,ECp *P)
 Constant time table look-up - borrowed from ed25519 
 */
 
+static
 void fe_cmov(type64 f[],type64 g[],int ib)
 {
   type64 b=ib;
@@ -579,6 +603,7 @@ static void select(ECp *T,ECp W[],int b)
 
 /* Point Multiplication - exponent is 333 bits */
 
+static
 void mul(int *w,ECp *P)
 {
 	ECp W[1+(1<<(WINDOW-1))],S[2],Q;
@@ -710,6 +735,7 @@ w[80]= 0; w[81]= 0; w[82]= 0; w[83]= 2;
 
 /* Point Multiplication - exponent is 333 bits */
 
+static
 void mul_to_proj(int *w,ECp *P)
 {
 	ECp W[1+(1<<(WINDOW-1))],S[2],Q;
@@ -724,6 +750,7 @@ void mul_to_proj(int *w,ECp *P)
 	}
 }
 
+static
 void win4(unsigned char* nv, int *w)
 {
   // convert incoming N to bipolar 4-bit window vector - no branching
@@ -750,6 +777,7 @@ void win4(unsigned char* nv, int *w)
     }
 }
 
+static
 void gfetch(unsigned char* v, type64 *w)
 {
   // fetch 56-bit words from consecutively stored 64-bit words in v.
@@ -773,6 +801,7 @@ void gfetch(unsigned char* v, type64 *w)
   w[5] = ((t2 << 40) | (t1 >> 24)) & bot56bits;
 }
 
+static
 void scrn(type64 *w)
 {
   do {
@@ -780,6 +809,7 @@ void scrn(type64 *w)
   } while(w[0] & ~bot56bits);
 }
 
+static
 void gstore(type64 *w, unsigned char* v)
 {
   // store 56-bit words into consecutively stored 64-bit words in v.
@@ -832,6 +862,7 @@ void Ed3363_affine_mul(unsigned char* ptx,
   gstore(P.z, ptz);
 }
 
+static
 void normz(type64 *px, type64 *py, type64 *pz)
 {
   type64 t[6];
@@ -875,6 +906,7 @@ void Ed3363_projective_mul(unsigned char* ptx,
 
 // Initialise P
 
+static
 void init_proj(type64 *x,type64 *y,type64 *z, ECp *P)
 {
   for (int i=0;i<=5;i++)
@@ -886,6 +918,7 @@ void init_proj(type64 *x,type64 *y,type64 *z, ECp *P)
     }
 }
 
+static
 void add_proj(ECp *Q, ECp *P)
 {
   // Add Q to P, both in projective (X,Y,Z) coordinates. We don't use T here.

@@ -44,7 +44,7 @@
    (:linux      "libLispCurve1174.so")
    (t (:default "libLispCurve1174")))
   (cffi:define-foreign-library
-      :libpbc
+      :libLispPBC
    (:darwin     "libLispPBCIntf.dylib")
    (:linux      "libLispPBCIntf.so")
    (t (:default "libLispPBCIntf"))))
