@@ -257,6 +257,9 @@ THE SOFTWARE.
   ;; a curve using WITH-ED-CURVE
   (mapcar 'ed-curve-name *known-curves*))
 
+(defun set-curve (curve)
+  (setf *edcurve* (select-curve curve)))
+
 ;; -----------------------------------------------------------------------
 
 (cffi:defcfun ("Ed3363_affine_mul" _Ed3363-affine-mul) :void

@@ -203,6 +203,7 @@ THE SOFTWARE.
   (:export
    :ed-curve
    :with-ed-curve
+   :set-curve
    :ed-curves
    :*ed-gen*
    :*ed-r*
