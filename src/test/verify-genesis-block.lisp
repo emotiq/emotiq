@@ -25,10 +25,10 @@
          coinbase-public-address))))
 
 (define-test verify-genesis-block-generate ()
-  (progn 
-    (emotiq:note "Generating 100 genesis blocks~%")
+  (let ((iterations 100))
+    (emotiq:note "Generating ~a genesis blocks" iterations)
     (loop
-      :repeat 100
+      :repeat iterations
       :do (progn
             (multiple-value-bind (amount directory keypair coinbase-public-address)
                 (create-and-check-genesis-block)
