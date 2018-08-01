@@ -2,6 +2,8 @@
 (defpackage :crypto-lib-loader
   (:use :cl)
   (:export
+   :load-dlls
+   :unload-dlls
    ))
 
 (in-package :crypto-lib-loader)
@@ -73,5 +75,11 @@
    (t
     (format t "~%Skipping library loading"))
    ))
+
+(defun unload-dlls ()
+  (cffi:close-foreign-library :libLispPBC)
+  (cffi:close-foreign-library :libed3363)
+  (cffi:close-foreign-library :libcurve1174)
+  (setf *load-counter* 0))
   
 (load-dlls)
