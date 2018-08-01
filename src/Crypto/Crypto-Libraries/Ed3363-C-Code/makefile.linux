@@ -1,4 +1,4 @@
-GCC=g++ -shared -fpic -I$(PREFIX)/include  -O3 -msse3 -mfpmath=sse -m64 -L$(PREFIX)/lib
+GCC=gcc -shared -fpic -I$(PREFIX)/include  -O3 -msse3 -mfpmath=sse -m64 -L$(PREFIX)/lib
 
 TARGET=$(PREFIX)/lib/libLispEd3363.so
 TARGET2=$(PREFIX)/lib/libLispCurve1174.so

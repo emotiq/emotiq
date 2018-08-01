@@ -2,13 +2,6 @@
 (in-package :crypto-pairings-test)
 
 (define-test basis-consistency
-  (assert-true (hash:hash-check edec::*curve1174*    edec::*chk-curve1174*))
-  (assert-true (hash:hash-check edec::*curve-e382*   edec::*chk-curve-e382*))
-  (assert-true (hash:hash-check edec::*curve41417*   edec::*chk-curve41417*))
-  (assert-true (hash:hash-check edec::*curve-e521*   edec::*chk-curve-e521*))
-  (assert-true (hash:hash-check edec::*curve-ed448*  edec::*chk-curve-ed448*))
-  (assert-true (hash:hash-check edec::*curve-ed3363* edec::*chk-curve-ed3363*))
-
   (assert-true (hash:hash-check pbc::*pairing-default-ar160-params* pbc::*chk-pairing-default-ar160-params*))
   (assert-true (hash:hash-check pbc::*pairing-fr256-params-old*     pbc::*chk-pairing-fr256-params-old*))
   (assert-true (hash:hash-check pbc::*pairing-fr256-params*         pbc::*chk-pairing-fr256-params*))
