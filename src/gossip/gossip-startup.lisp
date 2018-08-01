@@ -54,12 +54,8 @@
         (let ((interval (+ 20 (random 40)))) ; minimum 20 seconds; maximum 60
           (loop
             (unless (> (length (remote-real-uids))
-                       ; sqrt is just a heuristic about whether we're connected to the outside world.
-                       ;  Needs to be more sophisticated if *hosts* can vary over time,
-                       ;   and if we begin to cause (remote-real-uids) to decrease over time
-                       ;   when nodes disappear.
-                       (sqrt (length *hosts*)))
-              (ping-other-machines))
+                       (1- (length *hosts*)))
+              (ping-other-machines (missing-hosts)))
             (sleep interval)))))))
 
 (defun ping-other-machines (&optional (hosts *hosts*))
