@@ -1,4 +1,4 @@
-GCC=gcc -shared -fpic -I$(PREFIX)/include -O2 -msse3 -mfpmath=sse -m64 -L$(PREFIX)/lib
+GCC=g++ -shared -fpic -I$(PREFIX)/include -O2 -msse3 -mfpmath=sse -m64 -L$(PREFIX)/lib
 
 
 TARGET=$(PREFIX)/lib/libLispPBCIntf.so

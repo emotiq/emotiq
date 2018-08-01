@@ -45,21 +45,25 @@ typedef struct pairing_context {
 
 pairing_context_t context[16];
 
+static inline
 bool& IsInit(uint64_t ctxt)
 {
   return context[ctxt].init_flag;
 }
 
+static inline
 pairing_t& Pairing(uint64_t ctxt)
 {
   return context[ctxt].pairing;
 }
 
+static inline
 element_t& G1_gen(uint64_t ctxt)
 {
    return context[ctxt].g1_gen;
 }
 
+static inline
 element_t& G2_gen(uint64_t ctxt)
 {
   return context[ctxt].g2_gen;
@@ -379,6 +383,7 @@ int64_t check_signature(uint64_t ctxt,
 // well, often returning total garbage in such cases. Instead, we must
 // take precautions ourselves.
 
+static
 bool tst_nonzero (uint8_t* ptr, uint64_t nel)
 {
   // search operand for a non-zero byte
