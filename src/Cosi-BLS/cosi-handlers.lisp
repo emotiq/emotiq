@@ -1,4 +1,4 @@
-;; cosi-handlers.lisp -- Handlers for various Cosi operations
+;; cosi-handlers.lisp -- Cosi protocol handlers
 ;;
 ;; DM/Emotiq  02/18
 ;; ---------------------------------------------------------------
@@ -45,25 +45,6 @@ THE SOFTWARE.
 (defvar *cosi-max-wait-period* 30
   "Timeout in seconds that represents the longest witness idle period before setting up an emergency call-for-new-election.")
   
-;; -------------------------------------------------------
-
-(defmacro with-current-node (node &body body)
-  `(let ((*current-node* ,node))
-     ,@body))
-
-(define-symbol-macro *blockchain*     (node-blockchain     *current-node*))
-(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
-(define-symbol-macro *mempool*        (node-mempool        *current-node*))
-(define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
-(define-symbol-macro *leader*         (node-current-leader *current-node*))
-(define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
-(define-symbol-macro *had-work*       (node-had-work       *current-node*))
-
-;; election related items
-(define-symbol-macro *election-calls* (node-election-calls *current-node*))
-(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
-(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
-
 ;; -------------------------------------------------------
 
 (defstruct tx-changes
@@ -142,8 +123,7 @@ THE SOFTWARE.
   (pr "~A got genesis block" (short-id (current-node)))
   (unless blk ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
-  (push blk *blockchain*)
-  (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk))
+  (add-to-blockchain (current-node) blk))
 
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction-new)) &key trn)
@@ -186,8 +166,29 @@ THE SOFTWARE.
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
   (pr "Block committed to blockchain")
-  (pr "Block signatures = ~D" (logcount (block-signature-bitmap (first *blockchain*))))
-  (send-hold-election))
+  (pr "Block signatures = ~D" (logcount (block-signature-bitmap (latest-block))))
+  (send-blockchain-comment) ;; b'cast to everyone
+  (send-hold-election))     ;; b'cast to witness pool
+
+(defmethod node-dispatcher ((msg-sym (eql :blockchain-head)) &key pkey hashID sig)
+  (when (validate-blockchain-head-message pkey hashID sig)
+    (unless (eql *blockchain* hashID)
+      (pr "Missing block head ~A, requesting fill" (short-id hashID))
+      (setf *blockchain* hashID)
+      (start-backfill (current-node) hashID))))
+
+(defvar *max-query-depth*  8)
+
+(defmethod node-dispatcher ((msg-sym (eql :request-block)) &key replyTo hashId depth)
+  (let ((blk (gethash hashID *blockchain-tbl*)))
+    (if blk
+        (reply replyTo :block-you-requested hashID blk)
+      (when (< depth *max-query-depth*)
+        (ask-neighbor-node :request-block   ;; else forward to someone else
+                           :replyTo replyTo
+                           :hashID  hashID
+                           :depth   (1+ depth))
+        ))))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
   ;; trap errant :GOSSIP messages that arrive at the Cosi application layer
@@ -195,6 +196,15 @@ THE SOFTWARE.
   (pr "WARN - Unexpected GOSSIP message: ~S" msg))
 
 ;; ------------------------------------------------------------------------------------
+
+(defvar *dead-node-pkeys* nil)
+
+(defun kill-node (pkey)
+  (pushnew pkey *dead-node-pkeys* :test 'int=))
+
+(defun enable-node (pkey)
+  (setf *dead-node-pkeys* (delete pkey *dead-node-pkeys*
+                                  :test 'int=)))
 
 (defun make-node-dispatcher (node)
   (let ((beh  (make-actor
@@ -204,20 +214,90 @@ THE SOFTWARE.
                )))
     (make-actor
      (lambda (&rest msg)
-       ;;; Source of majority of messages on screen makes it fairly verbose
-       (pr "Cosi MSG: ~A" msg)
-       (um:dcase msg
-         (:actor-callback (aid &rest ans)
-          (let ((actor (lookup-actor-for-aid aid)))
-            (when actor
-              (apply 'send actor ans))
-            ))
-         
-          (t (&rest msg)
-             (apply 'send beh msg))
-          )))))
+       (unless (find (node-pkey node) *dead-node-pkeys*
+                     :test 'int=)
+         ;;; Source of majority of messages on screen makes it fairly verbose
+         (pr "Cosi MSG: Node ~A ~A"
+             (short-id node)
+             (mapcar 'short-id msg))
+         (um:dcase msg
+           (:actor-callback (aid &rest ans)
+            (let ((actor (lookup-actor-for-aid aid)))
+              (when actor
+                (apply 'send actor ans))
+              ))
+           
+           (t (&rest msg)
+              (apply 'send beh msg))
+           ))))))
 
 ;; -------------------------------------------------------------------------------------
+;; Blockchain Sync
+
+(defun ask-neighbor-node (&rest msg)
+  (let* ((my-pkey (node-pkey (current-node)))
+         (nodes   (remove my-pkey  ;; avoid asking myself
+                          (get-witness-list)
+                          :test 'int=)))
+    (gossip:singlecast msg (nth (random (length nodes)) nodes)
+                       :graphID :uber
+                       :startNodeID my-pkey)))
+
+(defun validate-block-signature (blkID blk)
+  (let* ((bits  (block-signature-bitmap blk))
+         (pkey  (composite-pkey blk bits)))
+    (and (int= blkID (hash-block blk))            ;; is it really the block I think it is?
+         (check-block-multisignature blk)         ;; does the signature check out?
+         )))
+
+(defun sync-blockchain (node hashID &optional (retries 1))
+  (when hashID
+    (assert (integerp hashID))
+    (with-current-node node
+      (ask-neighbor-node :request-block :replyTo (current-actor) :hashID hashID :depth 1)
+      (let ((start   (get-universal-time))
+            (timeout 60))
+        (labels ((retry-ask ()
+                   (if (>= retries 3)
+                       (pr "ERROR - No response to blockchain query for block ~A" hashID)
+                     (sync-blockchain node hashID (1+ retries)))))
+          (recv
+            ((list :answer :block-you-requested blkID blk)
+             (with-current-node node
+               (assert (integerp blkID))
+               (cond ((and (int= blkID hashID)
+                           (validate-block-signature blkID blk)) ;; a valid response?
+                      (setf (gethash blkID *blockchain-tbl*) blk)
+                      (um:when-let (newID (block-prev-block-hash blk)) ;; do I have predecessor?
+                        (assert (integerp newID))
+                        (unless (gethash newID *blockchain-tbl*)
+                          ;; NOTE: While the following may appear to be a recursive call,
+                          ;; the semantics of ACTORS:RECV ensure that it performs in constant
+                          ;; stack space.
+                          (sync-blockchain node newID))))  ;; if not, then ask for it
+                     (t
+                      ;; wasn't what I asked for, or invalid block response
+                      (setf timeout (- (+ start 60) (get-universal-time)))
+                      (if (plusp timeout)
+                          (retry-recv) ;; maybe node I asked forwarded to another node?
+                        (retry-ask)))
+                     )))
+            
+            :TIMEOUT    timeout
+            :ON-TIMEOUT (retry-ask)
+            ))))))
+
+(defun start-backfill (node fromID)
+  ;; User callable backfill starter - need to provide a reference to
+  ;; the NODE structure to be backfilled, and a starting block ID hash
+  ;; value.
+  ;;
+  ;; If you received a warning about a missing block when calling
+  ;; (BLOCK-LIST) then the block ID you need is the prev-block-hash in
+  ;; the header of the last block in your returned list.
+  (spawn 'sync-blockchain node fromID))
+
+;; --------------------------------------------------------------------
 
 (defvar *election-proof*   nil) ;; NYI
 
@@ -642,10 +722,12 @@ check that each TXIN and TXOUT is mathematically sound."
   (um:accum acc
     (iter-subs node #'acc)))
 
-(defmethod short-id ((node node))
-  (short-id (node-pkey node)))
+;; ---------------------------------------------------------------------
 
 (defmethod short-id (x)
+  x)
+
+(defmethod short-id ((x integer))
   (let* ((str (hex-str x))
          (len (length str)))
     (if (> len 14)
@@ -653,6 +735,11 @@ check that each TXIN and TXOUT is mathematically sound."
                      ".."
                      (subseq str (- len 7)))
       str)))
+
+(defmethod short-id ((node node))
+  (short-id (node-pkey node)))
+
+;; -----------------------------------------------------------------------
 
 (defun node-id-str (node)
   (short-id node))
@@ -870,8 +957,10 @@ check that each TXIN and TXOUT is mathematically sound."
   (let* ((bits  (block-signature-bitmap blk))
          (sig   (block-signature blk))
          (hash  (hash/256 (signature-hash-message blk))))
-    (and (check-hash-multisig hash sig bits blk)
-         (check-block-transactions-hash blk))
+    (and (find (block-leader-pkey blk) (block-witnesses blk) ;; is the purported Leader in the witness list?
+               :test 'int=)
+         (check-hash-multisig hash sig bits blk)  ;; does the multisignature validate?
+         (check-block-transactions-hash blk))     ;; do the transactions hash to the header Merkel hash?
     ))
 
 (defun call-for-punishment ()
@@ -881,7 +970,29 @@ check that each TXIN and TXOUT is mathematically sound."
 
 (defun done-with-duties ()
   (setup-emergency-call-for-new-election))
-  
+
+;; ----------------------------------------------------------------------
+
+(defun make-blockchain-comment-message-skeleton (pkey hashID)
+  `(:blockchain-head
+    :pkey   ,pkey
+    :hashID ,hashID))
+
+(defun make-signed-blockchain-comment-message (pkey hashID)
+  (make-signed-message (make-blockchain-comment-message-skeleton pkey hashID)))
+
+(defun send-blockchain-comment ()
+  (gossip:broadcast (make-signed-blockchain-comment-message (node-pkey (current-node))
+                                                            *blockchain*)
+                    :graphID :UBER))
+
+(defun validate-blockchain-head-message (pkey hashID sig)
+  (pbc:check-hash (make-blockchain-comment-message-skeleton pkey hashID)
+                  sig
+                  pkey))
+
+;; ----------------------------------------------------------------------
+
 (defun validate-cosi-message (node consensus-stage blk)
   (ecase consensus-stage
     (:prepare
@@ -890,7 +1001,7 @@ check that each TXIN and TXOUT is mathematically sound."
      (or
       (and (int= *leader* (block-leader-pkey blk))
            (check-block-transactions-hash blk)
-           (let ((prevblk (first *blockchain*)))
+           (let ((prevblk (latest-block)))
              (or (null prevblk)
                  (and (> (block-timestamp blk) (block-timestamp prevblk))
                       (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
@@ -909,8 +1020,7 @@ check that each TXIN and TXOUT is mathematically sound."
       (and (int= *leader* (block-leader-pkey blk))
            (check-block-multisignature blk)
            (progn
-             (push blk *blockchain*)
-             (setf (gethash (cosi/proofs:hash-block blk) *blockchain-tbl*) blk)
+             (add-to-blockchain node blk)
              (cond
               ;; For new tx: ultra simple for now: there's no UTXO
               ;; database. Just remhash from the mempool all
@@ -1049,9 +1159,9 @@ check that each TXIN and TXOUT is mathematically sound."
   (pr "Assemble new block")
   (let* ((node      (current-node))
          (self      (current-actor))
-         (new-block (cosi/proofs:create-block (first *blockchain*)
+         (new-block (cosi/proofs:create-block (latest-block)
                                               *election-proof* *leader*
-                                              (coerce (get-witness-list) 'vector)
+                                              (get-witness-list)
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
@@ -1090,7 +1200,9 @@ check that each TXIN and TXOUT is mathematically sound."
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else
-      (done-with-duties))
+      (progn
+        (send-blockchain-comment)
+        (done-with-duties)))
     ))
 
 ;; -----------------------------------------------------------------

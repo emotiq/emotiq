@@ -118,3 +118,10 @@
                (slot-value *acceptor* 'hunchentoot::port))
   (hunchentoot:start *acceptor*))
 
+(defun stop-server ()
+  (when *acceptor*
+    (emotiq:note "Stopping websocket server.")
+    (hunchentoot:stop *acceptor*)))
+
+
+

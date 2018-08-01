@@ -41,8 +41,6 @@
   Should be true, especially on larger networks. Reduces unnecessary interim-replies while still ensuring
   some partial information is propagating in case of node failures.")
 
-(defparameter *nominal-gossip-port* 65002 "Nominal gossip network port to be used.")
-
 ;;;; DEPRECATE
 (defparameter *use-all-neighbors* 2 "True to broadcast to all neighbors; nil for none (no forwarding).
                                        Can be an integer to pick up to n neighbors.")
@@ -593,7 +591,9 @@ are in place between nodes.
 (defclass proxy-gossip-node (abstract-gossip-node actor-mixin)
   ((real-address :initarg :real-address :initform nil :accessor real-address
             :documentation "Real IP or DNS address of remote node")
-   (real-port :initarg :real-port :initform *nominal-gossip-port* :accessor real-port
+   (real-port :initarg :real-port
+              :initform (emotiq/config:setting :gossip-server-port)
+              :accessor real-port
               :documentation "Real port of remote node")
    (real-uid :initarg :real-uid :initform nil :accessor real-uid
                   :documentation "UID of the (real) gossip node on the other end.
@@ -2187,7 +2187,8 @@ gets sent back, and everything will be copacetic.
    again if you change the graph or want to start with a clean log."
   (when archive-log (archive-log))
   (sleep .5)
-  (start-gossip-transport usocket:*wildcard-host* *nominal-gossip-port*)
+  (start-gossip-transport usocket:*wildcard-host*
+                          (emotiq/config:setting :gossip-server-port))
   (maphash (lambda (uid node)
              (declare (ignore uid))
              (setf (car (ac::actor-busy (actor node))) nil)
@@ -2243,18 +2244,19 @@ gets sent back, and everything will be copacetic.
 
 (defun other-udp-port ()
   (when *udp-gossip-socket*
-    (if (= *nominal-gossip-port* *actual-udp-gossip-port*)
-        (1+ *nominal-gossip-port*)
-        *nominal-gossip-port*)))
+    (let ((gossip-port (emotiq/config:setting :gossip-server-port)))
+      (if (= gossip-port *actual-udp-gossip-port*)
+        (1+ gossip-port)
+        gossip-port))))
 
 (defun other-tcp-port ()
   "Deduce proper port for other end of connection based on whether this process
    has already established one. Only used for testing two processes communicating on one machine."
   (when *tcp-gossip-socket*
-    (if (= *nominal-gossip-port* *actual-tcp-gossip-port*)
-        (1+ *nominal-gossip-port*)
-        *nominal-gossip-port*)))
-
+    (let ((gossip-port (emotiq/config:setting :gossip-server-port)))
+      (if (= gossip-port *actual-tcp-gossip-port*)
+          (1+ gossip-port)
+          gossip-port))))
     
 ; UDP TESTS
 ; Test 1
@@ -2271,7 +2273,7 @@ gets sent back, and everything will be copacetic.
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 200)) ; assumes there's a node numbered 200 on another Lisp process at 65003
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 200))
+(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" (emotiq/config:setting :gossip-server-port 200)))
 
 
 #+TEST1 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
@@ -2298,7 +2300,7 @@ gets sent back, and everything will be copacetic.
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':UDP "localhost" (other-udp-port) 0))
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+(setf rnode (ensure-proxy-node ':UDP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" (emotiq/config:setting :gossip-server-port) 0))
 
 #+TEST2 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network
@@ -2326,7 +2328,7 @@ gets sent back, and everything will be copacetic.
 #+TEST-LOCALHOST
 (setf rnode (ensure-proxy-node ':TCP "localhost" (other-tcp-port) 0))
 #+TEST-AMAZON
-(setf rnode (ensure-proxy-node ':TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" *nominal-gossip-port* 0))
+(setf rnode (ensure-proxy-node ':TCP "ec2-35-157-133-208.eu-central-1.compute.amazonaws.com" (emotiq/config:setting :gossip-server-port) 0))
 
 #+TEST3 ; create 'real' local node to call solicit-wait on because otherwise system will try to forward the
        ;   continuation that solicit-wait makes across the network

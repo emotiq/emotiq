@@ -37,7 +37,7 @@
 
 (defsystem "emotiq/filesystem"
   :depends-on (uiop
-               emotiq)
+               emotiq/delivery)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -108,20 +108,20 @@
                emotiq/logging
                emotiq/filesystem
                lisp-object-encoder
-               useful-macros
-               gossip/config)
-  :in-order-to ((test-op (test-op "emotiq-config-test")))
+               crypto-pairings
+               useful-macros)
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "stakes")
-                             (:file "genesis")
-                             (:file "config")))))
+                             (:file "config")
+                             (:file "genesis")))))
+
 
 (defsystem "emotiq/config/generate"
   :depends-on (emotiq/config
                cosi-bls)
-  :in-order-to ((test-op (test-op "emotiq-config-test")))
+  :in-order-to ((test-op (test-op "test-generate")))
   :components ((:module source
                 :pathname "./"
                 :serial t

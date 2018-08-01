@@ -23,30 +23,33 @@
 
 (in-package "EMOTIQ")
 
-;; "Entry Point" for development - does nothing, just load and go
-(defun main (&key config-subpath how-started-message?)
-  (when config-subpath
-    (setf emotiq/fs:*subpath* config-subpath))
+(defun main (&key etc-and-wallets how-started-message?)
+  "Main loop for Emotiq daemon"
+  (when etc-and-wallets
+    (setf (symbol-function 'emotiq/fs:etc/)
+          (lambda () (pathname etc-and-wallets))))
   (message-running-state how-started-message?)
+
   ;; Create a default wallet on disk if one doesn't already exist
   (emotiq/wallet:create-wallet)
+
   ;; Start the websocket interface for the Electron wallet
   ;; listening <ws://localhost:PORT/wallet> .
   (when (string-equal "true"
-                      (emotiq/config:settings/read :websocket-server))
-    (websocket/wallet:start-server :port (emotiq/config:settings/read :websocket-server-port)))
+                      (emotiq/config:setting :websocket-server))
+    (websocket/wallet:start-server :port (emotiq/config:setting :websocket-server-port)))
+
   ;; Start the REST server which provides support for testing the
   ;; WebSocket implementation at <http://localhost:PORT/client/>
   (when (string-equal "true"
-                      (emotiq/config:settings/read :rest-server))
-    (emotiq-rest:start-server :port (emotiq/config:settings/read :rest-server-port)))
+                      (emotiq/config:setting :rest-server))
+    (emotiq-rest:start-server :port (emotiq/config:setting :rest-server-port)))
 
   (emotiq/tracker:start-tracker)
   (emotiq:start-node)
   (cosi-simgen:startup-elections))
 
-;; Entry Point for binary version of the system.
-
+;; Entry Point for binary (aka "production" version of the system.
 (defun start ()
   ;; This is for running in the binary command line only. For now, if we're
   ;; starting from the command line, we assume it's for
@@ -56,6 +59,7 @@
   (unintern 'cl-user::*performing-binary-build*) ;; if building binary,
   (setq *production* t)  ;; used by EMOTIQ:PRODUCTION-P in Crypto
   (message-running-state "from command line")
+  (pbc:init-pairing)
   (actors:install-actor-system)
   (main))
 

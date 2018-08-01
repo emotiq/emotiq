@@ -1,6 +1,7 @@
 (in-package :emotiq)
 
-(defvar *notestream* *error-output* "Output stream for Emotiq notes")
+#-lispworks(defparameter *notestream* *error-output* "Output stream for Emotiq notes")
+#+lispworks(defparameter *notestream* hcl:*background-output* "Output stream for Emotiq notes")
 
 ;;; N.b. deliberately not a macro so we can theoretically inspect the
 ;;; call stack.

@@ -176,7 +176,7 @@ added to the blockchain."
       (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
       (setf election-proof block-election-proof)
       (setf leader-pkey block-leader-pkey)
-      (setf witnesses block-witnesses)
+      (setf witnesses (coerce block-witnesses 'vector))
       (setf transactions block-transactions)
       (setf merkle-root-hash (compute-merkle-root-hash blk))
       (setf input-script-merkle-root-hash (compute-input-script-merkle-root-hash blk))
@@ -184,7 +184,7 @@ added to the blockchain."
       (when prev-block? 
         (with-slots (prev-block-hash)
             blk
-          (setf prev-block-hash (hash-block prev-block?))))
+          (setf prev-block-hash (int (hash-block prev-block?)))))
       blk)))
 
 
