@@ -660,7 +660,6 @@ are in place between nodes.
                (host-in-nodes hostpair))
              hosts))
 
-
 (defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))

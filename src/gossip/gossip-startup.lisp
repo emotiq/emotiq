@@ -55,7 +55,7 @@
           (loop
             (unless (> (length (remote-real-uids))
                        (1- (length *hosts*)))
-              (ping-other-machines))
+              (ping-other-machines (missing-hosts)))
             (sleep interval)))))))
 
 (defun ping-other-machines (&optional (hosts *hosts*))
