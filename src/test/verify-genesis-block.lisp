@@ -33,8 +33,9 @@
             (multiple-value-bind (amount directory keypair coinbase-public-address)
                 (create-and-check-genesis-block)
               (assert-true (equal amount
-                                  (cosi/proofs/newtx:initial-total-coin-amount))
+                                  (cosi/proofs/newtx:initial-total-coin-amount)))
               (assert-true (equal (vec-repr:int (pbc:keying-triple-pkey keypair))
-                                  coinbase-public-address))))
+                                  coinbase-public-address)))
             (format t ".")))))
+
 
