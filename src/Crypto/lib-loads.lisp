@@ -1,5 +1,10 @@
 
-(in-package :cl-user)
+(defpackage :crypto-lib-loader
+  (:use :cl)
+  (:export
+   ))
+
+(in-package :crypto-lib-loader)
 
 ;; -----------------------------------------------------------------------
 
@@ -44,20 +49,29 @@
    (:linux      "libLispPBCIntf.so")
    (t (:default "libLispPBCIntf"))))
 
-(defun load-dlls()
-  "load the dev or production dlls at runtime"
-  (if (emotiq:production-p)
-      (define-production-dlls)
-    (define-dev-dlls))
-  ;; (format t "DYLD_LIBRARY_PATH = ~S" (getenv "DYLD_LIBRARY_PATH"))
-  (format t "~%cffi:*foreign-library-directories* = ~S"
-          (mapcar (lambda (item)
-                    (if (consp item)
-                        (apply (first item) (rest item))
-                      item))
-                  cffi:*foreign-library-directories*))
-  (cffi:use-foreign-library :libLispPBC)
-  (cffi:use-foreign-library :libEd3363)
-  (cffi:use-foreign-library :libCurve1174))
+(defvar *load-counter*  0)
 
+(defun load-dlls ()
+  "load the dev or production dlls at runtime"
+  (format t "~%CRYPTO-LIB-LOADER:LOAD-DLL Load Counter = ~A" (incf *load-counter*))
+  (cond
+   ((= 1 *load-counter*)
+    (if (emotiq:production-p)
+        (define-production-dlls)
+      (define-dev-dlls))
+    ;; (format t "DYLD_LIBRARY_PATH = ~S" (getenv "DYLD_LIBRARY_PATH"))
+    (format t "~%cffi:*foreign-library-directories* = ~S"
+            (mapcar (lambda (item)
+                      (if (consp item)
+                          (apply (first item) (rest item))
+                        item))
+                    cffi:*foreign-library-directories*))
+    (cffi:use-foreign-library :libLispPBC)
+    (cffi:use-foreign-library :libEd3363)
+    (cffi:use-foreign-library :libCurve1174))
+   
+   (t
+    (format t "~%Skipping library loading"))
+   ))
+  
 (load-dlls)
