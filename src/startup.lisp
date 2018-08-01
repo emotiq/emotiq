@@ -26,27 +26,35 @@
 (defun main (&key etc-and-wallets how-started-message?)
   "Main loop for Emotiq daemon"
   (when etc-and-wallets
-    (setf (symbol-function 'emotiq/fs:etc/)
+    (setf (symbol-function 'emotiq/fs:emotiq/user/root/)
           (lambda () (pathname etc-and-wallets))))
   (message-running-state how-started-message?)
 
   ;; Create a default wallet on disk if one doesn't already exist
+  #+(or)
   (emotiq/wallet:create-wallet)
 
+  (emotiq/config/generate:ensure-defaults :force t :for-purely-local t)
+
+  (websocket/wallet:start-server :port :3145)
+  (emotiq-rest:start-server :port :3140)
   ;; Start the websocket interface for the Electron wallet
   ;; listening <ws://localhost:PORT/wallet> .
+  #+(or)
   (when (string-equal "true"
                       (emotiq/config:setting :websocket-server))
     (websocket/wallet:start-server :port (emotiq/config:setting :websocket-server-port)))
 
   ;; Start the REST server which provides support for testing the
   ;; WebSocket implementation at <http://localhost:PORT/client/>
+  #+(or)
   (when (string-equal "true"
                       (emotiq/config:setting :rest-server))
     (emotiq-rest:start-server :port (emotiq/config:setting :rest-server-port)))
 
   (emotiq/tracker:start-tracker)
 
+  #+(or)
   (when (string-equal "true"
                       (emotiq/config:setting :gossip-server))
     (emotiq:start-node)
@@ -63,6 +71,8 @@
   (setq *production* t)  ;; used by EMOTIQ:PRODUCTION-P in Crypto
   (message-running-state "from command line")
   (actors:install-actor-system)
+  (main :etc-and-wallets #p"/var/tmp/emotiq/")
+  #+(or)
   (main))
 
 (defun argv ()

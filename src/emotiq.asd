@@ -55,6 +55,8 @@
   :depends-on (emotiq/node
                actors
                emotiq/wallet
+               cosi-bls
+               emotiq/config/generate
                emotiq-rest
                websocket/wallet
 	       emotiq/tracker)
