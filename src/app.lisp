@@ -257,19 +257,19 @@
 
 
 (defun block-explorer ()
-  (for-all-blocks (b)
-     (for-all-transactions-in-block (tx b)
-        (explore-transaction (txid))))
+  (let ((b (cosi-simgen:block-list)))
+    (cosi/proofs/newtx::do-transactions (tx b)
+      (explore-transaction tx))))
 
-(defun explore-transaction (txid)
-  (let ((tx (cosi/proofs/newtx:find-tx txid)))
+(defun explore-transaction (tx)
+  (let ((txid (cosi/proofs/newtx:transaction-id tx)))
     (let ((my-address (my-address tx)))
       (let ((out-list (get-transaction-tx-outs tx)))
         (let ((in-list (get-transaction-tx-inss tx)))
-          (let (out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id out-txid-list))
-            (let (in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id in-txid-list))
-              (let ((in-address-list (mapcar #'my-address from-txid-list)))
-                (let ((out-address-list (mapcar #'my-address from-txid-list)))
+          (let ((out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id out-list)))
+            (let ((in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id in-list)))
+              (let ((in-address-list (mapcar #'my-address in-list)))
+                (let ((out-address-list (mapcar #'my-address out-list)))
                   ;; at this point, 
                   ;; tx == the given transaction CLOS object
                   ;; txid == string txid for this transaction
@@ -285,12 +285,12 @@
                   (emotiq:note "[txids] tx=~A in=~A out=~A, [addresses] tx=~A from=~A to=~A"
                                txid in-txid-list out-txid-list
                                my-address in-address-list out-address-list))))))))))
-
-(defun get-transaction-txid-outs (tx)
+  
+(defun get-transaction-outs (tx)
   "return a list of CLOS transactions that are outputs of this transaction"
   (cosi/proofs/newtx:transaction-outputs tx))
 
-(defun get-transaction-txid-ins (tx)
+(defun get-transaction-ins (tx)
   "return a list of CLOS transactions that are inputs of this transaction"
   (cosi/proofs/newtx:transaction-inputs tx))
 
@@ -300,7 +300,7 @@
       ""
     (let ((ins (cosi/proofs/newtx:transaction-inputs tx)))
       (unless (not (null ins))
-        (emotiq:note "ERROR: empty inputs for tx=~A"))xs
+        (emotiq:note "ERROR: empty inputs for tx=~A"))
       (let ((addr (cosi/proofs/newtx::tx-out-public-key-hash (first ins))))
         ;; all tx-ins must point to this address
         ;; this check is probably a no-op for most testing transactions
