@@ -263,10 +263,10 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 
 (cffi:defcfun ("Ed3363_affine_mul" _Ed3363-affine-mul) :void
-  (ptx         :pointer :uint8)
-  (pty         :pointer :uint8)
-  (ptz         :pointer :uint8)
-  (nv          :pointer :uint8))
+  (ptx  :pointer :uint8)
+  (pty  :pointer :uint8)
+  (ptz  :pointer :uint8)
+  (nv   :pointer :uint8))
 
 (cffi:defcfun ("Ed3363_projective_mul" _Ed3363-projective-mul) :void
   (ptx  :pointer :uint8)
