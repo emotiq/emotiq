@@ -24,6 +24,27 @@
          keypair 
          coinbase-public-address))))
 
+(defun test-base58 (&optional (niter 100))
+  (loop repeat niter do
+        (let* ((val (random (ash 1 256)))
+               (b58  (vec-repr:base58-str val))
+               (b582 (vec-repr:base58-str val)))
+          (assert (string= b58 b582)))))
+
+(defun run-verify-genesis-block-generate ()
+  (let ((iterations 100))
+    (emotiq:note "Generating ~a genesis blocks" iterations)
+    (loop
+      :repeat iterations
+      :do (progn
+            (multiple-value-bind (amount directory keypair coinbase-public-address)
+                (create-and-check-genesis-block)
+              (assert (equal amount
+                             (cosi/proofs/newtx:initial-total-coin-amount)))
+              (assert (equal (vec-repr:int (pbc:keying-triple-pkey keypair))
+                             coinbase-public-address)))
+            (format t ".")))))
+  
 (define-test verify-genesis-block-generate ()
   (let ((iterations 100))
     (emotiq:note "Generating ~a genesis blocks" iterations)

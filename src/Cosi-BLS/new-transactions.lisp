@@ -1074,7 +1074,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   "Iterate over all transactions of the blockchain from latest spent
    to earliest spent around the exectution of BODY. To exit early you
    must return using RETURN-FROM to a lexical tag."
-  (LET ((block-var (or block-var? '#:block)))
+  (LET ((block-var (or block-var? '#:eblock)))
     `(do-blockchain (,block-var)
        (do-transactions (,tx-var ,block-var)
          ,@body))))
@@ -1109,10 +1109,10 @@ returns the block the transaction was found in as a second value."
                         return tx))))
     (if result-from-mempool?
         (values result-from-mempool? t)
-        (do-blockchain (block)
-          (do-transactions (tx block)
+        (do-blockchain (eblock)
+          (do-transactions (tx eblock)
             (when (tx-ids= (transaction-id tx) id)
-              (return-from find-transaction-per-id (values tx block))))))))
+              (return-from find-transaction-per-id (values tx eblock))))))))
 
 (defun double-spend-tx-out-p (id index &optional also-search-mempool-p)
   (when also-search-mempool-p
@@ -1395,8 +1395,8 @@ of type TYPE."
   "Return whether TRANSACTION's output at index OUTPUT-INDEX has been spent. As
    a second value, returns whether the transaction was found at all."
   (let ((this-transaction-id (transaction-id transaction)))
-    (do-blockchain (block)
-      (do-transactions (tx block)
+    (do-blockchain (eblock)
+      (do-transactions (tx eblock)
         (if (eq tx transaction)
 
             ;; We reached all the way from the latest in time to this
@@ -1438,8 +1438,8 @@ of type TYPE."
    ADDRESS here is taken to mean the same thing as the public key
    hash."
   (let ((utxos-so-far '()))
-    (do-blockchain (block)
-      (do-transactions (tx block)
+    (do-blockchain (eblock)
+      (do-transactions (tx eblock)
         (loop for txo in (transaction-outputs tx)
               as public-key-hash = (tx-out-public-key-hash txo)
               as index from 0
@@ -1500,11 +1500,11 @@ of type TYPE."
         do (pr "      [~d] amt = ~a (out to) addr = ~a"
                    i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
 
-(defun dump-txs (&key file mempool block blockchain node)
+(defun dump-txs (&key file mempool eblock blockchain node)
   (flet ((dump-loops ()
-           (when block
-             (pr "Dump txs in block = ~s:" block)
-             (do-transactions (tx block)
+           (when eblock
+             (pr "Dump txs in block = ~s:" eblock)
+             (do-transactions (tx eblock)
                (dump-tx tx)))
            (when mempool
              (pr "Dump txs in mempool:")
@@ -1512,9 +1512,9 @@ of type TYPE."
                    do (dump-tx tx)))
            (when blockchain
              (pr "Dump txs on blockchain:")
-             (do-blockchain (block)
-               (pr " Dump txs in block = ~s:" block)
-               (do-transactions (tx block)
+             (do-blockchain (eblock)
+               (pr " Dump txs in block = ~s:" eblock)
+               (do-transactions (tx eblock)
                  (dump-tx tx))))))
     (cosi-simgen:with-current-node
         (or node 
@@ -1777,7 +1777,7 @@ of type TYPE."
 
 
 
-(defun clear-transactions-in-block-from-mempool (block)
+(defun clear-transactions-in-block-from-mempool (eblock)
   "Remove transactions that have just been added the block from the mempool that
    is globally bound to cosi-simgen:*mempool*. Note that these transactions may
    not be identical EQ Lisp instances, so even if you're holding a pointer to
@@ -1787,7 +1787,7 @@ of type TYPE."
    are exactly the same, have not undergone any changes after being encoded,
    transferred from one node to the other over the network, and decoded, etc."
   (loop with mempool = cosi-simgen:*mempool*
-        for transaction in (cosi/proofs:block-transactions block)
+        for transaction in (cosi/proofs:block-transactions eblock)
         count (remove-transaction-from-mempool transaction mempool)
           into n-removed
         finally
