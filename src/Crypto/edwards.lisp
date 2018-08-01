@@ -260,56 +260,56 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 
 (cffi:defcfun ("Ed3363_affine_mul" _Ed3363-affine-mul) :void
-  (ptx         :pointer :unsigned-char)
-  (pty         :pointer :unsigned-char)
-  (ptz         :pointer :unsigned-char)
-  (nv          :pointer :unsigned-char))
+  (ptx         :pointer :uint8)
+  (pty         :pointer :uint8)
+  (ptz         :pointer :uint8)
+  (nv          :pointer :uint8))
 
 (cffi:defcfun ("Ed3363_projective_mul" _Ed3363-projective-mul) :void
-  (ptx         :pointer :unsigned-char)
-  (pty         :pointer :unsigned-char)
-  (ptz         :pointer :unsigned-char)
-  (nv          :pointer :unsigned-char))
+  (ptx  :pointer :uint8)
+  (pty  :pointer :uint8)
+  (ptz  :pointer :uint8)
+  (nv   :pointer :uint8))
 
 (cffi:defcfun ("Ed3363_projective_add" _Ed3363-projective-add) :void
-  (pt1x         :pointer :unsigned-char)
-  (pt1y         :pointer :unsigned-char)
-  (pt1z         :pointer :unsigned-char)
-  (pt2x         :pointer :unsigned-char)
-  (pt2y         :pointer :unsigned-char)
-  (pt2z         :pointer :unsigned-char))
+  (pt1x :pointer :uint8)
+  (pt1y :pointer :uint8)
+  (pt1z :pointer :uint8)
+  (pt2x :pointer :uint8)
+  (pt2y :pointer :uint8)
+  (pt2z :pointer :uint8))
 
 (cffi:defcfun ("Ed3363_to_affine" _Ed3363-to-affine) :void
-  (pt1x         :pointer :unsigned-char)
-  (pt1y         :pointer :unsigned-char)
-  (pt1z         :pointer :unsigned-char))
+  (pt1x :pointer :uint8)
+  (pt1y :pointer :uint8)
+  (pt1z :pointer :uint8))
 
 ;; -----------------------------------------------------------------------
 
 (cffi:defcfun ("Curve1174_affine_mul" _Curve1174-affine-mul) :void
-  (ptx         :pointer :unsigned-char)
-  (pty         :pointer :unsigned-char)
-  (ptz         :pointer :unsigned-char)
-  (nv          :pointer :unsigned-char))
+  (ptx  :pointer :uint8)
+  (pty  :pointer :uint8)
+  (ptz  :pointer :uint8)
+  (nv   :pointer :uint8))
 
 (cffi:defcfun ("Curve1174_projective_mul" _Curve1174-projective-mul) :void
-  (ptx         :pointer :unsigned-char)
-  (pty         :pointer :unsigned-char)
-  (ptz         :pointer :unsigned-char)
-  (nv          :pointer :unsigned-char))
+  (ptx  :pointer :uint8)
+  (pty  :pointer :uint8)
+  (ptz  :pointer :uint8)
+  (nv   :pointer :uint8))
 
 (cffi:defcfun ("Curve1174_projective_add" _Curve1174-projective-add) :void
-  (pt1x         :pointer :unsigned-char)
-  (pt1y         :pointer :unsigned-char)
-  (pt1z         :pointer :unsigned-char)
-  (pt2x         :pointer :unsigned-char)
-  (pt2y         :pointer :unsigned-char)
-  (pt2z         :pointer :unsigned-char))
+  (pt1x :pointer :uint8)
+  (pt1y :pointer :uint8)
+  (pt1z :pointer :uint8)
+  (pt2x :pointer :uint8)
+  (pt2y :pointer :uint8)
+  (pt2z :pointer :uint8))
 
 (cffi:defcfun ("Curve1174_to_affine" _Curve1174-to-affine) :void
-  (pt1x         :pointer :unsigned-char)
-  (pt1y         :pointer :unsigned-char)
-  (pt1z         :pointer :unsigned-char))
+  (pt1x :pointer :uint8)
+  (pt1y :pointer :uint8)
+  (pt1z :pointer :uint8))
 
 ;; ----------------------------------------------------------------
 
