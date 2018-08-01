@@ -913,12 +913,6 @@ dropped on the floor.
                          nil)
                        (error (e) e)))
 
-(defun ultra-safe-actor-send (&rest args)
-  "Version of ac:send that never, EVER, throws or shows an error, because
-  I'm tired of seeing 'invalid send target' errors from solicit-direct which are completely benign."
-  (ignore-errors (progn (apply 'ac:send args)
-                   nil)))
-
 ;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
   "Like solicit-wait but asks for all replies to be sent back to node directly, rather than percolated upstream.
@@ -929,7 +923,7 @@ dropped on the floor.
                   (uid node)
                   node))
          (mbox (mpcompat:make-mailbox))
-         (actor (ac:make-actor (lambda (&rest msg) (apply 'ultra-safe-actor-send mbox msg))))
+         (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
     (unwind-protect
         (progn 
@@ -1096,16 +1090,12 @@ dropped on the floor.
          (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can actor-send to
                         (actor destnode)
                         destuid)))
-    (when (null destactor)
-      (if (null destnode)
-          (error "Cannot find node for ~D" destuid)
-          (error "Cannot find actor for node ~S" destnode)))
     (edebug 5 "send-msg" msg destnode srcuid)
     (uiop:if-let (error (actor-send destactor
                                     :gossip ; actor-verb
                                     srcuid  ; first arg of actor-msg
                                     msg))
-      (edebug 1 :error error destuid msg :from srcuid))))
+      (edebug 5 :warn error destuid msg :from srcuid))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
