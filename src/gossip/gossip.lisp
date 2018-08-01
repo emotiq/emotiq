@@ -394,6 +394,14 @@ are in place between nodes.
   #-(or Allegro LispWorks CCL)
   (warn "No implementation of PROCESS-KILL for this system."))
 
+(defun stream-eofp (stream)
+  "Returns true if stream is at EOF"
+  #+OPENMCL
+  (handler-case (ccl:stream-eofp stream) ; could be a bad-fd error if other end got closed
+    (error () t))
+  #+LISPWORKS
+  (stream:stream-check-eof-no-hang stream))
+
 (defun find-process (name)
   "Returns a process with given name, if any."
   (find-if (lambda (process) (ignore-errors (string-equal name (subseq (process-name process) 0 (length name))))) (all-processes)))
@@ -652,7 +660,6 @@ are in place between nodes.
                (host-in-nodes hostpair))
              hosts))
 
-
 (defmethod gossip-dispatcher (node &rest actor-msg)
   "Extracts gossip-msg from actor-msg and calls deliver-gossip-msg on it"
   (let ((gossip-cmd (first actor-msg)))
@@ -901,9 +908,9 @@ dropped on the floor.
 
 (defun actor-send (&rest args)
   "Error-safe version of ac:send. Returns nil if successful; otherwise returns error object"
-      (gossip-handler-case (progn (apply 'ac:send args)
-                      nil)
-        (error (e) e)))
+  (gossip-handler-case (progn (apply 'ac:send args)
+                         nil)
+                       (error (e) e)))
 
 ;; NOTE: "direct" here refers to the mode of reply, not the mode of sending.
 (defun solicit-direct (node kind &rest args)
@@ -1082,16 +1089,12 @@ dropped on the floor.
          (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can actor-send to
                         (actor destnode)
                         destuid)))
-    (when (null destactor)
-      (if (null destnode)
-          (error "Cannot find node for ~D" destuid)
-          (error "Cannot find actor for node ~S" destnode)))
     (edebug 5 "send-msg" msg destnode srcuid)
     (uiop:if-let (error (actor-send destactor
                                     :gossip ; actor-verb
                                     srcuid  ; first arg of actor-msg
                                     msg))
-      (edebug 1 :error error destuid msg :from srcuid))))
+      (edebug 5 :warn error destuid msg :from srcuid))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -2025,15 +2028,17 @@ gets sent back, and everything will be copacetic.
 
 (defmethod ensure-proxy-from-ad ((monad augmented-data))
   "Given an augmented-data, make a proxy from it if it contains enough metadata to do so.
-   [Calling bind here is cheating because we're not returning another monad.
-    We're side-effecting, not composing. But it's easy.]"
-  (bind (lambda (data metadata)
-          (let* ((address (when metadata (cdr (assoc :eripa metadata))))
-                 (port    (when metadata (cdr (assoc :port metadata)))))
-            (when (and address port)
-              (dolist (uid data) ; this will usually be a singleton list, but it doesn't have to be
-                (ensure-proxy-node :TCP address port uid nil)))))
-        monad))
+  [Calling bind here is cheating because we're not returning another monad.
+  We're side-effecting, not composing. But it's easy.]"
+  (let ((proxies nil)) ; just so we have some output data to trace
+    (bind (lambda (data metadata)
+            (let* ((address (when metadata (cdr (assoc :eripa metadata))))
+                   (port    (when metadata (cdr (assoc :port metadata)))))
+              (when (and address port)
+                (dolist (uid data) ; this will usually be a singleton list, but it doesn't have to be
+                  (pushnew (ensure-proxy-node :TCP address port uid nil) proxies)))))
+          monad)
+    proxies))
 
 (defun ensure-proxies (adlist)
   "Ensures a proxy exists for each UID in each augmented-datum in adlist"
