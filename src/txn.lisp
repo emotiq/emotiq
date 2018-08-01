@@ -8,7 +8,7 @@
 (defmethod address ((pkey pbc:public-key))
   (cosi/proofs:public-key-to-address pkey))
 (defmethod address ((integers cons))
-  (pbc:make-keying-triple (car cons) (cdr cons)))
+  (pbc:make-keying-triple (first integers) (second integers)))
 
 
 (defmethod get-utxos ((account pbc:keying-triple))
