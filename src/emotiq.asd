@@ -105,6 +105,7 @@
                 :serial t
                 :components ((:file "package")
                              #+CLOZURE (:file "clozure")
+                             (:file "node-init")
 			     (:file "cosi-construction")
                              (:file "cosi-handlers")
                              (:file "mvp-election-beacon")

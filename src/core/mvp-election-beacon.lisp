@@ -27,7 +27,7 @@
                                 (declare (ignore k))
                                 (acc (list (node:pkey node)
                                            (node:stake node))))
-                              node:*ip->node*)))))
+                              *ip->node*)))))
         ))
 
 (defun get-witnesses-sans-pkey (pkey)
@@ -154,7 +154,7 @@ based on their relative stake"
   (ac:ask *election-central* :next-after-reset))
 
 (defun fire-election () ;; for REPL playing...
-  (with-current-node node::*my-node*
+  (with-current-node *my-node*
     (send-hold-election)))
 
 #|
@@ -314,17 +314,17 @@ based on their relative stake"
 
 (defun startup-elections ()
   ;; call this from global init after all housekeeping
-  (with-current-node node::*my-node*
+  (with-current-node *my-node*
     (setup-emergency-call-for-new-election)))
 
 (defmethod gossip:make-node ((kind (eql :cosi)) &key pkey skey)
-  (setf node::*my-node* (make-instance 'node
-                                       :pkey  (pbc:public-key pkey)
-                                       :skey  (pbc:secret-key skey)))
-  (gossip:initialize-node node::*my-node*
+  (setf *my-node* (make-instance 'node
+                                 :pkey  (pbc:public-key pkey)
+                                 :skey  (pbc:secret-key skey)))
+  (gossip:initialize-node *my-node*
                           :pkey pkey
                           :skey skey)
-  node::*my-node*)
+  *my-node*)
 
 (defun gossip:cosi-loaded-p ()
   t)

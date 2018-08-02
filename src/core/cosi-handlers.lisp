@@ -27,11 +27,11 @@
 
 ;; -------------------------------------------------------
 
-(defstruct tx-changes
-  ;; all lists contain key vectors
-  tx-dels    ;; list of pending transation removals from mempool
-  utxo-adds  ;; list of pending new utxos
-  utxo-dels) ;; list of pending spent utxos
+;; (defstruct tx-changes
+;;   ;; all lists contain key vectors
+;;   tx-dels    ;; list of pending transation removals from mempool
+;;   utxo-adds  ;; list of pending new utxos
+;;   utxo-dels) ;; list of pending spent utxos
 
 ;; -------------------------------------------------------
 ;; Support macros... ensure Node context is preserved into continuation bodies.
@@ -62,13 +62,13 @@
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader (current-node))
-  (setf *tx-changes* (make-tx-changes)))
+  (setf *tx-changes* (node:make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
   (let ((node       (current-node))
         (epoch      *local-epoch*))
     (emotiq/tracker:track :new-witness node)
-    (setf *tx-changes* (make-tx-changes))
+    (setf *tx-changes* (node:make-tx-changes))
     
     (setf *had-work-p* nil)
     (node-schedule-after *cosi-max-wait-period*
@@ -142,25 +142,25 @@
 
 ;; ------------------------------------------------------------------------------------
 
-(defun make-node-dispatcher (node)
-  (let ((beh  (make-actor
-               (lambda (&rest msg)
-                 (with-current-node node
-                   (apply 'node-dispatcher msg)))
-               )))
-    (make-actor
-     (lambda (&rest msg)
-       (pr "Cosi MSG: ~A" msg)
-       (um:dcase msg
-         (:actor-callback (aid &rest ans)
-          (let ((actor (lookup-actor-for-aid aid)))
-            (when actor
-              (apply 'send actor ans))
-            ))
+;; (defun make-node-dispatcher (node)
+;;   (let ((beh  (make-actor
+;;                (lambda (&rest msg)
+;;                  (with-current-node node
+;;                    (apply 'node-dispatcher msg)))
+;;                )))
+;;     (make-actor
+;;      (lambda (&rest msg)
+;;        (pr "Cosi MSG: ~A" msg)
+;;        (um:dcase msg
+;;          (:actor-callback (aid &rest ans)
+;;           (let ((actor (lookup-actor-for-aid aid)))
+;;             (when actor
+;;               (apply 'send actor ans))
+;;             ))
          
-          (t (&rest msg)
-             (apply 'send beh msg))
-          )))))
+;;           (t (&rest msg)
+;;              (apply 'send beh msg))
+;;           )))))
 
 ;; -------------------------------------------------------------------------------------
 
@@ -255,11 +255,11 @@
   (send-real-nodes :reset))
 
 (defun reset-nodes ()
-  (loop for node across node::*bitpos->node* do
+  (loop for node across *bitpos->node* do
         (setf (node:corrupted-p      node) nil
               (node:blockchain node) nil)
 
-        (setf (node:current-leader node) (node:pkey node::*top-node*))
+        (setf (node:current-leader node) (node:pkey node:*top-node*))
         (clrhash (node:blocks  node))
         (clrhash (node:mempool node))
         (clrhash (node:utxos   node))
@@ -276,8 +276,8 @@
     (node::iter-other-members node #'acc)))
 
 (defun send-real-nodes (&rest msg)
-  (loop for ip in node::*real-nodes* do
-        (apply 'send (node:pkey (gethash ip node::*ip->node*)) msg)))
+  (loop for ip in *real-nodes* do
+        (apply 'send (node:pkey (gethash ip *ip->node*)) msg)))
 
 
 (defun sub-signing (my-node consensus-stage blk seq-id timeout)
@@ -342,7 +342,7 @@
                            :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
 
         (t
-         (loop for node across node:*bitpos->node* do
+         (loop for node across *bitpos->node* do
                (unless (eql node my-node)
                  (apply 'send (node:pkey node) msg))))
         ))

@@ -1,61 +1,15 @@
-;; cosi-netw-xlat.lisp -- Interrim layer for comms until Gossip is fully absorbed
-;;
-;; DM/Emotiq  04/18
-;; ---------------------------------------------------------------
-#|
-The MIT License
-
-Copyright (c) 2018 Emotiq AG
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-|#
-
-
 (in-package :cosi-simgen)
-
-;; -----------------------------------------------------------------
-
-(defparameter *aid-tbl*
-  ;; assoc between Actors and AID's
-  (trivial-garbage:make-weak-hash-table :weakness :value))
-
-(um:defmonitor
-    ((associate-aid-with-actor (aid actor)
-       (setf (gethash aid *aid-tbl*) actor))
-
-     (lookup-actor-for-aid (aid)
-       (gethash aid *aid-tbl*))
-     ))
-
-;; -----------------------------------------------------------------
 
 (defstruct actor-return-addr
   node aid)
 
 (defmethod sdle-store:backend-store-object ((backend sdle-store:resolving-backend) (obj ACTORS:ACTOR) stream)
   (let* ((aid  (or (ac:get-property obj 'aid)
-                   (setf (ac:get-property obj 'aid) (node::gen-uuid-int))))
+                   (setf (ac:get-property obj 'aid) (gen-uuid-int))))
          (ret  (make-actor-return-addr
-                :node (node:pkey (or (node:current-node)
-                                     node:*my-node*))
+                :node (node:pkey (or (node:current-node) *my-node*))
                 :aid  aid)))
-    (associate-aid-with-actor aid obj)
+    (register-actor-id aid obj)
     (sdle-store:backend-store-object backend ret stream)))
 
 (defmethod ac:send ((addr actor-return-addr) &rest msg)
@@ -96,12 +50,12 @@ THE SOFTWARE.
 
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
   (cond (*use-real-gossip*
-         (if (int= pkey (node:pkey node::*my-node*))
-             (apply 'ac:send (node:self node::*my-node*) msg)
+         (if (int= pkey (node:pkey *my-node*))
+             (apply 'ac:send (node:self *my-node*) msg)
            (gossip-send pkey nil msg)))
         
         (t
-         (let ((node (gethash (int pkey) node:*pkey->node*)))
+         (let ((node (gethash (int pkey) *pkey->node*)))
            (unless node
              (pr (format nil "send to unknown pkey: ~A" (node:short-id pkey))))
            (when node
@@ -118,7 +72,7 @@ THE SOFTWARE.
 (defparameter *cosi-port*   65001)
 
 (defmethod translate-pkey-to-ip-port ((pkey pbc:public-key))
-  (let ((node (gethash (int pkey) node:*pkey->node*)))
+  (let ((node (gethash (int pkey) *pkey->node*)))
     (values (node:real-ip node) *cosi-port*)))
 
 ;; --------------------------------------------------------------
@@ -163,11 +117,11 @@ THE SOFTWARE.
       (progn ;; ignore-errors
         ;; might not be a properly destructurable packet
         (destructuring-bind (dest &rest msg) packet
-          (let ((node (gethash (int dest) node:*pkey->node*)))
+          (let ((node (gethash (int dest) *pkey->node*)))
             (unless node
               (pr :Non-existent-node))
             (when node
-              (when (eq node node:*my-node*)
+              (when (eq node *my-node*)
                 (pr (format nil "fowarding-by-default-to-me: ~A" msg)))
               (apply 'ac:send (node:self node) msg)))))
       )))

@@ -61,8 +61,8 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (when executive-threads
     (actors:set-executive-pool executive-threads))
   (when (or new-configuration-p
-            (not (and (probe-file node:*default-data-file*)
-                      (probe-file node:*default-key-file*))))
+            (not (and (probe-file cosi-simgen::*default-data-file*)
+                      (probe-file cosi-simgen::*default-key-file*))))
     (cosi-simgen:generate-tree :nodes nodes))
   (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
   (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
@@ -70,8 +70,8 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   (cosi-simgen:reconstruct-tree)
 
   (flet ((send-real-nodes (&rest msg)
-           (dolist (ip node::*real-nodes*)
-             (apply #'actors:send (node:pkey (gethash ip node:*ip->node*)) msg))))
+           (dolist (ip cosi-simgen::*real-nodes*)
+             (apply #'actors:send (node:pkey (gethash ip cosi-simgen::*ip->node*)) msg))))
 
     (send-real-nodes :reset))
   
@@ -84,7 +84,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
                   (setf (node:stake node) stake)
                   (ac:pr (list pkey stake))
                   (acc (list pkey stake))))
-              node:*ip->node*)))
+              cosi-simgen::*ip->node*)))
   
 
   (setf cosi-simgen::*all-nodes* (cosi-simgen::get-witness-list))

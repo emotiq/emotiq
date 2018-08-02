@@ -1,35 +1,10 @@
-
-;; from cosi-construction
 (defpackage :cosi-simgen
   (:use
-   :common-lisp
-   ;;:cosi
+   :cl
+   :alexandria
    :crypto/modular-arith
    :vec-repr
-   :hash
-   ;; :cosi/proofs
-   )
-  #+nil(:import-from :edwards-ecc
-   :ed-add 
-   :ed-sub 
-   :ed-mul 
-   :ed-div 
-   :ed-affine
-   :ed-nth-pt
-   :*ed-r*
-   :*ed-q*
-   :ed-neutral-point
-   :ed-pt=
-   :with-ed-curve
-   :ed-compress-pt
-   :ed-decompress-pt
-   :ed-validate-point
-   :ed-random-pair
-   :make-ecc-pt)
-  #+nil(:import-from :ecc-crypto-b571
-   :random-between
-   :convert-int-to-nbytesv
-   :convert-bytes-to-int)
+   :hash)
   (:import-from :actors
    :=bind
    :=values
@@ -70,27 +45,27 @@
    :*current-node*
    :current-node
    :gossip-neighborcast
-   :node
-   :node-pkey
-   :node-skey
-   :node-stake
-   :node-self
-   :node-blockchain
-   :node-blockchain-tbl
-   :node-mempool
-   :node-utxo-table
-   :node-current-leader
-   :*my-node*
-   :*top-node*
-   :*leader*
-   :*blockchain*
-   :*blockchain-tbl*
-   :*mempool*
-   :*utxo-table*
-   :*ip-node-tbl*
-   :*pkey-node-tbl*
-   :*pkey-skey-tbl*
-   :*node-bit-tbl*
+   ;; :node
+   ;; :node-pkey
+   ;; :node-skey
+   ;; :node-stake
+   ;; :node-self
+   ;; :node-blockchain
+   ;; :node-blockchain-tbl
+   ;; :node-mempool
+   ;; :node-utxo-table
+   ;; :node-current-leader
+   ;; :*my-node*
+   ;; :*top-node*
+   ;; :*leader*
+   ;; :*blockchain*
+   ;; :*blockchain-tbl*
+   ;; :*mempool*
+   ;; :*utxo-table*
+   ;; :*ip-node-tbl*
+   ;; :*pkey-node-tbl*
+   ;; :*pkey-skey-tbl*
+   ;; :*node-bit-tbl*
    :send
    :reply
    :node-dispatcher
@@ -105,8 +80,8 @@
    :reset-nodes
    :forwarding
    :startup-elections
-   :short-id
-   :node-id-str
+   ;; :short-id
+   ;; :node-id-str
    :set-nodes
    :get-witness-list
    ))

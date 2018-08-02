@@ -27,13 +27,10 @@
    #:cpu-load
    #:self
    #:short-id
-   #:make-node
    #:make-tx-changes
    #:current-node
-   #:*current-node*
-   #:*my-node*
    #:*top-node*
-   #:*leader*
+   #:*current-node*
    #:*blockchain*
    #:*blocks*
    #:*mempool*
@@ -43,16 +40,7 @@
    #:*had-work-p*
    #:*election-calls*
    #:*beacon*
-   #:*local-epoch*
-   #:*ip->node*          ;; ip-node-tbl
-   #:*pkey->node*        ;; pkey-node-tbl
-   #:*pkey->skey*        ;; pkey-skey-tbl
-   #:*bitpos->node*      ;; node-bit-tbl
-   #:*default-data-file*
-   #:*default-key-file*
-   #:generate-tree
-   #:reconstruct-tree
-   #:dispatch))
+   #:*local-epoch*))
 
 (defpackage emotiq/block
   (:use #:cl #:alexandria)
