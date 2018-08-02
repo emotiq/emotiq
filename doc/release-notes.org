@@ -43,6 +43,7 @@ UI <-- Emotiq {result: true, id: 23}
    
 ** <2018-06-14 Mon 12:55Z> ~test-0.15-websockets~
 
+
 | Binaries | <https://github.com/emotiq/emotiq/releases/tag/test-0.15-websockets>                      |
 | Branch   | <https://github.com/emotiq/emotiq/compare/157484804-create-websocket-interface-20180614a> |
 
@@ -51,3 +52,17 @@ UI <-- Emotiq {result: true, id: 23}
    both the read and write timeouts have been extended to an hour
    (3600 seconds).
 
+** <2018-08-02 Thu 10:27Z> ~mvp-0.1.0~
+
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/mvp-0.1.0>              |
+| Branch   | <https://github.com/emotiq/emotiq/compare/mvp/mvp-websocket-20180802a> |
+
+Pure mock of websocket interfaces for the wallet
+
+1.  transactions updates with each submit-transaction request
+2.  submit-transaction 
+
+
+See Also 
+<https://github.com/emotiq/emotiq/issues/387>
+<https://github.com/emotiq/emotiq/issues/383>
