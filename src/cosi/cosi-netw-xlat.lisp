@@ -1,4 +1,4 @@
-(in-package :cosi-simgen)
+(in-package :emotiq/cosi)
 
 (defstruct actor-return-addr
   node aid)
@@ -38,7 +38,7 @@
 (defmethod gossip-send (pkey aid msg)
   ;; stub code to do direct UDP until we plug in actual Gossip code...
   (cond (*use-real-gossip*
-         (gossip:singlecast msg (int pkey)
+         (gossip:singlecast msg (vec-repr:int pkey)
                             :graphID :uber))
 
         (t
@@ -50,12 +50,12 @@
 
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
   (cond (*use-real-gossip*
-         (if (int= pkey (node:pkey *my-node*))
+         (if (vec-repr:int= pkey (node:pkey *my-node*))
              (apply 'ac:send (node:self *my-node*) msg)
            (gossip-send pkey nil msg)))
         
         (t
-         (let ((node (gethash (int pkey) *pkey->node*)))
+         (let ((node (gethash (vec-repr:int pkey) *pkey->node*)))
            (unless node
              (pr (format nil "send to unknown pkey: ~A" (node:short-id pkey))))
            (when node
@@ -72,7 +72,7 @@
 (defparameter *cosi-port*   65001)
 
 (defmethod translate-pkey-to-ip-port ((pkey pbc:public-key))
-  (let ((node (gethash (int pkey) *pkey->node*)))
+  (let ((node (gethash (vec-repr:int pkey) *pkey->node*)))
     (values (node:real-ip node) *cosi-port*)))
 
 ;; --------------------------------------------------------------
@@ -117,7 +117,7 @@
       (progn ;; ignore-errors
         ;; might not be a properly destructurable packet
         (destructuring-bind (dest &rest msg) packet
-          (let ((node (gethash (int dest) *pkey->node*)))
+          (let ((node (gethash (vec-repr:int dest) *pkey->node*)))
             (unless node
               (pr :Non-existent-node))
             (when node

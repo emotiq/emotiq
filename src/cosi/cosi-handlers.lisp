@@ -1,13 +1,5 @@
-(in-package :cosi-simgen)
-;; ---------------------------------------------------------------
+(in-package :emotiq/cosi)
 
-(defvar *use-gossip*      t)     ;; use Gossip graphs instead of Cosi Trees
-(defvar *use-real-gossip* t)     ;; set to T for real Gossip mode, NIL = simulation mode
-
-;; ---------------------------------------------------------------
-
-(defun NYI (&rest args)
-  (error "Not yet implemented: ~A" args))
 
 (defvar *cosi-prepare-timeout* 10
   "Timeout in seconds that the leader waits during prepare phase for sealing a block.")
@@ -18,23 +10,12 @@
 (defvar *cosi-max-wait-period* 30
   "Timeout in seconds that represents the longest witness idle period before setting up an emergency call-for-new-election.")
   
-;; -------------------------------------------------------
 
+;; Support macros... ensure Node context is preserved into continuation bodies.
 
 (defmacro with-current-node (node &body body)
   `(let ((*current-node* ,node))
      ,@body))
-
-;; -------------------------------------------------------
-
-;; (defstruct tx-changes
-;;   ;; all lists contain key vectors
-;;   tx-dels    ;; list of pending transation removals from mempool
-;;   utxo-adds  ;; list of pending new utxos
-;;   utxo-dels) ;; list of pending spent utxos
-
-;; -------------------------------------------------------
-;; Support macros... ensure Node context is preserved into continuation bodies.
 
 (defmacro =node-bind (parms expr &body body)
   ;; set up continuation that preserves Node context
@@ -55,10 +36,9 @@
 
 ;; -------------------------------------------------------
 
-(defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
 
 (defmethod node-dispatcher (msg-sym &key)
-  (error "Unknown message: ~A~%Node: ~A" msg-sym (node::short-id (current-node))))
+  (error "Unknown message: ~A~%Node: ~A" msg-sym (node:short-id (current-node))))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-leader)) &key)
   (emotiq/tracker:track :new-leader (current-node))
@@ -88,19 +68,9 @@
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
   (ac:pr args))
 
-;; (defmethod node-dispatcher ((msg-sym (eql :genesis-utxo)) &key utxo)
-;;   ;; A Genesis UTXO comes only once, being broadcast to the witness
-;;   ;; group by a distinguished member who creates it.
-;;   ;;
-;;   ;; We can use the receipt of the genesis UTXO to also start up our
-;;   ;; internal election beacon in loose synchrony with other witnesses.
-;;   ;;
-;;   (pr "~A got genesis utxo" (node::short-id (current-node)))
-;;   (really-record-new-utxo utxo))
-
 ;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
-  (pr "~A got genesis block" (node::short-id (current-node)))
+  (pr "~A got genesis block" (node:short-id (current-node)))
   (unless blk   ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
   (push blk *blockchain*)
@@ -140,29 +110,7 @@
   ;; These should not be happening, just log the incident, and ignore.
   (pr "WARN - Unexpected GOSSIP message: ~S" msg))
 
-;; ------------------------------------------------------------------------------------
 
-;; (defun make-node-dispatcher (node)
-;;   (let ((beh  (make-actor
-;;                (lambda (&rest msg)
-;;                  (with-current-node node
-;;                    (apply 'node-dispatcher msg)))
-;;                )))
-;;     (make-actor
-;;      (lambda (&rest msg)
-;;        (pr "Cosi MSG: ~A" msg)
-;;        (um:dcase msg
-;;          (:actor-callback (aid &rest ans)
-;;           (let ((actor (lookup-actor-for-aid aid)))
-;;             (when actor
-;;               (apply 'send actor ans))
-;;             ))
-         
-;;           (t (&rest msg)
-;;              (apply 'send beh msg))
-;;           )))))
-
-;; -------------------------------------------------------------------------------------
 
 (defvar *election-proof*   nil) ;; NYI
 
@@ -172,18 +120,6 @@
 (defun signature-hash-message (blk)
   (block:serialize-header blk))
 
-;; (defun get-block-transactions (blk)
-;;   "Right now it is a simple partially ordered list of transactions.
-;; Later it may become an ADS structure"
-;;   (cosi/proofs:block-transactions blk))
-
-;; --------------------------------------------------------------------
-
-(defmethod node-check-transaction (msg)
-  "Just ignore invalid messages"
-  (declare (ignore msg))
-  nil)
-      
 ;; ----------------------------------------------------------------------
 ;; Code run by Cosi block validators...
 
@@ -259,7 +195,7 @@
         (setf (node:corrupted-p      node) nil
               (node:blockchain node) nil)
 
-        (setf (node:current-leader node) (node:pkey node:*top-node*))
+        (setf (node:current-leader node) (node:pkey *top-node*))
         (clrhash (node:blocks  node))
         (clrhash (node:mempool node))
         (clrhash (node:utxos   node))
@@ -268,12 +204,12 @@
 ;; -------------------------------------------------------------------
 
 (defun send-subs (node &rest msg)
-  (node::iter-other-members node (lambda (sub)
-                                   (apply 'send sub msg))))
+  (node:iter-other-members node (lambda (sub)
+                                  (apply 'send sub msg))))
 
 (defun group-subs (node)
   (um:accum acc
-    (node::iter-other-members node #'acc)))
+    (node:iter-other-members node #'acc)))
 
 (defun send-real-nodes (&rest msg)
   (loop for ip in *real-nodes* do
@@ -316,47 +252,9 @@
           :ON-TIMEOUT
           (progn
             (pr "SubSigning timeout waiting for ~A"
-                         (node::short-id node))
+                         (node:short-id node))
             (=return nil))
           )))))
-
-;; -----------------------------------------------------------
-
-(defvar *cosi-gossip-neighborhood-graph* nil) ;; T if neighborhood graph has been established
-
-(defun ensure-cosi-gossip-neighborhood-graph (my-node)
-  (declare (ignore my-node))
-  (or *cosi-gossip-neighborhood-graph*
-      (setf *cosi-gossip-neighborhood-graph*
-            (or :UBER ;; for now while debugging
-                (gossip:establish-broadcast-group
-                 (mapcar 'first (get-witness-list))
-                 :graphID :cosi)))
-      ))
-
-(defun gossip-neighborcast (my-node &rest msg)
-  "Gossip-neighborcast - send message to all witness nodes."
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :style :neighborcast
-                           :graphID (ensure-cosi-gossip-neighborhood-graph my-node)))
-
-        (t
-         (loop for node across *bitpos->node* do
-               (unless (eql node my-node)
-                 (apply 'send (node:pkey node) msg))))
-        ))
-
-
-(defun broadcast+me (msg)
-  (let ((my-pkey (node:pkey (current-node))))
-    ;; make sure our own Node gets the message too
-    (gossip:singlecast msg my-pkey
-                       :graphID nil) ;; force send to ourselves
-    ;; this really should go to everyone
-    (gossip:broadcast msg
-                      :startNodeID my-pkey ;; need this or else get an error sending to NIL destnode
-                      :graphID :UBER)))
 
 ;; -----------------------------------------------------------
 
@@ -388,14 +286,14 @@
 (=defun gossip-signing (my-node consensus-stage blk blk-hash seq-id timeout)
   (with-current-node my-node
     (cond ((and *use-gossip*
-                (int= (node:pkey my-node) *leader*))
+                (vec-repr:int= (node:pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
            (let ((bft-thrsh (1- (bft-threshold blk))) ;; adj by 1 since leader is also witness
                  (start     nil)
                  (g-bits    0)
                  (g-sig     nil))
              
-             (pr "Running Gossip Signing, Node = ~A" (node::short-id my-node))
+             (pr "Running Gossip Signing, Node = ~A" (node:short-id my-node))
 
              (gossip-neighborcast my-node :signing
                                   :reply-to        (current-actor)
@@ -427,7 +325,7 @@
                                 sig
                                 (zerop (logand g-bits bits)) ;; check for no intersection
                                 (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                           (pr "Got bits: ~A" (hex-str bits))
+                           (pr "Got bits: ~A" (vec-repr:hex-str bits))
                            (setf g-bits (logior g-bits bits)
                                  g-sig  (add-sigs sig g-sig))
                            (if (>= (logcount g-bits) bft-thrsh)
@@ -465,8 +363,8 @@
           (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
-  (hash= (block:merkle-root-hash blk) ;; check transaction hash against header
-         (block:compute-merkle-root-hash blk)))
+  (hash:hash= (block:merkle-root-hash blk) ;; check transaction hash against header
+              (block:compute-merkle-root-hash blk)))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
   pkey2)
@@ -494,9 +392,9 @@
        (pbc:check-hash hash sig (composite-pkey blk bits))))
 
 (defun check-block-multisignature (blk)
-  (let* ((bits  (block:signature-bitmap blk))
-         (sig   (block:signature blk))
-         (hash  (hash/256 (signature-hash-message blk))))
+  (let* ((bits (block:signature-bitmap blk))
+         (sig  (block:signature blk))
+         (hash (hash:hash/256 (signature-hash-message blk))))
     (and (check-hash-multisig hash sig bits blk)
          (check-block-transactions-hash blk))
     ))
@@ -517,14 +415,14 @@
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
      (or
-      (and (int= *leader*
+      (and (vec-repr:int= *leader*
                  (block:leader-pkey blk))
            (check-block-transactions-hash blk)
            (let ((prevblk (first *blockchain*)))
              (or (null prevblk)
                  (and (> (block:timestamp blk) (block:timestamp prevblk))
-                      (hash= (block:prev-block-hash blk) (block:hash prevblk)))))
-           (or (int= (node:pkey node) *leader*)
+                      (hash:hash= (block:prev-block-hash blk) (block:hash prevblk)))))
+           (or (vec-repr:int= (node:pkey node) *leader*)
                (check-block-transactions blk)))
       ;; else - failure case
       (progn
@@ -536,8 +434,8 @@
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
      (or
-      (and (int= *leader*
-                 (block:leader-pkey blk))
+      (and (vec-repr:int= *leader*
+                          (block:leader-pkey blk))
            (check-block-multisignature blk)
            (progn
              (push blk *blockchain*)
@@ -561,10 +459,10 @@
   ;; Compute a collective BLS signature on the message. This process
   ;; is tree-recursivde.
   (let* ((node     (current-node))
-         (blk-hash (hash/256 (signature-hash-message blk)))
+         (blk-hash (hash:hash/256 (signature-hash-message blk)))
          (subs     (and (not *use-gossip*)
                         (remove-if 'node-bad (group-subs node)))))
-    (pr "Node: ~A :Stage ~A" (node::short-id node) consensus-stage)
+    (pr "Node: ~A :Stage ~A" (node:short-id node) consensus-stage)
     (=node-bind (ans)
         ;; ----------------------------------
         (par
@@ -576,15 +474,15 @@
              ;; to decide for themselves
              (or (and (validate-cosi-message node consensus-stage blk)
                       (let ((witnesses (block:witnesses blk)))
-                        (pr "Block validated ~A" (node::short-id node))
+                        (pr "Block validated ~A" (node:short-id node))
                         (pr "Block witnesses = ~A" witnesses)
                         (let ((pos (position (node:pkey node) witnesses
-                                             :test 'int=)))
+                                             :test 'vec-repr:int=)))
                           (when pos
                             (list (pbc:sign-hash blk-hash (node:skey node))
                                   (ash 1 pos))))))
                  (progn
-                   (pr "Block not validated ~A" (node::short-id node))
+                   (pr "Block not validated ~A" (node:short-id node))
                    (list nil 0)))))
 
           ;; parallel task #2
@@ -610,7 +508,7 @@
                       ((null resp)
                        ;; no response from node, or bad subtree
                        (pr "No signing: ~A"
-                                    (node::short-id sub))
+                                    (node:short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -637,8 +535,8 @@
   ;; assume for now that leader cannot be corrupted...
   (let* ((node (current-node))
          (self (current-actor))
-         (hash (hash/256 (signature-hash-message blk)))
-         (sess (int hash)))
+         (hash (hash:hash/256 (signature-hash-message blk)))
+         (sess (vec-repr:int hash)))
     (ac:self-call :signing
                   :reply-to        self
                   :consensus-stage consensus-stage

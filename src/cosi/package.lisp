@@ -1,10 +1,8 @@
-(defpackage :cosi-simgen
+(defpackage :emotiq/cosi
   (:use
    :cl
-   :alexandria
-   :crypto/modular-arith
-   :vec-repr
-   :hash)
+   :alexandria)
+  (:nicknames :cosi)
   (:import-from :actors
    :=bind
    :=values
@@ -26,10 +24,10 @@
    :set-executive-pool
    :with-borrowed-mailbox
    :pr)
-
   (:import-from :node
-                :*current-node*
                 :current-node
+                :*top-node*
+                :*current-node*
                 :*blockchain*     
                 :*blocks* 
                 :*mempool*        
@@ -45,27 +43,6 @@
    :*current-node*
    :current-node
    :gossip-neighborcast
-   ;; :node
-   ;; :node-pkey
-   ;; :node-skey
-   ;; :node-stake
-   ;; :node-self
-   ;; :node-blockchain
-   ;; :node-blockchain-tbl
-   ;; :node-mempool
-   ;; :node-utxo-table
-   ;; :node-current-leader
-   ;; :*my-node*
-   ;; :*top-node*
-   ;; :*leader*
-   ;; :*blockchain*
-   ;; :*blockchain-tbl*
-   ;; :*mempool*
-   ;; :*utxo-table*
-   ;; :*ip-node-tbl*
-   ;; :*pkey-node-tbl*
-   ;; :*pkey-skey-tbl*
-   ;; :*node-bit-tbl*
    :send
    :reply
    :node-dispatcher
@@ -80,8 +57,6 @@
    :reset-nodes
    :forwarding
    :startup-elections
-   ;; :short-id
-   ;; :node-id-str
    :set-nodes
    :get-witness-list
    ))

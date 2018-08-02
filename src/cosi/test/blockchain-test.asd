@@ -1,6 +1,6 @@
 (defsystem "blockchain-test"
   :depends-on (lisp-unit
-               emotiq/core)
+               emotiq/cosi)
   :perform  (test-op (o s)
                      (symbol-call :lisp-unit :run-tests :all :blockchain-test))
   :components ((:module tests

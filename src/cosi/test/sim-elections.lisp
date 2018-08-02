@@ -16,7 +16,7 @@
   "NODE-LIST is a list of (public-key stake-amount) pairs"
   (ac:pr (format nil "election set-nodes ~A" node-list))
   (assert node-list)
-  (setf cosi-simgen::*all-nodes* node-list))
+  (setf cosi::*all-nodes* node-list))
 
 ;;; this can be done in the election handler, or use this code and ensure
 ;;; that each node-handler responds to :hold-an-election
@@ -35,7 +35,7 @@
                             (destructuring-bind (node-pkey node-stake) pair
                               (ac:send node-pkey :hold-an-election
                                        :n rand)))
-                        cosi-simgen::*all-nodes*))))
+                        cosi::*all-nodes*))))
        (um:dcase msg
          (:start ()
           (ac:pr "Beacon started")
@@ -98,13 +98,13 @@
   (tree-node-sum node))
 
 #|
-(defmethod node-stake ((node cosi-simgen:node))
-  (cosi-simgen:node-stake node))
+(defmethod node-stake ((node cosi:node))
+  (cosi:node-stake node))
 |#
 (defmethod node-stake ((node cons))
   (second node))
 
-;; a tree of stakes, cosi-simgen:nodes at the leaves (very bottom of tree)
+;; a tree of stakes, cosi:nodes at the leaves (very bottom of tree)
 
 (defun make-tree-node (pair)
   (destructuring-bind (l &optional r) pair
@@ -121,7 +121,7 @@
   "Given a fraction (0 < nfrac < 1) arrange all stakeholders into a
 binary decision tree, and determine the node which wins the election,
 based on their relative stake"
-  (let* ((tree    (car (um:nlet-tail iter ((nodes cosi-simgen::*all-nodes*))  ;; tail recursive, scheme-like, named let
+  (let* ((tree    (car (um:nlet-tail iter ((nodes cosi::*all-nodes*))  ;; tail recursive, scheme-like, named let
                     (if (= 1 (length nodes))
                         nodes
                       (iter (mapcar 'make-tree-node (um:group nodes 2))))))))
@@ -140,7 +140,7 @@ based on their relative stake"
 
 
 
-(defmethod cosi-simgen:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
+(defmethod cosi:node-dispatcher ((msg-sym (eql :hold-an-election)) &key n)
   (let* ((node   (node:current-node))
          (me     (node:pkey node))
          (stake  (node:stake node))
@@ -156,11 +156,11 @@ based on their relative stake"
                    (node:short-id me))
       (if iwon
           (progn
-            (cosi-simgen:send me :become-leader)
-            (cosi-simgen:send me :make-block))
-          (cosi-simgen:send me :become-witness)))))
+            (cosi:send me :become-leader)
+            (cosi:send me :make-block))
+          (cosi:send me :become-witness)))))
 
-(defmethod cosi-simgen:node-dispatcher :around ((msg-sym (eql :block-finished)) &key)
+(defmethod cosi:node-dispatcher :around ((msg-sym (eql :block-finished)) &key)
   (call-next-method))
 
 

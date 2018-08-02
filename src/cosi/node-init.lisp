@@ -1,4 +1,4 @@
-(in-package :cosi-simgen)
+(in-package :emotiq/cosi)
 
 
 (defgeneric node-dispatcher (msg-sym &key &allow-other-keys))
@@ -18,7 +18,7 @@
 (defvar *leader-node* (get-local-ipv4 "localhost"))
 
 
-;; TODO: where are these removed when nodes leaves network?
+;; TODO: remove when node leaves network
 (defvar *bitpos->node* #()
   "vector of all nodes in the tree ordered by public key magnitude")
 
@@ -73,8 +73,7 @@
 
 
 
-
-(defun keyval (key)
+(defun key-int-val (key)
   (vec-repr:int key))
 
 
@@ -88,7 +87,7 @@
                        (psig pbc:keying-triple-sig)
                        (skey pbc:keying-triple-skey))
           (pbc:make-key-pair ip)
-        (setf (gethash (keyval pkey) *pkey->skey*) skey)
+        (setf (gethash (key-int-val pkey) *pkey->skey*) skey)
         (values ip
                 (list pkey psig)))))
 
@@ -96,16 +95,16 @@
 (defun assign-bit-positions ()
   ;; assign bit positions to each node
   (let ((collected (coerce (hash-table-values *ip->node*) 'vector)))
-    (setf collected (sort collected #'< :key (compose #'keyval #'node:pkey)))
+    (setf collected (sort collected #'< :key (compose #'key-int-val #'node:pkey)))
     (loop
        :for node :across collected
-       :for ix :from 0
-       :do (setf (node:bitpos node) ix))
+       :for idx :from 0
+       :do (setf (node:bitpos node) idx))
     (setf *bitpos->node* collected)))
 
 
 (defun init-mappings ()
-  (setf node:*top-node* nil
+  (setf *top-node* nil
         *my-node* nil
         *leader-node* (get-local-ipv4 "localhost")
         *real-nodes*  (mapcar #'cdr *local-nodes*))

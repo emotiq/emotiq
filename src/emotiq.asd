@@ -96,17 +96,19 @@
                              (:file "blockchain")
                              ))))
 
-(defsystem "emotiq/core"
+(defsystem "emotiq/cosi"
   :depends-on (emotiq/config
                emotiq/tracker
                emotiq/blockchain)
   :components ((:module source
-                :pathname "core/"
+                :pathname "cosi/"
                 :serial t
                 :components ((:file "package")
                              #+CLOZURE (:file "clozure")
                              (:file "node-init")
 			     (:file "cosi-construction")
+                             #+LISPWORKS (:file "cosi-construction-debug")
+                             (:file "cosi-gossip")
                              (:file "cosi-handlers")
                              (:file "mvp-election-beacon")
                              (:file "cosi-netw-xlat")))))

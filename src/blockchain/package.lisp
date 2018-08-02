@@ -26,6 +26,11 @@
    #:corrupted-p
    #:cpu-load
    #:self
+   #:make-other-members
+   #:iteri-other-members
+   #:iter-other-members
+   #:bitmap
+   #:set-cpu-load
    #:short-id
    #:make-tx-changes
    #:current-node

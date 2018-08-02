@@ -56,26 +56,26 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   #+OPENMCL
   (when (find-package :gui)
     (setf emotiq:*notestream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log")))
-  (setf cosi-simgen::*use-real-gossip* nil)
+  (setf cosi::*use-real-gossip* nil)
   (setf actors::*maximum-age* 120)
   (when executive-threads
     (actors:set-executive-pool executive-threads))
   (when (or new-configuration-p
-            (not (and (probe-file cosi-simgen::*default-data-file*)
-                      (probe-file cosi-simgen::*default-key-file*))))
-    (cosi-simgen:generate-tree :nodes nodes))
-  (setf cosi-simgen::*cosi-prepare-timeout* cosi-prepare-timeout)
-  (setf cosi-simgen::*cosi-commit-timeout* cosi-commit-timeout)
+            (not (and (probe-file cosi::*default-data-file*)
+                      (probe-file cosi::*default-key-file*))))
+    (cosi:generate-tree :nodes nodes))
+  (setf cosi::*cosi-prepare-timeout* cosi-prepare-timeout)
+  (setf cosi::*cosi-commit-timeout* cosi-commit-timeout)
 
-  (cosi-simgen:reconstruct-tree)
+  (cosi:reconstruct-tree)
 
   (flet ((send-real-nodes (&rest msg)
-           (dolist (ip cosi-simgen::*real-nodes*)
-             (apply #'actors:send (node:pkey (gethash ip cosi-simgen::*ip->node*)) msg))))
+           (dolist (ip cosi::*real-nodes*)
+             (apply #'actors:send (node:pkey (gethash ip cosi::*ip->node*)) msg))))
 
     (send-real-nodes :reset))
   
-  (cosi-simgen::set-nodes
+  (cosi::set-nodes
    (um:accum acc
      (maphash (lambda (k node)
                 (declare (ignore k))
@@ -84,10 +84,10 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
                   (setf (node:stake node) stake)
                   (ac:pr (list pkey stake))
                   (acc (list pkey stake))))
-              cosi-simgen::*ip->node*)))
+              cosi::*ip->node*)))
   
 
-  (setf cosi-simgen::*all-nodes* (cosi-simgen::get-witness-list))
+  (setf cosi::*all-nodes* (cosi::get-witness-list))
   
   (emotiq/tracker:start-tracker))
 
@@ -125,7 +125,7 @@ This will spawn an actor which will asynchronously do the following:
   (setf *genesis-output* nil
         *tx-1* nil
         *tx-2* nil)
-  (cosi-simgen::reset-nodes)
+  (cosi::reset-nodes)
   (let ((fee 10))    
     (ac:pr "Construct Genesis Block")
     (let* ((genesis-block
@@ -133,7 +133,7 @@ This will spawn an actor which will asynchronously do the following:
               ;; Establish current-node binding of genesis node
               ;; around call to create genesis block.
               (block:make-genesis-block (wallet:address *genesis-account*)
-                                        (cosi-simgen::get-witness-list))))
+                                        (cosi::get-witness-list))))
            (genesis-transaction (first (block:transactions genesis-block)))
            (genesis-address (wallet:address *genesis-account*))
            (user-1-address (wallet:address *user-1*))
@@ -145,7 +145,7 @@ This will spawn an actor which will asynchronously do the following:
                    (txn:id genesis-transaction))
       (txn:dump genesis-transaction)      
 
-      (cosi-simgen:gossip-neighborcast nil :genesis-block :blk genesis-block)
+      (cosi:gossip-neighborcast nil :genesis-block :blk genesis-block)
       
       (sleep 10.0)
       
@@ -160,7 +160,7 @@ This will spawn an actor which will asynchronously do the following:
                    genesis-address (txn:id last-transaction))
       (txn:dump last-transaction)
 
-      (cosi-simgen:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
       
       (fire-election)
       (assert (txn::wait-for-tx-count 1 :timeout 120.0))
@@ -175,7 +175,7 @@ This will spawn an actor which will asynchronously do the following:
                    user-1-address)
       (txn:dump last-transaction)
           
-      (cosi-simgen:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
 
       (fire-election)
       (assert (txn::wait-for-tx-count 2 :timeout 120.0))
@@ -190,14 +190,14 @@ This will spawn an actor which will asynchronously do the following:
                    user-2-address)
       (txn:dump last-transaction)
       
-      (cosi-simgen:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
       (fire-election)
       (assert (txn::wait-for-tx-count 3 :timeout 120.0))
           
       ;; here: attempt a double-spend: (with same TxID)
       (emotiq:note "Tx 4 [USER-2 -> USER-3] created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting." user-2-address)
             
-      (cosi-simgen:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
       
       ;; this sleep is here so we can manually see in a log the double spend attemp
       ;; better (testable) approach would be to have a way to subscribe to a tracker messages
