@@ -629,6 +629,7 @@ THE SOFTWARE.
 (defun xfer-to-c (val cvec)
   ;; transfer val to C vector in 6 8-byte words
   (declare (integer val))
+  (setf val (mod val *ed-q*))
   (setf (cffi:mem-aref cvec :uint64 0) (ldb (byte 64   0) val)
         (cffi:mem-aref cvec :uint64 1) (ldb (byte 64  64) val)
         (cffi:mem-aref cvec :uint64 2) (ldb (byte 64 128) val)
