@@ -22,9 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
+(in-package :cl-user)
+
 (asdf:defsystem "core-crypto"
   :description "core-crypto: core cryptography functions"
-  :version     "1.0"
+  :version     "1.0.1"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :in-order-to ((test-op (test-op "core-crypto-tests")))
   :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
