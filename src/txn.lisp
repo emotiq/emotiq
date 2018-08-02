@@ -77,8 +77,11 @@
          :do (incf selected-amount tx-amount)
          :do (push txn-spec selected-txns)
          :do (cond ((= selected-amount amount) (exact))
-                   ((> selected-amount amount) (surplus))))
-      (error "insufficient funds ~A" selected-txns))))
+                   ((> selected-amount amount) (surplus))
+                   (t (error "insufficient funds for txamount ~A~%~tselected amount ~A~%~tselected transactions ~A"
+                             tx-amount
+                             selected-amount 
+                             selected-txns)))))))
 
 
 
