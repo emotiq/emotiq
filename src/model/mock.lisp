@@ -59,8 +59,8 @@
                  (:amount . ,amount))
                 (:object
                  (:cloaked . (:false))
-                 (:address . "my wallet address")
-                 (:amount . 1))))))
+                 (:address . ,*wallet-address*)
+                 (:amount . (- *amount* *fee* amount)))))))
 
 (defun transactions ()
   *transactions*)
