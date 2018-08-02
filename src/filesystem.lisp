@@ -75,7 +75,7 @@
 
 (defun new-temporary-directory (&key (root #p"/var/tmp/emotiq/"))
   (loop
-     :with sub-directory = (make-pathname
+     :for sub-directory = (make-pathname
                             :defaults root
                             :directory (append (pathname-directory root)
                                                (list (symbol-name (gensym)))))
