@@ -1992,3 +1992,9 @@ we are done. Else re-probe with (X^2 + 1)."
         nil                                          ;; do nothing, esp. don't try to init-pairing
       (init-Ed3363))))                      ;; in all other cases, init-pairing at LOAD time.
 |#
+
+(defmethod crypto-lib-loader:load-dlls :after ()
+  (set-ed-curve :curve1174))
+
+(defmethod crypto-lib-loader:unload-dlls :before ()
+  (setf *edcurve* nil))

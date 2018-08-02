@@ -1,10 +1,29 @@
+;; lib-loads.lisp -- Controlled Crypto Library load/unload
+;;
+;; DM/Emotiq 08/18
+;; ---------------------------------------------------------
+#|
+Copyright (c) 2018 Emotiq AG
 
-(defpackage :crypto-lib-loader
-  (:use :cl)
-  (:export
-   :load-dlls
-   :unload-dlls
-   ))
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+|#
+
 
 (in-package :crypto-lib-loader)
 
@@ -51,9 +70,43 @@
    (:linux      "libLispPBCIntf.so")
    (t (:default "libLispPBCIntf"))))
 
+;; -----------------------------------------------------------------------------
+
+#+:LISPWORKS
+(defun do-with-aimed-load-paths (fn)
+  (labels ((pref-env-var (var-name pref)
+             (let ((prev (lw:environment-variable var-name)))
+               (setf (lw:environment-variable var-name)
+                     (if prev
+                         (um:paste-strings #\: pref prev)
+                       pref))
+               prev)))
+    (let* ((ld-name   "LD_LIBRARY_PATH")
+           (dyld-name "DYLD_LIBRARY_PATH")
+           (pref      (asdf:system-relative-pathname :emotiq "../var/local/lib/"))
+           (sav-ld    (pref-env-var ld-name   pref))
+           (sav-dyld  (pref-env-var dyld-name pref)))
+      (unwind-protect
+          (funcall fn)
+        (setf (lw:environment-variable ld-name)   sav-ld
+              (lw:environment-variable dyld-name) sav-dyld))
+      )))
+
+#-:LISPWORKS
+(defun do-with-aimed-load-paths (fn)
+  (funcall fn))
+
+
+(defmacro with-aimed-load-paths (&body body)
+  `(do-with-aimed-load-paths (lambda () ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-aimed-load-paths" 0)
+
+
 (defvar *load-counter*  0)
 
-(defun load-dlls ()
+(defmethod load-dlls ()
   "load the dev or production dlls at runtime"
   (format t "~%CRYPTO-LIB-LOADER:LOAD-DLL Load Counter = ~A" (incf *load-counter*))
   (cond
@@ -68,15 +121,16 @@
                           (apply (first item) (rest item))
                         item))
                     cffi:*foreign-library-directories*))
-    (cffi:use-foreign-library :libLispPBC)
-    (cffi:use-foreign-library :libEd3363)
-    (cffi:use-foreign-library :libCurve1174))
+    (with-aimed-load-paths
+      (cffi:use-foreign-library :libLispPBC)
+      (cffi:use-foreign-library :libEd3363)
+      (cffi:use-foreign-library :libCurve1174)))
    
    (t
     (format t "~%Skipping library loading"))
    ))
 
-(defun unload-dlls ()
+(defmethod unload-dlls ()
   (cffi:close-foreign-library :libLispPBC)
   (cffi:close-foreign-library :libed3363)
   (cffi:close-foreign-library :libcurve1174)

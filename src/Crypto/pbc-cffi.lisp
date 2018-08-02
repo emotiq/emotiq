@@ -182,7 +182,7 @@ THE SOFTWARE.
 ;; -----------------------------------------------------------------------
 ;; Init interface - this must be performed first
 
-(cffi:defcfun ("init_pairing" _init-pairing :library :libLispPBC) :int64
+(cffi:defcfun ("init_pairing" _init-pairing) :int64
   (context     :uint64)
   (param-text  :pointer :char)
   (ntext       :uint64)
@@ -1899,14 +1899,18 @@ likely see an assertion failure"
 |#
 ;; ------------------------------------------------------------------------------
 
-#-:lispworks
-(eval-when (:load-toplevel)
-  ;; THe last init-pairing executed leaves *pairing* set. Up to 16
-  ;; context slots available, (0 .. 15)
+(defmethod crypto-lib-loader:load-dlls :after ()
   (init-pairing :params *pairing-fr256-params* :context 0)
-  ;; do FR449 last so it becomes the default pairing
   (init-pairing :params *pairing-fr449-params* :context 1)
   (set-pairing :pairing-fr256))
+
+(defmethod crypto-lib-loader:unload-dlls :before ()
+  (setf *pairing* nil)
+  (fill *pairings* nil))
+
+#-:lispworks
+(eval-when (:load-toplevel)
+  (crypto-lib-loader:load-dlls))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -1923,16 +1927,9 @@ likely see an assertion failure"
     (format *standard-output* "~&building-binary-p ~A~&"
             building-binary-p)
     
-    (if building-binary-p
-        nil                                          ;; do nothing, esp. don't try to init-pairing
-      (progn
-        ;; in all other cases, init-pairing at LOAD time.
-        ;;
-        ;; THe last init-pairing executed leaves *pairing* set. Up to 16
-        ;; context slots available, (0 .. 15)
-        (init-pairing :params *pairing-fr256-params* :context 0)
-        ;; do FR449 last so it becomes the default pairing
-        (init-pairing :params *pairing-fr449-params* :context 1)
-        (set-pairing :pairing-fr256)
-        ))))
+    (unless building-binary-p
+      ;; in all other cases, init-pairing at LOAD time.
+      ;;
+      (crypto-lib-loader:load-dlls))
+    ))
 

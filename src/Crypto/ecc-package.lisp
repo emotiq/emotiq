@@ -413,3 +413,10 @@ THE SOFTWARE.
    :field-random
    ))
    
+(defpackage :crypto-lib-loader
+  (:use :cl)
+  (:export
+   :load-dlls
+   :unload-dlls
+   ))
+
