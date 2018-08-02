@@ -52,11 +52,10 @@
 (defun test-app ()
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
-    (with-current-node
-     (emotiq:main)
-     (app2)
-     (dump-results strm)
-     (block-explorer))))
+    (emotiq:main)
+    (app2)
+    (dump-results strm)
+    (block-explorer)))
 
 (defun app2 ()
   "helper for tests"
@@ -84,6 +83,7 @@
     (sleep 30)
 
     (spend *bob* *mary* 290 :fee fee)
+    ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
 
     (sleep 120)))
 
@@ -259,14 +259,16 @@
           b-list)))
 
 (defun explore-transaction (tx)
-  (let ((txid (cosi/proofs/newtx:transaction-id tx)))  ;; TODO: cut over to with-block-list
-    (let ((my-address (my-address tx)))
+  (let ((txid (cosi/proofs/newtx:hash-transaction-id tx)))  ;; TODO: use with-block-list macro
+    (let ((my-address (get-transaction-address tx)))
       (let ((out-list (get-transaction-outs tx)))
         (let ((in-list (get-transaction-ins tx)))
-          (let ((out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id out-list)))
-            (let ((in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id in-list)))
-              (let ((in-address-list (mapcar #'my-address in-list)))
-                (let ((out-address-list (mapcar #'my-address out-list)))
+          (let ((out-txid-list (mapcar #'cosi/proofs/newtx::tx-out-public-key-hash out-list)))
+            (let ((in-txid-list (mapcar #'(lambda (in)
+                                            (emotiq/txn:address (cosi/proofs/newtx::%tx-in-public-key in)))
+                                        in-list)))
+              (let ((in-address-list (mapcar #'get-transaction-address in-list)))
+                (let ((out-address-list (mapcar #'get-transaction-address out-list)))
                   ;; at this point, 
                   ;; tx == the given transaction CLOS object
                   ;; txid == string txid for this transaction
@@ -291,21 +293,35 @@
   "return a list of CLOS transactions that are inputs of this transaction"
   (cosi/proofs/newtx:transaction-inputs tx))
 
-(defmethod my-address ((tx cosi/proofs/newtx::transaction))
-  "return the string address for a given tx (derived from address in inputs), return empty string for tx's that have no inputs (i.e. coinbase txn)"
-  (if (eq :coinbase (cosi/proofs/newtx::transaction-type tx))
-      ""
-    (let ((ins (cosi/proofs/newtx:transaction-inputs tx)))
-      (unless (not (null ins))
-        (emotiq:note "ERROR: empty inputs for tx=~A"))
-      (let ((addr (cosi/proofs/newtx::tx-out-public-key-hash (first ins))))
-        ;; all tx-ins must point to this address
-        ;; this check is probably a no-op for most testing transactions
-        (unless (every #'(lambda (in-tx)
-                           (string= addr (cosi/proofs/newtx::tx-out-public-key-hash in-tx)))
-                       (rest ins))
-          (emotiq:note "ERROR: not all txins ~A refer to the same address ~A"
-                       ins addr))
-        addr))))
+(defmethod get-transaction-address ((tx cosi/proofs/newtx::transaction))
+  "return the address of tx"
+  ;; we can get the address of tx by looking at its inputs and pulling out the pkey that the
+  ;; inputs are aimed at
 
-  
+  ;; this turns out to be extra easy at the moment, because the current tx input data
+  ;; structure has a field that contains the pkey - will this change in the future?
+
+  ;; the actual blockchain transactions are optimized so that redundant information is not
+  ;; stored - target pkeys appear in the txouts of transactions that feed into this one - using only that information,
+  ;; this code would have to reach back to the input transactions to find the account pkey associated
+  ;; with this transaction (in the txout of the input transaction(s)).
+
+  (cosi/proofs/newtx::%tx-in-public-key (first (cosi/proofs/newtx::transaction-inputs tx))))
+
+
+;;;;;;;;;;;;;;;;;;
+; random transaction generator
+;;;;;;;;;;;;;;;;;;
+#|
+(defparameter *seed* 0.1)
+
+(defparameter *from* nil
+  "list of accounts which will send tokens from to *to*")
+
+(defparameter *to* nil
+  "list of accounts which will accept tokens")
+
+(defun generate-pseudo-random-transactions ()
+  "spawn an actor that wakes up and spends tokens from some account in *from* to another account in *to*"
+  (let ((keypairs (emotiq/config:get-keypairs)))
+|#
