@@ -11,8 +11,16 @@
   "Timeout in seconds that represents the longest witness idle period before setting up an emergency call-for-new-election.")
   
 
-;; Support macros... ensure Node context is preserved into continuation bodies.
+(defvar *max-transactions* 16
+  "max number of transactions per block")
 
+(defvar *in-simulatinon-always-byz-ok* nil
+  "set to nil for non-sim mode, forces consensus")
+
+(defvar *election-proof* nil) ;; NYI
+
+
+;; Support macros... ensure Node context is preserved into continuation bodies.
 (defmacro with-current-node (node &body body)
   `(let ((*current-node* ,node))
      ,@body))
@@ -24,8 +32,7 @@
        (=bind ,parms
            ,expr
          (with-current-node ,g!node  ;; restore node context
-           ,@body)))
-    ))
+           ,@body)))))
 
 (defmacro node-schedule-after (timeout &body body)
   ;; Actor schedule-after with Node context preservation
@@ -45,39 +52,33 @@
   (setf *tx-changes* (node:make-tx-changes)))
 
 (defmethod node-dispatcher ((msg-sym (eql :become-witness)) &key)
-  (let ((node       (current-node))
-        (epoch      *local-epoch*))
+  (let ((node (current-node))
+        (epoch *local-epoch*))
     (emotiq/tracker:track :new-witness node)
-    (setf *tx-changes* (node:make-tx-changes))
-    
-    (setf *had-work-p* nil)
+    (setf *tx-changes* (node:make-tx-changes)
+          *had-work-p* nil)
     (node-schedule-after *cosi-max-wait-period*
       (when (= *local-epoch* epoch) ;; no intervening election
         (unless *had-work-p*
           ;; if we had work during this epoch before this timeout,
           ;; then a call-for-new-election has either already been sent,
           ;; or else a setup-emergency-call has been performed.
-          (done-with-duties)
-          )))
-    ))
+          (done-with-duties))))))
                
 (defmethod node-dispatcher ((msg-sym (eql :reset)) &key)
   (emotiq/tracker:track :reset)
   (reset-nodes))
 
 (defmethod node-dispatcher ((msg-sym (eql :answer)) &rest args)
-  (ac:pr args))
+  (pr args))
 
-;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :genesis-block)) &key blk)
   (pr "~A got genesis block" (node:short-id (current-node)))
   (unless blk   ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
   (push blk *blockchain*)
-  (let ((hash (block:hash blk)))
-    (setf (gethash hash *blocks*) blk)))
+  (setf (gethash (block:hash blk) *blocks*) blk))
 
-;; for new transactions:  -mhd, 6/12/18
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key txn)
   (txn:validate txn))
 
@@ -96,8 +97,7 @@
 (defmethod node-dispatcher ((msg-sym (eql :signing)) &key reply-to consensus-stage blk seq timeout)
   ;; witness nodes receive this message to participate in a multi-signing
   (setf *had-work-p* t)
-  (node-cosi-signing reply-to
-                     consensus-stage blk seq timeout))
+  (node-cosi-signing reply-to consensus-stage blk seq timeout))
 
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
@@ -111,23 +111,8 @@
   (pr "WARN - Unexpected GOSSIP message: ~S" msg))
 
 
-
-(defvar *election-proof*   nil) ;; NYI
-
-(defvar *max-transactions*  16)  ;; max nbr TX per block
-(defvar *in-simulatinon-always-byz-ok* nil) ;; set to nil for non-sim mode, forces consensus
-
 (defun signature-hash-message (blk)
   (block:serialize-header blk))
-
-;; ----------------------------------------------------------------------
-;; Code run by Cosi block validators...
-
-(defun check-block-transactions (blk)
-  (block:check-transactions blk))
-
-;; --------------------------------------------------------------------
-;; Message handlers for verifier nodes
 
 ;; -----------------------------------------------------------------------
 
@@ -185,41 +170,23 @@
   nil)
 
 ;; -------------------------------------------------------------------
-;; debug init
-
-(defun reset-system ()
-  (send-real-nodes :reset))
-
-(defun reset-nodes ()
-  (loop for node across *bitpos->node* do
-        (setf (node:corrupted-p      node) nil
-              (node:blockchain node) nil)
-
-        (setf (node:current-leader node) (node:pkey *top-node*))
-        (clrhash (node:blocks  node))
-        (clrhash (node:mempool node))
-        (clrhash (node:utxos   node))
-        ))
-
-;; -------------------------------------------------------------------
 
 (defun send-subs (node &rest msg)
-  (node:iter-other-members node (lambda (sub)
-                                  (apply 'send sub msg))))
+  (node:iter-other-members node (lambda (sub) (apply #'send sub msg))))
 
 (defun group-subs (node)
   (um:accum acc
     (node:iter-other-members node #'acc)))
 
 (defun send-real-nodes (&rest msg)
-  (loop for ip in *real-nodes* do
-        (apply 'send (node:pkey (gethash ip *ip->node*)) msg)))
+  (dolist (ip *real-nodes*)
+    (apply #'send (node:pkey (gethash ip *ip->node*)) msg)))
 
 
 (defun sub-signing (my-node consensus-stage blk seq-id timeout)
   (declare (ignore my-node))
   (=lambda (node)
-    (let ((start  (get-universal-time)))
+    (let ((start (get-universal-time)))
       #-:LISPWORKS (declare (ignore start))
       (send node :signing
             :reply-to        (current-actor)
@@ -227,34 +194,28 @@
             :blk             blk
             :seq             seq-id
             :timeout         timeout)
-      (labels
-          ((!dly ()
+      (labels ((!dly ()
                  #+:LISPWORKS
-                 (send *dly-instr* :incr
-                       (/ (- (get-universal-time) start)
-                          timeout)))
-
+                 (send *dly-instr* :incr (/ (- (get-universal-time) start) timeout)))
                (=return (val)
                  (!dly)
                  (become 'do-nothing) ;; stop responding to messages
                  (=values val)))
         (recv
-          ((list* :signed sub-seq ans)
-           (if (eql sub-seq seq-id)
-               (=return ans)
-             ;; else
-             (retry-recv)))
+         ((list* :signed sub-seq ans)
+          (if (eql sub-seq seq-id)
+              (=return ans)
+              ;; else
+              (retry-recv)))
           
-          (_
-           (retry-recv))
+         (_
+          (retry-recv))
           
-          :TIMEOUT timeout
-          :ON-TIMEOUT
-          (progn
-            (pr "SubSigning timeout waiting for ~A"
-                         (node:short-id node))
-            (=return nil))
-          )))))
+         :TIMEOUT timeout
+         :ON-TIMEOUT
+         (progn
+           (pr "SubSigning timeout waiting for ~A" (node:short-id node))
+           (=return nil)))))))
 
 ;; -----------------------------------------------------------
 
@@ -265,8 +226,7 @@
   sig1)
 
 (defmethod add-sigs ((sig1 pbc:signature) (sig2 pbc:signature))
-  (change-class (pbc:add-pts sig1 sig2)
-                'pbc:signature))
+  (change-class (pbc:add-pts sig1 sig2) 'pbc:signature))
 
 ;; -------------------------------------------------------------
 
@@ -285,73 +245,68 @@
 
 (=defun gossip-signing (my-node consensus-stage blk blk-hash seq-id timeout)
   (with-current-node my-node
-    (cond ((and *use-gossip*
-                (vec-repr:int= (node:pkey my-node) *leader*))
-           ;; we are leader node, so fire off gossip spray and await answers
-           (let ((bft-thrsh (1- (bft-threshold blk))) ;; adj by 1 since leader is also witness
-                 (start     nil)
-                 (g-bits    0)
-                 (g-sig     nil))
+    (if (and *use-gossip-p* (vec-repr:int= (node:pkey my-node) *leader*))
+        ;; we are leader node, so fire off gossip spray and await answers
+        (let ((bft-thrsh (1- (bft-threshold blk))) ;; adj by 1 since leader is also witness
+              (start nil)
+              (g-sig nil)
+              (g-bits 0))
              
-             (pr "Running Gossip Signing, Node = ~A" (node:short-id my-node))
+          (pr "Running Gossip Signing, Node = ~A" (node:short-id my-node))
 
-             (gossip-neighborcast my-node :signing
-                                  :reply-to        (current-actor)
-                                  :consensus-stage consensus-stage
-                                  :blk             blk
-                                  :seq             seq-id
-                                  :timeout         timeout)
-             (setf start (get-universal-time))
+          (neighborcast my-node
+                        :signing
+                        :reply-to        (current-actor)
+                        :consensus-stage consensus-stage
+                        :blk             blk
+                        :seq             seq-id
+                        :timeout         timeout)
              
-             (labels
-                 ((=return (val)
-                    (pr "Return from Gossip Signing")
-                    (become 'do-nothing) ;; stop responding to messages
-                    (=values val))
+          (setf start (get-universal-time))
+             
+          (labels ((=return (val)
+                     (pr "Return from Gossip Signing")
+                     (become 'do-nothing) ;; stop responding to messages
+                     (=values val))
                   
-                  (=finish ()
-                    (=return (if g-sig
-                                 (list g-sig g-bits)
-                               (list nil 0))))
+                   (=finish ()
+                     (=return (if g-sig
+                                  (list g-sig g-bits)
+                                  (list nil 0))))
 
-                  (adj-timeout ()
-                    (let ((stop (get-universal-time)))
-                      (decf timeout (- stop (shiftf start stop))))))
+                   (adj-timeout ()
+                     (let ((stop (get-universal-time)))
+                       (decf timeout (- stop (shiftf start stop))))))
                   
-               (recv
-                 ((list :signed sub-seq sig bits)
-                  (with-current-node my-node
-                    (cond ((and (eql sub-seq seq-id)
-                                sig
-                                (zerop (logand g-bits bits)) ;; check for no intersection
-                                (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
-                           (pr "Got bits: ~A" (vec-repr:hex-str bits))
-                           (setf g-bits (logior g-bits bits)
-                                 g-sig  (add-sigs sig g-sig))
-                           (if (>= (logcount g-bits) bft-thrsh)
-                               (=finish)
-                             ;; else
-                             (progn
-                               (adj-timeout)
-                               (retry-recv))))
+            (recv
+             ((list :signed sub-seq sig bits)
+              (with-current-node my-node
+                (cond ((and (eql sub-seq seq-id)
+                            sig
+                            (zerop (logand g-bits bits)) ;; check for no intersection
+                            (pbc:check-hash blk-hash sig (composite-pkey blk bits)))
+                       (pr "Got bits: ~A" (vec-repr:hex-str bits))
+                       (setf g-bits (logior g-bits bits)
+                             g-sig  (add-sigs sig g-sig))
+                       (if (>= (logcount g-bits) bft-thrsh)
+                           (=finish)
+                           ;; else
+                           (progn
+                             (adj-timeout)
+                             (retry-recv))))
 
-                          (t
-                           (adj-timeout)
-                           (retry-recv)))))
+                      (t
+                       (adj-timeout)
+                       (retry-recv)))))
                  
-                 (msg
-                  (pr "Gossip-wait got unknown message: ~A" msg)
-                  (adj-timeout)
-                  (retry-recv))
-                 
-                 :TIMEOUT    timeout
-                 :ON-TIMEOUT (=finish)
-                 ))))
-  
-          (t 
-           ;; else - not leader don't re-gossip request for signatures
-           (=values nil))
-          )))
+             (msg
+              (pr "Gossip-wait got unknown message: ~A" msg)
+              (adj-timeout)
+              (retry-recv))
+             :TIMEOUT    timeout
+             :ON-TIMEOUT (=finish))))
+        
+        (=values nil)))) ;; else - not leader don't re-gossip request for signatures
 
 ;; -------------------------------------------------------
 ;; VALIDATE-COSI-MESSAGE -- this is the one you need to define for
@@ -362,9 +317,6 @@
       (>= (logcount bits)
           (bft-threshold blk))))
 
-(defun check-block-transactions-hash (blk)
-  (hash:hash= (block:merkle-root-hash blk) ;; check transaction hash against header
-              (block:compute-merkle-root-hash blk)))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
   pkey2)
@@ -373,17 +325,16 @@
   pkey1)
 
 (defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
-  (change-class (pbc:add-pts pkey1 pkey2)
-                'pbc:public-key))
+  (change-class (pbc:add-pts pkey1 pkey2) 'pbc:public-key))
 
 (defun composite-pkey (blk bits)
-  ;; compute composite witness key sum
-  (let ((wsum  nil))
-    (loop for ix from 0
-       for wkey in (coerce (block:witnesses blk) 'list)
-          do
-          (when (logbitp ix bits)
-            (setf wsum (add-pkeys wsum wkey))))
+  "compute composite witness key sum"
+  (let ((wsum nil))
+    (loop
+       :for ix :from 0
+       :for wkey :in (coerce (block:witnesses blk) 'list)
+       :do (when (logbitp ix bits)
+             (setf wsum (add-pkeys wsum wkey))))
     wsum))
 
 (defun check-hash-multisig (hash sig bits blk)
@@ -396,17 +347,16 @@
          (sig  (block:signature blk))
          (hash (hash:hash/256 (signature-hash-message blk))))
     (and (check-hash-multisig hash sig bits blk)
-         (check-block-transactions-hash blk))
-    ))
+         (block:check-transactions-hash blk))))
 
 (defun call-for-punishment ()
   ;; a witness detected a problem with a block handed by the leader... hmmm...
   ;; for now, just call for new election
-  (when *use-real-gossip*
+  (when *use-real-gossip-p*
     (call-for-new-election)))
 
 (defun done-with-duties ()
-  (when *use-real-gossip*
+  (when *use-real-gossip-p*
     (setup-emergency-call-for-new-election)))
   
 (defun validate-cosi-message (node consensus-stage blk)
@@ -414,44 +364,37 @@
     (:prepare
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
-     (or
-      (and (vec-repr:int= *leader*
-                 (block:leader-pkey blk))
-           (check-block-transactions-hash blk)
-           (let ((prevblk (first *blockchain*)))
-             (or (null prevblk)
-                 (and (> (block:timestamp blk) (block:timestamp prevblk))
-                      (hash:hash= (block:prev-block-hash blk) (block:hash prevblk)))))
-           (or (vec-repr:int= (node:pkey node) *leader*)
-               (check-block-transactions blk)))
-      ;; else - failure case
-      (progn
-        (call-for-punishment)
-        nil))) ;; return nil for failure
+     (or (and (vec-repr:int= *leader*
+                             (block:leader-pkey blk))
+              (block:check-transactions-hash blk)
+              (let ((prevblk (first *blockchain*)))
+                (or (null prevblk)
+                    (and (> (block:timestamp blk) (block:timestamp prevblk))
+                         (vec-repr:int= (block:prev-block-hash blk) (block:hash prevblk)))))
+              (or (vec-repr:int= (node:pkey node) *leader*)
+                  (block:check-transactions blk)))
+         (progn   ;; else - failure case
+           (call-for-punishment)
+           nil))) ;; return nil for failure
 
     (:commit
      ;; message is a block with multisignature check signature for
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
-     (or
-      (and (vec-repr:int= *leader*
-                          (block:leader-pkey blk))
-           (check-block-multisignature blk)
-           (progn
-             (push blk *blockchain*)
-             (setf (gethash (block:hash blk)
-                            *blocks*) blk)
-             ;; For new tx: ultra simple for now: there's no UTXO
-             ;; database. Just remhash from the mempool all
-             ;; transactions that made it into the block.
-             (mempool:clear-block-transactions blk)
-             (done-with-duties)
-             t)) ;; return truea to validate
-      ;; else - failure case
-      (progn
-        (call-for-punishment)
-        nil))) ;; return nil for failure
-    ))
+     (or (and (vec-repr:int= *leader* (block:leader-pkey blk))
+              (check-block-multisignature blk)
+              (progn
+                (push blk *blockchain*)
+                (setf (gethash (block:hash blk) *blocks*) blk)
+                ;; For new tx: ultra simple for now: there's no UTXO
+                ;; database. Just remhash from the mempool all
+                ;; transactions that made it into the block.
+                (mempool:clear-block-transactions blk)
+                (done-with-duties)
+                t)) ;; return truea to validate
+         (progn     ;; else - failure case
+           (call-for-punishment)
+           nil))))) ;; return nil for failure
 
 ;; ----------------------------------------------------------------------------
 
@@ -460,7 +403,7 @@
   ;; is tree-recursivde.
   (let* ((node     (current-node))
          (blk-hash (hash:hash/256 (signature-hash-message blk)))
-         (subs     (and (not *use-gossip*)
+         (subs     (and (not *use-gossip-p*)
                         (remove-if 'node-bad (group-subs node)))))
     (pr "Node: ~A :Stage ~A" (node:short-id node) consensus-stage)
     (=node-bind (ans)
@@ -507,8 +450,7 @@
                      (cond
                       ((null resp)
                        ;; no response from node, or bad subtree
-                       (pr "No signing: ~A"
-                                    (node:short-id sub))
+                       (pr "No signing: ~A" (node:short-id sub))
                        (mark-node-no-response node sub))
                       
                       (t
@@ -518,15 +460,11 @@
                                   (pbc:check-hash blk-hash sub-sig (composite-pkey blk sub-bits)))
                              (setf sig  (add-sigs sig sub-sig)
                                    bits (logior bits sub-bits))
-                           ;; else
-                           (mark-node-corrupted node sub))
-                         ))
-                      )))
+                             (mark-node-corrupted node sub)))))))
             (mapc #'fold-answer subs r-lst) ;; gather results from subs
             (when g-ans
               (fold-answer node g-ans))
-            (send reply-to :signed seq-id sig bits))
-          ))))
+            (send reply-to :signed seq-id sig bits))))))
 
 ;; -----------------------------------------------------------
 
@@ -550,33 +488,27 @@
           ((eql seq sess)
            (pr "Made it back from signing")
            (if (check-hash-multisig hash sig bits blk)
-               ;; we completed successfully
-               (progn
+               (progn ;; we completed successfully
                  (pr "Forwarding multisig to leader")
                  (reply reply-to :signature sig bits))
-             ;; bad signature
-             (reply reply-to :corrupt-cosi-network)
-             ))
-          ;; ------------------------------------
+               (reply reply-to :corrupt-cosi-network))) ;; bad signature
           (t ;; seq mismatch
-             ;; must have been a late arrival
-             (pr "late-arrival")
-             (retry-recv))
-          ))) ;; end of message pattern
-      )))
+           ;; must have been a late arrival
+           (pr "late-arrival")
+           (retry-recv))))))))
 
 ;; ------------------------------------------------------------------------------------------------
 
-(defun leader-assemble-block (trns prepare-timeout commit-timeout)
+(defun leader-assemble-block (txns prepare-timeout commit-timeout)
   (send *dly-instr* :clr)
   (send *dly-instr* :pltwin :histo-4)
   (pr "Assemble new block")
-  (let* ((node      (current-node))
-         (self      (current-actor))
+  (let* ((node (current-node))
+         (self (current-actor))
          (new-block (block:make-block (first *blockchain*)
                                       *election-proof* *leader*
-                                      (map 'vector 'first (get-witness-list))
-                                      trns)))
+                                      (map 'vector #'first (get-witness-list))
+                                      txns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
                   :blk       new-block
@@ -601,22 +533,35 @@
             (send (node:pkey node) :block-finished))
            
            ((list :answer :corrupt-cosi-network)
-            (pr "Corrupt Cosi network in COMMIT phase"))
-           )))
+            (pr "Corrupt Cosi network in COMMIT phase")))))
       
       ((list :answer :corrupt-cosi-network)
-       (pr "Corrupt Cosi network in PREPARE phase"))
-      )))
+       (pr "Corrupt Cosi network in PREPARE phase")))))
     
 (defun leader-exec (prepare-timeout commit-timeout)
-  (let ((trns (block:new-transactions)))
-    (pr "Leader see transactions: ~a" trns)
-    (if trns
-        (leader-assemble-block trns prepare-timeout commit-timeout)
+  (let ((txns (block:new-transactions :max *max-transactions*)))
+    (pr "Leader see transactions: ~a" txns)
+    (if txns
+        (leader-assemble-block txns prepare-timeout commit-timeout)
         (done-with-duties))))
 
 ;; -----------------------------------------------------------------
+;; debug
 
 (defun init-sim ()
   (reconstruct-tree)
   (reset-system))
+
+(defun reset-system ()
+  (send-real-nodes :reset))
+
+(defun reset-nodes ()
+  (loop
+     :for node :across *bitpos->node* :do
+       (setf (node:corrupted-p node) nil
+             (node:blockchain node) nil
+             (node:current-leader node) (node:pkey *top-node*))
+       (clrhash (node:blocks node))
+       (clrhash (node:mempool node))
+       (clrhash (node:utxos node))))
+

@@ -72,7 +72,6 @@
             (apply #'send beh msg)))))))
 
 
-
 (defun key-int-val (key)
   (vec-repr:int key))
 
@@ -90,6 +89,9 @@
         (setf (gethash (key-int-val pkey) *pkey->skey*) skey)
         (values ip
                 (list pkey psig)))))
+
+
+
 
 
 (defun assign-bit-positions ()

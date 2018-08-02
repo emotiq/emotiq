@@ -1,28 +1,5 @@
 (in-package :blockchain-test)
 
-;; (defun run-1 ()
-;;   (sim::initialize :nodes 3 :new-configuration-p t)
-;;   (sim::ensure-simulation-keys)
-;;   (setf sim::*genesis-output* nil
-;;         sim::*tx-1* nil
-;;         sim::*tx-2* nil)
-;;   (node:reset-nodes)
-;;   (ac:pr "Construct Genesis Block")
-  
-;;   (let* ((genesis-block
-;;           (let ((node:*current-node* node:*top-node*))
-;;             ;; Establish current-node binding of genesis node
-;;             ;; around call to create genesis block.
-;;             (block:make-genesis-block (wallet:address sim::*genesis-account*)
-;;                                       (sim:keys-and-stakes))))
-;;          (genesis-transaction (first (block:transactions genesis-block))))
-
-;;     (emotiq:note "Tx 0 created/genesis, now broadcasting.")
-;;     (txn:dump genesis-transaction)      
-
-;;     (node:gossip-neighborcast nil :genesis-block :blk genesis-block)
-;;     (sleep 10.0)))
-
 
 (defun init (&key
                (cosi-prepare-timeout 40)
@@ -56,7 +33,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
   #+OPENMCL
   (when (find-package :gui)
     (setf emotiq:*notestream* (funcall (intern "MAKE-LOG-WINDOW" :gui) "Emotiq Log")))
-  (setf cosi::*use-real-gossip* nil)
+  (setf cosi::*use-real-gossip-p* nil)
   (setf actors::*maximum-age* 120)
   (when executive-threads
     (actors:set-executive-pool executive-threads))
@@ -145,7 +122,7 @@ This will spawn an actor which will asynchronously do the following:
                    (txn:id genesis-transaction))
       (txn:dump genesis-transaction)      
 
-      (cosi:gossip-neighborcast nil :genesis-block :blk genesis-block)
+      (cosi:neighborcast nil :genesis-block :blk genesis-block)
       
       (sleep 10.0)
       
@@ -160,7 +137,7 @@ This will spawn an actor which will asynchronously do the following:
                    genesis-address (txn:id last-transaction))
       (txn:dump last-transaction)
 
-      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:neighborcast nil :new-transaction :txn last-transaction)
       
       (fire-election)
       (assert (txn::wait-for-tx-count 1 :timeout 120.0))
@@ -175,7 +152,7 @@ This will spawn an actor which will asynchronously do the following:
                    user-1-address)
       (txn:dump last-transaction)
           
-      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:neighborcast nil :new-transaction :txn last-transaction)
 
       (fire-election)
       (assert (txn::wait-for-tx-count 2 :timeout 120.0))
@@ -190,14 +167,14 @@ This will spawn an actor which will asynchronously do the following:
                    user-2-address)
       (txn:dump last-transaction)
       
-      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:neighborcast nil :new-transaction :txn last-transaction)
       (fire-election)
       (assert (txn::wait-for-tx-count 3 :timeout 120.0))
           
       ;; here: attempt a double-spend: (with same TxID)
       (emotiq:note "Tx 4 [USER-2 -> USER-3] created/signed by user-2 (~a) [attempt to double-spend (same TxID)], now broadcasting." user-2-address)
             
-      (cosi:gossip-neighborcast nil :new-transaction :txn last-transaction)
+      (cosi:neighborcast nil :new-transaction :txn last-transaction)
       
       ;; this sleep is here so we can manually see in a log the double spend attemp
       ;; better (testable) approach would be to have a way to subscribe to a tracker messages

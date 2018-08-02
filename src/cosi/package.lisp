@@ -40,9 +40,7 @@
                 :*local-epoch*)
                 
   (:export
-   :*current-node*
-   :current-node
-   :gossip-neighborcast
+   :neighborcast
    :send
    :reply
    :node-dispatcher

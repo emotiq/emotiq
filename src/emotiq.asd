@@ -110,8 +110,8 @@
                              #+LISPWORKS (:file "cosi-construction-debug")
                              (:file "cosi-gossip")
                              (:file "cosi-handlers")
-                             (:file "mvp-election-beacon")
-                             (:file "cosi-netw-xlat")))))
+                             (:file "cosi-election-beacon")
+                             (:file "cosi-network-translation")))))
 
 (defsystem "emotiq/cli"
   :depends-on (emotiq/wallet

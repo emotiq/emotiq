@@ -1,37 +1,35 @@
 (in-package :emotiq/cosi)
 
 
-(defvar *use-gossip* t
+(defvar *use-gossip-p* t
   "use Gossip graphs instead of Cosi Trees")
 
-(defvar *use-real-gossip* t
+(defvar *use-real-gossip-p* t
   "set to T for real Gossip mode, NIL = simulation mode")
 
 (defvar *gossip-neighborhood-graph* nil
   "established neighborhood graph")
 
 
-(defun ensure-gossip-neighborhood-graph (my-node)
+(defun ensure-neighborhood-graph (my-node)
   (declare (ignore my-node))
   (or *gossip-neighborhood-graph*
       (setf *gossip-neighborhood-graph*
             (or :UBER ;; for now while debugging
                 (gossip:establish-broadcast-group
                  (mapcar #'first (get-witness-list))
-                 :graphID :cosi)))
-      ))
+                 :graphID :cosi)))))
 
-(defun gossip-neighborcast (my-node &rest msg)
+
+(defun neighborcast (my-node &rest msg)
   "Gossip-neighborcast - send message to all witness nodes."
-  (cond (*use-real-gossip*
-         (gossip:broadcast msg
-                           :style :neighborcast
-                           :graphID (ensure-gossip-neighborhood-graph my-node)))
-
-        (t
-         (loop for node across *bitpos->node* do
-               (unless (eql node my-node)
-                 (apply 'send (node:pkey node) msg))))))
+  (if *use-real-gossip-p*
+      (gossip:broadcast msg
+                        :style :neighborcast
+                        :graphID (ensure-neighborhood-graph my-node))
+      (loop :for node :across *bitpos->node* :do
+           (unless (eql node my-node)
+             (apply #'send (node:pkey node) msg)))))
 
 
 (defun broadcast+me (msg)

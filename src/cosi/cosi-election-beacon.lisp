@@ -17,7 +17,7 @@
 
 
 (defun get-witness-list ()
-  (if *use-real-gossip*
+  (if *use-real-gossip-p*
       *all-nodes*
       (or *all-nodes* ;; other sim
           (setf *all-nodes*
@@ -276,7 +276,7 @@ based on their relative stake"
       ;; *local-epoch* will also not have
       ;; changed
       (unless (get-witness-list)
-        (cond (*use-real-gossip*
+        (cond (*use-real-gossip-p*
                (let* ((nodes/stakes (emotiq/config:get-stakes))
                       (my-pair      (find (node:pkey node) nodes/stakes
                                           :test 'vec-repr:int=
