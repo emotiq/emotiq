@@ -1,5 +1,5 @@
 (defsystem "core-crypto-test"
-  :depends-on (core-crypto
+  :depends-on (crypto-pairings
                lisp-unit)
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
