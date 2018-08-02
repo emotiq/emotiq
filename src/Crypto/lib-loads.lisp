@@ -72,8 +72,31 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------------------------------
 
-#+:LISPWORKS
+#+(AND :LISPWORKS (:OR :MACOS :LINUX))
 (defun do-with-aimed-load-paths (fn)
+  ;;
+  ;; LW specifies that lib load has search order:
+  ;;
+  ;;  On MacOS
+  ;;  ---------
+  ;;   1. LD_LIBRARY_PATH
+  ;;   2. DYLD_LIBRARY_PATH
+  ;;   3. ~/lib
+  ;;   4. /usr/local/lib
+  ;;   5. /usr/lib
+  ;;
+  ;;  On Linux
+  ;;  ---------
+  ;;   1. LD_LIBRARY_PATH
+  ;;   2. list of libs specified in /etc/ld.so.cache
+  ;;   3. /usr/lib
+  ;;   4. /lib
+  ;;
+  ;; On Windows, it first searches in the directory of the executable.
+  ;;
+  ;; So for MacOS and Linux we arrange to prefix LD_LIBRARY_PATH with
+  ;; our own specific path
+  ;;
   (labels ((pref-env-var (var-name pref)
              (let ((prev (lw:environment-variable var-name)))
                (setf (lw:environment-variable var-name)
@@ -82,17 +105,19 @@ THE SOFTWARE.
                        pref))
                prev)))
     (let* ((ld-name   "LD_LIBRARY_PATH")
-           (dyld-name "DYLD_LIBRARY_PATH")
-           (pref      (asdf:system-relative-pathname :emotiq "../var/local/lib/"))
-           (sav-ld    (pref-env-var ld-name   pref))
-           (sav-dyld  (pref-env-var dyld-name pref)))
+           (pref      (if (emotiq:production-p)
+                          ;; use current app folder for lib path
+                          (namestring
+                           (pathname-directory (lw:lisp-image-name)))
+                        ;; else - use our ../var/local/lib path
+                        (asdf:system-relative-pathname :emotiq "../var/local/lib/")))
+           (sav-ld    (pref-env-var ld-name   pref)))
       (unwind-protect
           (funcall fn)
-        (setf (lw:environment-variable ld-name)   sav-ld
-              (lw:environment-variable dyld-name) sav-dyld))
+        (setf (lw:environment-variable ld-name) sav-ld))
       )))
 
-#-:LISPWORKS
+#-(AND :LISPWORKS (:OR :MACOS :LINUX))
 (defun do-with-aimed-load-paths (fn)
   (funcall fn))
 
@@ -111,23 +136,17 @@ THE SOFTWARE.
   (format t "~%CRYPTO-LIB-LOADER:LOAD-DLL Load Counter = ~A" (incf *load-counter*))
   (cond
    ((= 1 *load-counter*)
+    (format t " -- Loading libraries")
     (if (emotiq:production-p)
         (define-production-dlls)
       (define-dev-dlls))
-    ;; (format t "DYLD_LIBRARY_PATH = ~S" (getenv "DYLD_LIBRARY_PATH"))
-    (format t "~%cffi:*foreign-library-directories* = ~S"
-            (mapcar (lambda (item)
-                      (if (consp item)
-                          (apply (first item) (rest item))
-                        item))
-                    cffi:*foreign-library-directories*))
     (with-aimed-load-paths
       (cffi:use-foreign-library :libLispPBC)
       (cffi:use-foreign-library :libEd3363)
       (cffi:use-foreign-library :libCurve1174)))
    
    (t
-    (format t "~%Skipping library loading"))
+    (format t " -- Skip library loading"))
    ))
 
 (defmethod unload-dlls ()
@@ -136,4 +155,3 @@ THE SOFTWARE.
   (cffi:close-foreign-library :libcurve1174)
   (setf *load-counter* 0))
   
-(load-dlls)

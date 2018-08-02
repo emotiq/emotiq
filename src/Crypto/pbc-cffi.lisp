@@ -1908,14 +1908,16 @@ likely see an assertion failure"
   (setf *pairing* nil)
   (fill *pairings* nil))
 
+;; --------------------------------------------------------------------
+
 #-:lispworks
 (eval-when (:load-toplevel)
   (crypto-lib-loader:load-dlls))
 
 #+:lispworks
 (eval-when (:load-toplevel)
-  ;; 2 choices, if building-binary, don't init-pairing; else init-pairing
-  ;; Cannot init-pairing during DELIVERY (since, multitasking not allowed during DELIVERY), must init-pairing later.
+  ;; 2 choices, if building-binary, don't load-dlls; else load-dlls
+  ;; Cannot load-dlls during DELIVERY (since, multitasking not allowed during DELIVERY), must load-dlls later.
   ;; *performing-binary-build* is created in delivery.lisp, else it is not created and not BOUNDP
 
   ;; Trying to avoid the use of *features*.  We use a special, cl-user::*performing-binary-build*, set up
@@ -1928,8 +1930,7 @@ likely see an assertion failure"
             building-binary-p)
     
     (unless building-binary-p
-      ;; in all other cases, init-pairing at LOAD time.
-      ;;
+      ;; in all other cases, load-dlls at LOAD time.
       (crypto-lib-loader:load-dlls))
     ))
 

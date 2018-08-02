@@ -1969,30 +1969,6 @@ we are done. Else re-probe with (X^2 + 1)."
 |#
              
 ;; ------------------------------------------------------------------------------
-#|
-#-:lispworks
-(eval-when (:load-toplevel)
-  (init-Ed3363))
-
-#+:lispworks
-(eval-when (:load-toplevel)
-  ;; 2 choices, if building-binary, don't init-pairing; else init-pairing
-  ;; Cannot init-pairing during DELIVERY (since, multitasking not allowed during DELIVERY), must init-pairing later.
-  ;; *performing-binary-build* is created in delivery.lisp, else it is not created and not BOUNDP
-
-  ;; Trying to avoid the use of *features*.  We use a special, cl-user::*performing-binary-build*, set up
-  ;; in emotiq/etc/deliver/deliver.lisp, then write Lisp code to decide which of the 2 cases to perform (at LOAD time).
-  ;; This special is UNINTERNED in emotiq/src/startup.lisp/START.
-
-  (let ((building-binary-p (boundp 'cl-user::*performing-binary-build*)))
-
-    (format *standard-output* "~&building-binary-p ~A~&"
-            building-binary-p)
-    
-    (if building-binary-p
-        nil                                          ;; do nothing, esp. don't try to init-pairing
-      (init-Ed3363))))                      ;; in all other cases, init-pairing at LOAD time.
-|#
 
 (defmethod crypto-lib-loader:load-dlls :after ()
   (set-ed-curve :curve1174))
