@@ -45,12 +45,18 @@
           (account-name a) name)
     a))
 
+(defmacro with-current-node (&rest body)
+  `(cosi-simgen:with-current-node cosi-simgen::*my-node*
+     ,@body))
+
 (defun test-app ()
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
-    (emotiq:main)
-    (app2)
-    (dump-results strm)))
+    (with-current-node
+     (emotiq:main)
+     (app2)
+     (dump-results strm)
+     (block-explorer))))
 
 (defun app2 ()
   "helper for tests"
@@ -115,10 +121,6 @@
     (publish-transaction txn)
     (setf *tx0* txn)
     *tx0*))
-
-(defmacro with-current-node (&rest body)
-  `(cosi-simgen:with-current-node (cosi-simgen:current-node)
-     ,@body))
 
 (defmethod spend ((from account) (to account) amount &key (fee 10))
   "make a transaction and publish it"
@@ -198,7 +200,7 @@
 ;;
 ;; I'm going to leave the code below in, until I can get the code above to work...
 ;; 
-;; I'm keeping this code until everything works - 
+;; I'm keeping this code around until everything works.
 
 #+nil
 (defun r2 ()
@@ -250,12 +252,14 @@
 
 
 (defun block-explorer ()
-  (let ((b (cosi-simgen:block-list)))
-    (cosi/proofs/newtx::do-transactions (tx b)
-      (explore-transaction tx))))
+  (let ((b-list (cosi-simgen:block-list)))
+    (mapc #'(lambda (b) 
+              (cosi/proofs/newtx::do-transactions (tx b)
+                (explore-transaction tx)))
+          b-list)))
 
 (defun explore-transaction (tx)
-  (let ((txid (cosi/proofs/newtx:transaction-id tx)))
+  (let ((txid (cosi/proofs/newtx:transaction-id tx)))  ;; TODO: cut over to with-block-list
     (let ((my-address (my-address tx)))
       (let ((out-list (get-transaction-outs tx)))
         (let ((in-list (get-transaction-ins tx)))
