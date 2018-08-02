@@ -4,7 +4,7 @@
 (defmethod get-utxos ((account pbc:keying-triple))
   (get-utxos (wallet:address account)))
 (defmethod get-utxos ((address string))
-  (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
+  (let ((node:*current-node* node:*top-node*))
     (%get-utxos address)))
 
 (defun %get-utxos (address)

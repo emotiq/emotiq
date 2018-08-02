@@ -62,6 +62,7 @@ N.B. :nodes has no effect unless a new configuration has been triggered (see abo
       ;;; FIXME:  return nil when initialization is not successful
       t))
 
+
 (defvar *genesis-account*
   nil
   "Genesis account.")
@@ -228,7 +229,7 @@ This will spawn an actor which will asynchronously do the following:
            (genesis-transaction         ; kludgey handling here
             (first (cosi/proofs:block-transactions genesis-block)))
            (genesis-public-key-hash
-            (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *genesis-account*))))
+            (wallet:address (pbc:keying-triple-pkey *genesis-account*))))
       
       (emotiq:note "Tx 0 created/genesis, now broadcasting.")
       (cosi/proofs/newtx:dump-tx genesis-transaction)      
@@ -241,7 +242,7 @@ This will spawn an actor which will asynchronously do the following:
               (cosi/proofs/newtx:make-transaction-inputs `((,txid ,index))))
              
              (user-1-public-key-hash    ; a/k/a address
-              (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-1*)))
+              (wallet:address (pbc:keying-triple-pkey *user-1*)))
              (amount-1 890)             ; user gets 890 (fee = 10)
              (change-amount-1
               (- (cosi/proofs/newtx:initial-total-coin-amount) 
@@ -264,7 +265,7 @@ This will spawn an actor which will asynchronously do the following:
         (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
         
         (let* ((user-2-public-key-hash
-                (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-2*)))
+                (wallet:address (pbc:keying-triple-pkey *user-2*)))
                (amount-2 500)
                (change-amount-2 (- amount-1 (+ amount-2 fee))))
           
@@ -291,7 +292,7 @@ This will spawn an actor which will asynchronously do the following:
           (cosi-simgen:gossip-neighborcast nil :new-transaction-new :trn signed-transaction)
           
           (let* ((user-3-public-key-hash
-                  (cosi/proofs:public-key-to-address (pbc:keying-triple-pkey *user-3*)))
+                  (wallet:address (pbc:keying-triple-pkey *user-3*)))
                  (amount-3 350)
                  (change-amount-3 (- amount-2 (+ amount-3 fee))))
             

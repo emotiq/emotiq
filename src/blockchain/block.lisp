@@ -282,12 +282,12 @@ added to the blockchain."
                (byte 1 i)
                signature-bitmap))))
 
-(defun update-signature (block sig bits)
+(defun update-signature! (block sig bits)
   "Update BLOCK, an eblock instance, slots per SIG, an instance of
    pbc:signed-message, and BITS, a bitmap with format as documented
    for the signature-bitmap slot of eblock."
   (with-slots (signature signature-bitmap)
       block
-    (setf signature sig)
-    (setf signature-bitmap bits)))
+    (setf signature sig
+          signature-bitmap bits)))
 

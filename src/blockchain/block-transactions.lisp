@@ -13,6 +13,10 @@
             (coerce txns 'list)))))
 
 
+(defun check-transactions-hash (blk)
+  (hash:hash= (merkle-root-hash blk)
+              (compute-merkle-root-hash blk)))
+
 (defun check-transactions (blk)
   "Return nil if invalid block. This is run by a CoSi block 
    validator. Validate by recomputing the full merkle hash on all the 

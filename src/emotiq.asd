@@ -74,13 +74,48 @@
                              (:file "file")
                              (:file "wallet")))))
 
+;; (defsystem "cosi-node"
+;;   :description "Cosi: Authenticated multi-signatures in Lisp"
+;;   :version     "1.0.3"
+;;   :author      "D.McClain <dbm@emotiq.ch>"
+;;   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
+;;   :depends-on (emotiq/logging
+;;                ironclad
+;;                actors
+;;                emotiq/utilities
+;;                emotiq/tracker
+;;                emotiq/config
+;;                core-crypto
+;;                crypto-pairings
+;;                lisp-object-encoder
+;;                useful-macros
+;;                usocket
+;;                trivial-garbage
+;;                ads-clos
+;;                gossip)
+;;   ;; :in-order-to ((test-op (test-op "cosi-bls-test")))
+;;   :components ((:module package
+;;                         :pathname "cosi-node/"
+;;                         :components ((:file "package")))
+;;                (:module source
+;;                         :depends-on (package)
+;;                         :pathname "cosi-node/"
+;;                         :serial t
+;;                         :components (#+CLOZURE (:file "clozure")
+;;                                      (:file "cosi-node")))))
+
 (defsystem "emotiq/blockchain"
   :depends-on (emotiq
-               emotiq/wallet)
+               emotiq/wallet
+               trivial-garbage
+               usocket
+               gossip)
   :components ((:module source
                 :pathname "blockchain/"
                 :serial t
-                :components ((:file "transaction-base")
+                :components ((:file "package")
+                             (:file "node-base")
+                             (:file "transaction-base")
                              (:file "transaction-script")
                              (:file "transaction")
                              (:file "block")
@@ -88,7 +123,29 @@
                              (:file "blockchain-base")
                              (:file "blockchain-transaction")
                              (:file "block-transactions")
-                             (:file "blockchain")))))
+                             (:file "blockchain")
+                             ;;(:file "node") 
+                             ))))
+
+(defsystem "emotiq/core"
+  :depends-on (emotiq/config
+               emotiq/tracker
+               emotiq/blockchain)
+  :components ((:module source
+                :pathname "core/"
+                :serial t
+                :components ((:file "package")
+                             #+CLOZURE (:file "clozure")
+                             ;; (:file "cosi-blkdef")
+                             ;; (:file "block")
+                             ;; (:file "cosi-keying")
+			     (:file "cosi-construction")
+                             ;; (:file "range-proofs")
+                             ;; (:file "transaction")
+                             (:file "cosi-handlers")
+                             (:file "mvp-election-beacon")
+                             ;; (:file "new-transactions")
+                             (:file "cosi-netw-xlat")))))
 
 (defsystem "emotiq/cli"
   :depends-on (emotiq/wallet

@@ -170,7 +170,7 @@ The genesis block for the node is returned as the second value.
     (when (or force
               (not (probe-file genesis-block-path)))
       (let ((genesis-block
-             (cosi/proofs:create-genesis-block
+             (block:make-genesis-block          ;; cosi/proofs:create-genesis-block
               (alexandria:assoc-value configuration :address-for-coins)
               (alexandria:assoc-value configuration :stakes))))
         (with-open-file (o genesis-block-path

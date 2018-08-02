@@ -10,7 +10,7 @@
   "Make a collect transaction with amount equal to FEE, an amount of
    tokens to transfer. The fee is designated to be paid to the address
    (a function of the public key) of the leader node."
-  (let* ((leader-public-key cosi-simgen:*leader*)
+  (let* ((leader-public-key node:*leader*)
          (leader-address (wallet:address leader-public-key)))
     (make-transaction (list (make-coinbase-input))
                       (list (make-coinbase-output leader-address fee))
@@ -42,7 +42,7 @@ returns the block the transaction was found in as a second value."
   (let ((result-from-mempool?
          (and also-search-mempool
               ;; TODO: make it a simple GETHASH lookup
-              (loop :for tx :being :each :hash-value :of cosi-simgen:*mempool*
+              (loop :for tx :being :each :hash-value :of node:*mempool*
                  :when (id= (id tx) id)
                  :return tx))))
     (if result-from-mempool?
@@ -139,7 +139,7 @@ returns the block the transaction was found in as a second value."
                                       *minimum-transaction-fee*)
                       (return nil)))
                   (emotiq:note "Node ~a declares successful transaction ~a TxID = ~a"
-                               (cosi-simgen:current-node)
+                               (node:current-node)
                                transaction
                                (id-string (id transaction)))
                   (mempool:add-transaction transaction)
@@ -150,7 +150,7 @@ returns the block the transaction was found in as a second value."
   (when also-search-mempool
     (loop
        :with transaction-seen-p = nil
-       :for tx :being :each :hash-value :of cosi-simgen:*mempool*
+       :for tx :being :each :hash-value :of node:*mempool*
        :do (loop ;; TODO: make it a simple GETHASH lookup
               :for tx-in :in (inputs tx)
               :as tx-in-id = (input-id tx-in)
@@ -284,9 +284,7 @@ returns the block the transaction was found in as a second value."
         tx-types (or tx-types *wait-for-tx-default-tx-types*))
   (let ((start-ut (get-universal-time))
         (interval (or interval 1/10))
-        (cosi-simgen:*current-node* (or node 
-                                        cosi-simgen:*current-node*
-                                        cosi-simgen:*top-node*)))
+        (node:*current-node* (or node node:*current-node* node:*top-node*)))
     (emotiq:note "Awaiting ~d ~a txs."
                  n                   
                  (if (spend-tx-types-p tx-types) 

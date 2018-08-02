@@ -34,10 +34,10 @@
 
 (defmacro do-blockchain ((block-var) &body body)
   "Do blocks of the blockchain in reverse chronological order. Iterate over the
-   blocks of the blockchain (i.e., the value of cosi-simgen:*blockchain*)
+   blocks of the blockchain (i.e., the value of node:*blockchain*)
    beginning the most recent minted and ending with the genesis block, with
    BLOCK-VAR bound during each iteration to the block."
-  `(loop :for ,block-var :in cosi-simgen:*blockchain*
+  `(loop :for ,block-var :in node:*blockchain*
       :do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
@@ -46,7 +46,7 @@
    the execution of BODY. It's possible to return using RETURN although
    RETURN-FROM to a lexical tag is recommended as the most reliable and clear
    method."
-  (alexandria:with-gensyms (reversed-txs)
+  (with-gensyms (reversed-txs)
     `(let ((,reversed-txs (reverse (block:transactions ,blk))))
        (loop :for ,tx-var :in ,reversed-txs
           :do (progn ,@body)))))
@@ -76,7 +76,7 @@
                (txn:dump tx)))
            (when mempool
              (emotiq:note "Dump txs in mempool:")
-             (loop :for tx :being :each :hash-value :of cosi-simgen:*mempool*
+             (loop :for tx :being :each :hash-value :of node:*mempool*
                 :do (txn:dump tx)))
            (when blockchain
              (emotiq:note "Dump txs on blockchain:")
@@ -84,10 +84,7 @@
                (emotiq:note " Dump txs in block = ~s:" block)
                (do-transactions (tx block)
                  (txn:dump tx))))))
-    (let ((cosi-simgen:*current-node*
-           (or node 
-               cosi-simgen:*current-node*
-               cosi-simgen:*top-node*)))
+    (let ((node:*current-node* (or node node:*current-node* node:*top-node*)))
       (if file
           (with-open-file (*standard-output*
                            file
