@@ -52,9 +52,9 @@ UI <-- Emotiq {result: true, id: 23}
    both the read and write timeouts have been extended to an hour
    (3600 seconds).
 
-** <2018-08-02 Thu 10:27Z> ~mvp-0.1.0~
+** <2018-08-02 Thu 10:27Z> ~mvp-0.1.1~
 
-| Binaries | <https://github.com/emotiq/emotiq/releases/tag/mvp-0.1.0>              |
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/mvp-0.1.2>              |
 | Branch   | <https://github.com/emotiq/emotiq/compare/mvp/mvp-websocket-20180802a> |
 
 Pure mock of websocket interfaces for the wallet
