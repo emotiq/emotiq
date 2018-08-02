@@ -1004,7 +1004,7 @@ check that each TXIN and TXOUT is mathematically sound."
            (let ((prevblk (latest-block)))
              (or (null prevblk)
                  (and (> (block-timestamp blk) (block-timestamp prevblk))
-                      (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
+                      (int= (block-prev-block-hash blk) (hash-block prevblk)))))
            (or (int= (node-pkey node) *leader*)
                (check-block-transactions blk)))
       ;; else - failure case
