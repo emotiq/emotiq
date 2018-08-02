@@ -93,6 +93,30 @@
 ;;; TCP transport implementation based on thread-per-connection model.
 ;;;
 
+;;; To see open sockets:
+;;; (gossip/transport::sockets gossip::*transport*)
+
+(defun socket-info (socket)
+  ; errors can happen if socket is closed
+  (list (ignore-errors (usocket::get-local-address socket))
+        (ignore-errors (usocket::get-local-port socket))
+        (ignore-errors (usocket::get-peer-address socket))
+        (ignore-errors (usocket::get-peer-port socket))))
+
+(defun sockets-matching (pred)
+  (when pred
+    (loop for socket in (gossip/transport::sockets gossip::*transport*)
+      when (or (eq t pred)
+               (ignore-errors (funcall pred socket)))
+      collect socket)))
+
+; (dolist (socket (gossip/transport::sockets-matching t)) (print (gossip/transport::socket-info socket)))
+
+(defun sockets-to (peer-address)
+  "Returns a list of sockets connected to given peer-address"
+  (sockets-matching (lambda (socket)
+                      (gossip::gossip-equalp peer-address (usocket::get-peer-address socket)))))
+
 (defclass tcp-threads-transport ()
   (;; Operational state.
    (listen-socket :initarg :listen-socket :initform nil :accessor listen-socket
@@ -121,6 +145,17 @@
   ip port
   ;; Queue of messages waiting to be delivered.
   transmit-queue)
+
+(defun canonicalize-address (address)
+  "Always return a string representation of address."
+  (usocket::host-to-hostname address))
+
+(defun canonicalize-port (port)
+  "Always return an integer for port"
+  (if (integerp port)
+      port
+      ; Eventually we should be able to look ports up by name
+      (error "Cannot deal with non-integer ports yet")))
 
 (defmethod start (address port mrh peer-up peer-down
                           (backend (eql :tcp)) backend-parameters)
@@ -192,37 +227,54 @@
              (funcall (message-received-hook transport) msg))))
     (error (err)
       (edebug 5 :error "Read thread error" err)
-      (usocket:socket-close socket))))
+      (usocket:socket-close socket)
+      (setf (sockets transport) (remove socket (sockets transport)))
+      (setf (readers transport) (remove (mpcompat:current-process) (readers transport)))
+      )))
 
 ;;; Writing
 
 (defun run-tcp-write-thread (transport address port mailbox)
   "Transfer objects from MAILBOX to the remote endpoint ADDRESS:PORT."
+  (setf address (canonicalize-address address)
+        port    (canonicalize-port    port))
   (with-slots (lock message-queues peer-down-hook sockets) transport
     (gossip-handler-case
-        ;; Establish new connection.
-        (let ((socket (connect-to address port (eripa))))
-          (edebug 5 :transport "Ready to write to" address :PORT port)
-          (mpcompat:with-lock (lock) (push socket sockets))
-          ;; Loop transferring messages from mailbox to socket.
-          (unwind-protect
-               (loop (loenc:serialize (mpcompat:mailbox-read mailbox)
-                                      (usocket:socket-stream socket))
-                  (finish-output (usocket:socket-stream socket))
-                  (edebug 5 :transport "Sent message to" address :PORT port))
-            (ignore-errors (usocket:socket-close socket))
-            ;; Clear state related to this connection.
-            (mpcompat:with-lock ((lock transport))
-              (remhash (list address port) message-queues)
-              (setf sockets (remove socket sockets)))))
-      (error (err)
-        ;; Notify that peer is down and then terminate.
-        (edebug 5 :error "Write thread error" err)
-        ;; Purge message queue to drop messages and forget connection.
-        (mpcompat:with-lock (lock)
-          (setf (gethash (list address port) message-queues) nil))
-        (when peer-down-hook
-          (funcall peer-down-hook address port (princ-to-string err)))))))
+     ;; Establish new connection.
+     (let ((socket (ignore-errors (connect-to address port (eripa)))))
+       (cond (socket ; connection might have been refused
+              (edebug 5 :transport "Ready to write to" address :PORT port)
+              (mpcompat:with-lock (lock) (push socket sockets))
+              ;; Loop transferring messages from mailbox to socket.
+              (unwind-protect
+                  (loop
+                    (unless (ignore-errors (usocket::get-peer-address socket)) ; force an error to be thrown if socket is not connected
+                      (error "Disconnected socket"))
+                    ; Note 1: Ignore-errors above is because: While I know get-peer-address will throw an error on CCL,
+                    ;   I don't know if it will do so on other implementations. Therefore we force the error.
+                    ; Note 2: Sometimes finish-output will blindly send output to a disconnected socket
+                    ;   without throwing an error (at least on CCL), so checking explicitly ensures this won't happen.
+                    (loenc:serialize (mpcompat:mailbox-read mailbox)
+                                         (usocket:socket-stream socket))
+                    (finish-output (usocket:socket-stream socket))
+                    (edebug 5 :transport "Sent message to" address :PORT port))
+                (ignore-errors (usocket:socket-close socket))
+                ;; Clear state related to this connection.
+                (mpcompat:with-lock ((lock transport))
+                  (remhash (list address port) message-queues)
+                  (setf sockets (remove socket sockets)))))
+             (t (mpcompat:with-lock ((lock transport)) ; if socket itself was not created, remove message queue.
+                  ; I know the error handler _should_ take care of this. Belt and suspenders.
+                  (remhash (list address port) message-queues)))))
+             
+     (error (err)
+            ;; Notify that peer is down and then terminate.
+            (edebug 5 :error "Write thread error" err)
+            ;; Purge message queue to drop messages and forget connection.
+            (mpcompat:with-lock (lock)
+              (setf (gethash (list address port) message-queues) nil))
+            (when peer-down-hook
+              (funcall peer-down-hook address port (princ-to-string err)))))))
 
 (defun connect-to (address port &optional local-host)
   "Return a new socket conneted to ADDRESS:PORT.
@@ -236,25 +288,29 @@
                           :local-host local-host))
 
 (defmethod transmit-message ((transport tcp-threads-transport) address port message)
+  (setf address (canonicalize-address address)
+        port    (canonicalize-port    port))
   (mpcompat:mailbox-send (get-message-queue transport address port) message))
 
 (defun get-message-queue (transport address port)
+  (setf address (canonicalize-address address)
+        port    (canonicalize-port    port))
   (with-slots (lock message-queues writers) transport
     ;; Check if the writer for this endpoint was already created.
     (or (gethash (list address port) message-queues)
         (mpcompat:with-lock (lock)
-                            ;; Check if the writer was created before we acquired the lock.
-                            (or (gethash (list address port) message-queues)
-                                ;; Create the (one and only) writer to this endpoint.
-                                (let ((mailbox (mpcompat:make-mailbox)))
-                                  (setf (gethash (list address port) message-queues) mailbox)
-                                  (push (mpcompat:process-run-function (format nil "gossip/transport writer to ~A:~A" address port)
-                                                                       nil
-                                                                       (lambda ()
-                                                                         (edebug 5 :transport "Started write thread for" transport :TO address :PORT port)
-                                                                         (run-tcp-write-thread transport address port mailbox)))
-                                        writers)
-                                  mailbox))))))
+          ;; Check if the writer was created before we acquired the lock.
+          (or (gethash (list address port) message-queues)
+              ;; Create the (one and only) writer to this endpoint.
+              (let ((mailbox (mpcompat:make-mailbox)))
+                (setf (gethash (list address port) message-queues) mailbox)
+                (push (mpcompat:process-run-function (format nil "gossip/transport writer to ~A:~A" address port)
+                        nil
+                        (lambda ()
+                          (edebug 5 :transport "Started write thread for" transport :TO address :PORT port)
+                          (run-tcp-write-thread transport address port mailbox)))
+                      writers)
+                mailbox))))))
 
 (defun test ()
   (let ((transport (start-transport :address "localhost")))

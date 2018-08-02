@@ -37,7 +37,7 @@
 
 (defsystem "emotiq/filesystem"
   :depends-on (uiop
-               emotiq)
+               emotiq/delivery)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -67,6 +67,7 @@
   :depends-on (emotiq/logging
                ironclad
                quri
+               emotiq/txn
                lisp-object-encoder
                cosi-bls)
   :in-order-to ((test-op (test-op "wallet-test")))
@@ -93,18 +94,6 @@
                 :pathname "./"
                 :components ((:file "node")))))
 
-(defsystem "emotiq/sim"  ;; a simulated network entirely within the local process
-  :depends-on (emotiq/cli
-               alexandria
-	       emotiq/tracker
-               emotiq/txn)  
-  :in-order-to ((test-op (test-op "emotiq-sim-test")))
-  :components ((:module source
-                :pathname "./"
-                :components ((:file "handler")
-                             (:file "election-sim")
-                             (:file "node-sim" :depends-on (election-sim))))))
-
 (defsystem "emotiq/tracker"
   :depends-on (emotiq
                actors
@@ -114,33 +103,37 @@
                 :serial t
                 :components ((:file "state-tracker")))))
 
-(defsystem "emotiq/ate"
-  :depends-on (emotiq emotiq/tracker emotiq/sim emotiq/startup gossip)
-  :components ((:module source
-                :pathname "./"
-                :serial t
-                :components ((:file "ate")))))
-
 (defsystem "emotiq/config"
   :depends-on (cl-json
                emotiq/logging
                emotiq/filesystem
                lisp-object-encoder
-               useful-macros
-               gossip/config)
-  :in-order-to ((test-op (test-op "emotiq-config-test")))
+               crypto-pairings
+               useful-macros)
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "stakes")
-                             (:file "genesis")
-                             (:file "config")))))
+                             (:file "config")
+                             (:file "genesis")))))
+
 
 (defsystem "emotiq/config/generate"
   :depends-on (emotiq/config
                cosi-bls)
-  :in-order-to ((test-op (test-op "emotiq-config-test")))
+  :in-order-to ((test-op (test-op "test-generate")))
   :components ((:module source
                 :pathname "./"
                 :serial t
                 :components ((:file "generate")))))
+
+(defsystem "emotiq/app"
+  :depends-on (gossip
+               emotiq
+               emotiq/txn
+               emotiq/startup
+               cosi-bls)
+  :components ((:module source
+                        :pathname "./"
+                        :components ((:file "app")))))
+

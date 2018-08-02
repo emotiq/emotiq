@@ -183,9 +183,6 @@
    :compute-input-script-merkle-root-hash
    :compute-witness-merkle-root-hash
 
-   :ith-witness-signed-p
-   :set-ith-witness-signed-p
-
    :block-epoch
    :block-prev-block-hash
    :block-timestamp
@@ -312,26 +309,17 @@
    :node-utxo-table
    :node-current-leader
    :*my-node*
-   :*top-node*
    :*leader*
    :*blockchain*
    :*blockchain-tbl*
    :*mempool*
    :*utxo-table*
-   :*ip-node-tbl*
-   :*pkey-node-tbl*
-   :*pkey-skey-tbl*
-   :*node-bit-tbl*
    :send
    :reply
    :node-dispatcher
    :*cosi-prepare-timeout*
    :*cosi-commit-timeout*
    :leader-exec
-   :*default-data-file*
-   :*default-key-file*
-   :generate-tree
-   :reconstruct-tree
    :init-sim
    :reset-nodes
    :forwarding
@@ -340,6 +328,13 @@
    :node-id-str
    :set-nodes
    :get-witness-list
+   :with-current-node
+   :block-list
+   :latest-block
+   :with-block-list
+   :kill-node
+   :enable-node
+   :start-backfill
    ))
 
 (defpackage :cosi-keying

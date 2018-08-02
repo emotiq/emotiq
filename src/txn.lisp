@@ -3,16 +3,17 @@
 (defparameter *transaction-fee* 10)
 
 ;;;; ADDRESS method could ideally be placed in EMOTIQ or EMOTIQ/USER package?
-(defmethod address ((account pbc:keying-triple))
-  (address (pbc:keying-triple-pkey account)))
 (defmethod address ((pkey pbc:public-key))
   (cosi/proofs:public-key-to-address pkey))
-
+(defmethod address ((account pbc:keying-triple))
+  (address (pbc:keying-triple-pkey account)))
+(defmethod address ((integers cons))
+  (address (pbc:make-keying-triple (first integers) (second integers))))
 
 (defmethod get-utxos ((account pbc:keying-triple))
-  (address (address account)))
+  (get-utxos (address account)))
 (defmethod get-utxos ((address string))
-  (let ((cosi-simgen:*current-node* cosi-simgen:*top-node*))
+  (cosi-simgen:with-current-node cosi-simgen:*my-node*
     (cosi/proofs/newtx:get-utxos-per-account address)))
          
 
@@ -132,7 +133,7 @@
 ;;   ;;     as the public key of the node, same as :public.
 ;;   ;;   :public - bignum representing public key of the node
 ;;   ;;   :private - bignum representing private key of the node
-;;   (let ((config-settings (emotiq/config:settings/read)))
+;;   (let ((config-settings (emotiq/config:setting/read)))
 ;;     (flet ((config-get (name) (cdr (assoc name config-settings))))
 ;;       (let* ((address-for-coin (config-get :address-for-coins))
 ;;              (public-key (config-get :public))

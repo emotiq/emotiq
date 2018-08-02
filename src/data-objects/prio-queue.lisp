@@ -98,6 +98,10 @@ THE SOFTWARE.
          (values nil nil))
         ))
 
+(defmethod peekq ((q unsafe-lifo) &key &allow-other-keys)
+  (let ((ref (envelope-ref q)))
+    (values (car ref) ref)))
+
 (defmethod emptyq-p ((q unsafe-lifo))
   (null (envelope-ref q)))
 
@@ -214,6 +218,15 @@ THE SOFTWARE.
               t))
     ))
 
+(defmethod peekq ((q unsafe-fifo) &key &allow-other-keys)
+  (with-accessors ((hd  unsafe-fifo-hd)
+                   (tl  unsafe-fifo-tl)) q
+    (declare (cons hd tl))
+    (if (eq hd tl)
+        (values nil nil)
+      (values (cadr hd) t))
+    ))
+
 (defmethod emptyq-p ((q unsafe-fifo))
   (with-accessors ((hd  unsafe-fifo-hd)
                    (tl  unsafe-fifo-tl)) q
@@ -290,6 +303,10 @@ THE SOFTWARE.
                       cell)))) )
     (values ans found)))
 
+(defmethod peekq ((q fifo) &key &allow-other-keys)
+  (let ((ref (car (fifo-ref q))))
+    (values (car ref) ref)))
+
 (defmethod emptyq-p ((q fifo))
   (null (car (fifo-ref q))))
 
@@ -345,6 +362,24 @@ THE SOFTWARE.
                     (prio (maps:map-cell-key node))
                     (fq   (maps:map-cell-val node)))
                (yes prio fq)))
+            ))))
+
+(defmethod peekq ((q unsafe-priq) &key prio)
+  (let ((tree  (envelope-ref q)))
+    (labels ((no ()
+               (values nil nil)))
+
+      (cond ((maps:is-empty tree) (no))
+            
+            (prio
+             (um:if-let (fq (maps:find prio tree))
+                 (peekq fq)
+               (no)))
+          
+            (t
+             (let* ((node (sets:max-elt tree))
+                    (fq   (maps:map-cell-val node)))
+               (peekq fq)))
             ))))
 
 (defmethod emptyq-p ((q unsafe-priq))
@@ -457,7 +492,10 @@ THE SOFTWARE.
                                  :wait-reason wait-reason
                                  :timeout     timeout)
            (popq mbox))
-      )))
+      ))
+
+  (defmethod mailbox-peek ((mbox prio-mailbox))
+    (peekq mbox)))
 
 ;; ------------------------------------------------------
 
@@ -489,7 +527,10 @@ THE SOFTWARE.
                    (popq mbox))
               (progn
                 (mp:wait-on-semaphore sem nil wait-reason)
-                (popq mbox)))))))
+                (popq mbox))))))
+
+  (defmethod mailbox-peek ((mbox prio-mailbox))
+    (peekq mbox)))
 
 #+:SBCL
 (progn
@@ -519,8 +560,10 @@ THE SOFTWARE.
                (popq mbox))
           (progn
             (sb-thread:wait-on-semaphore sem)
-            (popq mbox))))))
-
+            (popq mbox)))))
+  
+  (defmethod mailbox-peek ((mbox prio-mailbox))
+    (peekq mbox)))
 
 ;; ------------------------------------------------------
 
@@ -555,6 +598,9 @@ THE SOFTWARE.
                                 (values nil nil))
                 (mp:get-semaphore sem)
                 (popq mbox)))
-            ))))
+            )))
+  
+  (defmethod mailbox-peek ((mbox prio-mailbox))
+    (peekq mbox)))
 
 ;; ------------------------------------------------------

@@ -61,27 +61,24 @@
     ("/wallet/:name/address/:address/transaction/"
      :method :post
      :content-type "application/json")
-  (let ((raw-or-string (hunchentoot:raw-post-data))
-        uri)
+  (let ((raw-or-string (hunchentoot:raw-post-data)))
     (let ((message
            (if (subtypep (type-of raw-or-string) 'string)
                (flexi-streams:octets-to-string raw-or-string
                                                :external-format :utf-8)
                raw-or-string)))
     (let ((transaction (cl-json:decode-json-from-string message)))
-      (with-wallet-named (name)
-        (emotiq/wallet:submit-transaction
-         transaction
-         :name name
-         :address address))))))
+      (emotiq/wallet:submit-transaction
+       transaction
+       :wallet-name name
+       :address address)))))
   
 (restas:define-route
     %get-transaction
     ("/wallet/:name/address/:address/transaction/:id")
-  (with-wallet-named (name)
-    (emotiq/wallet:get-transaction id
-                                  :wallet-name name
-                                  :address address)))
+  (emotiq/wallet:get-transaction id
+                                 :wallet-name name
+                                 :address address))
      
   
 

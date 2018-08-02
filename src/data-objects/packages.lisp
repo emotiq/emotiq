@@ -64,6 +64,7 @@ THE SOFTWARE.
    #:make-priq
    #:addq
    #:popq
+   #:peekq
    #:emptyq-p
    #:contents
    #:findq
@@ -73,6 +74,7 @@ THE SOFTWARE.
    #:make-prio-mailbox
    #:mailbox-send
    #:mailbox-read
+   #:mailbox-peek
    #:mailbox-empty-p
    #:mailbox-not-empty-p
    ))
