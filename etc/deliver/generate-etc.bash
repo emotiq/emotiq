@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-lisp=${lisp:-ccl}
+lisp=${lisp:-lwpro}
 
 function lisp_exec () {
     # We're running in the CI

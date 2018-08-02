@@ -61,7 +61,7 @@ popd
 
 # Add default etc artifacts
 
-${etc_deliver}/generate-etc.bash ${target_path}etc/
+env lisp=${lisp:-lwpro} ${etc_deliver}/generate-etc.bash ${target_path}etc/
 
 # we use tar to preserve hard links (this can be rewritten)
 pushd ${lib}
