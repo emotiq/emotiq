@@ -108,7 +108,8 @@ THE SOFTWARE.
            (pref      (if (emotiq:production-p)
                           ;; use current app folder for lib path
                           (namestring
-                           (pathname-directory (lw:lisp-image-name)))
+                           (make-pathname
+                            :directory (pathname-directory (lw:lisp-image-name))))
                         ;; else - use our ../var/local/lib path
                         (asdf:system-relative-pathname :emotiq "../var/local/lib/")))
            (sav-ld    (pref-env-var ld-name   pref)))
