@@ -1,14 +1,16 @@
-(defsystem "crypto-pairings-test"
+(defsystem "core-crypto-test"
   :depends-on (crypto-pairings
                lisp-unit)
   :perform (test-op (o s)
              (symbol-call :lisp-unit :run-tests
-                          :all :crypto-pairings-test))
+                          :all :core-crypto-test))
   :components ((:module package
                 :pathname "./"
                 :components ((:file "package")))
                (:module tests
                 :depends-on (package)
                 :pathname "./"
-                :components ((:file "hash")
-                             (:file "crypto-pairings-test")))))
+                :components ((:file "hash")))))
+
+
+                       
