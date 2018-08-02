@@ -36,29 +36,5 @@ THE SOFTWARE.
   :depends-on   ("core-crypto"
                  "emotiq"
                  "cffi"
-                 "useful-macros"
-                 "crypto-pairings/libraries"))
-
-(defsystem "crypto-pairings/libraries"
-  :perform
-  (prepare-op
-   :before (o c)
-   (let ((wildcard-for-libraries
-          (make-pathname :defaults 
-                         (asdf:system-relative-pathname
-                          :emotiq "../var/local/lib/libLispPBCIntf")
-                         :type :wild)))
-     (unless (directory wildcard-for-libraries)
-       (format *standard-output*
-               "~&Failed to find libraries matching~&~t~a~&~
-~&Attempting to build native libraries... hang on for a minute, please..."
-               wildcard-for-libraries)
-       (run-program `("bash"
-                      ,(namestring (system-relative-pathname
-                                    :emotiq "../etc/build-crypto-pairings.bash")))
-                    :output :string :error :string)
-       (format *standard-output* "~tWhew!  Finished.~&")))))
-
-
-
+                 "useful-macros"))
 

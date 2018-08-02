@@ -22,9 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cl-user)
-
-(asdf:defsystem "core-crypto"
+(defsystem "core-crypto"
   :description "core-crypto: core cryptography functions"
   :version     "1.0.1"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
@@ -53,7 +51,7 @@ THE SOFTWARE.
 		 "crypto-libraries"
                  ))
 
-(asdf:defsystem "crypto-libraries"
+(defsystem "crypto-libraries"
   :perform
   (prepare-op
    :before (o c)
