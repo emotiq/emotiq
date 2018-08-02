@@ -25,7 +25,7 @@ esac
 
 var=${BASE}/var
 etc=${BASE}/etc
-etcdeliver=${etc}/deliver
+etc_deliver=${etc}/deliver
 # where make install will install stuff
 prefix=${var}/local
 lib=${prefix}/lib
@@ -41,7 +41,8 @@ date_now=`/bin/date "+%Y%m%d%H%M%S"`
 hash=$(git rev-parse --short $(git log -1 --pretty=format:"%H"))
 version="${date_now}-${hash}-${arch}"
 target_dir=emotiq-${version}
-mkdir -p ${production_dir}/${target_dir}
+target_path=${production_dir}/${target_dir}/
+mkdir -p ${target_path}
 
 echo -n $version > ${production_dir}/version.txt
 
@@ -51,12 +52,16 @@ echo -n $version > ${production_dir}/version.txt
 ${DIR}/build-crypto-pairings.bash MAKESUFFIX=${makesuffix}
 
 pushd ${production_dir}/${target_dir}
-${etcdeliver}/${deliveryscript}
+${etc_deliver}/${deliveryscript}
 if [ $? -ne 0 ] ; then
   echo 'Build failure!'
   exit 127
 fi
 popd
+
+# Add default etc artifacts
+
+${etc_deliver}/generate-etc.bash ${target_path}etc/
 
 # we use tar to preserve hard links (this can be rewritten)
 pushd ${lib}

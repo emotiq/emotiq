@@ -24,4 +24,4 @@ case $(uname -s) in
 esac
 
 cd ${workingdir}
-exec ${workingdir}/${APP_NAME} $*
+exec ${workingdir}/${APP_NAME} -c ${workingdir}/etc/ $*
