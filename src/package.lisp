@@ -104,6 +104,9 @@
   (:export
    #:*subpath*
    #:subpath
+
+   #:new-temporary-directory
+   
    #:emotiq/user/root/
    #:emotiq/wallet/
    #:tmp/
@@ -129,21 +132,39 @@
   (:use #:cl)
   (:export
    #:*nodes-dns-ip*
-   #:*stakes-filename*
    #:*max-stake*
-   #:emotiq-conf
+
+   #:*conf-filename*
+   #:*hosts-filename*
+   #:*local-machine-filename*
+   #:*stakes-filename*
+   #:*keypairs-filename*
+
    #:generated-directory
-   #:get-stakes
    #:get-genesis-block
-   #:settings/read))
+
+   #:gossip-get-values
+   
+   #:get-nth-key
+   #:get-stakes
+
+   #:get-keypairs
+   #:local-machine ;; aka gossip's idea of its configuration
+
+   #:settings
+   #:setting))
 
 (defpackage emotiq/config/generate
   (:use #:cl)
   (:export
    #:*dns-ip-zt.emotiq.ch*
-   #:keys/generate
-   #:stakes/generate
-   #:network/generate
+
+   #:+default-configuration+
+
+   #:generate-network
+   #:generate-keys
+   #:generate-stake
+
    #:ensure-defaults))
 
 (defpackage emotiq/app

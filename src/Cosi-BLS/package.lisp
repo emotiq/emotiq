@@ -329,6 +329,12 @@
    :set-nodes
    :get-witness-list
    :with-current-node
+   :block-list
+   :latest-block
+   :with-block-list
+   :kill-node
+   :enable-node
+   :start-backfill
    ))
 
 (defpackage :cosi-keying

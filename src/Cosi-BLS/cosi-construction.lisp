@@ -68,16 +68,12 @@ THE SOFTWARE.
              :initform (make-subs))
    (bit      :accessor node-bit      ;; bit position in bitmap
              :initform 0)
-   (stake    :accessor node-stake
-             :initarg  :stake
-             :initform 0)
    ;; -------------------------------------
    ;; pseudo-globals per node
    (blockchain     :accessor node-blockchain
                    :initform nil)
    (blockchain-tbl :accessor node-blockchain-tbl
-                   :initform (make-hash-table
-                              :test 'equalp))
+                   :initform (make-hash-table))
    (mempool        :accessor  node-mempool
                    :initform  (make-hash-table
                                :test 'equalp))
@@ -118,6 +114,38 @@ THE SOFTWARE.
              :initarg  :self)
    ))
 
+;; -------------------------------------------------------
+
+(defvar *current-node*  nil)  ;; for sim = current node running
+
+(defun current-node ()
+  *current-node*)
+
+(defmacro with-current-node (node &body body)
+  `(let ((*current-node* ,node))
+     ,@body))
+
+(define-symbol-macro *blockchain*     (node-blockchain     *current-node*))
+(define-symbol-macro *blockchain-tbl* (node-blockchain-tbl *current-node*))
+(define-symbol-macro *mempool*        (node-mempool        *current-node*))
+(define-symbol-macro *utxo-table*     (node-utxo-table     *current-node*))
+(define-symbol-macro *leader*         (node-current-leader *current-node*))
+(define-symbol-macro *tx-changes*     (node-tx-changes     *current-node*))
+(define-symbol-macro *had-work*       (node-had-work       *current-node*))
+
+;; election related items
+(define-symbol-macro *election-calls* (node-election-calls *current-node*))
+(define-symbol-macro *beacon*         (node-current-beacon *current-node*))
+(define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
+
+(defun add-to-blockchain (node blk)
+  (with-current-node node
+    (let ((hashID (int (hash-block blk))))
+      (setf *blockchain* hashID
+            (gethash hashID *blockchain-tbl*) blk))))
+
+;; -------------------------------------------------------
+
 (defmethod node-bitmap ((node node))
   (ash 1 (node-bit node)))
 
@@ -144,29 +172,46 @@ THE SOFTWARE.
   (declare (ignore args))
   (error "Need to specify..."))
 
-(defvar *current-node*  nil)  ;; for sim = current node running
-
-(defun current-node ()
-  *current-node*)
-
 ;; new for Gossip support, and conceptually cleaner...
 (defmethod initialize-instance :around ((node node) &key &allow-other-keys)
-  (setf (node-self node) (make-node-dispatcher node))
-  (setf *current-node* node)
+  (setf (node-self node) (make-node-dispatcher node)
+        *current-node*   node)
   (call-next-method))
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)
   (when (null (node-blockchain node))
-    (let ((genesis-block (emotiq/config:get-genesis-block)))
-      (push genesis-block (node-blockchain node))
-      (setf (gethash (cosi/proofs:hash-block genesis-block)
-                     (node-blockchain-tbl node))
-            genesis-block))))
+    (add-to-blockchain node (emotiq/config:get-genesis-block))))
 
 ;; --------------------------------------------------------------
 
 (defun gen-uuid-int ()
   (uuid:uuid-to-integer (uuid:make-v1-uuid)))
 
+;; --------------------------------------------------------------
+
+(defun latest-block ()
+  (and *blockchain*
+       (gethash *blockchain* *blockchain-tbl*)))
+
+(defun block-list (&optional (from *blockchain*))
+  (um:accum acc
+    (um:nlet-tail iter ((id from))
+      (when id
+        ;; terminate on null reference (from genesis block)
+          (um:if-let (blk (gethash (int id) *blockchain-tbl*))
+            (progn
+              ;; or terminate when missing the block
+              (acc blk)
+              (iter (block-prev-block-hash blk)))
+            (warn "Missing block ~A -- you might want to ask for a back-fill" (short-id id)))
+          ))))
+
+(defmacro with-block-list ((blockchain-list) &body body)
+  `(let ((block-list (symbol-function 'cosi-simgen:block-list)))
+     (setf (symbol-function 'cosi-simgen:block-list)
+           (lambda () ,blockchain-list))
+     (multiple-value-prog1
+         (progn ,@body)
+       (setf (symbol-function 'cosi-simgen:block-list) block-list))))
 
 

@@ -1,4 +1,4 @@
-(in-package :emotiq-config-test)
+(in-package :emotiq-config-generate-test)
 
 ;;;; INTERNAL testing
 
@@ -6,7 +6,7 @@
 (define-test key-generation ()
   (let* ((devops-plist emotiq/config/generate:*dns-ip-zt.emotiq.ch*)
          (nodes-dns-ip devops-plist)
-         (nodes (emotiq/config/generate:keys/generate nodes-dns-ip)))
+         (nodes (emotiq/config/generate:generate-keys nodes-dns-ip)))
     (assert-eq (length devops-plist)
                (length nodes))))
 
@@ -16,7 +16,7 @@
 
 (define-test network-generation ()
    (let* ((devops-plist emotiq/config/generate:*dns-ip-zt.emotiq.ch*)
-          (directories (emotiq/config/generate:network/generate :nodes-dns-ip devops-plist)))
+          (directories (emotiq/config/generate:generate-network :nodes-dns-ip devops-plist)))
      (assert-eq (length devops-plist)
                 (length directories))))
 

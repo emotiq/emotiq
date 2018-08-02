@@ -4,7 +4,8 @@
 
 (in-package :gossip)
 
-(defparameter *hosts* nil "Cached hosts as read from *hosts-filename* (minus the local machine)")
+(defparameter *hosts* nil
+  "Cached hosts as read from configuration (minus the local machine)")
 
 (defun process-eripa-value (ev)
   (setf *eripa* (if (eq :deduce ev)
@@ -13,25 +14,24 @@
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
-  (declare (special gossip/config::*keypairs-filename*))
   (when local-machine
     (destructuring-bind (&key eripa
-                              (gossip-port *nominal-gossip-port*)
+                              (gossip-port
+                               (emotiq/config:setting :gossip-server-port))
                               pubkeys)
-                        local-machine
+        local-machine
       (when eripa (process-eripa-value eripa))
-      (cond ((typep gossip-port '(unsigned-byte 16))
-             (setf *nominal-gossip-port* gossip-port))
-            (t (error "Invalid gossip-port ~S" gossip-port)))
+      (unless (typep gossip-port '(unsigned-byte 16))
+        (error "Invalid gossip-port ~S" gossip-port))
       (cond ((consp pubkeys)
-             (clear-local-nodes)) ; kill local nodes
+             (clear-local-nodes)) ; kill local nodes ;; FIXME should be part of shutdown routine
             (t (error "Invalid or unspecified public keys ~S" pubkeys)))
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
-                       (unless (member local-pubkey keypairs :test 'eql :key 'car)
-                 (error "Pubkey ~S is not present in ~S" local-pubkey gossip/config::*keypairs-filename*))
-                       t)
-                     pubkeys)
+               (unless (member local-pubkey keypairs :test 'eql :key 'car)
+                 (error "Pubkey ~S is not present in keypairs database" local-pubkey))
+               t)
+             pubkeys)
       ;; make local nodes
       (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
           (mapc (lambda (pubkey)
@@ -70,11 +70,8 @@
   (when hosts
     (multiple-list-uids hosts)))
 
-(defun gossip-startup (&key root-path (ping-others nil))
+(defun gossip-startup (&key (ping-others nil))
   "Reads initial testnet configuration optionally attempting a basic connectivity test
-  
-  ROOT-PATH specifies a specific root the configuration as opposed to
-  the use of the autoconfiguration mechanism.
   
   If PING-OTHERS is true, returns list of augmented-data or exception
   monads about live public keys on other machines.
@@ -89,11 +86,9 @@
   (handler-bind 
       ((error (lambda (e)
                 (edebug 1 :WARN "Cannot configure local machine: ~a" e))))
-    (when root-path 
-      (gossip/config:initialize :root-path root-path))
     (gossip-init ':maybe)
     (multiple-value-bind (keypairs hosts local-machine)
-                         (gossip/config:get-values)
+        (emotiq/config:gossip-get-values)
       (configure-local-machine keypairs local-machine)
       ;; make it easy to call ping-other-machines later
       (setq *hosts*
@@ -102,7 +97,7 @@
                   for host-pair in hosts
                   as host-hbo = (host-to-hbo (first host-pair))
                   when (not (and (= eripa-host-hbo host-hbo)
-                                 (= *nominal-gossip-port* (second host-pair))))
+                                 (= (emotiq/config:setting :gossip-server-port) (second host-pair))))
                     collect host-pair))
       (edebug 1 "Gossip init finished.")
       (if ping-others

@@ -24,22 +24,23 @@
 (in-package "EMOTIQ")
 
 ;; "Entry Point" for development - does nothing, just load and go
-(defun main (&key config-subpath how-started-message?)
-  (when config-subpath
-    (setf emotiq/fs:*subpath* config-subpath))
+(defun main (&key etc how-started-message?)
+  (when etc
+    (setf (symbol-function 'emotiq/fs:etc/)
+          (lambda () (pathname etc))))
   (message-running-state how-started-message?)
   ;; Create a default wallet on disk if one doesn't already exist
   (emotiq/wallet:create-wallet)
   ;; Start the websocket interface for the Electron wallet
   ;; listening <ws://localhost:PORT/wallet> .
   (when (string-equal "true"
-                      (emotiq/config:settings/read :websocket-server))
-    (websocket/wallet:start-server :port (emotiq/config:settings/read :websocket-server-port)))
+                      (emotiq/config:setting :websocket-server))
+    (websocket/wallet:start-server :port (emotiq/config:setting :websocket-server-port)))
   ;; Start the REST server which provides support for testing the
   ;; WebSocket implementation at <http://localhost:PORT/client/>
   (when (string-equal "true"
-                      (emotiq/config:settings/read :rest-server))
-    (emotiq-rest:start-server :port (emotiq/config:settings/read :rest-server-port)))
+                      (emotiq/config:setting :rest-server))
+    (emotiq-rest:start-server :port (emotiq/config:setting :rest-server-port)))
 
   (emotiq/tracker:start-tracker)
   (emotiq:start-node)

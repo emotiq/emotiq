@@ -209,6 +209,13 @@ based on their relative stake"
    
 (defvar *mvp-election-period*  20) ;; seconds between election rounds
 
+(defun stake-for (pkey)
+  (let ((pair (find pkey (emotiq/config:get-stakes)
+                    :key  'first
+                    :test 'int=)))
+    (and pair
+         (cadr pair))))
+
 (defun run-election (n)
   ;; use the election value n (0 < n < 1) to decide on staked winner
   ;; to become new leader node. Second runner up becomes responsible
@@ -220,11 +227,9 @@ based on their relative stake"
   (let ((self      (current-actor))
         (node      (current-node)))
     
-    (with-accessors ((stake       node-stake) ;; only used for diagnostic messages
-                     (pkey        node-pkey)
-                     (local-epoch node-local-epoch)) node
+    (with-accessors ((me  node-pkey)) node
 
-      (update-election-seed pkey)
+      (update-election-seed me)
 
       (let* ((winner     (hold-election n))
              (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
@@ -238,18 +243,18 @@ based on their relative stake"
         
         (pr "~A got :hold-an-election ~A" (short-id node) n)
         (pr "election results ~A (stake = ~A)"
-                     (if (int= pkey winner) " *ME* " " not me ")
-                     stake)
+                     (if (int= me winner) " *ME* " " not me ")
+                     (stake-for winner))
         (pr "winner ~A me=~A"
                      (short-id winner)
-                     (short-id pkey))
+                     (short-id me))
 
-        (when (int= pkey new-beacon)
+        (when (int= me new-beacon)
           ;; launch a beacon
           (node-schedule-after *mvp-election-period*
             (send-hold-election)))
 
-        (cond ((int= pkey winner)
+        (cond ((int= me winner)
                ;; why not use ac:self-call?  A: Because doing it with
                ;; send, instead, allows queued up messages to be
                ;; handled first. Might be some transactions waiting to
@@ -270,8 +275,7 @@ based on their relative stake"
 
 (defun setup-emergency-call-for-new-election ()
   ;; give the election beacon a chance to do its thing
-  (let* ((node      (current-node))
-         (old-epoch *local-epoch*))
+  (let* ((old-epoch *local-epoch*))
     (node-schedule-after *emergency-timeout*
       ;; first time processing at startup
       ;; go gather keys and stakes.
@@ -334,7 +338,7 @@ based on their relative stake"
 
 (defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
   (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (or (pr "Got call for new election") t)
+             (or (pr "Node ~A got call for new election" (short-id (current-node))) t)
              (>= (length *election-calls*)
                 (bft-threshold (get-witness-list))))
     (run-special-election)))
