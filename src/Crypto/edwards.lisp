@@ -75,6 +75,12 @@ THE SOFTWARE.
 (defstruct ed-curve
   name c d q h r gen)
 
+(defstruct (fast-ed-curve (:include ed-curve))
+  affine-mul
+  proj-mul
+  proj-add
+  to-affine)
+
 ;; -----------------------------------------------------------
 
 (defstruct ecc-pt
@@ -83,9 +89,12 @@ THE SOFTWARE.
 (defstruct ed-proj-pt
   x y z)
 
+
+(defmethod make-load-form ((point ecc-pt) &optional env)
+  (make-load-form-saving-slots point :environment env))
+
 (defmethod make-load-form ((point ed-proj-pt) &optional env)
-  (declare (ignore env))
-  (make-load-form-saving-slots point))
+  (make-load-form-saving-slots point :environment env))
 
 ;; ------------------------------------------------------------------------------
 ;; Curve parameters from SafeCurves
@@ -102,7 +111,7 @@ THE SOFTWARE.
   ;; rho-security (security by Pollard's rho attack) = 2^124.3
   ;; rho-security = (* 0.886 (sqrt *ed-r*))  (0.886 = (sqrt (/ pi 4)))
   ;; x^2 + y^2 = 1 - 1174 x^2 y^2
-  (make-ed-curve
+  (make-fast-ed-curve
    :name :Curve1174
    :c    1
    :d    -1174
@@ -113,11 +122,15 @@ THE SOFTWARE.
    :gen  (make-ecc-pt
           :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
           :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
+   :affine-mul '_Curve1174-affine-mul
+   :proj-mul   '_Curve1174-projective-mul
+   :proj-add   '_Curve1174-projective-add
+   :to-affine  '_Curve1174-to-affine
    ))
 
 (defvar *chk-curve1174*
-  ;; = (hex-str (hash/256 *curve1174))
-  "50c953d8d6f83ab18a8a475acc04567cf621ea543a576f20d70f1f1784a3c727")
+  ;; = (hex-str (hash/256 *curve1174*))
+  "7053DFE4A372C99AEB0224C59C165CF23F90C5EDB8B55575CDF17F9C7EB1CAB9")
 
 ;; ---------------------------
 
@@ -207,7 +220,7 @@ THE SOFTWARE.
 (defvar *curve-Ed3363*  ;; the High-Five curve from MIRACL Labs
   ;; y^2 + x^2 = 1 + 11111 x^2 y^2
   ;; rho-security = 2^168 to 2^192 ?? just a guess
-  (make-ed-curve
+  (make-fast-ed-curve
    :name :curve-Ed3363
    :c    1
    :d    11111  ;; the High-Five! 
@@ -218,11 +231,15 @@ THE SOFTWARE.
    :gen  (make-ecc-pt
           :x  #x0c
           :y  #xC0DC616B56502E18E1C161D007853D1B14B46C3811C7EF435B6DB5D5650CA0365DB12BEC68505FE8632)
+   :affine-mul '_Ed3363-affine-mul
+   :proj-mul   '_Ed3363-projective-mul
+   :proj-add   '_Ed3363-projective-add
+   :to-affine  '_Ed3363-to-affine
    ))
 
 (defvar *chk-curve-Ed3363*
   ;; = (hex-str (hash/256 *curve-Ed3363*))
-  "B997BCED2633F39C98EE33FD9B1861780035B93168A55583D4B87895BC270681")
+  "A6AB325A0F84136E4B0F34FF310547A3608C5F7C0B6695CBAF4C9E7307B45AE2")
 
 ;; ------------------------------------------------------
 
@@ -340,8 +357,7 @@ THE SOFTWARE.
        ))))
 
 (defun have-fast-impl ()
-  (or (eql *edcurve* *curve-ed3363*)
-      (eql *edcurve* *curve1174*)))
+  (fast-ed-curve-p *edcurve*))
   
 (defun ed-affine (pt)
   (optima:ematch pt
@@ -668,25 +684,6 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
-(defvar *fast-fns*
-  `((,*curve1174*
-     :fast-affine-fn         _Curve1174-to-affine
-     :fast-affine-mul-fn     _Curve1174-affine-mul
-     :fast-projective-mul-fn _Curve1174-projective-mul
-     :fast-projective-add-fn _Curve1174-projective-add)
-    
-    (,*curve-ed3363*
-     :fast-affine-fn         _Ed3363-to-affine
-     :fast-affine-mul-fn     _Ed3363-affine-mul
-     :fast-projective-mul-fn _Ed3363-projective-mul
-     :fast-projective-add-fn _Ed3363-projective-add)))
-
-(defun get-fast-fn (kw)
-  (let* ((lst (assoc *edcurve* *fast-fns* :test 'eq)))
-    (getf (cdr lst) kw)))
-
-;; -------------------------------------------------------------------
-
 (defun fast-mul (pt n)
   (declare (integer n))
   ;; (tally :ecmul)
@@ -706,7 +703,7 @@ THE SOFTWARE.
                               (cptz)
                               (cwv  nn))
 
-             (funcall (get-fast-fn :fast-affine-mul-fn)
+             (funcall (fast-ed-curve-affine-mul *edcurve*)
                       cptx cpty cptz cwv)
              
              (make-ed-proj-pt
@@ -722,7 +719,7 @@ THE SOFTWARE.
                               (cptz (ed-proj-pt-z pt))
                               (cwv  nn))
              
-             (funcall (get-fast-fn :fast-projective-mul-fn)
+             (funcall (fast-ed-curve-proj-mul *edcurve*)
                       cptx cpty cptz cwv)
              
              (make-ed-proj-pt
@@ -740,7 +737,7 @@ THE SOFTWARE.
                      (cpt2yv (ed-proj-pt-y pt2))
                      (cpt2zv (ed-proj-pt-z pt2)))
     
-             (funcall (get-fast-fn :fast-projective-add-fn)
+             (funcall (fast-ed-curve-proj-add *edcurve*)
                       cpt1xv cpt1yv cpt1zv
                       cpt2xv cpt2yv cpt2zv)
     
@@ -755,7 +752,7 @@ THE SOFTWARE.
                      (cpty (ed-proj-pt-y pt))
                      (cptz (ed-proj-pt-z pt)))
     
-    (funcall (get-fast-fn :fast-affine-fn)
+    (funcall (fast-ed-curve-to-affine *edcurve*)
              cptx cpty cptz)
     
     (make-ecc-pt
