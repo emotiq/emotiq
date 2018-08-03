@@ -127,12 +127,18 @@
                 :serial t
                 :components ((:file "generate")))))
 
+(defsystem "emotiq/random"
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "repeatable-randoms")))))
+
 (defsystem "emotiq/app"
   :depends-on (gossip
                emotiq
                emotiq/txn
                emotiq/startup
-               cosi-bls)
+               cosi-bls
+               emotiq/random)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "app")))))

@@ -37,23 +37,23 @@
 
 (defun make-account (name)
   "return an account class"
-  (let ((key-triple (pbc:make-key-pair name)))
+  (let ((key-triple (pbc:make-key-pair name))
 	(a (make-instance 'account)))
     (setf (account-triple a) key-triple
           (account-skey a) (pbc:keying-triple-skey key-triple)
           (account-pkey a) (pbc:keying-triple-pkey key-triple)
           (account-name a) name)
-    a)
+    a))
 
-(defun make-account-given-keys (name pkey skey)
+(defun make-account-given-keypairs (name pkey skey)
   "return an account class"
-  (let ((keypairs (emotiq/config:get-keypairs)))
+  (let ((keypairs (emotiq/config:get-keypairs))
 	(a (make-instance 'account)))
     (setf (account-triple a) (pbc:make-keying-triple pkey skey)
           (account-skey a) skey
           (account-pkey a) pkey
           (account-name a) name)
-    a)
+    a))
 
 (defmacro with-current-node (&rest body)
   `(cosi-simgen:with-current-node cosi-simgen::*my-node*
@@ -63,11 +63,13 @@
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
     (emotiq:main)
-    (app2)
-    (dump-results strm)
-    (block-explorer)))
+    (setf gossip::*debug-level* nil)
+    #+nil(app)
+    #+nil(dump-results strm)
+    (generate-pseudo-random-transactions)
+    #+nil(block-explorer)));; not tested
 
-(defun app2 ()
+(defun app ()
   "helper for tests"
 
   (wait-for-node-startup)
@@ -323,9 +325,18 @@
 ; random transaction generator
 ;;;;;;;;;;;;;;;;;;
 
-(defparameter *seed-state* nil
-  "monitored variable for pseudo-random number generator")
-;; see https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node133.html for how to use this repeatedly
+;; for lack of better graphics, let's used pipe syntax to show what I am building
+;;
+;; ticker | timer (randomizer) | transaction-creator
+;; 
+;; the pipe syntax cannot show that "ticker" is sending itself a message, endlessly
+;;
+;; maybe (loop ticker | ticker |2) | timer | transaction-creator
+;;
+;; these are honest message sends between concurrent pieces of code
+;; the loopback to ticker is not recursion, it is a message send
+;; 
+
 
 (defparameter *all-accounts* nil
   "list of accounts which will be re-used whenever one of the from/to lists dry up, monitored")
@@ -343,30 +354,27 @@
 (defparameter *create-transaction-actor* nil
   "creates a transaction using *from* and *to* lists, whenever pinged")
 
-(defmonitor
-    (ensure-lists ()
+(useful-macros:defmonitor
+    ((ensure-lists ()
        ;; helper that checks and resets (if necessary) the from and to lists
        ;; should be done atomically, hence in a (Hoare) monitor
        (when (or (null *from*)
                  (null *to*))
-         (setf *from* account-list
-               *to* (reverse account-list))))
+         (setf *from* *all-accounts*
+               *to* (reverse *all-accounts*))))
   
-    (get-from ()
-      ;; return an account from the *from* list and pop
-      (ensure-lists ()
-         (pop *from*)))
+     (get-from ()
+       ;; return an account from the *from* list and pop
+       (ensure-lists)
+       (pop *from*))
 
-    (get-to ()
-      ;; return an account from the *to* list and pop
-      (ensure-lists ()
-         (pop *to*)))
+     (get-to ()
+       ;; return an account from the *to* list and pop
+       (ensure-lists)
+       (pop *to*))
 
-    (time-to-fire-p ()
-                    
-
-;; end monitor
-)
+     ;; end monitor
+     ))
 
 (defun generate-pseudo-random-transactions ()
   "spawn an actor that wakes up and spends tokens from some account in *from* to another account in *to*"
@@ -384,8 +392,6 @@
       ;; when one of them peters out, reset the lists
       (setf *all-accounts* account-list)
       (ensure-lists)
-      (setf *seed-state* (make-random-state 1)) ;; the intent here is to create a pseudo-random number that is consistent between test runs - does this do it?
-
 
       ;; in general, using actors here is over-kill
       ;; actors are just an efficient way to invoke the process paradigm
@@ -396,61 +402,102 @@
       (let ((tick-period 1) ;; bald guess at something that resembles "human time" and will allow a test set of transactions to propagate
             (node cosi-simgen::*my-node*))
         (setf *transaction-creator-actor* (actors:make-actor #'(lambda (msg)
-                                                                 (transaction-creator node msg))))
+                                                                 (transaction-creator
+                                                                  (first msg)
+                                                                  node
+                                                                  msg))))
         (setf *timer-actor* (actors:make-actor #'(lambda (msg)
-                                                   (random-timer-actor *transaction-creator-actor* msg))))
-        (setf *ticker-actor* (actors:do-schedule-timeout-action tick-period
-                                                                #'(lambda (msg)
-                                                                    (forever-ticker *timer-actor* msg))))))))
+                                                   (random-timer-actor
+                                                    *transaction-creator-actor*
+                                                    (first msg)
+                                                    node
+                                                    msg))))
+        (setf *ticker-actor* (actors:make-actor #'forever-ticker))
+        (actors:send *ticker-actor* :again *ticker-actor* *timer-actor* tick-period node)))))
 
-(defun forever-ticker (to-whom msg)
+;; actor body
+(defun forever-ticker (&rest msg)
+    (let ((msg-symbol (first msg))
+          (self (second msg))
+          (to-whom (third msg))
+          (sleep-amount (fourth msg))
+          (node (fifth msg)))
+      (emotiq:note "ticker ~s ~s ~s ~s ~s" msg-symbol self to-whom sleep-amount node)
 
-  ;; timers and errors (catch/throw stuff) are nothing special, they are just "events"
+      ;; timers and errors (catch/throw stuff) are nothing special, they are just "events"
+    
+      ;; this actor gets a periodic tick (using existing actor timer code)
+      ;; then sends a message to the randomizer, forever ;; this is over-kill, but, I hope
+      ;; it is very obvious
+      
+      ;; ignore the message, just send a tick to whom
+      
+      (sleep sleep-amount)
+      (actors:send to-whom :tick node)
+      (actors:send self :again self to-whom sleep-amount)))
 
-  ;; this actor gets a periodic tick (using existing actor timer code)
-  ;; then sends a message to the randomizer, forever, this is over-kill, but, I hope
-  ;; obvious
+(defun get-fire-p (n)
+  "return T if RANDOM(1/n) is 25% of n or less"
+  ;; repeatable random numbers are created with RANDOM, after calling emotiq/random:init-random
+  (let ((r (random n)))
+    (multiple-value-bind (num dem)
+        (truncate n 4)
+      (zerop dem))))
 
-  ;; ignore the message, just send a tick to whom
-
-  (send to-whom :tick))
-
-(defun random-timer-actor (to-whom msg)
+;; actor body
+(defun random-timer-actor (&rest msg)
   "after a pseudo-random number of ticks, wake the transaction-creator up"
 
-  ;; should not receive anything but :tick messages,
-  ;; messages are always lists, and, by convention, the first token in a message is a keyword
-  ;; dlambda is just a convenience
-  (assert (eq :tick (first msg)))
-
-  ;; code to make repeatable pseudo-random numbers
-  ;; see Rationale for [Funtion] make-random-state in https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node133.html
-  (let ((fire-p (ensure-repeatable-random-and-get-fire-p 50)))
-    (when fire-p
-      (send to-whom :create-transaction))))
+  (let ((msg-symbol (first msg))
+        (node (second msg)))
+    
+    ;; should not receive anything but :tick messages,
+    ;; messages are always lists, and, by convention, the first token in a message is a keyword
+    ;; dlambda is just a convenience
+    (assert (eq :tick msg-symbol))
+    
+    (let ((fire-p t)) ; (get-fire-p 50)))
+      (emotiq:note "timer fire-p ~s" fire-p)
+      (when fire-p
+        (actors:send to-whom :create-transaction node)))))
   
-(defun transaction-creator (node msg)
+(defun create-an-amount-lower-or-equal-to (n)
+  "apply some heuristic to generate an amount which we can use in a randomly-created transaction"
+  n)
 
-  (assert (eq (first msg) :create-transaction))
+;; actor body
+(defun transaction-creator (&rest msg)
 
-  (let ((to-account (get-to))
-        (from-acount (get-from)))
-    (let ((from-bal 0)
-          (max-froms 16) ;; a bald guess as to the number of from-accounts we will search before giving up
-          (some-lower-limit 100) ;; another bald guess at what kind of (random) amount we want to use
-          (fee 10))
+  (let ((msg-symbol (first msg))
+        (node (second msg)))
+    
+    (emotiq:note "transaction-creator ~A ~A" msg-symbol node)
 
-      ;; search for an account with suffient fess
-      (loop :dotimes max-froms
-            :as bal = (get-balance from-account)
-            :do (cond ((>= bal (+ fee some-lower-limit))
-                       (setf from=bal bal)
-                       (return))
-                      ((< bal some-lower-limit)
-                       (setf from-account (get-from)))))
+    (assert (eq msg-symbol :create-transaction))
 
-      (if (>= from-bal some-lower-limit)
-          (emotiq:note "can't create a transaction, since ~A accounts do not have suffient funds"
-                       max-froms)
-        (let ((new-amount (create-an-amount-lower-or-equal-to (+ fee some-lower-limit))))
-          (spend from-account to-account :fee fee))))))
+    (let ((to-account (get-to))
+          (from-acount (get-from)))
+      (let ((from-bal 0)
+            (max-froms 16) ;; a bald guess as to the number of from-accounts we will search before giving up
+            (some-lower-limit 100) ;; bald guess at what kind of (random) amount we want to use
+            (fee 10))
+
+        ;; search for an account with sufficient balance to handle the amount + fees
+        (loop :repeat max-froms
+              :with bal = (get-balance from-account)
+              :do (cond ((>= bal (+ fee some-lower-limit))
+                         (setf from-bal bal)
+                         (return))
+                        ((< bal some-lower-limit)
+                         (setf from-account (get-from)))))
+
+        (if (>= from-bal some-lower-limit)
+            (emotiq:note "can't create a transaction, since ~A accounts do not have suffient funds"
+                         max-froms)
+          (let ((new-amount (create-an-amount-lower-or-equal-to some-lower-limit)))
+            (emotiq:note "transaction creator making a transaction of ~A from ~A to ~A with fee ~A"
+                         new-amount
+                         from-account
+                         to-account
+                         fee)
+            (spend from-account to-account :fee fee)))))))

@@ -182,6 +182,6 @@
    #:get-balance))
 
 (defpackage emotiq/random
-  (:user #:cl)
+  (:use #:cl)
   (:export 
    #:init-random))
