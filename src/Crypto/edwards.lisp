@@ -86,14 +86,15 @@ THE SOFTWARE.
 (defstruct ecc-pt
   x y)
 
-(defstruct ed-proj-pt
-  x y z)
+(defstruct (ecc-proj-pt (:include ecc-pt)
+                        (:conc-name ecc-pt-))
+  z)
 
 
 (defmethod make-load-form ((point ecc-pt) &optional env)
   (make-load-form-saving-slots point :environment env))
 
-(defmethod make-load-form ((point ed-proj-pt) &optional env)
+(defmethod make-load-form ((point ecc-proj-pt) &optional env)
   (make-load-form-saving-slots point :environment env))
 
 ;; ------------------------------------------------------------------------------
@@ -122,6 +123,7 @@ THE SOFTWARE.
    :gen  (make-ecc-pt
           :x  1582619097725911541954547006453739763381091388846394833492296309729998839514
           :y  3037538013604154504764115728651437646519513534305223422754827055689195992590)
+
    :affine-mul '_Curve1174-affine-mul
    :proj-mul   '_Curve1174-projective-mul
    :proj-add   '_Curve1174-projective-add
@@ -231,6 +233,7 @@ THE SOFTWARE.
    :gen  (make-ecc-pt
           :x  #x0c
           :y  #xC0DC616B56502E18E1C161D007853D1B14B46C3811C7EF435B6DB5D5650CA0365DB12BEC68505FE8632)
+
    :affine-mul '_Ed3363-affine-mul
    :proj-mul   '_Ed3363-projective-mul
    :proj-add   '_Ed3363-projective-add
@@ -245,13 +248,13 @@ THE SOFTWARE.
 
 (defvar *edcurve* *Curve1174*)
 
-(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*))
-(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*))
-(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*))
-(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*))
-(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*))
-(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*))
-(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*))
+(define-symbol-macro *ed-c*     (ed-curve-c     *edcurve*)) ;; c constant in curve equation
+(define-symbol-macro *ed-d*     (ed-curve-d     *edcurve*)) ;; d constant in curve equation
+(define-symbol-macro *ed-q*     (ed-curve-q     *edcurve*)) ;; prime base of the coordinate field
+(define-symbol-macro *ed-r*     (ed-curve-r     *edcurve*)) ;; primt bsae on the curve field
+(define-symbol-macro *ed-h*     (ed-curve-h     *edcurve*)) ;; cofactor for the containing field
+(define-symbol-macro *ed-gen*   (ed-curve-gen   *edcurve*)) ;; generator point for the curve
+(define-symbol-macro *ed-name*  (ed-curve-name  *edcurve*)) ;; keyword symbol name of the curve
 
 ;; ------------------------------------------------------
 
@@ -342,144 +345,146 @@ THE SOFTWARE.
                              :y *ed-c*))))
 
 (defun ed-neutral-point-p (pt)
-  (optima:ematch pt
-    ((ecc-pt- :x x)     (zerop x))
-    ((ed-proj-pt- :x x) (zerop x))
-    ))
+  (zerop (ecc-pt-x pt)))
 
-(defun slow-to-affine (pt)
-  (optima:ematch pt
-    ((ed-proj-pt- :x x :y y :z z)
-     (with-mod *ed-q*
-       (make-ecc-pt
-        :x (m/ x z)
-        :y (m/ y z))
-       ))))
+;; -------------------------------------------------------------------
 
 (defun have-fast-impl ()
   (fast-ed-curve-p *edcurve*))
-  
-(defun ed-affine (pt)
-  (optima:ematch pt
-    ((ecc-pt-) pt)
-    ((ed-proj-pt- :x x :y y :z z)
-     (cond ((= 1 z)
-            (make-ecc-pt
-             :x x
-             :y y))
-           ((have-fast-impl)
-            (fast-to-affine pt))
-           (t
-            (slow-to-affine pt))
-           ))))
-    
-(defun ed-projective (pt)
-  (optima:ematch pt
-    ((ecc-pt- :x x :y y)
-     (make-ed-proj-pt
-      :x x
-      :y y
-      :z 1))
-    ((ed-proj-pt-)
-     pt)
-    ))
 
+;; -------------------------------------------------------------------
+
+(defmethod ed-affine ((pt ecc-pt))
+  pt)
+
+(defmethod ed-affine ((pt ecc-proj-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y) (z z)) pt)
+             (declare (integer x y z)))
+    (cond ((= 1 z)
+           (make-ecc-pt
+            :x  x
+            :y  y))
+          ((have-fast-impl)
+           (fast-to-affine pt))
+          (t
+           (with-mod *ed-q*
+             (make-ecc-pt
+              :x  (m/ x z)
+              :y  (m/ y z))))
+          )))
+
+;; -------------------------------------------------------------------
+
+(defmethod ed-projective ((pt ecc-proj-pt))
+  pt)
+
+(defmethod ed-projective ((pt ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y)) pt)
+             (declare (integer x y)))
+    (make-ecc-proj-pt
+     :x x
+     :y y
+     :z 1)))
+  
 #|
-(defun ed-projective (pt)
-  (optima:ematch pt
-    ((ecc-pt- :x x :y y)
-     (let* ((alpha (field-between *ed-q*)))
-         (with-mod *ed-q*
-           (make-ed-proj-pt
-            :x (m* alpha x)
-            :y (m* alpha y)
-            :z alpha)
-           )))
-    ((ed-proj-pt-) pt)
-    ))
+(defmethod ed-projective ((pt ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y)) pt)
+             (declare (integer x y))
+             (alpha (field-random *ed-q*)))
+    (with-mod *ed-q*
+      (make-ecc-proj-pt
+       :x (m* alpha x)
+       :y (m* alpha y)
+       :z alpha)
+      )))
 |#
 
-(defun ed-random-projective (pt)
-  (with-mod *ed-q*
-    (let* ((alpha (field-random *ed-q*)))
-      (declare (integer alpha))
-      (optima:ematch pt
-        ((ecc-pt- :x x :y y)
-         (make-ed-proj-pt
-          :x (m* alpha x)
-          :y (m* alpha y)
-          :z alpha))
-        ((ed-proj-pt- :x x :y y :z z)
-         (make-ed-proj-pt
-          :x (m* alpha x)
-          :y (m* alpha y)
-          :z (m* alpha z)))
-        ))))
+;; -------------------------------------------------------------------
 
-(defun ed-unify-pair-type (pt1 pt2)
-  ;; contageon to projective coords
-  (optima:ematch pt1
-    ((ecc-pt-)
-     (optima:ematch pt2
-       ((ecc-pt-)
-        (values pt1 pt2))
-       ((ed-proj-pt-)
-        (values (ed-projective pt1) pt2))
-       ))
-    ((ed-proj-pt-)
-     (optima:ematch pt2
-       ((ecc-pt-)
-        (values pt1 (ed-projective pt2)))
-       ((ed-proj-pt-)
-        (values pt1 pt2))
-       ))
-    ))
-
-(defun ed-pt= (pt1 pt2)
-  (with-mod *ed-q*
-    (optima:ematch pt1
-      ((ecc-pt- :x x1 :y y1)
-       (optima:ematch pt2
-         ((ecc-pt- :x x2 :y y2)
-          (and (m= x1 x2)
-               (m= y1 y2)))
-         ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (and (m= (* x1 z2)
-                   x2)
-               (m= (* y1 z2)
-                   y2)))
-         ))
-      ((ed-proj-pt- :x x1 :y y1 :z z1)
-       (optima:ematch pt2
-         ((ecc-pt- :x x2 :y y2)
-          (and (m= (* x2 z1)
-                   x1)
-               (m= (* y2 z1)
-                   y1)))
-         ((ed-proj-pt- :x x2 :y y2 :z z2)
-          (and (m= (* x1 z2)
-                   (* x2 z1))
-               (m= (* y1 z2)
-                   (* y2 z1))))
-         ))
+(defmethod ed-random-projective ((pt ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y)) pt)
+             (declare (integer x y))
+             (alpha (field-random *ed-q*))
+             (declare (integer alpha)))
+    (with-mod *ed-q*
+      (make-ecc-proj-pt
+       :x (m* alpha x)
+       :y (m* alpha y)
+       :z alpha)
       )))
 
-(defun ed-satisfies-curve (pt)
-  (with-mod *ed-q*
-    (optima:ematch pt
-      ((ecc-pt- :x x :y y)
-       ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
-       (m= (+ (* x x)
-              (* y y))
-           (* *ed-c* *ed-c*
-              (1+ (m* *ed-d* x x y y)))
-           ))
-      ((ed-proj-pt- :x x :y y :z z)
-       (= (m* z z (+ (m* x x) (m* y y)))
-          (m* *ed-c* *ed-c*
-              (+ (m* z z z z)
-                 (m* *ed-d* x x y y)))))
+(defmethod ed-random-projective ((pt ecc-proj-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y) (z z)) pt)
+             (declare (integer x y z))
+             (alpha (field-random *ed-q*))
+             (declare (integer alpha)))
+    (with-mod *ed-q*
+      (make-ecc-proj-pt
+       :x (m* alpha x)
+       :y (m* alpha y)
+       :z (m* alpha z))
       )))
+
+;; -------------------------------------------------------------------
+
+(defmethod ed-pt= ((pt1 ecc-pt) (pt2 ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y)) pt1)
+             (declare (integer x1 y1))
+             (:struct-accessors ecc-pt ((x2 x) (y2 y)) pt2)
+             (declare (integer x2 y2)))
+    (with-mod *ed-q*
+      (and (m= x1 x2)
+           (m= y1 y2))
+      )))
+  
+(defmethod ed-pt= ((pt1 ecc-proj-pt) (pt2 ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y) (z1 z)) pt1)
+             (declare (integer x1 y1 z1))
+             (:struct-accessors ecc-pt ((x2 x) (y2 y)) pt2)
+             (declare (integer x2 y2)))
+    (with-mod *ed-q*
+      (and (m= (* z1 x2) x1)
+           (m= (* z1 y2) y1))
+    )))
+
+(defmethod ed-pt= ((pt1 ecc-pt) (pt2 ecc-proj-pt))
+  (ed-pt= pt2 pt1))
+
+(defmethod ed-pt= ((pt1 ecc-proj-pt) (pt2 ecc-proj-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x1 x) (y1 y) (z1 z)) pt1)
+             (declare (integer x1 y1 z1))
+             (:struct-accessors ecc-pt ((x2 x) (y2 y) (z2 z)) pt2)
+             (declare (integer x2 y2 z2)))
+    (with-mod *ed-q*
+      (and (m= (* z1 x2) (* z2 x1))
+           (m= (* z1 y2) (* z2 y1)))
+      )))
+
+;; -------------------------------------------------------------------
+
+(defmethod ed-satisfies-curve ((pt ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y)) pt)
+             (declare (integer x y)))
+    ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
+    (with-mod *ed-q*
+      (m= (+ (* x x)
+             (* y y))
+          (* *ed-c* *ed-c*
+             (1+ (m* *ed-d* x x y y)))
+          ))))
+
+(defmethod ed-satisfies-curve ((pt ecc-proj-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y) (z z)) pt)
+             (declare (integer x y z)))
+    ;; z^2*(x^2 + y^2) = c^2*(z^4 + d*x^2*y^2)
+    (with-mod *ed-q*
+      (= (m* z z (+ (m* x x) (m* y y)))
+         (m* *ed-c* *ed-c*
+             (+ (m* z z z z)
+                (m* *ed-d* x x y y)))
+         ))))
+
+;; -------------------------------------------------------------------
 
 (defun ed-affine-add (pt1 pt2)
   ;; x^2 + y^2 = c^2*(1 + d*x^2*y^2)
@@ -510,13 +515,13 @@ THE SOFTWARE.
 
 (defun ed-projective-add (pt1 pt2)
   (with-mod *ed-q*
-    (um:bind* ((:struct-accessors ed-proj-pt ((x1 x)
-                                              (y1 y)
-                                              (z1 z)) pt1)
+    (um:bind* ((:struct-accessors ecc-pt ((x1 x)
+                                          (y1 y)
+                                          (z1 z)) pt1)
                (declare (integer x1 y1 z1))
-               (:struct-accessors ed-proj-pt ((x2 x)
-                                              (y2 y)
-                                              (z2 z)) pt2)
+               (:struct-accessors ecc-pt ((x2 x)
+                                          (y2 y)
+                                          (z2 z)) pt2)
                (declare (integer x2 y2 z2))
                (a  (m* z1 z2))
                (declare (integer a))
@@ -537,7 +542,7 @@ THE SOFTWARE.
                                c d)))
                (y3 (m* a g (- d c)))
                (z3 (m* *ed-c* f g)))
-      (make-ed-proj-pt
+      (make-ecc-proj-pt
        :x  x3
        :y  y3
        :z  z3)
@@ -558,18 +563,25 @@ THE SOFTWARE.
            (ed-projective-add ppt1 ppt2))
           )))
 
-(defun ed-negate (pt)
-  (with-mod *ed-q*
-    (optima:ematch pt
-      ((ecc-pt- :x x :y y)
-       (make-ecc-pt
-        :x (m- x)
-        :y y))
-      ((ed-proj-pt- :x x :y y :z z)
-       (make-ed-proj-pt
-        :x (m- x)
-        :y y
-        :z z))
+;; ----------------------------------------------------------------
+
+(defmethod ed-negate ((pt ecc-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y)) pt)
+             (declare (integer x y)))
+    (with-mod *ed-q*
+      (make-ecc-pt
+       :x  (m- x)
+       :y  y)
+      )))
+
+(defmethod ed-negate ((pt ecc-proj-pt))
+  (um:bind* ((:struct-accessors ecc-pt ((x x) (y y) (z z)) pt)
+             (declare (integer x y z)))
+    (with-mod *ed-q*
+      (make-ecc-proj-pt
+       :x  (m- x)
+       :y  y
+       :z  z)
       )))
 
 (defun ed-sub (pt1 pt2)
@@ -706,7 +718,7 @@ THE SOFTWARE.
              (funcall (fast-ed-curve-affine-mul *edcurve*)
                       cptx cpty cptz cwv)
              
-             (make-ed-proj-pt
+             (make-ecc-proj-pt
               :x (xfer-from-c cptx) ;; projective out...
               :y (xfer-from-c cpty)
               :z (xfer-from-c cptz))
@@ -714,15 +726,15 @@ THE SOFTWARE.
           
           (t
            ;; about a 10% speed penalty over using affine points
-           (with-fli-buffers ((cptx (ed-proj-pt-x pt))  ;; projective in...
-                              (cpty (ed-proj-pt-y pt))
-                              (cptz (ed-proj-pt-z pt))
+           (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; projective in...
+                              (cpty (ecc-pt-y pt))
+                              (cptz (ecc-pt-z pt))
                               (cwv  nn))
              
              (funcall (fast-ed-curve-proj-mul *edcurve*)
                       cptx cpty cptz cwv)
              
-             (make-ed-proj-pt
+             (make-ecc-proj-pt
               :x (xfer-from-c cptx) ;; projective out...
               :y (xfer-from-c cpty)
               :z (xfer-from-c cptz))
@@ -730,27 +742,27 @@ THE SOFTWARE.
           )))
 
 (defun fast-add (pt1 pt2)
-  (with-fli-buffers ((cpt1xv (ed-proj-pt-x pt1)) ;; projective in...
-                     (cpt1yv (ed-proj-pt-y pt1))
-                     (cpt1zv (ed-proj-pt-z pt1))
-                     (cpt2xv (ed-proj-pt-x pt2))
-                     (cpt2yv (ed-proj-pt-y pt2))
-                     (cpt2zv (ed-proj-pt-z pt2)))
+  (with-fli-buffers ((cpt1xv (ecc-pt-x pt1)) ;; projective in...
+                     (cpt1yv (ecc-pt-y pt1))
+                     (cpt1zv (ecc-pt-z pt1))
+                     (cpt2xv (ecc-pt-x pt2))
+                     (cpt2yv (ecc-pt-y pt2))
+                     (cpt2zv (ecc-pt-z pt2)))
     
              (funcall (fast-ed-curve-proj-add *edcurve*)
                       cpt1xv cpt1yv cpt1zv
                       cpt2xv cpt2yv cpt2zv)
     
-    (make-ed-proj-pt ;; projective out...
+    (make-ecc-proj-pt ;; projective out...
      :x (xfer-from-c cpt1xv)
      :y (xfer-from-c cpt1yv)
      :z (xfer-from-c cpt1zv))
     ))
 
 (defun fast-to-affine (pt)
-  (with-fli-buffers ((cptx (ed-proj-pt-x pt)) ;; projective in...
-                     (cpty (ed-proj-pt-y pt))
-                     (cptz (ed-proj-pt-z pt)))
+  (with-fli-buffers ((cptx (ecc-pt-x pt)) ;; projective in...
+                     (cpty (ecc-pt-y pt))
+                     (cptz (ecc-pt-z pt)))
     
     (funcall (fast-ed-curve-to-affine *edcurve*)
              cptx cpty cptz)
@@ -1025,7 +1037,7 @@ THE SOFTWARE.
       (assert (m= yy (* y y))) ;; check that yy was a square
       ;; if yy was not a square then y^2 will equal -yy, not yy.
       (ed-validate-point
-       (make-ed-proj-pt
+       (make-ecc-proj-pt
         :x  x
         :y  y
         :z  1))
@@ -1048,7 +1060,7 @@ THE SOFTWARE.
 (defmethod hashable ((x ecc-pt))
   (hashable (ed-compress-pt x :lev t)))
 
-(defmethod hashable ((x ed-proj-pt))
+(defmethod hashable ((x ecc-proj-pt))
   (hashable (ed-affine x)))
 
 ;; -----------------------------------------------------------
@@ -1414,7 +1426,7 @@ we are done. Else re-probe with (X^2 + 1)."
                                       (m* 1+xx 1+xx))
                                    (+ (m* r xx)
                                       (m* 1+xx 1+xx))))
-                        (pt    (make-ed-proj-pt
+                        (pt    (make-ecc-proj-pt
                                 :x  x
                                 :y  y
                                 :z  1)))
@@ -1805,7 +1817,7 @@ we are done. Else re-probe with (X^2 + 1)."
                        (yv   (m* sqrt-c4dm1 yw))
                        (x    (m/ (m* -2 *ed-c* xu) yv))
                        (y    (m/ (m* *ed-c* (1+ xu)) (- 1 xu)))
-                       (pt   (make-ed-proj-pt
+                       (pt   (make-ecc-proj-pt
                               :x  x
                               :y  y
                               :z  1)))
