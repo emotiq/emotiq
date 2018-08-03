@@ -37,7 +37,17 @@
 
 (defun make-account (name)
   "return an account class"
-  (let ((key-triple (pbc:make-key-pair name))
+  (let ((key-triple (pbc:make-key-pair name)))
+	(a (make-instance 'account)))
+    (setf (account-triple a) key-triple
+          (account-skey a) (pbc:keying-triple-skey key-triple)
+          (account-pkey a) (pbc:keying-triple-pkey key-triple)
+          (account-name a) name)
+    a))
+
+(defun make-account-from-keypair (pub priv name)
+  "return an account class"
+  (let ((key-triple keypair)
 	(a (make-instance 'account)))
     (setf (account-triple a) key-triple
           (account-skey a) (pbc:keying-triple-skey key-triple)
@@ -312,7 +322,8 @@
 ;;;;;;;;;;;;;;;;;;
 ; random transaction generator
 ;;;;;;;;;;;;;;;;;;
-#|
+;#|
+
 (defparameter *seed* 0.1)
 
 (defparameter *from* nil
@@ -324,5 +335,7 @@
 (defun generate-pseudo-random-transactions ()
   "spawn an actor that wakes up and spends tokens from some account in *from* to another account in *to*"
   (let ((keypairs (emotiq/config:get-keypairs)))
-|#
+
+
+;|#
 
