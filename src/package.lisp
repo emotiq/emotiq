@@ -181,4 +181,7 @@
    #:get-transactions
    #:get-balance))
 
-
+(defpackage emotiq/random
+  (:user #:cl)
+  (:export 
+   #:init-random))
