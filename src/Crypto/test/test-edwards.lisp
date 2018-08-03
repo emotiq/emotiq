@@ -43,13 +43,6 @@
                 (setf a2 (ed-add a2 pt)))
           (assert-true (ed-pt= a1 a2)))))
 
-(define-test tst-c-mul
-  (loop repeat 1000 do
-        (let* ((r   (field-random *ed-r*))
-               (pt1 (edec::ed-basic-mul *ed-gen* r))
-               (pt2 (ed-mul *ed-gen* r)))
-          (assert-true (ed-pt= pt1 pt2)))))
-
 (define-test tst-cmpr-decmpr
   (loop repeat 1000 do
         (let* ((pt  (ed-random-generator))

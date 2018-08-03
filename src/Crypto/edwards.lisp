@@ -759,7 +759,9 @@ THE SOFTWARE.
     ))
 
 #|
-(loop repeat 100 do (range-proofs:validate-range-proof (range-proofs:make-range-proof 1234567890)))
+(loop repeat 100 do
+      (range-proofs:validate-range-proof
+       (range-proofs:make-range-proof 1234567890)))
  |#
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
