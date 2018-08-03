@@ -112,7 +112,7 @@ THE SOFTWARE.
                             :directory (pathname-directory (lw:lisp-image-name))))
                         ;; else - use our ../var/local/lib path
                         (asdf:system-relative-pathname :emotiq "../var/local/lib/")))
-           (sav-ld    (pref-env-var ld-name   pref)))
+           (sav-ld    (pref-env-var ld-name pref)))
       (unwind-protect
           (funcall fn)
         (setf (lw:environment-variable ld-name) sav-ld))
@@ -147,7 +147,7 @@ THE SOFTWARE.
       (cffi:use-foreign-library :libCurve1174)))
    
    (t
-    (format t " -- Skip library loading"))
+    (format t " -- Skip re-loading libraries"))
    ))
 
 (defmethod unload-dlls ()
