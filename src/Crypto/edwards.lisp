@@ -365,7 +365,7 @@ THE SOFTWARE.
             :x  x
             :y  y))
           ((have-fast-impl)
-           (fast-to-affine pt))
+           (%ecc-fast-to-affine pt))
           (t
            (with-mod *ed-q*
              (make-ecc-pt
@@ -555,7 +555,7 @@ THE SOFTWARE.
   (let ((ppt1 (ed-projective pt1))  ;; projective add is so much faster than affine add
         (ppt2 (ed-projective pt2))) ;; so it pays to make the conversion
     (cond ((have-fast-impl)
-           (fast-add ppt1 ppt2))
+           (%ecc-fast-add ppt1 ppt2))
           (t 
            ;; since projective add takes about 6 usec, and affine add takes
            ;; about 40 usec, it pays to always convert to projective coords,
@@ -696,52 +696,38 @@ THE SOFTWARE.
 
 ;; -------------------------------------------------------------------
 
-(defun fast-mul (pt n)
-  (declare (integer n))
-  ;; (tally :ecmul)
-  (let ((nn  (mod n *ed-r*)))
-    (declare (integer nn))
+(defmethod %ecc-fast-mul ((pt ecc-proj-pt) n)
+  ;; about a 10% speed penalty over using affine points
+  (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; projective in...
+                     (cpty (ecc-pt-y pt))
+                     (cptz (ecc-pt-z pt))
+                     (cwv  n))
     
-    (cond ((zerop nn) (ed-neutral-point))
-
-          #||#
-          ((or (= nn 1)
-               (ed-neutral-point-p pt)) pt)
-          #||#
-          
-          ((ecc-pt-p pt)
-           (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; affine in...
-                              (cpty (ecc-pt-y pt))
-                              (cptz)
-                              (cwv  nn))
-
-             (funcall (fast-ed-curve-affine-mul *edcurve*)
-                      cptx cpty cptz cwv)
-             
-             (make-ecc-proj-pt
+    (funcall (fast-ed-curve-proj-mul *edcurve*)
+             cptx cpty cptz cwv)
+    
+    (make-ecc-proj-pt
               :x (xfer-from-c cptx) ;; projective out...
               :y (xfer-from-c cpty)
               :z (xfer-from-c cptz))
-             ))
-          
-          (t
-           ;; about a 10% speed penalty over using affine points
-           (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; projective in...
-                              (cpty (ecc-pt-y pt))
-                              (cptz (ecc-pt-z pt))
-                              (cwv  nn))
-             
-             (funcall (fast-ed-curve-proj-mul *edcurve*)
-                      cptx cpty cptz cwv)
-             
-             (make-ecc-proj-pt
-              :x (xfer-from-c cptx) ;; projective out...
-              :y (xfer-from-c cpty)
-              :z (xfer-from-c cptz))
-             ))
-          )))
+    ))
 
-(defun fast-add (pt1 pt2)
+(defmethod %ecc-fast-mul ((pt ecc-pt) n)
+  (with-fli-buffers ((cptx (ecc-pt-x pt))  ;; affine in...
+                     (cpty (ecc-pt-y pt))
+                     (cptz)
+                     (cwv  n))
+
+    (funcall (fast-ed-curve-affine-mul *edcurve*)
+             cptx cpty cptz cwv)
+    
+    (make-ecc-proj-pt
+     :x (xfer-from-c cptx) ;; projective out...
+     :y (xfer-from-c cpty)
+     :z (xfer-from-c cptz))
+    ))
+  
+(defun %ecc-fast-add (pt1 pt2)
   (with-fli-buffers ((cpt1xv (ecc-pt-x pt1)) ;; projective in...
                      (cpt1yv (ecc-pt-y pt1))
                      (cpt1zv (ecc-pt-z pt1))
@@ -759,7 +745,7 @@ THE SOFTWARE.
      :z (xfer-from-c cpt1zv))
     ))
 
-(defun fast-to-affine (pt)
+(defun %ecc-fast-to-affine (pt)
   (with-fli-buffers ((cptx (ecc-pt-x pt)) ;; projective in...
                      (cpty (ecc-pt-y pt))
                      (cptz (ecc-pt-z pt)))
@@ -772,6 +758,9 @@ THE SOFTWARE.
      :y (xfer-from-c cpty))
     ))
 
+#|
+(loop repeat 100 do (range-proofs:validate-range-proof (range-proofs:make-range-proof 1234567890)))
+ |#
 ;; -------------------------------------------------------------------
 ;; 4-bit fixed window method - decent performance, and never more than
 ;; |r|/4 terms
@@ -890,24 +879,6 @@ THE SOFTWARE.
     (or ans  ;; projective out...
         (ed-neutral-point))))
 
-(defun ed-basic-mul (pt n)
-  (declare (integer n))
-  (let ((nn  (with-mod *ed-r*
-               (mmod n))))
-    (declare (integer nn))
-    
-    (cond ((zerop nn) (ed-projective
-                       (ed-neutral-point)))
-          
-          ((or (= nn 1)
-               (ed-neutral-point-p pt)) pt)
-
-          ;; use a 4-bit bipolar fixed-window algorithm
-          (t
-           (generalized-bipolar-windowed-mul pt nn
-                                             :window-nbits 4))
-          )))
-
 ;; --------------------------------------------------------------------------------
 #|
 ;; 1-bit NAF form
@@ -954,11 +925,25 @@ THE SOFTWARE.
   (let* ((alpha  (* *ed-r* *ed-h* (field-random #.(ash 1 48)))))
     (ed-basic-mul pt (+ n alpha)))
   |#
-  (cond ((have-fast-impl)
-         (fast-mul pt n))
-        (t
-         (ed-basic-mul pt n))
-        ))
+  (declare (integer n))
+  ;; (tally :ecmul)
+  (let ((nn  (mod n *ed-r*)))
+    (declare (integer nn))
+    
+    (cond ((zerop nn)
+           (ed-neutral-point))
+          
+          ((or (= nn 1)
+               (ed-neutral-point-p pt))
+           pt)
+          
+          ((have-fast-impl)
+           (%ecc-fast-mul pt nn))
+          
+          (t
+           (generalized-bipolar-windowed-mul pt nn
+                                    :window-nbits 4))
+          )))
 
 (defun ed-div (pt n)
   (with-mod *ed-r*
@@ -1978,9 +1963,17 @@ we are done. Else re-probe with (X^2 + 1)."
 |#
              
 ;; ------------------------------------------------------------------------------
+;; CORE-CRYPTO:STARTUP and CORE-CRYPTO:SHUTDOWN
 
-(defmethod crypto-lib-loader:load-dlls :after ()
+(defun startup-edwards ()
+  (core-crypto:ensure-dlls-loaded)
+  (format t "~%Connecting Edwards Curves")
   (set-ed-curve :curve1174))
 
-(defmethod crypto-lib-loader:unload-dlls :before ()
+(core-crypto:add-to-startups 'startup-edwards)
+
+(defun shutdown-edwards ()
+  (format t "~%Disconnecting Edwards Curves")
   (setf *edcurve* nil))
+
+(core-crypto:add-to-shutdowns 'shutdown-edwards)

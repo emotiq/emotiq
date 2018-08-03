@@ -151,8 +151,34 @@ THE SOFTWARE.
    ))
 
 (defmethod unload-dlls ()
-  (cffi:close-foreign-library :libLispPBC)
-  (cffi:close-foreign-library :libed3363)
-  (cffi:close-foreign-library :libcurve1174)
-  (setf *load-counter* 0))
-  
+  (when (plusp *load-counter*)
+    (format t "~%Unloading DLL's")
+    (cffi:close-foreign-library :libLispPBC)
+    (cffi:close-foreign-library :libed3363)
+    (cffi:close-foreign-library :libcurve1174)
+    (setf *load-counter* 0)
+    ))
+
+;; ---------------------------------------------------------------------------
+;; Define methods on CORE-CRYPTO:STARTUP and CORE-CRYPTO:SHUTDOWN
+
+(defvar *system-startup-fns*  nil)
+(defvar *system-shutdown-fns* nil)
+
+(defun core-crypto:startup ()
+  (mapc 'funcall (reverse *system-startup-fns*)))
+
+(defun core-crypto:shutdown ()
+  (mapc 'funcall *system-shutdown-fns*))
+
+(defun core-crypto:ensure-dlls-loaded ()
+  (load-dlls))
+
+(defun core-crypto:add-to-startups (fn)
+  (pushnew fn *system-startup-fns*))
+
+(defun core-crypto:add-to-shutdowns (fn)
+  (pushnew fn *system-shutdown-fns*))
+
+(core-crypto:add-to-startups  'load-dlls)
+(core-crypto:add-to-shutdowns 'unload-dlls)

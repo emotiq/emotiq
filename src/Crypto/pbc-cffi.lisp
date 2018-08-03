@@ -1898,21 +1898,29 @@ likely see an assertion failure"
       (ac:pr :done ans))))
 |#
 ;; ------------------------------------------------------------------------------
+;; CORE-CRYPTO:STARTUP and CORE-CRYPTO:SHUTDOWN
 
-(defmethod crypto-lib-loader:load-dlls :after ()
+(defun startup-pbc ()
+  (core-crypto:ensure-dlls-loaded)
+  (format t "~%Connecting PBC lib")
   (init-pairing :params *pairing-fr256-params* :context 0)
   (init-pairing :params *pairing-fr449-params* :context 1)
   (set-pairing :pairing-fr256))
 
-(defmethod crypto-lib-loader:unload-dlls :before ()
+(core-crypto:add-to-startups 'startup-pbc)
+
+(defun shutdown-pbc ()
+  (format t "~%Disconnecting PBC lib")
   (setf *pairing* nil)
-  (fill *pairings* nil))
+  (fill *contexts* nil))
+
+(core-crypto:add-to-shutdowns 'shutdown-pbc)
 
 ;; --------------------------------------------------------------------
 
 #-:lispworks
 (eval-when (:load-toplevel)
-  (crypto-lib-loader:load-dlls))
+  (core-crypto:startup))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -1931,6 +1939,6 @@ likely see an assertion failure"
     
     (unless building-binary-p
       ;; in all other cases, load-dlls at LOAD time.
-      (crypto-lib-loader:load-dlls))
+      (core-crypto:startup))
     ))
 

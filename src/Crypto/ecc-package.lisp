@@ -213,7 +213,7 @@ THE SOFTWARE.
    :*ed-nb*
    :*ed-nbits*
    :ecc-pt
-   :ed-proj-pt
+   :ecc-proj-pt
    :ed-affine
    :ed-pt=
    :ed-neutral-point
@@ -411,6 +411,12 @@ THE SOFTWARE.
    :ctr-drbg-int
    :random-between
    :field-random
+
+   :add-to-startups
+   :add-to-shutdowns
+   :ensure-dlls-loaded
+   :startup
+   :shutdown
    ))
    
 (defpackage :crypto-lib-loader
@@ -419,4 +425,5 @@ THE SOFTWARE.
    :load-dlls
    :unload-dlls
    ))
+
 

@@ -59,7 +59,7 @@
   (unintern 'cl-user::*performing-binary-build*) ;; if building binary,
   (setq *production* t)  ;; used by EMOTIQ:PRODUCTION-P in Crypto
   (message-running-state "from command line")
-  (crypto-lib-loader:load-dlls)
+  (core-crypto:startup)
   (actors:install-actor-system)
   (main))
 
