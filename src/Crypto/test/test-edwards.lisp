@@ -56,6 +56,3 @@
                      (ed-add (ed-mul *ed-gen* (1- *ed-r*))
                              *ed-gen*)))))
 
-#|
-(lisp-unit:run-tests :all :crypto/test)
-|#
