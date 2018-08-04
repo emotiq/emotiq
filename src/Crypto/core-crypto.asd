@@ -48,10 +48,10 @@ THE SOFTWARE.
                  "emotiq"
                  "emotiq/delivery"
                  "cffi"
-		 "crypto-libraries"
+		 "core-crypto/libraries"
                  ))
 
-(defsystem "crypto-libraries"
+(defsystem "core-crypto/libraries"
   :perform
   (prepare-op
    :before (o c)
