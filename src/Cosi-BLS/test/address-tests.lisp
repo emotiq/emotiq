@@ -33,7 +33,9 @@
      (public-key-to-address public-key :net :test)
      'should-be-testnet-address)))
 
-
+;; ----------------------------------------------------------------------------------------
+;; THIS IS NOT HELPFUL - WE ARE NOT BITCOIN -- OUR KEYING IS ENTIRELY DIFFERENT
+;; ----------------------------------------------------------------------------------------
 ;; Test notes: it may be helpful to test individual components of the
 ;; address.lisp code with the handy address tester here:
 ;;
