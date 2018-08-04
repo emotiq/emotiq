@@ -381,7 +381,7 @@ THE SOFTWARE.
   ;; vec is byte vector from which val was computed
   (declare (integer val))
   (let* ((nbytes (length vec))
-         (n58    (ceiling nbytes #.(log 58 256)))
+         (n58    (ceiling (* nbytes #.(log 256 58))))
          (cs     nil))
     (declare (fixnum nbytes n58))
     (um:nlet-tail iter ((val  val)
@@ -431,7 +431,7 @@ THE SOFTWARE.
   ;; vec is byte vector from which val was computed
   (declare (integer val))
   (let* ((nbytes (length vec))
-         (n64    (ceiling nbytes #.(log 64 256)))
+         (n64    (ceiling (* nbytes #.(log 256 64))))
          (ntail  (logand n64 3))
          (cs     nil))
     (declare (fixnum nbytes n64 ntail))
