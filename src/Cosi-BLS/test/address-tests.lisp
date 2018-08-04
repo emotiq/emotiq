@@ -6,20 +6,20 @@
   (let* ((k                         (make-key-pair :test))
          (public-key                (keying-triple-pkey k))
          (public-key-as-hex-string  (hex-str public-key))
-         (public-key-byte-vector    (bev-vec pkey))
+         (public-key-byte-vector    (bev-vec public-key))
          (bitcoin-version           #x00)
          (should-be-bitcoin-address "112TDcS6aiYAG8rRnrM6rijTpiB4MSxnsMo")
          (should-be-mainnet-address "2ZAALAks7kwxXKwfCLKiFLpS3hAmecUpsac") 
          (should-be-testnet-address "1ym7GSk8CpyVoSy61JW4o6QqkTJPMcPHp7T"))
     (print "Public Key to Key Hash as Address Test (Base58Check Encoding)")
+    ;; let's really test something here... equivalence of pkey, pkey hex string, and pkey byte vector
     (assert-equal
      should-be-bitcoin-address 
-     (public-key-to-address
-      public-key-byte-vector :override-version bitcoin-version)
+     (public-key-to-address public-key :override-version bitcoin-version)
      'should-be-bitcoin-address)
     (assert-equal 
      should-be-mainnet-address
-     (public-key-to-address public-key-byte-vector :net :main)
+     (public-key-to-address public-key-as-hex-string :net :main)
      'should-be-mainnet-address)
     (assert-equal 
      should-be-testnet-address
