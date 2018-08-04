@@ -21,11 +21,12 @@
      'should-be-bitcoin-address)
     (assert-equal 
      should-be-mainnet-address
-     (public-key-to-address public-key-as-hex-string :net :main)
+     ;; stop encouraging the use of untypted bignums and byte vectors...
+     (public-key-to-address public-key :net :main)
      'should-be-mainnet-address)
     (assert-equal 
      should-be-testnet-address
-     (public-key-to-address public-key-byte-vector :net :test)
+     (public-key-to-address public-key :net :test)
      'should-be-testnet-address)))
 
 
