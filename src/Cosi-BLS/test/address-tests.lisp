@@ -3,17 +3,14 @@
 (in-package :cosi-bls-test)
 
 (define-test public-key-to-key-hash-as-address-test
-  (let* ((public-key-as-hex-string
-           "0433F8C523B3FF52F0A515DD19EB88B1356BED642F5B9A55AE34D7481FE2EED2D36BDACAFD1A400910CDD1F3BB79A8C4D090C37180156BE25D2801D53DFA646066")
-         (public-key-byte-vector
-           (ironclad:hex-string-to-byte-array public-key-as-hex-string))
-         (bitcoin-version #x00)
-         (should-be-bitcoin-address
-           "1ABD7Te3tqtMmdmYh432fSyB2fX3juS475")
-         (should-be-mainnet-address
-           "2ZHtKfnQawFgcxizxB2eRHXwQ1fEM62RSiT")
-         (should-be-testnet-address
-           "ytqFwmfg1HDu5kRm9Czy38M6mnr45QaA3L"))
+  (let* ((k                         (make-key-pair :test))
+         (public-key                (keying-triple-pkey k))
+         (public-key-as-hex-string  (hex-str public-key))
+         (public-key-byte-vector    (bev-vec pkey))
+         (bitcoin-version           #x00)
+         (should-be-bitcoin-address "112TDcS6aiYAG8rRnrM6rijTpiB4MSxnsMo")
+         (should-be-mainnet-address "2ZAALAks7kwxXKwfCLKiFLpS3hAmecUpsac") 
+         (should-be-testnet-address "1ym7GSk8CpyVoSy61JW4o6QqkTJPMcPHp7T"))
     (print "Public Key to Key Hash as Address Test (Base58Check Encoding)")
     (assert-equal
      should-be-bitcoin-address 

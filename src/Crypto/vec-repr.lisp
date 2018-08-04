@@ -584,6 +584,9 @@ THE SOFTWARE.
   (make-instance 'bev
                  :vec (coerce x 'ub8-vector)))
 
+(defmethod bev ((x string))
+  (bev (hex x)))
+
 (defmethod bev ((x integer))
   ;; convert integer to BEV vector
   (make-instance 'bev
