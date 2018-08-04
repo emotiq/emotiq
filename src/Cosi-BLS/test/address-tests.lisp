@@ -15,7 +15,9 @@
     ;; let's really test something here... equivalence of pkey, pkey hex string, and pkey byte vector
     (assert-equal
      should-be-bitcoin-address 
-     (public-key-to-address public-key :override-version bitcoin-version)
+     (public-key-to-address public-key               :override-version bitcoin-version)
+     (public-key-to-address public-key-as-hex-string :override-version bitcoin-version)
+     (public-key-to-address public-key-byte-vector   :override-version bitcoin-version)
      'should-be-bitcoin-address)
     (assert-equal 
      should-be-mainnet-address
