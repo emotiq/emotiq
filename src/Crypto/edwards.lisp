@@ -1103,20 +1103,19 @@ THE SOFTWARE.
 
 (defun absorb-hash (h)
   (let ((qlen (integer-length *ed-q*))
-        (hvec (bev-vec h)))
+        (hvec (bev-vec h))
+        (hv   hvec))
     (declare (fixnum qlen)
-             (ub8-vector hvec))
-    (um:nlet-tail iter ((hv    hvec)
-                        (ct    1))
-      (declare (fixnum ct)
-               (ub8-vector hv))
-      (if (< (* 8 (length hv)) qlen)
-          (iter (concatenate 'ub8-vector hv (bev-vec ct) hvec) (1+ ct))
-        (let ((hint  (int hvec)))
-          (declare (integer hint))
-          (loop while (>= hint *ed-q*) do
-                (setf hint (ash hint -1)))
-          hint)))))
+             (ub8-vector hvec hv))
+    (loop for ct fixnum from 1
+          while (< (* 8 (length hv)) qlen)
+          do
+          (setf hv (concatenate 'ub8-vector hv (vector ct) hvec)))
+    (let ((hint  (int hv)))
+      (declare (integer hint))
+      (loop while (>= hint *ed-q*) do
+            (setf hint (ash hint -1)))
+      hint)))
 
 (defun ed-pt-from-hash (h)
   "Hash onto curve. Treat h as X coord with sign indication,
