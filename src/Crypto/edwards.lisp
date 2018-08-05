@@ -1145,7 +1145,7 @@ we are done. Else re-probe with (X^2 + 1)."
                     ;; initial (x,y) coords were in a small subgroup.
                     (iter (1+ (m* x x)))
                   pt)))
-          ;; else - non-quadratic residut
+          ;; else - non-quadratic residue, so re-probe at x^2+1
           (iter (1+ (m* x x)))
           )))))
 
