@@ -514,7 +514,7 @@
                        from-account
                        to-account
                        fee)
-          (spend from-account to-account new-amount :fee fee))))))
+          (spend from-account (account-pkey to-account) new-amount :fee fee))))))
 
 (defun shutdown ()
   (r2-shutdown)
