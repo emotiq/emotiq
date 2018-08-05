@@ -1116,8 +1116,10 @@ THE SOFTWARE.
           (setf hv (concatenate 'ub8-vector hv (vector ct) hvec)))
     (let ((hint  (int hv)))
       (declare (integer hint))
-      (loop while (>= hint *ed-q*) do
-            (setf hint (ash hint -1)))
+      (when (>= hint *ed-q*)
+        (setf hint (ash hint (- qlen (integer-length hint))))
+        (if (>= hint *ed-q*)
+            (setf hint (ash hint -1))))
       hint)))
 
 (defun ed-pt-from-hash (h)
