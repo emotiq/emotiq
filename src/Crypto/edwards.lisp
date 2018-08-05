@@ -1138,8 +1138,8 @@ we are done. Else re-probe with (X^2 + 1)."
                 ;; to prevent winding up in a small subgroup.
                 (if (ed-neutral-point-p pt)
                     ;; we already know the point sits on the curve,
-                    ;; but it could be the neutral point, or belong
-                    ;; in a small subgroup.
+                    ;; but it could now be the neutral point if
+                    ;; initial (x,y) coords were in a small subgroup.
                     (iter (1+ (m* x x)))
                   pt)))
           ;; else - non-quadratic residut
