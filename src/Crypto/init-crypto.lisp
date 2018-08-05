@@ -1,8 +1,11 @@
+
+(in-package :core-crypto)
+
 ;; --------------------------------------------------------------------
 
 #-:lispworks
 (eval-when (:load-toplevel)
-  (core-crypto:startup))
+  (startup))
 
 #+:lispworks
 (eval-when (:load-toplevel)
@@ -21,6 +24,6 @@
     
     (unless building-binary-p
       ;; in all other cases, load-dlls at LOAD time.
-      (core-crypto:startup))
+      (startup))
     ))
 
