@@ -1058,20 +1058,6 @@ THE SOFTWARE.
 (defun hash-to-pt-range (&rest args)
   (apply 'hash-to-range *ed-q* args))
 
-(defun ed-grp-random (&optional (base *ed-r*))
-  ;; generate a "safe" random value in the field described by base, r in (1 .. base-1)
-  ;; it is safe by virtue of using a nonce value
-  (let ((nbits  (1- (integer-length base))))
-    (um:nlet-tail iter ()
-      (let ((r (int
-                (get-hash-nbits nbits
-                                (uuid:make-v1-uuid) ;; the nonce...
-                                (field-random base)
-                                ))))
-        (if (zerop r)
-            (iter)
-          r)))))
-
 ;; -------------------------------------------------
 
 (defun compute-deterministic-skey (seed &optional (index 0))
@@ -1155,7 +1141,8 @@ we are done. Else re-probe with (X^2 + 1)."
   (ed-pt-from-hash (apply 'hash-to-pt-range seeds)))
 
 (defun ed-random-generator ()
-  (ed-pt-from-hash (ed-grp-random *ed-q*)))
+  (ed-pt-from-seed (uuid:make-v1-uuid)
+                   (ctr-drbg (integer-length *ed-q*))))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive

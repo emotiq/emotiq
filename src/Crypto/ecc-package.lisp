@@ -267,7 +267,6 @@ THE SOFTWARE.
 
    :make-ecc-pt
 
-   :ed-grp-random
    :ed-vrf
    :ed-prove-vrf
    :ed-check-vrf
