@@ -22,13 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(in-package :cl-user)
-
-(asdf:defsystem "core-crypto"
+(defsystem "core-crypto"
   :description "core-crypto: core cryptography functions"
   :version     "1.0.1"
   :author      "D.McClain <dbm@refined-audiometrics.com>"
   :license     "Copyright (c) 2015 by Refined Audiometrics Laboratory, LLC. All rights reserved."
+  :in-order-to ((test-op (test-op "core-crypto-test")))
+  :serial       t
   :components  ((:file "ecc-package")
                 (:file "cached-var")
                 (:file "modular-arith")
@@ -37,23 +37,47 @@ THE SOFTWARE.
                 (:file "hash")
                 (:file "ctr-hash-drbg")
                 (:file "primes")
-                #+:COM.RAL (:file "crypto-le")
-                (:file "kdf")
-                (:file "gf-571")
+                (:file "startup")
+                (:file "lib-loads")
                 (:file "edwards")
-                (:file "ecc-B571")
-                (:file "curve-gen")
-                (:file "crypto-environ")
-                #+:COM.RAL (:file "machine-id")
-                (:file "lagrange-4-square"))
-  :in-order-to ((test-op (test-op "core-crypto-test")))
-  :serial       t
+                (:file "lagrange-4-square")
+                (:file "pbc-cffi")
+                (:file "pbc")
+                (:file "subkey-derivation")
+                (:file "proofs")
+                (:file "init-crypto"))
   :depends-on   ("ironclad"
-                 #+:COM.RAL "aesx"
                  "useful-macros"
                  "mpcompat"
                  "lisp-object-encoder"
                  "s-base64"
                  "emotiq"
-                 "emotiq/delivery"))
+                 "emotiq/delivery"
+                 "cffi"
+		 "core-crypto/libraries"
+                 ))
+
+(defsystem "core-crypto/libraries"
+  :perform
+  (prepare-op
+   :before (o c)
+   (let ((wildcard-for-libraries
+          (make-pathname :defaults 
+                         (asdf:system-relative-pathname
+                          :emotiq "../var/local/lib/libLispCurve1174")
+                         :type :wild)))
+     (unless (directory wildcard-for-libraries)
+       (format *standard-output*
+               "~&Failed to find libraries matching~&~t~a~&~
+~&Attempting to build native libraries... hang on for a minute, please..."
+               wildcard-for-libraries)
+       (run-program `("bash"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-ecc.bash")))
+                    :output :string :error :string)
+       (run-program `("bash"
+                      ,(namestring (system-relative-pathname
+                                    :emotiq "../etc/build-crypto-pairings.bash")))
+                    :output :string :error :string)
+       (format *standard-output* "~tWhew!  Finished.~&")))))
 

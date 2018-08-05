@@ -47,6 +47,10 @@ THE SOFTWARE.
 (defclass hash/512 (hash)
   ())
 
+(defclass hash/var (hash)
+  ((hashfn  :reader  hash-fn
+            :initarg :hashfn)))
+
 ;; -------------------------------------------------
 
 (defmethod ub8v-repr ((x hash))
@@ -110,12 +114,43 @@ THE SOFTWARE.
 
 ;; -----------------------------------------------------
 
-(defun get-hash-nbytes (nb &rest seeds)
+(defun get-raw-hash-nbytes (nb &rest seeds)
   ;; returns a vector of nb raw-bytes
   (let ((dig (ironclad:make-digest :shake256 :output-length nb)))
     (dolist (seed seeds)
       (ironclad:update-digest dig (hashable seed)))
     (ironclad:produce-digest dig)))
+
+(defun make-bare-hash (vec fn)
+  (values
+   (make-instance 'hash/var
+                  :val (make-instance 'bev
+                                      :vec vec)
+                  :hashfn fn)
+   (length vec)))
+
+(defun get-hash-nbytes (nb &rest seeds)
+  (make-bare-hash (apply 'get-raw-hash-nbytes nb seeds)
+                  (get-cached-symbol-data 'hash/var :hash-bytes-fn nb
+                                          (lambda ()
+                                            (um:curry 'get-hash-nbytes nb)))
+                  ))
+
+(defun get-raw-hash-nbits (nbits &rest seeds)
+  "Concatenated SHA3 until we collect enough bits"
+  (multiple-value-bind (nbw nbf) (ceiling nbits 8)
+    (let ((vec (apply 'get-raw-hash-nbytes nbw seeds)))
+      (setf (aref vec 0) (ldb (byte (+ 8 nbf) 0) (aref vec 0)))
+      vec)))
+
+(defun get-hash-nbits (nbits &rest seeds)
+  (make-bare-hash (apply 'get-raw-hash-nbits nbits seeds)
+                  (get-cached-symbol-data 'hash/var :hash-bits-fn nbits
+                                          (lambda ()
+                                            (um:curry 'get-hash-nbits nbits)))))
+
+(defun hash-to-range (range &rest args)
+  (apply 'get-hash-nbits (um:floor-log2 range) args))
 
 ;; -----------------------------------------------------
 
@@ -130,8 +165,18 @@ THE SOFTWARE.
 (defmethod print-object ((obj hash) out-stream)
   (if *print-readably*
       (call-next-method)
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (short-str (hex-str obj)))
-    ))
+    (print-unreadable-object (obj out-stream :type t)
+      (princ (short-str (hex-str obj)) out-stream))))
 
+;; -----------------------------------------------------
+
+(defmethod hash-function-of-hash ((h hash))
+  ;; many of the hash functions are named the same as their
+  ;; correspdonding class wrappers. So given a hash object, we can
+  ;; find the hash to produce another like it.
+  (let ((sym (class-name (class-of h))))
+    (when (fboundp sym)
+      (symbol-function sym))))
+
+(defmethod hash-function-of-hash ((h hash/var))
+  (hash-fn h))

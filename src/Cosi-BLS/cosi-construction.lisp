@@ -60,6 +60,10 @@ THE SOFTWARE.
              :initarg  :skey)
    (pkey     :accessor node-pkey     ;; cached ECC point for public key
              :initarg  :pkey)
+   (short-pkey :accessor node-short-pkey ;; short/fast public key for Randhound
+               :initarg :short-pkey)
+   (short-skey :accessor node-short-skey ;; short/fast secret key for Randhound
+               :initarg :short-skey)
    (parent   :accessor node-parent   ;; points to node of group parent
              :initarg  :parent
              :initform nil)
@@ -112,6 +116,8 @@ THE SOFTWARE.
    (self     :accessor node-self     ;; ptr to Actor handler
              :accessor gossip:application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
+   (rh-state :accessor node-rh-state
+             :initform nil)          ;; ptr to Randhound state info
    ))
 
 ;; -------------------------------------------------------
@@ -137,6 +143,9 @@ THE SOFTWARE.
 (define-symbol-macro *election-calls* (node-election-calls *current-node*))
 (define-symbol-macro *beacon*         (node-current-beacon *current-node*))
 (define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
+
+;; randhound items
+(define-symbol-macro *rh-state*       (node-rh-state       *current-node*))
 
 (defun add-to-blockchain (node blk)
   (with-current-node node
@@ -173,9 +182,22 @@ THE SOFTWARE.
   (error "Need to specify..."))
 
 ;; new for Gossip support, and conceptually cleaner...
-(defmethod initialize-instance :around ((node node) &key &allow-other-keys)
+(defmethod initialize-instance :around ((node node) &key pkey skey &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node)
         *current-node*   node)
+  ;; -------------------------------------------------
+  ;; Set up some short keys for Randhound
+  ;;
+  ;; This should likely be changed for production. The code here is
+  ;; good'nuff for simulation
+  ;;
+  (let ((short-keys (pbc:with-pairing :PAIRING-AR160
+                      (pbc:make-key-pair (list :RANDHOUND skey)))
+                    ;; will be the hash of skey
+                    ))
+    (setf (node-short-pkey node) (pbc:keying-triple-pkey short-keys)
+          (node-short-skey node) (pbc:keying-triple-skey short-keys)))
+  ;; -------------------------------------------------
   (call-next-method))
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)
