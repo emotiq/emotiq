@@ -1102,6 +1102,9 @@ THE SOFTWARE.
 ;; Hashing onto curve
 
 (defun absorb-hash (h)
+  ;; absorb a hash value in the *ed-q* coordinate group
+  ;; if hash is small, then form (H | 1 | H | 2 | H ...) till large enough
+  ;; then back off by 1 bit right shift until hash value < *ed-q*
   (let ((qlen (integer-length *ed-q*))
         (hvec (bev-vec h))
         (hv   hvec))
