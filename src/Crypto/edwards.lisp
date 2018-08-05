@@ -1130,24 +1130,25 @@ we are done. Else re-probe with (X^2 + 1)."
                         (- *ed-c* x))
                     (m* (- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
                 ))
-        (if (quadratic-residue-p yy)
-            (let* ((ysqrt  (msqrt yy))
-                   (y      (min ysqrt (m- ysqrt))))
-              (let ((pt (ed-mul (make-ecc-pt
-                                 :x x
-                                 :y y)
-                                *ed-h*)))
-                ;; Watch out! This multiply by cofactor is necessary
-                ;; to prevent winding up in a small subgroup.
-                (if (ed-neutral-point-p pt)
-                    ;; we already know the point sits on the curve,
-                    ;; but it could now be the neutral point if
-                    ;; initial (x,y) coords were in a small subgroup.
-                    (iter (1+ (m* x x)))
-                  pt)))
-          ;; else - non-quadratic residue, so re-probe at x^2+1
-          (iter (1+ (m* x x)))
-          )))))
+        (or
+         (and (quadratic-residue-p yy)
+              (let* ((yysqrt  (msqrt yy))
+                     (y       (min yysqrt (m- yysqrt))))
+                (let ((pt (ed-mul (make-ecc-pt
+                                   :x x
+                                   :y y)
+                                  *ed-h*)))
+                  ;; Watch out! This multiply by cofactor is necessary
+                  ;; to prevent winding up in a small subgroup.
+                  ;;
+                  ;; we already know the point sits on the curve, but
+                  ;; it could now be the neutral point if initial
+                  ;; (x,y) coords were in a small subgroup.
+                  (and (not (ed-neutral-point-p pt))
+                       pt))))
+         ;; else - invalid point, so re-probe at x^2+1
+         (iter (1+ (m* x x)))
+         )))))
 
 (defun ed-pt-from-seed (&rest seeds)
   (ed-pt-from-hash (apply 'hash-to-pt-range seeds)))
