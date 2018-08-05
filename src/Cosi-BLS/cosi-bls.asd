@@ -35,7 +35,6 @@ THE SOFTWARE.
                emotiq/tracker
                emotiq/config
                core-crypto
-               crypto-pairings
                lisp-object-encoder
                useful-macros
                usocket

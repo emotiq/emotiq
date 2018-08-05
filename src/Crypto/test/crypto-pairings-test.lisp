@@ -1,4 +1,4 @@
-(in-package :crypto-pairings-test)
+(in-package :core-crypto-test)
 
 (define-test basis-consistency
   (assert-true (hash:hash-check pbc::*pairing-default-ar160-params* pbc::*chk-pairing-default-ar160-params*))
@@ -89,6 +89,4 @@
     (assert-true (check-confidential-purchase ppurch
                                               cost fees))))
 |#
-
-
 

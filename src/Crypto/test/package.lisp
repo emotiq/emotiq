@@ -1,16 +1,8 @@
 
 (defpackage :core-crypto-test
-  (:use :cl :core-crypto :lisp-unit)
+  (:use :cl :core-crypto :lisp-unit :pbc :subkey-derivation)
   )
 
-(defpackage :crypto-pairings-test
-  (:nicknames :pbc-test)
-  (:use :cl
-   :vec-repr
-   :hash
-   :pbc
-   :subkey-derivation
-   :lisp-unit))
 
 
 

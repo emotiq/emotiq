@@ -37,9 +37,15 @@ THE SOFTWARE.
                 (:file "hash")
                 (:file "ctr-hash-drbg")
                 (:file "primes")
+                (:file "startup")
                 (:file "lib-loads")
                 (:file "edwards")
-                (:file "lagrange-4-square"))
+                (:file "lagrange-4-square")
+                (:file "pbc-cffi")
+                (:file "pbc")
+                (:file "subkey-derivation")
+                (:file "proofs")
+                (:file "init-crypto"))
   :depends-on   ("ironclad"
                  "useful-macros"
                  "mpcompat"
