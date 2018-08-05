@@ -235,7 +235,7 @@ THE SOFTWARE.
    :hash-to-pt-range
    :hash-to-grp-range
    :ed-pt-from-hash
-   :ed-pt-from-seeds
+   :ed-pt-from-seed
    
    :elligator-random-pt
    :elligator-tau-vector

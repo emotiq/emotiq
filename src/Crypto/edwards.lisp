@@ -1101,47 +1101,57 @@ THE SOFTWARE.
 ;; -----------------------------------------------------
 ;; Hashing onto curve
 
+(defun absorb-hash (h)
+  (let ((qlen (integer-length *ed-q*))
+        (hvec (bev-vec h)))
+    (declare (fixnum qlen)
+             (ub8-vector hvec))
+    (um:nlet-tail iter ((hv    hvec)
+                        (ct    1))
+      (declare (fixnum ct)
+               (ub8-vector hv))
+      (if (< (* 8 (length hv)) qlen)
+          (iter (concatenate 'ub8-vector hv (bev-vec ct) hvec) (1+ ct))
+        (let ((hint  (int hvec)))
+          (declare (integer hint))
+          (loop while (>= hint *ed-q*) do
+                (setf hint (ash hint -1)))
+          hint)))))
+
 (defun ed-pt-from-hash (h)
   "Hash onto curve. Treat h as X coord with sign indication,
 just like a compressed point. Then if Y is a quadratic residue
 we are done. Else re-probe with (X^2 + 1)."
   (with-mod *ed-q*
-    (let* ((nbits (ed-nbits))
-           (v     (int h))
-           (sgn   (ldb (byte 1 nbits) v))
-           (x     (mmod (ldb (byte nbits 0) v))))
-      (um:nlet-tail iter ((x x))
-        (let ((yy (m/ (m* (+ *ed-c* x)
-                          (- *ed-c* x))
-                      (m* (- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
-                  ))
-          (if (quadratic-residue-p yy)
-              (let* ((y  (msqrt yy))
-                     (y  (if (eql sgn (ldb (byte 1 0) y))
-                             y
-                           (m- y))))
-                (let ((pt (ed-mul (make-ecc-pt
-                                   :x x
-                                   :y y)
-                                  *ed-h*)))
-                  ;; Watch out! This multiply by cofactor is necessary
-                  ;; to prevent winding up in a small subgroup.
-                  (if (or (ed-neutral-point-p pt)
-                          (ed-neutral-point-p (ed-mul pt *ed-h*)))
-                      ;; we already know the point sits on the curve,
-                      ;; but it could be the neutral point, or belong
-                      ;; in a small subgroup.
-                      (iter (1+ (m* x x)))
-                    pt)))
-            ;; else - non-quadratic residut
-            (iter (1+ (m* x x)))
-            ))))))
+    (um:nlet-tail iter ((x (absorb-hash h)))
+      (let ((yy (m/ (m* (+ *ed-c* x)
+                        (- *ed-c* x))
+                    (m* (- 1 (m* x x *ed-c* *ed-c* *ed-d*))))
+                ))
+        (if (quadratic-residue-p yy)
+            (let* ((ysqrt  (msqrt yy))
+                   (y      (min ysqrt (m- ysqrt))))
+              (let ((pt (ed-mul (make-ecc-pt
+                                 :x x
+                                 :y y)
+                                *ed-h*)))
+                ;; Watch out! This multiply by cofactor is necessary
+                ;; to prevent winding up in a small subgroup.
+                (if (ed-neutral-point-p pt)
+                    ;; we already know the point sits on the curve,
+                    ;; but it could be the neutral point, or belong
+                    ;; in a small subgroup.
+                    (iter (1+ (m* x x)))
+                  pt)))
+          ;; else - non-quadratic residut
+          (iter (1+ (m* x x)))
+          )))))
 
-(defun ed-pt-from-seeds (&rest seeds)
+(defun ed-pt-from-seed (&rest seeds)
   (ed-pt-from-hash (apply 'hash-to-pt-range seeds)))
 
 (defun ed-random-generator ()
-  (ed-pt-from-hash (field-random *ed-q*)))
+  (ed-pt-from-seed (field-random *ed-q*)))
 
 ;; ---------------------------------------------------
 ;; The IETF EdDSA standard as a primitive
@@ -1224,13 +1234,13 @@ we are done. Else re-probe with (X^2 + 1)."
 ;;   by Melara, Blankstein, Bonneau, Felten, and Freedman
 
 (defun ed-vrf (seed skey)
-    (let* ((h    (ed-pt-from-seeds seed))
+    (let* ((h    (ed-pt-from-seed seed))
            (vrf  (ed-mul h skey)))
       (ed-compress-pt vrf)))
            
 
 (defun ed-prove-vrf (seed skey)
-    (let* ((h    (ed-pt-from-seeds seed))
+    (let* ((h    (ed-pt-from-seed seed))
            (vrf  (ed-compress-pt (ed-mul h skey)))
            
            ;; r = the random challenge value for Fiat-Shamir sigma proof
@@ -1259,7 +1269,7 @@ we are done. Else re-probe with (X^2 + 1)."
   (let* ((v    (getf proof :v))
          (s    (getf proof :s))
          (tt   (getf proof :t))
-         (h    (ed-pt-from-seeds seed))
+         (h    (ed-pt-from-seed seed))
          ;; check s ?= H(g, h, P, v, g^r = g^tt * P^s, h^r = h^tt * v^s)
          (schk (int
                 (hash-to-grp-range
