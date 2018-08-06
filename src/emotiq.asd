@@ -57,7 +57,8 @@
                emotiq/wallet
                emotiq-rest
                websocket/wallet
-	       emotiq/tracker)
+	       emotiq/tracker
+               emotiq/random)
   :components ((:module source
                 :pathname "./"
                 :serial t
