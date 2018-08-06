@@ -53,6 +53,7 @@
                   directory)
      (multiple-value-bind (bal root)
          (verify-genesis-block)
+       (emotiq:note "genesis balance ~A" bal)
        (assert-true (equal coinbase-amount bal))
        (assert-true (equal coinbase-amount
                            (cosi/proofs/newtx:initial-total-coin-amount))))))
