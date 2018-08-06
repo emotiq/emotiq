@@ -66,3 +66,15 @@ Pure local mock of websocket interfaces for the wallet.
 See Also 
 <https://github.com/emotiq/emotiq/issues/387>
 <https://github.com/emotiq/emotiq/issues/383>
+
+** <2018-08-06 Mon 15:14Z> ~mvp-0.2.0~
+
+| Binaries | <https://github.com/emotiq/emotiq/releases/tag/mvp-0.2.0>              |
+| Branch   | <https://github.com/emotiq/emotiq/compare/mvp/mvp-websocket-20180806a> |
+
+1.  `transactions` call now works after `submit-transactions`
+
+2.  `submit-transaction` now returns serialized transaction instead of
+    boolean value.
+
+3.  Fix reported epoch

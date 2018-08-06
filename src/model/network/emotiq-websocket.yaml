@@ -43,7 +43,8 @@ paths:
                 description: The address of the wallet that the transaction is being sent from
                 type: string
         result:
-          type: boolean
+          schema:
+            $ref: 'messages.yaml#/schemas/transaction'
       'get-transaction':
         description:
           Retireve the best information that the node peer has about transaction

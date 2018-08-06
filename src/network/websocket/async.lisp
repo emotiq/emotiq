@@ -34,6 +34,7 @@ Returns the alist for for the response to return to the requesting client."
                                    ((:jsonrpc . "2.0")
                                     (:method . "consensus")
                                     (:params . ,notification)))))
+            #+(or)
             (emotiq:note "Notifying client ~a with ~a~&" client message)
             (send-as-json client message))))))
 

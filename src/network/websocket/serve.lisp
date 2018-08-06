@@ -71,9 +71,7 @@
                       (model/wallet::submit-new-transaction
                        :address to-address
                        :amount amount)))
-                 (declare (ignore transaction-result))
-                 ;;; TODO return value
-                 (setf result '(:true)))))
+                 (setf result transaction-result))))
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")
