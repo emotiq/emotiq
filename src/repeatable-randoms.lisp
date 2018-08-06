@@ -14,7 +14,8 @@
   (unless (probe-file "~/random-state-ccl.lisp")
     (with-open-file (s "~/random-state-ccl.lisp" :direction :output :if-exists
                        :supersede)
-      (format s "~S" *random-state*)))
+      (with-standard-io-syntax
+        (format s "~S" *random-state*))))
   ;;; Retrieve initial seed
   (with-open-file (s "~/random-state-ccl.lisp" :direction :input)
     (setf *random-state* (read s))))
