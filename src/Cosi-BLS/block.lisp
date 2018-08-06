@@ -184,7 +184,7 @@ added to the blockchain."
       (when prev-block? 
         (with-slots (prev-block-hash)
             blk
-          (setf prev-block-hash (int (hash-block prev-block?)))))
+          (setf prev-block-hash (hash-block prev-block?))))
       blk)))
 
 
