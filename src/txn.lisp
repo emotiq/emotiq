@@ -8,6 +8,7 @@
 (defmethod address ((account pbc:keying-triple))
   (address (pbc:keying-triple-pkey account)))
 (defmethod address ((integers cons))
+  ;; not really a list of integers any more -- a list of public keys (tagged items)
   (address (pbc:make-keying-triple (first integers) (second integers))))
 
 (defmethod get-utxos ((account pbc:keying-triple))
