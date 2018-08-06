@@ -118,7 +118,7 @@
    should be a version prefix octet to be used, and in that case it is used
    instead. This is intended to be used as a testing and debugging feature."
   (encode-address
-   (hash:hash/ripemd/160 (hash:hash/sha2/256 (vec-repr:int public-key)))
+   (hash:hash/ripemd/160 (hash:hash/sha2/256 public-key))
    (or override-version
        (ecase (or net *default-net-for-public-key-to-address*)
          (:main +mainnet-version-for-public-key-to-address+)
