@@ -76,7 +76,7 @@
   (let ((strm emotiq:*notestream*))
     (emotiq:main)
     (setf gossip::*debug-level* nil)
-    (app)
+    +nil(app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)

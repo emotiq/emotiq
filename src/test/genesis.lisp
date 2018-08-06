@@ -45,14 +45,17 @@
      root)))
 
 (define-test genesis-block ()
-  (multiple-value-bind (coinbase-amount directory coinbase-paid-to-keypair)
-      (create-genesis-block)
-    (emotiq:note "Created genesis block with coinbase paid ~a EMTQ to ~a~%~tin '~a'."
-                 coinbase-amount
-                 (emotiq/txn:address coinbase-paid-to-keypair)
-                 directory)
-    (assert-true (equal coinbase-amount
-                        (cosi/proofs/newtx:initial-total-coin-amount)))))
+   (multiple-value-bind (coinbase-amount directory coinbase-paid-to-keypair)
+       (create-genesis-block)
+     (emotiq:note "Created genesis block with coinbase paid ~a EMTQ to ~a~%~tin '~a'."
+                  coinbase-amount
+                  (emotiq/txn:address coinbase-paid-to-keypair)
+                  directory)
+     (multiple-value-bind (bal root)
+         (verify-genesis-block)
+       (assert-true (equal coinbase-amount bal))
+       (assert-true (equal coinbase-amount
+                           (cosi/proofs/newtx:initial-total-coin-amount))))))
 
 
 
