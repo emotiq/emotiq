@@ -11,6 +11,7 @@
                mpcompat
                key-value-store
                actors
+               core-crypto
                crypto-pairings
                usocket)
   :in-order-to ((test-op (test-op "gossip-test")))
