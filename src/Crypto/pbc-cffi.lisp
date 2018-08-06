@@ -24,140 +24,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :pbc-interface
-  (:use :common-lisp
-        :core-crypto
-        :vec-repr
-        :hash)
-  (:nicknames :pbc)
-  (:export
-   ;; classes and their slot readers
-   :crypto-val
-   :crypto-val-vec
-   :g1-cmpr
-   :g1-cmpr-pt
-   :g2-cmpr
-   :g2-cmpr-pt
-   :zr
-   :zr-val
-   :gt
-   :gt-val
-   :public-key
-   :public-key-val
-   :secret-key
-   :secret-key-val
-   :signature
-   :signature-val
-   :pairing
-   :pairing-val
-   :crypto-text
-   :crypto-text-vec
-   :public-subkey
-   :secret-subkey
-   
-   :init-pairing
-   :set-generator  ;; 1 each for G1, and G2 groups
-   
-   :get-g1
-   :get-g2
-   :get-order
-   
-   :make-key-pair
-   :check-public-key
-
-   :make-public-subkey
-   :make-secret-subkey
-   :ibe-encrypt
-   :ibe-decrypt
-   
-   :sign-message       ;; BLS Sigs
-   :check-message
-   :combine-signatures ;; for BLS MultiSigs
-
-   :compute-pairing
-
-   :pbc=
-   
-   :add-zrs
-   :sub-zrs
-   :mul-zrs
-   :div-zrs
-   :exp-zrs
-   :neg-zr
-   :inv-zr
-
-   :add-pts  ;; non-bent nomenclature for ECC
-   :sub-pts
-   :mul-pts  ;; bent nomenclature for ECC
-   :div-pts
-   :neg-pt
-   :inv-pt
-   
-   :mul-pt-zr
-   :expt-pt-zr  ;; bent nom
-
-   :mul-gts
-   :div-gts
-   :expt-gt-zr
-   :inv-gt
-   
-   :keying-triple
-   :keying-triple-pkey
-   :keying-triple-sig
-   :keying-triple-skey
-   
-   :signed-message
-   :signed-message-msg
-   :signed-message-sig
-   :signed-message-pkey
-
-   :pbc-hash
-   :hash-to-pbc-range
-   :sign-hash
-   :check-hash
-
-   :crypto-packet
-   :crypto-packet-pkey
-   :crypto-packet-id
-   :crypto-packet-tstamp
-   :crypto-packet-rval
-   :crypto-packet-cmsg
-
-   :g1-from-hash
-   :g2-from-hash
-   :zr-from-hash
-
-   :compute-vrf
-   :validate-vrf
-   :validate-vrf-mapping
-   :vrf
-   :vrf-seed
-   :vrf-x
-   :vrf-y
-   :vrf-proof
-
-   :make-pedersen-proof
-   :validate-pedersen-proof
-   :make-cloaked-proof
-   :validate-cloaked-proof
-
-   :confidential-purchase
-   :confidential-purchase-pbuy
-   :confidential-purchase-psell
-   :confidential-purchase-tbuy
-   :confidential-purchase-rsell
-   :check-confidential-purchase
-
-   :*pairing*
-   :*pairing-name*
-   :with-pairing
-   :set-pairing
-   :list-all-pairings
-
-   :make-keying-triple
-   :make-keying-pairs
-   ))
-
 (in-package :pbc-interface)
 
 ;; -----------------------------------------------------------------------
@@ -1723,7 +1589,7 @@ and then checking the pairing relation:
 "
   (assert (typep pkey-vendor 'g2-cmpr))
   (with-mod (get-order)
-    (let* ((krand  (random-between 1 (get-order)))
+    (let* ((krand  (field-random (get-order)))
            (tbuy   (mul-pt-zr (get-g1)
                               (m/ (m* krand (int skey))
                                   (m- paid change))))
