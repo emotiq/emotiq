@@ -4,7 +4,8 @@
   "Return the recovery phrase for WALLET-NAMED"
   (declare (ignore wallet-named))
   `(:object
-    (:address . ,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize)))
+    (:address . ,*wallet-address*)
+              ;;,(emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))
     (:keyphrase . (:list ,@(emotiq/wallet::key-phrase (emotiq/wallet::wallet-deserialize))))))
 
 (defun enumerate-wallets ()
@@ -13,12 +14,14 @@
   
 (defun get-wallet (name)
   "Return the representation of wallet with NAME at the node"
-  `(:object
-    (:address . ,(emotiq/wallet:primary-address (emotiq/wallet:get-wallet-named name)))
-    (:amount . 0)))
+  (declare (ignore name))
+  `(:object 
+    (:address . ,*wallet-address*)
+    (:amount . ,*amount*)))
 
 (defun get-wallet-addresses (name)
   "Return the addresses used by wallet NAME"
   (let ((wallet (emotiq/wallet:get-wallet-named name)))
     `(:array
       ,(emotiq/wallet:primary-address wallet))))
+

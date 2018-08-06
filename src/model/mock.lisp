@@ -4,31 +4,77 @@
 (defun mock (notify-hook)
   "Run a service that sends json messages to the function of one argument specified via NOTIFY-HOOK"
   (let ((epoch (+ 1000 (random 10000)))
-        (local-epoch 0)
-        (iterations-until-sync 20)
+        (iterations-until-sync 2)
         (i 0))
     (flet ((advance ()
              (setf epoch
-                   (+ epoch (random 2)))
-             (setf local-epoch 
+                   (+ epoch (random 4)))
+             (setf *local-epoch*
                    (if (> i iterations-until-sync)
                        epoch
-                       (+ local-epoch
-                          (random (- epoch local-epoch)))))
+                       (+ *local-epoch*
+                          (random (- epoch *local-epoch*)))))
              (setf i (1+ i))))
       (loop
          :do (let ((notification
                     `(:object
                       (:epoch . ,epoch)
-                      (:local-epoch . ,local-epoch)
-                      (:synchronized . ,(cl-json:json-bool (= local-epoch epoch))))))
+                      (:local-epoch . ,*local-epoch*)
+                      (:synchronized . ,(cl-json:json-bool (= *local-epoch* epoch))))))
                (funcall notify-hook notification))
-         :do (sleep (random 5))
+         :do (sleep (random 2))
          :do (advance)))))
 
+(defun current-posix-time ()
+  (- (get-universal-time) (encode-universal-time 0 0 0 1 1 1970 0)))
+
+(defun new-transaction-id ()
+  (gensym))
+
+(defun submit-new-transaction (&key (address "Payee address") (amount 1000))
+  (setf *amount* (+ *fee*
+                    (- *amount* amount)))
+  (let ((txn (create-new-spend-transaction :address address :amount amount)))
+    (setf *transactions* `(:array
+                           ,@(rest *transactions*)
+                           ,txn))))
+
+(defun create-new-spend-transaction (&key (address "Payee address") (amount 1000))
+  `(:object (:id . ,(new-transaction-id))
+            (:timestamp . ,(current-posix-time))
+            (:type . "spend")
+            (:epoch . ,*local-epoch*)
+            (:fee . ,*fee*)
+            (:inputs
+             . (:array
+                (:object
+                 (:cloaked . (:false))
+                 (:address . ,*wallet-address*)
+                 (:amount . ,amount))))
+            (:outputs
+             . (:array
+                (:object
+                 (:cloaked . (:false))
+                 (:address . ,address)
+                 (:amount . ,amount))
+                (:object
+                 (:cloaked . (:false))
+                 (:address . ,*wallet-address*)
+                 (:amount . (- *amount* *fee* amount)))))))
+
 (defun transactions ()
-  "Return the model for mock of transactions from the current wallet open on the node"
-  (let ((address (emotiq/wallet:primary-address (emotiq/wallet::wallet-deserialize))))
+  *transactions*)
+
+(defparameter *local-epoch*
+  0)
+(defparameter *amount*
+  (expt 10 11))
+(defparameter *wallet-address*
+  "ytD4ccGjrA1hRgYXiEvA8GMS8s9NK553Q2")
+(defparameter *fee*
+  10)
+(defparameter *transactions*
+  (let ((address "ytD4ccGjrA1hRgYXiEvA8GMS8s9NK553Q2"))
     `(:array
       (:object (:id . "C9746DE0C63763A650FCA")
                (:timestamp . 1527591324) (:type . "spend") (:epoch . 314) (:fee . 10)
@@ -36,7 +82,7 @@
                         (:array
                          (:object
                           (:cloaked . (:false))
-                          (:address . "780C0C4D916FAF3357277A27C6C9746DE0C63763A650FCA37C8F1BF9440F017E")
+                          (:address . ,address)
                           (:amount . 10000))))
                (:outputs .
                          (:array
@@ -44,10 +90,10 @@
                            (:cloaked . (:false))
                            (:address . ,address)
                            (:amount . 9000))
-                           (:object
-                            (:cloaked . (:false))
-                            (:address . "780C0C4D916FAF3357277A27C6C9746DE0C63763A650FCA37C8F1BF9440F017E")
-                            (:amount . 1000)))))
+                          (:object
+                           (:cloaked . (:false))
+                           (:address . "hRgYXiEvA8GMS8s9NK553Q2123123")
+                           (:amount . 1000)))))
       (:object (:id . "277A27C6C9746DE0C63763A650FCA")
                (:timestamp . 1527691324) (:type . "spend") (:epoch . 315) (:fee . 10)
                (:inputs .
@@ -60,7 +106,7 @@
                          (:array
                           (:object
                            (:cloaked . (:false))
-                           (:address . "277A27C6C9746DE0C63763A650FCA37C8F1BF9440F017E780C0C4D916FAF3357")
+                           (:address . "hRgYXiEvA8GMS8s9NK553Q2123123")
                            (:amount . 400))
                           (:object
                            (:cloaked . (:false))
@@ -78,11 +124,11 @@
                          (:array
                           (:object
                            (:cloaked . (:false))
-                           (:address . "277A27C6C9746DE0C63763A650FCA37C8F1BF9440F017E780C0C4D916FAF3357")
+                           (:address . "ypsrE7nAMx96T5QavqLxoLVp26MMpGEQSZ")
                            (:amount . 40000))
                           (:object
                            (:cloaked . (:false))
-                           (:address . "6C9746DE0C63763A650FCA37C8F1BF9440F017E780C0C4D916FAF3357")
+                           (:address . "hRgYXiEvA8GMS8s9NK553Q2123123")
                            (:amount . 4000))
                           (:object
                            (:cloaked . (:false))
@@ -100,12 +146,9 @@
                          (:array
                           (:object
                            (:cloaked . (:false))
-                           (:address . "277A27C6C9746DE0C63763A650FCA37C8F1BF9440F017E780C0C4D916FAF3357")
+                           (:address . "ywo9Y6yRrHhKqsJyuVcEWj5H1df1MKZMbe")
                            (:amount . 9000))
                           (:object
                            (:cloaked . (:false))
                            (:address . ,address)
                            (:amount . 1000))))))))
-
-
-
