@@ -576,7 +576,10 @@ THE SOFTWARE.
    :make-pkey
    :make-skey
    :make-sig)
+  (:import-from :cl
+   :list)
   (:export
+   :list
    :make-pkey
    :make-skey
    :make-sig

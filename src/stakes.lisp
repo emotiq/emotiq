@@ -27,7 +27,7 @@
     (emotiq:note "No pairs database found at '~a'" pathname)
     (return-from read-pairs-database nil))
   (with-open-file (s pathname)
-    (loop :for pair = (read s nil nil nil) 
+    (loop :for pair = (core-crypto:read-safely s) ;; (read s nil nil nil) 
        :until (not pair)
        :collect pair)))
 

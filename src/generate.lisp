@@ -192,17 +192,19 @@ The genesis block for the node is returned as the second value.
   (with-open-file (o (merge-pathnames emotiq/config:*stakes-filename* directory)
                      :direction :output
                      :if-exists :supersede)
-    (format o ";;; Stakes for a generated testnet configuration~%")
-    (dolist (stake stakes)
-      (format o "~s~%" stake))))
+    (let ((*print-readably* t))
+      (format o ";;; Stakes for a generated testnet configuration~%")
+      (dolist (stake stakes)
+        (format o "~s~%" (cons 'list stake))))))
 
 
 (defun output-keypairs (directory nodes)
   (with-open-file (o (merge-pathnames emotiq/config:*keypairs-filename* directory)
                      :direction :output
                      :if-exists :supersede)
-    (dolist (node nodes)
-      (format o "~s~%" (list (getf node :public) (getf node :private))))))
+    (let ((*print-readably* t))
+      (dolist (node nodes)
+        (format o "~s~%" (list 'list (getf node :public) (getf node :private)))))))
 
 (defun generated-directory (configuration)
   "For CONFIGURATION return a uniquely named relative directory for the network generation process"
@@ -237,19 +239,22 @@ The genesis block for the node is returned as the second value.
     (with-open-file (o p
                        :direction :output
                        :if-exists :supersede)
-      (format o "~s~&"
-              `(:eripa ,eripa
-                :gossip-port ,port
-                :pubkeys ,public-key-or-keys)))))
+      (let ((*print-readably* t))
+        (format o "~s~&"
+                `(list
+                  :eripa ,eripa
+                  :gossip-port ,port
+                  :pubkeys ,(cons 'list public-key-or-keys)))))))
 
 (defun write-hosts-conf (directory records)
   (let ((p (merge-pathnames emotiq/config:*hosts-filename* directory)))
     (with-open-file (o p
                        :direction :output
                        :if-exists :supersede)
-      (dolist (record records)
-        (format o "~s~&" `(,(getf record :ip)
-                            ,(getf record :gossip-server-port)))))))
+      (let ((*print-readably* t))
+        (dolist (record records)
+          (format o "~s~&" `(,(getf record :ip)
+                             ,(getf record :gossip-server-port))))))))
 
 (defun ensure-defaults (&key
                           force
