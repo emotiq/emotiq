@@ -68,6 +68,7 @@
     (values
      (cosi-simgen:with-block-list ((list genesis-block))
        (cosi/proofs/newtx:get-balance (emotiq/txn:address keypair)))
+     (emotiq/txn:address keypair)
      root)))
 
 (defun test-app ()
@@ -78,7 +79,6 @@
     (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
-    (values *blocks* *node*)
     (verify-genesis-block)
     #+nil(dump-results strm)
     #+nil(generate-pseudo-random-transactions)
