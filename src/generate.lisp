@@ -106,7 +106,7 @@ endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
                             :key-records nodes-with-keys)
              directories)
             (push configuration configurations)))))
-    (values 
+    (values
      directories
      configurations)))
 
@@ -121,7 +121,7 @@ endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
        :doing (push key-value-cons configuration))
     (when address-for-coins
       (push (cons :address-for-coins address-for-coins) configuration))
-    (when stakes 
+    (when stakes
       (push (cons :stakes stakes) configuration))
     configuration))
 
@@ -144,12 +144,12 @@ The genesis block for the node is returned as the second value.
    :host (alexandria:assoc-value configuration :hostname)
    :eripa (alexandria:assoc-value configuration :ip)
    :gossip-port (alexandria:assoc-value configuration :gossip-server-port)
-   :public (alexandria:assoc-value configuration :public)
+   :public (list (alexandria:assoc-value configuration :public))
    :key-records key-records)
   (with-open-file (o (merge-pathnames emotiq/config:*conf-filename* directory)
                      :if-exists :supersede
                      :direction :output)
-    (cl-json:encode-json 
+    (cl-json:encode-json
      (alexandria:alist-hash-table configuration)
      o))
 
@@ -257,7 +257,7 @@ The genesis block for the node is returned as the second value.
                           (nodes-dns-ip *eg-config-zerotier*))
   "Ensure that configuration will start up, even in the absence of explicit configuration
 
-With FORCE true, overwrite destination without warning. 
+With FORCE true, overwrite destination without warning.
 
 With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
   (let ((root (emotiq/fs:new-temporary-directory))
@@ -277,7 +277,7 @@ With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
        (format nil "rsync -avzP ~a ~a"
                (first directories)
                destination))
-      (when for-purely-local 
+      (when for-purely-local
         ;;; FIXME kludge
         (uiop:run-program
          (format nil "cat /dev/null > ~a"
@@ -288,13 +288,11 @@ With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
                (gossip-port (getf local-machine :gossip-port))
                (result
                 (write-gossip-conf destination
-                                   :eripa eripa 
+                                   :eripa eripa
                                    :port gossip-port
                                    :public-key-or-keys (mapcar 'first keypairs))))
           (emotiq:note "Finished mangling configuration for purely local nodes~%~t~a"
                        result)))
-      (values 
+      (values
        (emotiq/config:settings)
        destination))))
-
-
