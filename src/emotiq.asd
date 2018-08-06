@@ -108,7 +108,7 @@
                emotiq/logging
                emotiq/filesystem
                lisp-object-encoder
-               crypto-pairings
+               core-crypto
                useful-macros)
   :components ((:module source
                 :pathname "./"
