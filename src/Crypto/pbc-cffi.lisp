@@ -155,7 +155,7 @@ THE SOFTWARE.
    :list-all-pairings
 
    :make-keying-triple
-   :make-keying-integers
+   :make-keying-pairs
    ))
 
 (in-package :pbc-interface)

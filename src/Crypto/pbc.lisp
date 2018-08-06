@@ -9,14 +9,14 @@
                    :skey skey
                    :sig (or signature (pbc:sign-hash (hash:hash/256 pkey) skey)))))
 
-(defun make-keying-integers ()
+(defun make-keying-pairs ()
   "Makes a public/private keypair seeded via UUID:MAKE-V1-UUID
 
 Returns a list of of the generated public and private keys as integers"
   (let ((keypair (pbc:make-key-pair (list :lisp-authority (uuid:make-v1-uuid)))))
     (list
-     (vec-repr:int (pbc:keying-triple-pkey keypair))    ;; public is first
-     (vec-repr:int (pbc:keying-triple-skey keypair))))) ;; private is second
+     (pbc:keying-triple-pkey keypair)    ;; public is first
+     (pbc:keying-triple-skey keypair)))) ;; private is second
 
 
 

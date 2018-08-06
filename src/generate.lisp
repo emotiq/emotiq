@@ -27,7 +27,7 @@ where they override any later identical keys according to the semantics of CL:AS
 (defun generate-keys (records)
   "Generate keys for a list of plist RECORDS"
   (loop
-     :for (public-key private-key) = (pbc:make-keying-integers)
+     :for (public-key private-key) = (pbc:make-keying-pairs)
      :for record :in records
      :collecting (append record
                          ;;; HACK adapt to gossip/config needs
