@@ -3,9 +3,6 @@
 (in-package :cosi/proofs)
 
 
-
-
-                                                                                ;
 (defclass eblock ()
   ((protocol-version
     :initform 1

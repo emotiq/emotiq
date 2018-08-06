@@ -964,10 +964,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 null))
   pkey1)
 
-(defmethod add-pkeys (pkey1 pkey2)
-  (%add-pkeys (pbc:public-key pkey2) (pbc:public-key pkey1)))
-
-(defmethod %add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
+(defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
   (change-class (pbc:add-pts pkey1 pkey2)
                 'pbc:public-key))
 
