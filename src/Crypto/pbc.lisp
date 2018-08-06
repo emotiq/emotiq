@@ -5,7 +5,7 @@
   (make-instance 'pbc:keying-triple
                  :pkey public-key
                  :skey secret-key
-                 :sig (or signature (pbc:sign-hash (hash:hash/256 public-key) skey))))
+                 :sig (or signature (pbc:sign-hash (hash:hash/256 public-key) secret-key))))
 
 (defun make-keying-pairs ()
   "Makes a public/private keypair seeded via UUID:MAKE-V1-UUID
