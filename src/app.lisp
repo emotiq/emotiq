@@ -58,14 +58,30 @@
   `(cosi-simgen:with-current-node cosi-simgen::*my-node*
      ,@body))
 
+;; from test/geness.lisp
+(defun verify-genesis-block (&key (root (emotiq/fs:etc/)))
+  (let* ((genesis-block
+          (emotiq/config:get-genesis-block
+           :root root))
+         (keypair
+          (emotiq/config:get-nth-key 0 :root root)))
+    (values
+     (cosi-simgen:with-block-list ((list genesis-block))
+       (cosi/proofs/newtx:get-balance (emotiq/txn:address keypair)))
+     root)))
+
 (defun test-app ()
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
     (emotiq:main)
     (setf gossip::*debug-level* nil)
     (app)
-    (dump-results strm)
-    (generate-pseudo-random-transactions)
+    (setq *node* cosi-simgen::*my-node*  ;; for debugging
+           *blocks* (cosi-simgen::block-list))
+    (values *blocks* *node*)
+    (verify-genesis-block)
+    #+nil(dump-results strm)
+    #+nil(generate-pseudo-random-transactions)
     #+nil(block-explorer)));; not tested
 
 (defun app ()
@@ -75,9 +91,12 @@
 
   (setf *genesis* (make-genesis-account))
 
-(let ((bal (get-balance *genesis*)))
-  (emotiq:note "balance for genesis is ~A" bal))
+(let ((bal (get-balance *genesis*))
+      (a (emotiq/txn:address (account-triple *genesis*))))
+  (emotiq:note "balance for genesis is ~A" bal)
+  (emotiq:note "address of genesis ~A" a))
 
+#+nill(let ()
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
 	*mary* (make-account "mary")
@@ -99,7 +118,7 @@
     (spend *bob* *mary* 290 :fee fee)
     ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
 
-    (sleep 120)))
+    (sleep 120))))
 
 
 ;; alice should have 999...999,190
