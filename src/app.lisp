@@ -76,7 +76,7 @@
   (let ((strm emotiq:*notestream*))
     (emotiq:main)
     (setf gossip::*debug-level* nil)
-    +nil(app)
+    (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
@@ -96,7 +96,7 @@
   (emotiq:note "balance for genesis is ~A" bal)
   (emotiq:note "address of genesis ~A" a))
 
-#+nill(let ()
+(let ()
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
 	*mary* (make-account "mary")
