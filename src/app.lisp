@@ -75,6 +75,9 @@
 
   (setf *genesis* (make-genesis-account))
 
+(let ((bal (get-balance *genesis*)))
+  (emotiq:note "balance for genesis is ~A" bal))
+
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
 	*mary* (make-account "mary")
