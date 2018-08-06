@@ -35,7 +35,19 @@ cat >$TMPFILE <<EOF
 EOF
 
 echo Starting node${node_id} ...
-tmux new-session -d -s node${node_id} "$BASE/run-in-repl.bash $TMPFILE"
+case $LISP in
+  ccl*)
+    tmux new-session -d -s node${node_id} "rlwrap ccl -l $TMPFILE"
+    ;;
+  lispworks*)
+    tmux new-session -d -s node${node_id} "rlwrap lwpro"
+    tmux send-keys -t node${node_id} "(load \"$TMPFILE\")" C-m
+    ;;
+  *)
+    echo "Unknown CommonLisp dialect: $LISP. Falling back to CCL"
+    tmux new-session -d -s node${node_id} "rlwrap ccl -l $TMPFILE"
+    ;;
+esac
 
 ${timeout_cli} ${start_timeout} sh -c 'until nc -z $0 $1 2> /dev/null; do echo "Sleeping 1 sec..."; sleep 1; done' localhost $((3139+${node_id}))
 
