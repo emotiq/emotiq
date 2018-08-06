@@ -6,6 +6,7 @@
   :author "Copyright (c) 2018 Emotiq AG"
   :license "MIT (see LICENSE.txt)"
   :depends-on (lisp-unit
+               core-crypto
                emotiq/wallet)
   :perform (test-op (o s)
                     (symbol-call :lisp-unit :run-tests

@@ -35,11 +35,15 @@ THE SOFTWARE.
 (defpackage :crypto/modular-arith
   (:use :common-lisp
    :cached-var)
+  (:nicknames :modmath)
   (:export
    :with-mod
+   :mod-base   
    :reset-blinders
+   :m=
    :m^
    :msqrt
+   :msqr
    :m+
    :m-
    :m*
@@ -99,10 +103,12 @@ THE SOFTWARE.
 
 (defpackage :hash
   (:use :common-lisp
-        :vec-repr)
+        :vec-repr
+        :cached-var)
   (:export
    :hash
    :hash-val
+   :hash-fn
    :hash-bytes
    :hash-length
    :hash/ripemd/160
@@ -110,10 +116,16 @@ THE SOFTWARE.
    :hash/256
    :hash/384
    :hash/512
+   :hash/var
+   :get-raw-hash-nbytes
+   :get-raw-hash-nbits
    :get-hash-nbytes
+   :get-hash-nbits
+   :hash-to-range
    :hashable
    :hash-check
    :hash=
+   :hash-function-of-hash
    ))
 
 (defpackage :ecc-crypto-b571
@@ -126,6 +138,7 @@ THE SOFTWARE.
    :basic-random
    :basic-random-between
    :random-between
+   :field-random
    
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
@@ -190,6 +203,7 @@ THE SOFTWARE.
   (:export
    :ed-curve
    :with-ed-curve
+   :set-ed-curve
    :ed-curves
    :*ed-gen*
    :*ed-r*
@@ -199,7 +213,7 @@ THE SOFTWARE.
    :*ed-nb*
    :*ed-nbits*
    :ecc-pt
-   :ed-proj-pt
+   :ecc-proj-pt
    :ed-affine
    :ed-pt=
    :ed-neutral-point
@@ -211,13 +225,17 @@ THE SOFTWARE.
    :ed-mul
    :ed-div
    :ed-nth-pt
+   :ed-nth-proj-pt
    :ed-compress-pt
    :ed-decompress-pt
    :ed-validate-point
    :ed-valid-point-p
    :ed-random-pair
    :ed-random-generator
-   :ed-from-hash
+   :hash-to-pt-range
+   :hash-to-grp-range
+   :ed-pt-from-hash
+   :ed-pt-from-seed
    
    :elligator-random-pt
    :elligator-tau-vector
@@ -234,8 +252,6 @@ THE SOFTWARE.
    :ed-schnorr-sig
    :ed-schnorr-sig-verify
    
-   :get-hash-bits
-   
    :ed-convert-int-to-lev
    :ed-convert-lev-to-int
    :compute-deterministic-skey
@@ -250,6 +266,10 @@ THE SOFTWARE.
    :elligator-ed-dsa-validate
 
    :make-ecc-pt
+
+   :ed-vrf
+   :ed-prove-vrf
+   :ed-check-vrf
    ))
 
 (defpackage :lagrange-4-square
@@ -273,9 +293,11 @@ THE SOFTWARE.
 
 (defpackage :core-crypto
   (:use :common-lisp
-   :crypto/modular-arith
+   :modmath
    :edwards-ecc
-   :cached-var)
+   :cached-var
+   :vec-repr
+   :hash)
   (:import-from :ecc-crypto-b571
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
@@ -284,11 +306,13 @@ THE SOFTWARE.
    :sha3/256-buffers
    :ctr-drbg
    :ctr-drbg-int
-   :random-between)
+   :random-between
+   :field-random)
   (:export
    ;; from crypto/modular-arith
    :with-mod
    :reset-blinders
+   :m=
    :m^
    :msqrt
    :m+
@@ -300,13 +324,45 @@ THE SOFTWARE.
    :mchi
    :quadratic-residue-p
    :m!
+   ;; from vec-repr
+   :bev
+   :lev
+   :base58
+   :base64
+   :hex
+   :int
+   :int=
+   :vec=
+   :bev-vec
+   :lev-vec
+   :hex-str
+   :base58-str
+   :base64-str
+   :bevn
+   :levn
+   ;; from hash
+   :hash
+   :hash/256
+   :hash/384
+   :hash/512
+   :hash-bytes
+   :hash-length
+   :hashable
+   :get-hash-nbytes
+   :hash=
+   :hash-check
+   :hash/ripemd/160
+   :hash/sha2/256
    ;; from edwards-ecc
    :with-ed-curve
+   :set-ed-curve
    :*edcurve*
    :*ed-r*
    :*ed-q*
    :*ed-gen*
    :ed-curve-name
+   :ed-neutral-point
+   :ed-neutral-point-p
    :ed-mul
    :ed-add
    :ed-sub
@@ -314,12 +370,18 @@ THE SOFTWARE.
    :ed-negate
    :ed-pt=
    :ed-affine
-   :random-between
    :ed-compress-pt
    :ed-decompress-pt
+   :ed-nth-proj-pt
    :ed-nth-pt
    :ed-random-pair
    :ed-from-hash
+   :ed-random-generator
+   :ed-validate-point
+   :ed-valid-point-p
+   :ed-nbytes
+   :ed-nbits
+   :get-hash-nbits
    
    :elli2-encode
    :elli2-decode
@@ -347,5 +409,20 @@ THE SOFTWARE.
    :ctr-drbg
    :ctr-drbg-int
    :random-between
+   :field-random
+
+   :add-to-startups
+   :add-to-shutdowns
+   :ensure-dlls-loaded
+   :startup
+   :shutdown
    ))
    
+(defpackage :crypto-lib-loader
+  (:use :cl)
+  (:export
+   :load-dlls
+   :unload-dlls
+   ))
+
+

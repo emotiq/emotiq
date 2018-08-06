@@ -206,29 +206,62 @@ THE SOFTWARE.
   (setf *dead-node-pkeys* (delete pkey *dead-node-pkeys*
                                   :test 'int=)))
 
+;; ------------------------------------------------------------------------------------
+
+(defgeneric rh-dispatcher (msg-sym &key &allow-other-keys))
+
+;; ------------------------------------------------------------------------------------
+
 (defun make-node-dispatcher (node)
-  (let ((beh  (make-actor
-               (lambda (&rest msg)
-                 (with-current-node node
-                   (apply 'node-dispatcher msg)))
-               )))
+  ;; We define two separate Actors for this node, plus one super Actor
+  ;; for quick dispatching of incoming messages. The dispatcher
+  ;; determines which sub-actor should handle the response. It also
+  ;; handles direct replies to ephemeral Actors, indicated by
+  ;; :ACTOR-CALLBACK.
+  ;;
+  ;; We use separate sub-Actors for Cosi blockchain-related messaging,
+  ;; and another for Randhound election processing. That allows for
+  ;; concurrent processing of both kinds of messages, where Randhound
+  ;; activities don't mess with blockchain info, and vice versa.
+  ;;
+  ;; NOTE: Separate Actors = separate SMP threads
+  ;;
+  (let ((cosi-beh  (make-actor
+                    ;; Cosi blockchain messages - handled with NODE-DISPATCHER
+                    (lambda (&rest msg)
+                      (with-current-node node
+                        (apply 'node-dispatcher msg)))
+                    ))
+        (rh-beh (make-actor
+                 ;; Randhound election messages - handled with RH-DISPATCHER
+                 (lambda (&rest msg)
+                   (with-current-node node
+                     (apply 'rh-dispatcher msg)))
+                 )))
     (make-actor
+     ;; Dispatching Actor, remains lightly loaded for fast handling
      (lambda (&rest msg)
        (unless (find (node-pkey node) *dead-node-pkeys*
                      :test 'int=)
-         ;;; Source of majority of messages on screen makes it fairly verbose
          (pr "Cosi MSG: Node ~A ~A"
              (short-id node)
              (mapcar 'short-id msg))
          (um:dcase msg
            (:actor-callback (aid &rest ans)
+            ;; Replies to ephemeral Actors are prefixed with :ACTOR-CALLBACK.
+            ;; Lookup Actor from AID and dispatch directly.
             (let ((actor (lookup-actor-for-aid aid)))
               (when actor
                 (apply 'send actor ans))
               ))
            
+           (:randhound (&rest msg)
+            ;; Randhound messages are prefixed with :RANDHOUND
+            (apply 'send rh-beh msg))
+           
            (t (&rest msg)
-              (apply 'send beh msg))
+              ;; All other messages dispatch to Cosi blockchain handlers
+              (apply 'send cosi-beh msg))
            ))))))
 
 ;; -------------------------------------------------------------------------------------
@@ -922,7 +955,7 @@ check that each TXIN and TXOUT is mathematically sound."
           (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
-  (hash= (block-merkle-root-hash blk) ;; check transaction hash against header
+  (int= (block-merkle-root-hash blk) ;; check transaction hash against header
          (compute-merkle-root-hash blk)))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
@@ -1004,7 +1037,7 @@ check that each TXIN and TXOUT is mathematically sound."
            (let ((prevblk (latest-block)))
              (or (null prevblk)
                  (and (> (block-timestamp blk) (block-timestamp prevblk))
-                      (hash= (block-prev-block-hash blk) (hash-block prevblk)))))
+                      (int= (block-prev-block-hash blk) (hash-block prevblk)))))
            (or (int= (node-pkey node) *leader*)
                (check-block-transactions blk)))
       ;; else - failure case

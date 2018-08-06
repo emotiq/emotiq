@@ -78,8 +78,7 @@
          :do (push txn-spec selected-txns)
          :do (cond ((= selected-amount amount) (exact))
                    ((> selected-amount amount) (surplus))))
-      (error "insufficient funds ~A" selected-txns))))
-
+      (error "insufficient funds in txns=~A for amount=~A" selected-txns amount))))
 
 
 ;; UTXOS: (list (TXO (TxID INDEX) AMT) ...)
