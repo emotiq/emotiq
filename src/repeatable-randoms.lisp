@@ -5,20 +5,27 @@
 ;;; Initialize random seed to a random value for the first time.
 ;;; Only do this once, to create a brand new random seed.
 
+(defparameter
+    *random-state-filename*
+  (make-pathname :name "random-state"
+                 :type (string-downcase (symbol-name (uiop:implementation-type)))))
+
 (defun init-random ()
   "after calling this, (RANDOM 100) will return the same sequence of pseudo-random numbers on each test run"
   ;; see test-random below
-  ;; see Rationale for [Funtion] make-random-state in https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node133.html
+  ;; see Rationale for [Function] make-random-state in https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node133.html
   (setf *random-state* (make-random-state t))
   ;;; Save initial seed
-  (unless (probe-file "~/random-state-ccl.lisp")
-    (with-open-file (s "~/random-state-ccl.lisp" :direction :output :if-exists
-                       :supersede)
-      (with-standard-io-syntax
-        (format s "~S" *random-state*))))
+  (let ((path (merge-pathnames *random-state-filename* (emotiq/fs:tmp/))))
+    (unless (probe-file path)
+      (with-open-file (s path
+                         :direction :output
+                         :if-exists :supersede)
+        (with-standard-io-syntax
+          (format s "~S" *random-state*))))
   ;;; Retrieve initial seed
-  (with-open-file (s "~/random-state-ccl.lisp" :direction :input)
-    (setf *random-state* (read s))))
+    (with-open-file (path :direction :input)
+      (setf *random-state* (read s)))))
   
 ;;; NOTE: Initial seed must be retrieved by same CL implementation it was
 ;;;  written with, and usually the same version thereof, or this won't work.

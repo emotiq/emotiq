@@ -129,6 +129,7 @@
                 :components ((:file "generate")))))
 
 (defsystem "emotiq/random"
+  :depends-on (emotiq/filesystem)
   :components ((:module source
                 :pathname "./"
                 :components ((:file "repeatable-randoms")))))
