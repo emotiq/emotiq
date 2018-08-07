@@ -28,7 +28,7 @@
             (t (error "Invalid or unspecified public keys ~S" pubkeys)))
       ;; check to see that all pubkeys have a match in *keypair-db-path*
       (every (lambda (local-pubkey)
-               (unless (member local-pubkey keypairs :test 'eql :key 'car)
+               (unless (member local-pubkey keypairs :test 'vec-repr:int= :key 'car)
                  (error "Pubkey ~S is not present in keypairs database" local-pubkey))
                t)
              pubkeys)
