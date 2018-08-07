@@ -1738,7 +1738,7 @@ of type TYPE."
    genesis, and directs that it be sent to an address of their
    choosing."
   (loop for tx-in in (transaction-inputs transaction)
-        as id = (tx-in-id tx-in)
+        as id = (tx-in-id tx-in) ;; this is really a hash of the transaction containing the UTXO (DBM 8/18)
         as index = (tx-in-index tx-in)
         as input-tx = (find-transaction-per-id id t)
         as input-tx-outputs 
