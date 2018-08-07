@@ -24,7 +24,7 @@
         (with-standard-io-syntax
           (format s "~S" *random-state*))))
   ;;; Retrieve initial seed
-    (with-open-file (path :direction :input)
+    (with-open-file (s path :direction :input)
       (setf *random-state* (read s)))))
   
 ;;; NOTE: Initial seed must be retrieved by same CL implementation it was
