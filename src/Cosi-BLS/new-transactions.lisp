@@ -1049,7 +1049,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    transaction ID's, which are represented as instances of class BEV (a class to
    represent a big-endian vector of (unsigned-byte 8) elements), which in turn
    represents a sha-3/256 hash result."
-  (equalp tx-id-1 tx-id-2))
+  (pbc= tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
   "Do blocks of the blockchain in reverse chronological order. Iterate over the
@@ -1225,7 +1225,7 @@ returns the block the transaction was found in as a second value."
   vector, i.e., such that it has the property that it may be compared
   using equalp.  Specifically it's the big-endian byte vector
   representing the hash that is the transaction ID of TRANSACTION."
-  (transaction-id transaction))
+  (bev-vec (transaction-id transaction)))
 
 
 
