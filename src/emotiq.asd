@@ -59,7 +59,6 @@
   :depends-on (emotiq/logging
                ironclad
                quri
-               emotiq/txn
                lisp-object-encoder
                core-crypto
                crypto-pairings)
@@ -164,7 +163,7 @@
 (defsystem "emotiq/app"
   :depends-on (gossip
                emotiq
-               emotiq/txn
+               emotiq/blockchain
                emotiq/startup
                cosi-bls)
   :components ((:module source

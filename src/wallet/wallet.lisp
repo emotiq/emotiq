@@ -74,8 +74,7 @@ The default name for a wallet is *DEFAULT-WALLET-NAME*."
                     (first (last (pathname-directory directory)))))))
 
 (defun primary-address (wallet)
-  (emotiq/txn:address
-   (keying-triple wallet)))
+  (address (keying-triple wallet)))
 
 (defun key-phrase (wallet)
   (convert-int-to-wordlist
