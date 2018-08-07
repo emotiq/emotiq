@@ -19,12 +19,16 @@
   (gossip:gossip-init ':uninit)
   )
 
+(defvar *uids* (loop for i from 1 to 10 collect
+                      (vec-repr:bev i)))
+
 (defun %aliveness (uid)
   "Runs test sending initial message to node with given uid"
   (assert-eql 10 (unwrap (solicit-wait uid :count-alive)))
   (assert-true
-   (unordered-equal '(1 2 3 4 5 6 7 8 9 10)
-                    (unwrap (solicit-wait uid :list-alive)))))
+   (unordered-equal *uids*
+                    (unwrap (solicit-wait uid :list-alive))
+                    :test 'uid=)))
 
 (defun %key-value (uid)
   (gossip:archive-log)
@@ -227,7 +231,7 @@
   "Interesting graph of 10 nodes."
   (make-node ':gossip
    :temporary-p t
-   :UID 9
+   :UID (vec-repr:bev 9)
    :neighborhood '(2 4)
    :local-kvs (as-hash-table
                'EQUAL
@@ -235,7 +239,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 4
+   :UID (vec-repr:bev 4)
    :neighborhood '(8 3 5 9)
    :local-kvs (as-hash-table
                'EQUAL
@@ -243,7 +247,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 5
+   :UID (vec-repr:bev 5)
    :neighborhood '(6 8 4)
    :local-kvs (as-hash-table
                'EQUAL
@@ -251,7 +255,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 8
+   :UID (vec-repr:bev 8)
    :neighborhood '(4 3 5)
    :local-kvs (as-hash-table
                'EQUAL
@@ -259,7 +263,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 3
+   :UID (vec-repr:bev 3)
    :neighborhood '(4 1 8)
    :local-kvs (as-hash-table
                'EQUAL
@@ -267,7 +271,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 1
+   :UID (vec-repr:bev 1)
    :neighborhood '(2 6 3)
    :local-kvs (as-hash-table
                'EQUAL
@@ -275,7 +279,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 6
+   :UID (vec-repr:bev 6)
    :neighborhood '(5 2 1)
    :local-kvs (as-hash-table
                'EQUAL
@@ -283,7 +287,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 2
+   :UID (vec-repr:bev 2)
    :neighborhood '(9 1 7 6)
    :local-kvs (as-hash-table
                'EQUAL
@@ -291,7 +295,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 7
+   :UID (vec-repr:bev 7)
    :neighborhood '(10 2)
    :local-kvs (as-hash-table
                'EQUAL
@@ -299,7 +303,7 @@
    )
   (make-node ':gossip
    :temporary-p t
-   :UID 10
+   :UID (vec-repr:bev 10)
    :neighborhood '(7)
    :local-kvs (as-hash-table
                'EQUAL

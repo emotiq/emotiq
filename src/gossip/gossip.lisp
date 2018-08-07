@@ -20,7 +20,7 @@
 (defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs
         that are not expected to be globally-unique.")
-(defparameter *max-message-age* 30e6 "Messages older than this number of microseconds will be ignored")
+(defparameter *max-message-age* (truncate 30e6) "Messages older than this number of microseconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max seconds to wait for direct replies")
 ;(defparameter *direct-reply-max-seconds-to-wait* 100 "Max seconds to wait for direct replies")
@@ -690,7 +690,7 @@ are in place between nodes.
       (let ((node (apply 'make-instance 'gossip-node args)))
         (when neighborhood
           (mapcar (lambda (uid)
-                    (pushnew uid (neighborhood node)))
+                    (pushnew (vec-repr:bev uid) (neighborhood node)))
                   neighborhood))
         node))))
 
@@ -1115,8 +1115,10 @@ dropped on the floor.
   Kindsym is the name of the gossip method that should be called to handle this message.
   Doesn't change anything in message or node."
   (declare (ignore srcuid)) ; not using this for acceptance criteria in the general method
-  (let ((soluid (uid msg)))
-    (cond ((> (usec::get-universal-time-usec) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
+  (let ((soluid (uid msg))
+        (current-time (usec::get-universal-time-usec)))
+    (cond ((> current-time (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
+           (break)
            (values nil :too-old))
           (t
            (let ((already-seen? (kvs:lookup-key (message-cache thisnode) (vec-repr:bev-vec soluid))))
