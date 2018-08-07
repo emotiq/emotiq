@@ -999,7 +999,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; of the hash of the transaction.
 
 (defvar *initial-coinbase-tx-in-id-value*
-  "0000000000000000000000000000000000000000000000000000000000000000")
+  (make-instance 'hash:hash
+                 :val (bev (hex "0000000000000000000000000000000000000000000000000000000000000000"))))
 
 (defvar *initial-coinbase-tx-in-index-value*
   -1)
@@ -1480,7 +1481,7 @@ of type TYPE."
 (defun txid-string (transaction-id)
   "Return a string representation of TRANSACTION-ID, a byte vector,
    for display. The result is a lowercase hex string."
-  (nstring-downcase (format nil (hex-str transaction-id))))
+  (nstring-downcase (format nil (short-str (hex-str transaction-id)))))
   
 
 

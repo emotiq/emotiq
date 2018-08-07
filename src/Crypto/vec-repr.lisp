@@ -148,14 +148,14 @@ THE SOFTWARE.
 
 (defmethod print-object ((obj ub8v) out-stream)
   (if *print-readably*
-      (progn
+      (with-standard-io-syntax
         (princ "#." out-stream)
         (prin1 `(,(class-name (class-of obj)) (hex ,(hex-str (hex obj))))
                out-stream))
     ;; else
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (ub8v-vec obj))))
+    (print-unreadable-object (obj out-stream :type t)
+      (princ (short-str (ub8v-vec obj)) out-stream))
+    ))
 
 (defmethod print-object ((obj ub8v-repr) out-stream)
   ;; subclasses of UB8V-REPR mixin should feel free to override this
@@ -164,9 +164,9 @@ THE SOFTWARE.
               (class-name (class-of obj))
               (ub8v-repr obj))
     ;; else
-    (format out-stream "#<~A ~A >"
-            (class-name (class-of obj))
-            (ub8v-repr obj))))
+    (print-unreadable-object (obj out-stream :type t)
+      (princ (short-str (ub8v-repr obj)) out-stream))
+    ))
 
 (defun short-str (str)
   (let ((len (length str)))
@@ -376,6 +376,11 @@ THE SOFTWARE.
 ;;
 ;; For now, if this departs from Bitcoin standards, too bad.
 ;; ------------------------------------------------------------------
+
+(defun validate-base58-string (str)
+  (every (lambda (c)
+           (plusp (aref +alphabet-58+ (char-code c))))
+         str))
 
 (defun convert-int-to-base58-string (val vec)
   ;; vec is byte vector from which val was computed

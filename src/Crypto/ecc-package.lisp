@@ -99,6 +99,7 @@ THE SOFTWARE.
    :vec=
    :sbs
    :short-str
+   :validate-base58-string
    ))
 
 (defpackage :hash
@@ -427,9 +428,13 @@ THE SOFTWARE.
    :make-keying-pairs
 
    ;; for safe-reader
+   :address
+   :addr
+   :addr-str
    :make-pkey
    :make-skey
    :make-sig
+   :make-addr
    :read-safely
    ))
 
@@ -441,7 +446,11 @@ THE SOFTWARE.
    :vec-repr
    :hash)
   (:import-from :pbc
-   :read-safely)
+   :read-safely
+   :address
+   :addr
+   :addr-str
+   )
   (:import-from :ecc-crypto-b571
    :convert-int-to-nbytes
    :convert-int-to-nbytesv
@@ -561,6 +570,9 @@ THE SOFTWARE.
    :startup
    :shutdown
    :read-safely
+   :address
+   :addr
+   :addr-str
    ))
    
 (defpackage :crypto-lib-loader
