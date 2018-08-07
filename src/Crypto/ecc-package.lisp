@@ -571,17 +571,4 @@ THE SOFTWARE.
    ))
 
 
-(defpackage :crypto-safe-reader-package
-  (:import-from :pbc
-   :make-pkey
-   :make-skey
-   :make-sig)
-  (:import-from :cl
-   :list)
-  (:export
-   :list
-   :make-pkey
-   :make-skey
-   :make-sig
-   ))
    
