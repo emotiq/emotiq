@@ -100,7 +100,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defmethod transaction-id ((tx transaction))
   "Get hash of TX, a transaction, which also uniquely* identifies it,
    as hash:hash/256 instance."
-  (bev-vec (hash-transaction-id tx)))
+  (hash-transaction-id tx))
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
@@ -112,9 +112,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    hash:hash/256 instance."
   (ecase (transaction-type tx)
     ((:spend :spend-cloaked)
-     (bev-vec (hash-transaction-witness-id tx)))
+     (hash-transaction-witness-id tx))
     ((:collect :coinbase)
-     (bev-vec (transaction-hash '())))))
+     (transaction-hash '()))))
 
 ;; Note: there is no witness data in the case of
 ;; :collect/:coinbase. Consider later as an optimization making the
@@ -128,9 +128,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    hash:hash/256 instance."
   (ecase (transaction-type tx)
     ((:spend :spend-cloaked)
-     (bev-vec (hash-transaction-input-scripts-id tx)))
+     (hash-transaction-input-scripts-id tx))
     ((:collect :coinbase)
-     (bev-vec (transaction-hash '())))))
+     (transaction-hash '()))))
 
 ;; Same thing as above goes for input scripts.
     
