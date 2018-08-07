@@ -78,7 +78,7 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
         <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
                      (vec-repr:int (uid node))
                      (uid node)
-                     (uid node)
+                     (vec-repr:int (uid node))
                      (real-address node)
                      (real-port node)
                      (real-uid node)))
@@ -91,14 +91,14 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
 (defmethod dump-node ((node gossip-node) stream edgetable graphID)
   (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\~A\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
           (vec-repr:int (uid node))
-          (uid node)
+          (vec-repr:int (uid node))
           (uid node))
   (dolist (neighbor (neighborhood node graphID))
     (let* ((minuid (min (vec-repr:int neighbor) (vec-repr:int (uid node))))
            (maxuid (max (vec-repr:int neighbor) (vec-repr:int (uid node))))
            (key (cons minuid maxuid)))
       (unless (gethash key edgetable) ; don't dump links twice
-        (format stream "~%  \"~A\" -- \"~A\";" (vec-repr:int (uid node)) neighbor)
+        (format stream "~%  \"~A\" -- \"~A\";" (vec-repr:int (uid node)) (vec-repr:int neighbor))
         (setf (gethash key edgetable) t)))))
 
 (defun write-inner-commands (stream nodelist graphID)
