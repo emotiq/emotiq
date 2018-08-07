@@ -36,7 +36,7 @@ THE SOFTWARE.
 
 (defun witness-p (pkey)
   (find pkey (get-witness-list)
-        :test 'int=))
+        :test 'pbc=))
 
 ;; ---------------------------------------------------------------------------------------
 ;; Stake-weighted elections
@@ -186,7 +186,7 @@ based on their relative stake"
 (defun validate-election-message (n beacon sig)
   (and (or (and (null *beacon*)      ;; it would be nil at startup
                 (witness-p beacon))  ;;   from someone we know?
-           (int= beacon *beacon*))   ;; or from the beacon we know?
+           (pbc= beacon *beacon*))   ;; or from the beacon we know?
        (let ((skel (make-election-message-skeleton beacon n)))
          (pbc:check-hash (hash/256 skel) sig beacon)))) ;; not a forgery
 
@@ -212,7 +212,7 @@ based on their relative stake"
 (defun stake-for (pkey)
   (let ((pair (find pkey (emotiq/config:get-stakes)
                     :key  'first
-                    :test 'int=)))
+                    :test 'pbc=)))
     (and pair
          (cadr pair))))
 
@@ -234,7 +234,7 @@ based on their relative stake"
       (let* ((winner     (hold-election n))
              (new-beacon (hold-election n (remove winner (emotiq/config:get-stakes)
                                                   :key 'first
-                                                  :test 'int=))))
+                                                  :test 'pbc=))))
 
         (setf *leader*           winner
               *beacon*           new-beacon
@@ -243,18 +243,18 @@ based on their relative stake"
         
         (pr "~A got :hold-an-election ~A" (short-id node) n)
         (pr "election results ~A (stake = ~A)"
-                     (if (int= me winner) " *ME* " " not me ")
+                     (if (pbc= me winner) " *ME* " " not me ")
                      (stake-for winner))
         (pr "winner ~A me=~A"
                      (short-id winner)
                      (short-id me))
 
-        (when (int= me new-beacon)
+        (when (pbc= me new-beacon)
           ;; launch a beacon
           (node-schedule-after *mvp-election-period*
             (send-hold-election)))
 
-        (cond ((int= me winner)
+        (cond ((pbc= me winner)
                ;; why not use ac:self-call?  A: Because doing it with
                ;; send, instead, allows queued up messages to be
                ;; handled first. Might be some transactions waiting to
@@ -322,7 +322,7 @@ based on their relative stake"
   (and (= epoch *local-epoch*)        ;; talking about current epoch? not late arrival?
        (witness-p pkey)               ;; from someone we know?
        (not (find pkey *election-calls*  ;; not a repeat call
-                  :test 'int=))
+                  :test 'pbc=))
        (let ((skel (make-call-for-election-message-skeleton pkey epoch)))
          (pbc:check-hash (hash/256 skel) sig pkey))  ;; not a forgery
        (push pkey *election-calls*)))
@@ -331,7 +331,7 @@ based on their relative stake"
   (pr "Node ~A Calling for New Election" (short-id (current-node)))
   (with-accessors ((pkey  node-pkey)) (current-node)
     (unless (find pkey *election-calls* ;; prevent repeated calls
-                  :test 'int=)
+                  :test 'pbc=)
       (push pkey *election-calls*) ;; need this or we'll fail with only 3 nodes...
       (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch*)
                         :graphID :UBER))))

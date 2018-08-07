@@ -87,7 +87,7 @@ THE SOFTWARE.
                      :graphID :uber))
 
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
-  (if (int= pkey (node-pkey *my-node*))
+  (if (pbc= pkey (node-pkey *my-node*))
       (apply 'ac:send (node-self *my-node*) msg)
     (gossip-send pkey nil msg)))
         
