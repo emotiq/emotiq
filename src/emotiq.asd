@@ -60,8 +60,7 @@
                ironclad
                quri
                lisp-object-encoder
-               core-crypto
-               crypto-pairings)
+               core-crypto)
   :in-order-to ((test-op (test-op "wallet-test")))
   :components ((:module source
                 :pathname "wallet/"
