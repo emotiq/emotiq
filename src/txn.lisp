@@ -13,7 +13,7 @@
 
 (defmethod get-utxos ((account pbc:keying-triple))
   (get-utxos (address account)))
-(defmethod get-utxos ((address string))
+(defmethod get-utxos ((address pbc:address))
   (cosi-simgen:with-current-node cosi-simgen:*my-node*
     (cosi/proofs/newtx:get-utxos-per-account address)))
          

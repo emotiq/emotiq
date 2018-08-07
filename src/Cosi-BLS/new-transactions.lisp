@@ -751,22 +751,22 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
      (pr "Arg public-key (~s) is not of correct type: ~s"
              public-key 'pbc:public-key)
      (fail-script-op))
-    ((not (stringp public-key-hash))
-     (pr "Public-key-hash ~s not a string but string expected"
+    ((not (typep public-key-hash 'address))
+     (pr "Public-key-hash ~s not an ADDRESS but ADDRESS expected"
              public-key-hash)
      (fail-script-op))
     (t
      (let* ((public-key-hash-from-public-key
               (cosi/proofs:public-key-to-address public-key))
-            (l1 (length public-key-hash))
-            (l2 (length public-key-hash-from-public-key)))
+            (l1 (length (addr-str public-key-hash)))
+            (l2 (length (addr-str public-key-hash-from-public-key))))
        (cond
-         ((not (stringp public-key-hash-from-public-key))
-          (pr "Public-key hash ~s derived from public-key ~s not a string but string expected"
+         ((not (typep public-key-hash-from-public-key 'address))
+          (pr "Public-key hash ~s derived from public-key ~s not an ADDRESS but ADDRESS expected"
                   public-key-hash-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
-          (pr "Public key hash ~s length ~s not same as public key ~s hash ~s length ~s"
+          (pr "Public key ADDRESS ~s length ~s not same as public key ~s ADDRESS ~s length ~s"
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
@@ -854,7 +854,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       (loop for tx-out in transaction-outputs
             as public-key-hash-string
               = (abbrev-hash-string
-                 (tx-out-public-key-hash tx-out) :style ':address)
+                 (addr-str (tx-out-public-key-hash tx-out)) :style ':address)
             as amt = (tx-out-amount tx-out)
             as first-time = t then nil
             when (not first-time)
@@ -1481,7 +1481,7 @@ of type TYPE."
 (defun txid-string (transaction-id)
   "Return a string representation of TRANSACTION-ID, a byte vector,
    for display. The result is a lowercase hex string."
-  (nstring-downcase (format nil (short-str (hex-str transaction-id)))))
+  (nstring-downcase (format nil (short-str (addr-str transaction-id)))))
   
 
 
