@@ -77,7 +77,8 @@ THE SOFTWARE.
    (blockchain     :accessor node-blockchain
                    :initform nil)
    (blockchain-tbl :accessor node-blockchain-tbl
-                   :initform (make-hash-table))
+                   :initform (make-hash-table
+                              :test 'equalp))
    (mempool        :accessor  node-mempool
                    :initform  (make-hash-table
                                :test 'equalp))
@@ -149,9 +150,9 @@ THE SOFTWARE.
 
 (defun add-to-blockchain (node blk)
   (with-current-node node
-    (let ((hashID (int (hash-block blk))))
+    (let ((hashID (hash-block blk)))
       (setf *blockchain* hashID
-            (gethash hashID *blockchain-tbl*) blk))))
+            (gethash (bev-vec hashID) *blockchain-tbl*) blk))))
 
 ;; -------------------------------------------------------
 
@@ -213,14 +214,14 @@ THE SOFTWARE.
 
 (defun latest-block ()
   (and *blockchain*
-       (gethash *blockchain* *blockchain-tbl*)))
+       (gethash (bev-vec *blockchain*) *blockchain-tbl*)))
 
 (defun block-list (&optional (from *blockchain*))
   (um:accum acc
     (um:nlet-tail iter ((id from))
       (when id
         ;; terminate on null reference (from genesis block)
-          (um:if-let (blk (gethash (int id) *blockchain-tbl*))
+          (um:if-let (blk (gethash (bev-vec id) *blockchain-tbl*))
             (progn
               ;; or terminate when missing the block
               (acc blk)
@@ -282,7 +283,7 @@ Or just insert a check on every call to (BLOCK-LIST).
 
 (maphash 
        (lambda (k v) 
-             (assert (int= k (hash-block v))))
+             (assert (pbc= k (hash-block v))))
        *blockchain-tbl*)
 
 |#

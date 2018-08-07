@@ -295,6 +295,8 @@
    :set-executive-pool
    :with-borrowed-mailbox
    :pr)
+  (:import-from :pbc
+   :pbc=)
   (:export
    :*current-node*
    :current-node
