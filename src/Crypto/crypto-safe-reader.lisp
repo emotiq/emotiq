@@ -29,7 +29,8 @@
     (call-next-method)))
 
 (defun read-safely (in-stream)
-  (let ((*read-eval* nil))
+  (let ((*read-eval* nil)
+        (*package*   (find-package :pbc)))
     (labels ((eval-it (inp)
                (cond ((atom inp) inp)
                      
