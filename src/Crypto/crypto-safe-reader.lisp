@@ -34,11 +34,6 @@
     (labels ((eval-it (inp)
                (cond ((atom inp) inp)
                      
-                     ((eql (car inp) 'list)
-                      ;; allow list input with prefix 'LIST
-                      ;; (this no longer mandatory)
-                      (mapcar #'eval-it (cdr inp)))
-
                      ((and (member (car inp) '(make-pkey make-skey make-sig))
                            (stringp (cadr inp))
                            (every (um:rcurry 'digit-char-p 16) (cadr inp))
