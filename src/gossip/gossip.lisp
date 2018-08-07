@@ -20,7 +20,7 @@
 (defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs
         that are not expected to be globally-unique.")
-(defparameter *max-message-age* (truncate 30e6) "Messages older than this number of microseconds will be ignored")
+(defparameter *max-message-age* (truncate 300e6) "Messages older than this number of microseconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max seconds to wait for direct replies")
 ;(defparameter *direct-reply-max-seconds-to-wait* 100 "Max seconds to wait for direct replies")
@@ -360,7 +360,9 @@ are in place between nodes.
   (typep thing 'vec-repr:bev))
 
 (defun uid= (thing1 thing2)
-  (vec-repr:vec= thing1 thing2))
+  (handler-case (vec-repr:vec= thing1 thing2)
+    ; Because sometimes these things are symbols if they name actors
+    (error () (equalp thing1 thing2))))
 
 (defclass uid-mixin ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
@@ -572,9 +574,9 @@ are in place between nodes.
    (neighbors :initarg :neighbors :initform (kvs:make-store ':hashtable :test 'equal) :accessor neighbors
               :documentation "Table of lists of UIDs of direct neighbors of this node. This is the mechanism that establishes
               the connectivity of the node graph. Table is indexed by graphID.")
-   (timers :initarg :timers :initform nil :accessor timers
+   (timers :initarg :timers :initform (kvs:make-store ':hashtable :test 'equalp) :accessor timers
            :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
-   (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
+   (timeout-handlers :initarg :timeout-handlers :initform (kvs:make-store ':hashtable :test 'equalp) :accessor timeout-handlers
                      :documentation "Table of functions of 1 arg: timed-out-p that should be
            called to clean up after waiting operations are done. Keyed on solicitation id.
            Timed-out-p is true if a timeout happened. If nil, it means operations completed without
@@ -675,7 +677,7 @@ are in place between nodes.
     :node node
     :fn 
     (lambda (&rest msg)
-      (edebug 5 "Gossip Actor" (ac::current-actor) "received" msg)
+      (edebug 6 "Gossip Actor" (ac::current-actor) "received" msg)
       (apply 'gossip-dispatcher node msg))))
 
 (defun memoize-node (node)
@@ -1090,7 +1092,11 @@ dropped on the floor.
          (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can actor-send to
                         (actor destnode)
                         destuid)))
-    (edebug 5 "send-msg" msg destnode srcuid)
+    #+IGNORE
+    (when (and (uid= (vec-repr:bev 8) srcuid)
+               (uid= (vec-repr:bev 5) destuid))
+      (break "backflow"))
+    (edebug 5 "send-msg" msg srcuid "to" destuid)
     (uiop:if-let (error (actor-send destactor
                                     :gossip ; actor-verb
                                     srcuid  ; first arg of actor-msg
@@ -1118,7 +1124,6 @@ dropped on the floor.
   (let ((soluid (uid msg))
         (current-time (usec::get-universal-time-usec)))
     (cond ((> current-time (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
-           (break)
            (values nil :too-old))
           (t
            (let ((already-seen? (kvs:lookup-key (message-cache thisnode) (vec-repr:bev-vec soluid))))
@@ -1213,7 +1218,7 @@ dropped on the floor.
              nil)))))
 
 (defmethod get-downstream ((node gossip-node) srcuid howmany &optional (graphID +default-graphid+))
-  (let ((all-neighbors (remove srcuid (neighborhood node graphID))))
+  (let ((all-neighbors (remove srcuid (neighborhood node graphID) :test 'uid=)))
     (use-some-neighbors all-neighbors howmany)))
 
 (defun send-active-ignore (to from kind soluid failure-reason)
@@ -2190,6 +2195,7 @@ gets sent back, and everything will be copacetic.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
+  (gossip-init ':maybe)
   (when archive-log (archive-log))
   (sleep .5)
   (start-gossip-transport usocket:*wildcard-host*
