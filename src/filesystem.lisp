@@ -47,7 +47,7 @@
 
 (defun tmp/ ()
   "Writable filesystem for temporary output"
-  (let ((d "#p/var/tmp/emotiq/"))
+  (let ((d (merge-pathnames "tmp/" (emotiq/user/root/))))
     (ensure-directories-exist d)
     d))
 
