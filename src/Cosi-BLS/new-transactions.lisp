@@ -1383,7 +1383,7 @@ of type TYPE."
 
 (defun account-addresses= (address-1 address-2)
   (declare (type string address-1 address-2))
-  (string= address-1 address-2))
+  (string= (pbc:addr-str address-1) (pbc:addr-str address-2)))
 
 
 
