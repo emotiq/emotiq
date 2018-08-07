@@ -1229,11 +1229,11 @@ Certification includes a BLS Signature on the public key."
 (defmethod pbc= ((a crypto-val) (b crypto-val))
   (vec= a b))
 
-(defmethod pbc= (a b)
-  (int= a b))
-
 (defmethod pbc= ((a hash) (b hash))
   (hash= a b))
+
+(defmethod pbc= (a b)
+  (int= a b))
 
 ;; -------------------------------
 
