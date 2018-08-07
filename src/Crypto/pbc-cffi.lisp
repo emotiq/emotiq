@@ -997,6 +997,10 @@ library."
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
 
+(defmethod sign-hash (msg (skey secret-key))
+  (sign-hash (hash/256 msg) skey))
+
+
 (defmethod check-hash ((hash hash:hash) (sig signature) (pkey public-key))
   "Check bare-bones BLS Signature"
   (let ((nhash (hash-length hash)))
@@ -1005,6 +1009,9 @@ library."
                        (pbuf *g2-size*  pkey))
       (zerop (_check-signature *context* sbuf hbuf nhash pbuf))
       )))
+
+(defmethod check-hash (msg (sig signature) (pkey public-key))
+  (check-hash (hash/256 msg) sig pkey))
 
 ;; --------------------------------------------------------------
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
