@@ -176,10 +176,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    ;; for cloaked spend transaction: proof, message
    (tx-out-proof
     :reader tx-out-proof
-    :initarg :tx-out-proof)
+    :initarg :tx-out-proof
+    :initform nil)
    (tx-out-message
     :reader tx-out-message
-    :initarg :tx-out-message)))
+    :initarg :tx-out-message
+    :initform nil)))
 
 (defclass transaction-input ()
   ((tx-in-id :reader tx-in-id :initarg :tx-in-id)
