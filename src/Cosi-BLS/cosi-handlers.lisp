@@ -758,24 +758,19 @@ check that each TXIN and TXOUT is mathematically sound."
   x)
 
 (defmethod short-id ((x integer))
-  (let* ((str (hex-str x))
-         (len (length str)))
-    (if (> len 14)
-        (concatenate 'string (subseq str 0 7)
-                     ".."
-                     (subseq str (- len 7)))
-      str)))
+  (short-str (hex-str x)))
 
 (defmethod short-id ((node node))
-  (short-id (node-pkey node)))
+  (short-str (node-id-str node)))
 
 ;; -----------------------------------------------------------------------
 
 (defun node-id-str (node)
-  (short-id node))
+  (hex-str (node-pkey node)))
 
 (defmethod print-object ((node node) out-stream)
-  (format out-stream "#<NODE ~A>" (short-id node)))
+  (print-unreadable-object (node out-stream :type t)
+    (princ (short-id node) out-stream)))
 
 ;; ------------------------------
 
