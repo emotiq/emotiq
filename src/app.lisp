@@ -82,7 +82,7 @@
     (verify-genesis-block)
     (dump-results strm)
 
-    #+nil(generate-pseudo-random-transactions)
+    (generate-pseudo-random-transactions)
     #+nil(block-explorer)));; not tested
 
 (defun app ()
@@ -463,9 +463,9 @@
     
     (sleep sleep-amount)
     (emotiq:note "sending to randomizer")
-    (actors:send randomizer :tick node)
+    ;(actors:send randomizer :tick node)
     (emotiq:note "sending to self/forever-ticker")
-    (actors:send self :again self randomizer sleep-amount node)))
+    ;(actors:send self :again self randomizer sleep-amount node)))
 
 (defun get-fire-p (n)
   "return T if RANDOM(1/n) is 25% of n or less"
@@ -553,6 +553,11 @@
           (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
                     (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
             (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
+              (emotiq:note "comparing ~a account-address ~a to transaction-output ~a -> ~a"
+                           (account-name)
+                           account-address
+                           (cosi/proofs/newtx::tx-out-public-key-hash out)
+                           (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out)))
               (when (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
                 (push tx result)))))))
     result))
