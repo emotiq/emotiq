@@ -558,7 +558,7 @@
                            (account-name a)
                            account-address
                            (cosi/proofs/newtx::tx-out-public-key-hash out)
-                           (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out)))
-              (when (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
+                           (eq (cosi/proofs/newtx:account-address= account-address (cosi/proofs/newtx::tx-out-public-key-hash out))))
+              (when (eq (cosi/proofs/newtx:account-address= account-address (cosi/proofs/newtx::tx-out-public-key-hash out)))
                 (push tx result)))))))
     result))
