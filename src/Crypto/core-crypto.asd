@@ -42,6 +42,7 @@ THE SOFTWARE.
                 (:file "edwards")
                 (:file "lagrange-4-square")
                 (:file "pbc-cffi")
+                (:file "crypto-safe-reader")
                 (:file "pbc")
                 (:file "subkey-derivation")
                 (:file "proofs")

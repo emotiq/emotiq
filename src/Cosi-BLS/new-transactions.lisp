@@ -100,7 +100,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defmethod transaction-id ((tx transaction))
   "Get hash of TX, a transaction, which also uniquely* identifies it,
    as hash:hash/256 instance."
-  (bev-vec (hash-transaction-id tx)))
+  (hash-transaction-id tx))
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
@@ -112,9 +112,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    hash:hash/256 instance."
   (ecase (transaction-type tx)
     ((:spend :spend-cloaked)
-     (bev-vec (hash-transaction-witness-id tx)))
+     (hash-transaction-witness-id tx))
     ((:collect :coinbase)
-     (bev-vec (transaction-hash '())))))
+     (transaction-hash '()))))
 
 ;; Note: there is no witness data in the case of
 ;; :collect/:coinbase. Consider later as an optimization making the
@@ -128,9 +128,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    hash:hash/256 instance."
   (ecase (transaction-type tx)
     ((:spend :spend-cloaked)
-     (bev-vec (hash-transaction-input-scripts-id tx)))
+     (hash-transaction-input-scripts-id tx))
     ((:collect :coinbase)
-     (bev-vec (transaction-hash '())))))
+     (transaction-hash '()))))
 
 ;; Same thing as above goes for input scripts.
     
@@ -176,10 +176,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    ;; for cloaked spend transaction: proof, message
    (tx-out-proof
     :reader tx-out-proof
-    :initarg :tx-out-proof)
+    :initarg :tx-out-proof
+    :initform nil)
    (tx-out-message
     :reader tx-out-message
-    :initarg :tx-out-message)))
+    :initarg :tx-out-message
+    :initform nil)))
 
 (defclass transaction-input ()
   ((tx-in-id :reader tx-in-id :initarg :tx-in-id)
@@ -751,22 +753,22 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
      (pr "Arg public-key (~s) is not of correct type: ~s"
              public-key 'pbc:public-key)
      (fail-script-op))
-    ((not (stringp public-key-hash))
-     (pr "Public-key-hash ~s not a string but string expected"
+    ((not (typep public-key-hash 'address))
+     (pr "Public-key-hash ~s not an ADDRESS but ADDRESS expected"
              public-key-hash)
      (fail-script-op))
     (t
      (let* ((public-key-hash-from-public-key
               (cosi/proofs:public-key-to-address public-key))
-            (l1 (length public-key-hash))
-            (l2 (length public-key-hash-from-public-key)))
+            (l1 (length (addr-str public-key-hash)))
+            (l2 (length (addr-str public-key-hash-from-public-key))))
        (cond
-         ((not (stringp public-key-hash-from-public-key))
-          (pr "Public-key hash ~s derived from public-key ~s not a string but string expected"
+         ((not (typep public-key-hash-from-public-key 'address))
+          (pr "Public-key hash ~s derived from public-key ~s not an ADDRESS but ADDRESS expected"
                   public-key-hash-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
-          (pr "Public key hash ~s length ~s not same as public key ~s hash ~s length ~s"
+          (pr "Public key ADDRESS ~s length ~s not same as public key ~s ADDRESS ~s length ~s"
                   public-key-hash l2
                   public-key public-key-hash-from-public-key l2)
           (fail-script-op))
@@ -854,7 +856,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
       (loop for tx-out in transaction-outputs
             as public-key-hash-string
               = (abbrev-hash-string
-                 (tx-out-public-key-hash tx-out) :style ':address)
+                 (addr-str (tx-out-public-key-hash tx-out)) :style ':address)
             as amt = (tx-out-amount tx-out)
             as first-time = t then nil
             when (not first-time)
@@ -999,7 +1001,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; of the hash of the transaction.
 
 (defvar *initial-coinbase-tx-in-id-value*
-  "0000000000000000000000000000000000000000000000000000000000000000")
+  (make-instance 'hash:hash
+                 :val (bev (hex "0000000000000000000000000000000000000000000000000000000000000000"))))
 
 (defvar *initial-coinbase-tx-in-index-value*
   -1)
@@ -1049,7 +1052,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    transaction ID's, which are represented as instances of class BEV (a class to
    represent a big-endian vector of (unsigned-byte 8) elements), which in turn
    represents a sha-3/256 hash result."
-  (equalp tx-id-1 tx-id-2))
+  (pbc= tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
   "Do blocks of the blockchain in reverse chronological order. Iterate over the
@@ -1225,7 +1228,7 @@ returns the block the transaction was found in as a second value."
   vector, i.e., such that it has the property that it may be compared
   using equalp.  Specifically it's the big-endian byte vector
   representing the hash that is the transaction ID of TRANSACTION."
-  (transaction-id transaction))
+  (bev-vec (transaction-id transaction)))
 
 
 
@@ -1381,8 +1384,8 @@ of type TYPE."
 ;;; this function.
 
 (defun account-addresses= (address-1 address-2)
-  (declare (type string address-1 address-2))
-  (string= address-1 address-2))
+  (declare (type pbc:address address-1 address-2))
+  (string= (pbc:addr-str address-1) (pbc:addr-str address-2)))
 
 
 
@@ -1480,7 +1483,7 @@ of type TYPE."
 (defun txid-string (transaction-id)
   "Return a string representation of TRANSACTION-ID, a byte vector,
    for display. The result is a lowercase hex string."
-  (nstring-downcase (format nil (hex-str transaction-id))))
+  (nstring-downcase (format nil (short-str (addr-str transaction-id)))))
   
 
 
@@ -1737,7 +1740,7 @@ of type TYPE."
    genesis, and directs that it be sent to an address of their
    choosing."
   (loop for tx-in in (transaction-inputs transaction)
-        as id = (tx-in-id tx-in)
+        as id = (tx-in-id tx-in) ;; this is really a hash of the transaction containing the UTXO (DBM 8/18)
         as index = (tx-in-index tx-in)
         as input-tx = (find-transaction-per-id id t)
         as input-tx-outputs 

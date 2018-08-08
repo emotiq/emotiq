@@ -150,7 +150,7 @@ THE SOFTWARE.
   ;;;
   ;;; prophylactic so leader does not sign its own messages
   ;;; TODO determine whether this is no necessary
-  (unless (int= (node-pkey (current-node))
+  (unless (pbc= (node-pkey (current-node))
                 *leader*)
     (setf *had-work* t)
     (node-cosi-signing reply-to
@@ -172,7 +172,7 @@ THE SOFTWARE.
 
 (defmethod node-dispatcher ((msg-sym (eql :blockchain-head)) &key pkey hashID sig)
   (when (validate-blockchain-head-message pkey hashID sig)
-    (unless (eql *blockchain* hashID)
+    (unless (pbc= *blockchain* hashID)
       (pr "Missing block head ~A, requesting fill" (short-id hashID))
       (setf *blockchain* hashID)
       (start-backfill (current-node) hashID))))
@@ -200,11 +200,11 @@ THE SOFTWARE.
 (defvar *dead-node-pkeys* nil)
 
 (defun kill-node (pkey)
-  (pushnew pkey *dead-node-pkeys* :test 'int=))
+  (pushnew pkey *dead-node-pkeys* :test 'pbc=))
 
 (defun enable-node (pkey)
   (setf *dead-node-pkeys* (delete pkey *dead-node-pkeys*
-                                  :test 'int=)))
+                                  :test 'pbc=)))
 
 ;; ------------------------------------------------------------------------------------
 
@@ -242,7 +242,7 @@ THE SOFTWARE.
      ;; Dispatching Actor, remains lightly loaded for fast handling
      (lambda (&rest msg)
        (unless (find (node-pkey node) *dead-node-pkeys*
-                     :test 'int=)
+                     :test 'pbc=)
          (pr "Cosi MSG: Node ~A ~A"
              (short-id node)
              (mapcar 'short-id msg))
@@ -271,7 +271,7 @@ THE SOFTWARE.
   (let* ((my-pkey (node-pkey (current-node)))
          (nodes   (remove my-pkey  ;; avoid asking myself
                           (get-witness-list)
-                          :test 'int=)))
+                          :test 'pbc=)))
     (gossip:singlecast msg (nth (random (length nodes)) nodes)
                        :graphID :uber
                        :startNodeID my-pkey)))
@@ -279,13 +279,12 @@ THE SOFTWARE.
 (defun validate-block-signature (blkID blk)
   (let* ((bits  (block-signature-bitmap blk))
          (pkey  (composite-pkey blk bits)))
-    (and (int= blkID (hash-block blk))            ;; is it really the block I think it is?
+    (and (pbc= blkID (hash-block blk))            ;; is it really the block I think it is?
          (check-block-multisignature blk)         ;; does the signature check out?
          )))
 
 (defun sync-blockchain (node hashID &optional (retries 1))
   (when hashID
-    (assert (integerp hashID))
     (with-current-node node
       (ask-neighbor-node :request-block :replyTo (current-actor) :hashID hashID :depth 1)
       (let ((start   (get-universal-time))
@@ -297,12 +296,10 @@ THE SOFTWARE.
           (recv
             ((list :answer :block-you-requested blkID blk)
              (with-current-node node
-               (assert (integerp blkID))
-               (cond ((and (int= blkID hashID)
+               (cond ((and (pbc= blkID hashID)
                            (validate-block-signature blkID blk)) ;; a valid response?
                       (setf (gethash blkID *blockchain-tbl*) blk)
                       (um:when-let (newID (block-prev-block-hash blk)) ;; do I have predecessor?
-                        (assert (integerp newID))
                         (unless (gethash newID *blockchain-tbl*)
                           ;; NOTE: While the following may appear to be a recursive call,
                           ;; the semantics of ACTORS:RECV ensure that it performs in constant
@@ -761,24 +758,19 @@ check that each TXIN and TXOUT is mathematically sound."
   x)
 
 (defmethod short-id ((x integer))
-  (let* ((str (hex-str x))
-         (len (length str)))
-    (if (> len 14)
-        (concatenate 'string (subseq str 0 7)
-                     ".."
-                     (subseq str (- len 7)))
-      str)))
+  (short-str (hex-str x)))
 
 (defmethod short-id ((node node))
-  (short-id (node-pkey node)))
+  (short-str (node-id-str node)))
 
 ;; -----------------------------------------------------------------------
 
 (defun node-id-str (node)
-  (short-id node))
+  (hex-str (node-pkey node)))
 
 (defmethod print-object ((node node) out-stream)
-  (format out-stream "#<NODE ~A>" (short-id node)))
+  (print-unreadable-object (node out-stream :type t)
+    (princ (short-id node) out-stream)))
 
 ;; ------------------------------
 
@@ -878,7 +870,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (=defun gossip-signing (my-node consensus-stage blk blk-hash seq-id timeout)
   (with-current-node my-node
     (cond ((and *use-gossip*
-                (int= (node-pkey my-node) *leader*))
+                (pbc= (node-pkey my-node) *leader*))
            ;; we are leader node, so fire off gossip spray and await answers
            (let ((bft-thrsh (1- (bft-threshold blk))) ;; adj by 1 since leader is also witness
                  (start     nil)
@@ -955,8 +947,8 @@ check that each TXIN and TXOUT is mathematically sound."
           (bft-threshold blk))))
 
 (defun check-block-transactions-hash (blk)
-  (int= (block-merkle-root-hash blk) ;; check transaction hash against header
-         (compute-merkle-root-hash blk)))
+  (pbc= (block-merkle-root-hash blk) ;; check transaction hash against header
+        (compute-merkle-root-hash blk)))
 
 (defmethod add-pkeys ((pkey1 null) pkey2)
   pkey2)
@@ -964,10 +956,7 @@ check that each TXIN and TXOUT is mathematically sound."
 (defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 null))
   pkey1)
 
-(defmethod add-pkeys (pkey1 pkey2)
-  (%add-pkeys (pbc:public-key pkey2) (pbc:public-key pkey1)))
-
-(defmethod %add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
+(defmethod add-pkeys ((pkey1 pbc:public-key) (pkey2 pbc:public-key))
   (change-class (pbc:add-pts pkey1 pkey2)
                 'pbc:public-key))
 
@@ -991,7 +980,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (sig   (block-signature blk))
          (hash  (hash/256 (signature-hash-message blk))))
     (and (find (block-leader-pkey blk) (block-witnesses blk) ;; is the purported Leader in the witness list?
-               :test 'int=)
+               :test 'pbc=)
          (check-hash-multisig hash sig bits blk)  ;; does the multisignature validate?
          (check-block-transactions-hash blk))     ;; do the transactions hash to the header Merkel hash?
     ))
@@ -1032,13 +1021,13 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; blk is a pending block
      ;; returns nil if invalid - should not sign
      (or
-      (and (int= *leader* (block-leader-pkey blk))
+      (and (pbc= *leader* (block-leader-pkey blk))
            (check-block-transactions-hash blk)
            (let ((prevblk (latest-block)))
              (or (null prevblk)
                  (and (> (block-timestamp blk) (block-timestamp prevblk))
-                      (int= (block-prev-block-hash blk) (hash-block prevblk)))))
-           (or (int= (node-pkey node) *leader*)
+                      (pbc= (block-prev-block-hash blk) (hash-block prevblk)))))
+           (or (pbc= (node-pkey node) *leader*)
                (check-block-transactions blk)))
       ;; else - failure case
       (progn
@@ -1050,7 +1039,7 @@ check that each TXIN and TXOUT is mathematically sound."
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
      (or
-      (and (int= *leader* (block-leader-pkey blk))
+      (and (pbc= *leader* (block-leader-pkey blk))
            (check-block-multisignature blk)
            (progn
              (add-to-blockchain node blk)
@@ -1096,7 +1085,7 @@ check that each TXIN and TXOUT is mathematically sound."
                         (pr "Block validated ~A" (short-id node))
                         (pr "Block witnesses = ~A" (block-witnesses blk))
                         (let ((pos (position (node-pkey node) (block-witnesses blk)
-                                             :test 'int=)))
+                                             :test 'pbc=)))
                           (when pos
                             (list (pbc:sign-hash blk-hash (node-skey node))
                                   (ash 1 pos))))))

@@ -27,7 +27,7 @@ where they override any later identical keys according to the semantics of CL:AS
 (defun generate-keys (records)
   "Generate keys for a list of plist RECORDS"
   (loop
-     :for (public-key private-key) = (pbc:make-keying-integers)
+     :for (public-key private-key) = (pbc:make-keying-pairs)
      :for record :in records
      :collecting (append record
                          ;;; HACK adapt to gossip/config needs
@@ -159,6 +159,14 @@ The genesis block for the node is returned as the second value.
    directory
    (create-genesis configuration :directory directory :force t)))
 
+(defmacro with-safe-output (&body body)
+  `(with-standard-io-syntax
+     (let ((*print-readably* t))
+       ,@body)))
+
+#+:LISPWORKS
+(editor:setup-indent "with-safe-output" 0)
+
 (defun create-genesis (configuration
                        &key
                          (directory (emotiq/fs:tmp/))
@@ -185,24 +193,27 @@ The genesis block for the node is returned as the second value.
                              :element-type '(unsigned-byte 8)
                              :direction :output
                              :if-exists :supersede)
-            (lisp-object-encoder:serialize genesis-block o)))
+            (with-safe-output
+              (lisp-object-encoder:serialize genesis-block o))))
         genesis-block))))
 
 (defun output-stakes (directory stakes)
   (with-open-file (o (merge-pathnames emotiq/config:*stakes-filename* directory)
                      :direction :output
                      :if-exists :supersede)
-    (format o ";;; Stakes for a generated testnet configuration~%")
-    (dolist (stake stakes)
-      (format o "~s~%" stake))))
+    (with-safe-output
+      (format o ";;; Stakes for a generated testnet configuration~%")
+      (dolist (stake stakes)
+        (format o "~s~%" stake)))))
 
 
 (defun output-keypairs (directory nodes)
   (with-open-file (o (merge-pathnames emotiq/config:*keypairs-filename* directory)
                      :direction :output
                      :if-exists :supersede)
-    (dolist (node nodes)
-      (format o "~s~%" (list (getf node :public) (getf node :private))))))
+    (with-safe-output
+      (dolist (node nodes)
+        (format o "~s~%" (list (getf node :public) (getf node :private)))))))
 
 (defun generated-directory (configuration)
   "For CONFIGURATION return a uniquely named relative directory for the network generation process"
@@ -237,19 +248,21 @@ The genesis block for the node is returned as the second value.
     (with-open-file (o p
                        :direction :output
                        :if-exists :supersede)
-      (format o "~s~&"
-              `(:eripa ,eripa
-                :gossip-port ,port
-                :pubkeys ,public-key-or-keys)))))
+      (with-safe-output
+        (format o "~s~&"
+                `(:eripa ,eripa
+                  :gossip-port ,port
+                  :pubkeys ,public-key-or-keys))))))
 
 (defun write-hosts-conf (directory records)
   (let ((p (merge-pathnames emotiq/config:*hosts-filename* directory)))
     (with-open-file (o p
                        :direction :output
                        :if-exists :supersede)
-      (dolist (record records)
-        (format o "~s~&" `(,(getf record :ip)
-                            ,(getf record :gossip-server-port)))))))
+      (with-safe-output
+        (dolist (record records)
+          (format o "~s~&" `(,(getf record :ip)
+                             ,(getf record :gossip-server-port))))))))
 
 (defun ensure-defaults (&key
                           force

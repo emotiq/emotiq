@@ -66,7 +66,7 @@ for x.
 (defun rand ()
   "Return a random integer from Z_r over the domain of the curve
 field. 1 <= z_rand < group order"
-  (random-between 1 (get-order)))
+  (field-random (get-order)))
 
 ;; --------------------------------------------------------
 

@@ -47,13 +47,13 @@
 (defun read-gossip-configuration (pathname)
   (when (probe-file pathname)
     (with-open-file (s pathname :direction :input :if-does-not-exist :error)
-      (let ((form (read s nil nil nil)))
+      (let ((form (core-crypto:read-safely s)))
         form))))
 
 
 (defun local-machine (&key (root (emotiq/fs:etc/)))
   (let ((form (with-open-file (o (merge-pathnames *local-machine-filename* root))
-                (read o))))
+                (core-crypto:read-safely o))))
     (destructuring-bind (&key eripa
                               (gossip-port
                                (emotiq/config:setting :gossip-server-port))

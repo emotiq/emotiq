@@ -57,7 +57,8 @@
                emotiq/wallet
                emotiq-rest
                websocket/wallet
-	       emotiq/tracker)
+	       emotiq/tracker
+               emotiq/random)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -127,12 +128,19 @@
                 :serial t
                 :components ((:file "generate")))))
 
+(defsystem "emotiq/random"
+  :depends-on (emotiq/filesystem)
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "repeatable-randoms")))))
+
 (defsystem "emotiq/app"
   :depends-on (gossip
                emotiq
                emotiq/txn
                emotiq/startup
-               cosi-bls)
+               cosi-bls
+               emotiq/random)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "app")))))

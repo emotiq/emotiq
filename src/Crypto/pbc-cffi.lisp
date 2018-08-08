@@ -24,140 +24,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 |#
 
-(defpackage :pbc-interface
-  (:use :common-lisp
-        :core-crypto
-        :vec-repr
-        :hash)
-  (:nicknames :pbc)
-  (:export
-   ;; classes and their slot readers
-   :crypto-val
-   :crypto-val-vec
-   :g1-cmpr
-   :g1-cmpr-pt
-   :g2-cmpr
-   :g2-cmpr-pt
-   :zr
-   :zr-val
-   :gt
-   :gt-val
-   :public-key
-   :public-key-val
-   :secret-key
-   :secret-key-val
-   :signature
-   :signature-val
-   :pairing
-   :pairing-val
-   :crypto-text
-   :crypto-text-vec
-   :public-subkey
-   :secret-subkey
-   
-   :init-pairing
-   :set-generator  ;; 1 each for G1, and G2 groups
-   
-   :get-g1
-   :get-g2
-   :get-order
-   
-   :make-key-pair
-   :check-public-key
-
-   :make-public-subkey
-   :make-secret-subkey
-   :ibe-encrypt
-   :ibe-decrypt
-   
-   :sign-message       ;; BLS Sigs
-   :check-message
-   :combine-signatures ;; for BLS MultiSigs
-
-   :compute-pairing
-
-   :pbc=
-   
-   :add-zrs
-   :sub-zrs
-   :mul-zrs
-   :div-zrs
-   :exp-zrs
-   :neg-zr
-   :inv-zr
-
-   :add-pts  ;; non-bent nomenclature for ECC
-   :sub-pts
-   :mul-pts  ;; bent nomenclature for ECC
-   :div-pts
-   :neg-pt
-   :inv-pt
-   
-   :mul-pt-zr
-   :expt-pt-zr  ;; bent nom
-
-   :mul-gts
-   :div-gts
-   :expt-gt-zr
-   :inv-gt
-   
-   :keying-triple
-   :keying-triple-pkey
-   :keying-triple-sig
-   :keying-triple-skey
-   
-   :signed-message
-   :signed-message-msg
-   :signed-message-sig
-   :signed-message-pkey
-
-   :pbc-hash
-   :hash-to-pbc-range
-   :sign-hash
-   :check-hash
-
-   :crypto-packet
-   :crypto-packet-pkey
-   :crypto-packet-id
-   :crypto-packet-tstamp
-   :crypto-packet-rval
-   :crypto-packet-cmsg
-
-   :g1-from-hash
-   :g2-from-hash
-   :zr-from-hash
-
-   :compute-vrf
-   :validate-vrf
-   :validate-vrf-mapping
-   :vrf
-   :vrf-seed
-   :vrf-x
-   :vrf-y
-   :vrf-proof
-
-   :make-pedersen-proof
-   :validate-pedersen-proof
-   :make-cloaked-proof
-   :validate-cloaked-proof
-
-   :confidential-purchase
-   :confidential-purchase-pbuy
-   :confidential-purchase-psell
-   :confidential-purchase-tbuy
-   :confidential-purchase-rsell
-   :check-confidential-purchase
-
-   :*pairing*
-   :*pairing-name*
-   :with-pairing
-   :set-pairing
-   :list-all-pairings
-
-   :make-keying-triple
-   :make-keying-integers
-   ))
-
 (in-package :pbc-interface)
 
 ;; -----------------------------------------------------------------------
@@ -837,33 +703,6 @@ comparison.")
                                :initial-element nil))
 
 ;; -------------------------------------------------
-;; Coercion functions in case we are dealing with a client that only
-;; thinks in terms of bignums.
-
-(defmethod public-key ((key public-key))
-  key)
-
-(defmethod public-key ((val integer))
-  (make-instance 'public-key
-                 :val (bevn val *g2-size*)))
-
-
-(defmethod secret-key ((key secret-key))
-  key)
-
-(defmethod secret-key ((val integer))
-  (make-instance 'secret-key
-                 :val (bevn val *g1-size*)))
-
-
-(defmethod signature ((sig signature))
-  sig)
-
-(defmethod signature ((val integer))
-  (make-instance 'signature
-                 :val (bevn val *g1-size*)))
-
-;; -------------------------------------------------
 
 (defun list-all-pairings ()
   '(:pairing-fr449 :pairing-fr256 :pairing-fr255 :pairing-fr256 :pairing-fr248 :pairing-fr247 :pairing-ar160))
@@ -1158,11 +997,8 @@ library."
                      :val (xfer-foreign-to-lisp sigbuf *g1-size*))
       )))
 
-(defmethod sign-hash ((hash hash:hash) skey)
-  (sign-hash hash (secret-key skey)))
-
-(defmethod sign-hash (arg skey)
-  (sign-hash (hash-to-pbc-range arg) (secret-key skey)))
+(defmethod sign-hash (msg (skey secret-key))
+  (sign-hash (hash/256 msg) skey))
 
 
 (defmethod check-hash ((hash hash:hash) (sig signature) (pkey public-key))
@@ -1174,11 +1010,8 @@ library."
       (zerop (_check-signature *context* sbuf hbuf nhash pbuf))
       )))
 
-(defmethod check-hash ((hash hash:hash) sig pkey)
-  (check-hash hash (signature sig) (public-key pkey)))
-
-(defmethod check-hash (arg sig pkey)
-  (check-hash (hash-to-pbc-range arg) (signature sig) (public-key pkey)))
+(defmethod check-hash (msg (sig signature) (pkey public-key))
+  (check-hash (hash/256 msg) sig pkey))
 
 ;; --------------------------------------------------------------
 ;; BLS Signatures on Messages - result is a triple (MSG, SIG, PKEY)
@@ -1243,9 +1076,6 @@ Certification includes a BLS Signature on the public key."
               psig
               pkey))
 
-(defmethod check-public-key (pkey psig)
-  (check-public-key (public-key pkey) (signature psig)))
-
 ;; -----------------------------------------------------------------------
 ;; Sakai-Haskara Encryption
 
@@ -1258,9 +1088,6 @@ Certification includes a BLS Signature on the public key."
       (make-instance 'public-subkey
                      :val (xfer-foreign-to-lisp abuf *g2-size*)))))
 
-(defmethod make-public-subkey (pkey seed)
-  (make-public-subkey (public-key pkey) seed))
-
 
 (defmethod make-secret-subkey ((skey secret-key) seed)
   (multiple-value-bind (hsh hlen) (hash-to-pbc-range seed)
@@ -1270,9 +1097,6 @@ Certification includes a BLS Signature on the public key."
       (_make-secret-subkey *context* abuf sbuf hbuf hlen)
       (make-instance 'secret-subkey
                      :val (xfer-foreign-to-lisp abuf *g1-size*)))))
-
-(defmethod make-secret-subkey (skey seed)
-  (make-secret-subkey (secret-key skey) seed))
 
 ;; --------------------------------------------------------------
 ;; SAKKE - Sakai-Kasahara Pairing Encryption
@@ -1329,9 +1153,6 @@ Certification includes a BLS Signature on the public key."
                        :cmsg   cmsg)
         ))))
 
-(defmethod ibe-encrypt (msg pkey id)
-  (ibe-encrypt msg (public-key pkey) id))
-
 
 (defmethod ibe-decrypt ((cx crypto-packet) (skey secret-key))
   (with-accessors ((pkey   crypto-packet-pkey)
@@ -1356,9 +1177,6 @@ Certification includes a BLS Signature on the public key."
             (when (zerop (_sakai-kasahara-check *context* rbuf kbuf hbuf 32))
               (loenc:decode (raw-bytes msg))))
           )))))
-
-(defmethod ibe-decrypt ((cx crypto-packet) skey)
-  (ibe-decrypt cx (secret-key skey)))
 
 ;; -----------------------------------------------
 
@@ -1411,9 +1229,12 @@ Certification includes a BLS Signature on the public key."
 (defmethod pbc= ((a crypto-val) (b crypto-val))
   (vec= a b))
 
+(defmethod pbc= ((a hash) (b hash))
+  (hash= a b))
+
 (defmethod pbc= (a b)
   (int= a b))
-            
+
 ;; -------------------------------
 
 (defmethod add-pts ((pt1 g1-cmpr) (pt2 g1-cmpr))
@@ -1687,9 +1508,6 @@ Certification includes a BLS Signature on the public key."
               y)
      :proof g1)))  ;; public proof that we generated randomness = U^(1/(x+skey))
 
-(defmethod comptue-vrf (seed skey &rest args &key &allow-other-keys)
-  (apply 'compute-vrf seed (secret-key skey) args))
-
 
 (defmethod validate-vrf ((proof g1-cmpr) (randomness gt) &key &allow-other-keys)
   ;; verify randomness y = e(Proof, V), i.e., that it was computed properly
@@ -1737,9 +1555,6 @@ Certification includes a BLS Signature on the public key."
               (chk (compute-pairing (get-g1) (get-g2))))
          (int= c chk)))) ;; check the proof for having been derived from the seed
 
-(defmethod validate-vrf-mapping (seed (proof g1-cmpr) pkey randomness &rest args &key &allow-other-keys)
-  (apply 'validate-vrf-mapping seed proof (public-key pkey) randomness args))
-
 ;; --------------------------------------------------------
 ;; Confidential Purchases - cloak a purchase by providing a
 ;; crypto-proof of sufficient amount. The indifividual terms
@@ -1784,7 +1599,7 @@ and then checking the pairing relation:
 "
   (assert (typep pkey-vendor 'g2-cmpr))
   (with-mod (get-order)
-    (let* ((krand  (random-between 1 (get-order)))
+    (let* ((krand  (field-random (get-order)))
            (tbuy   (mul-pt-zr (get-g1)
                               (m/ (m* krand (int skey))
                                   (m- paid change))))
