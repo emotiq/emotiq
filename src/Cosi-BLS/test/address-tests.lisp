@@ -13,24 +13,26 @@
          (should-be-testnet-address "1ym7GSk8CpyVoSy61JW4o6QqkTJPMcPHp7T"))
     (print "Public Key to Key Hash as Address Test (Base58Check Encoding)")
     ;; let's really test something here... equivalence of pkey, pkey hex string, and pkey byte vector
-    (assert-equal
-     (public-key-to-address public-key               :override-version bitcoin-version)
-     (public-key-to-address public-key-as-hex-string :override-version bitcoin-version))
-    (assert-equal
-     (public-key-to-address public-key             :override-version bitcoin-version)
-     (public-key-to-address public-key-byte-vector :override-version bitcoin-version))
+    (assert
+     (pbc=
+       (public-key-to-address public-key               :override-version bitcoin-version)
+       (public-key-to-address (make-pkey public-key-as-hex-string) :override-version bitcoin-version)))
+    (assert
+     (pbc=
+       (public-key-to-address public-key             :override-version bitcoin-version)
+       (public-key-to-address (make-pkey public-key-byte-vector) :override-version bitcoin-version)))
      ;; stop encouraging the use of untypted bignums and byte vectors...     
     (assert-equal
      should-be-bitcoin-address 
-     (public-key-to-address public-key :override-version bitcoin-version)
+     (addr-str (public-key-to-address public-key :override-version bitcoin-version))
      'should-be-bitcoin-address)
-    (assert-equal 
+    (assert-equal
      should-be-mainnet-address
-     (public-key-to-address public-key :net :main)
+     (addr-str (public-key-to-address public-key :net :main))
      'should-be-mainnet-address)
     (assert-equal 
      should-be-testnet-address
-     (public-key-to-address public-key :net :test)
+     (addr-str (public-key-to-address public-key :net :test))
      'should-be-testnet-address)))
 
 ;; ----------------------------------------------------------------------------------------
