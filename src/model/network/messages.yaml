@@ -114,6 +114,4 @@ schemas:
     response:
       type: array
       items:
-        $ref: "/schemas/transaction
-            
-  
+        $ref: "/schemas/transaction"
