@@ -80,7 +80,8 @@
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
-    (dump-results strm)))
+    (dump-results strm)
+    (generate-pseudo-random-transactions)))
 
 (defun app ()
   "helper for tests"
