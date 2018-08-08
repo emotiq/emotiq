@@ -7,15 +7,19 @@
 
 ;; for lack of better graphics, let's use pipe syntax to show what I am building
 ;;
-;; ticker | timer (randomizer) | transaction-creator
+;; ticker | randomizer | transaction-creator
 ;; 
 ;; the pipe syntax cannot show that "ticker" is sending itself a message, endlessly
 ;;
-;; maybe (loop ticker | ticker |2) | timer | transaction-creator
+;; maybe (loop (ticker | ticker |2)) 2| randomizer | transaction-creator
 ;;
 ;; these are honest message sends between concurrent pieces of code
-;; the loopback to ticker is not recursion, it is a message send
+;; the loopback to ticker is not recursion, it is a message send (important point to understand)
+;; smalltalk talks about using message-sends, but it actually uses call-return
 ;; 
+
+;; I've "unrolled" most of the code, in the hopes of making it simpler to understand.
+;; It might be useful to delete the comments, before reading.
 
 
 (defparameter *all-accounts* nil
@@ -46,11 +50,14 @@
 (useful-macros:defmonitor
 
     ;; this is probably over-kill - it's a monitor for threads, not actors (i.e. much too coarse-grained)
-    ;; 
+    ;; TODO: implement monitors for actors, or just move these routines out of the monitor, or, think
+    ;; about the semantics of the Actors lib and maybe discover that this monitor is not needed at all
+
+    ;; get it working first, then optimize it away ...
 
     ((ensure-lists ()
        ;; helper that checks and resets (if necessary) the from and to lists
-       ;; should be done atomically, hence in a (Hoare) monitor
+       ;; should be done atomically, hence, it's in a (Hoare) monitor
        (when (or (null *from*)
                  (null *to*))
          (setf *from* *all-accounts*
@@ -106,7 +113,7 @@
         (setf *randomizer-actor*
               (actors:make-actor
                #'(lambda (&rest msg)
-                   (random-timer-actor
+                   (randomizer-actor
                     *transaction-creator-actor*
                     (first msg)
                     node
@@ -119,20 +126,32 @@
         ;; testing - actors can be tested one at a time
         ;; in this case "test" means a "sanity check" before tying everything together
         ;; we might be able to roll some of these tests into lisp-unit for regression testing (with some thought)
+
         ;; (this is akin to what lispers do by testing functions in a REPL, but actors (threads) provide
-        ;; encapsulation of control-flow which no call-return language (incl. lisp, oop, etc.) can provide
+        ;; encapsulation of control-flow which no call-return language (incl. lisp, oop, fp, etc.) can provide (because
+        ;; of call-return semantics (incl. RPC))
 
         ;; test 1 - can the *transaction-creator-actor* create a single transaction?
         ; (actors:send *transaction-creator-actor* :create-transaction node)
         ;;  passed
 
         ;; test 2 - does the ticker create ticks ad infinitum?  It should create an emotiq:note every tick-amount seconds
-        (actors:send *ticker-actor* :again *ticker-actor* *debug-counter-actor* tick-period node)
-        ;; note that we are substituting *debug-counter-actor* where *randomizing-actor* would go - they are "pin compatible",
-        ;; hence, we can use *counter-actor* like a probe, to see if *ticker-actor* is working
-        ;;  passed
 
-        ))))
+        ; (actors:send *ticker-actor* :again *ticker-actor* *debug-counter-actor* tick-period node)
+
+        ;; note that we are substituting *debug-counter-actor* where *randomizer-actor* would go - they are "pin compatible",
+        ;; hence, we can use *counter-actor* like a probe, to see if *ticker-actor* is working
+        ;;  passed - over 1700 ticks and nothing blew up
+
+        ;; test 3 - the smoke test, attach the ticker to the randomizer attached to the transaction-creator
+        ;; does the randomizer look to be sufficiently random???  Do we see the correct # of transactions in the blocks
+        ;; (the # of txns should constantly grow)
+        ;; ideally, the randomizer should have an output pin that we could simply monitor with a probe, but I'm itching to see
+        ;; this work
+        ;; N.B. we created the debug-counter, but aren't sending it any messages - it uses up a small amount of memory
+        ;; and is just a no-op
+        (actors:send *ticker-actor* :again *ticker-actor* *randomizer-actor* tick-period node)))))
+
 
 (defun debug-counter (&rest msg)
   "on every message received, incs the private variable *counter* and creates an emotiq:note"
@@ -148,7 +167,7 @@
   (destructuring-bind (msg-symbol self randomizer sleep-amount node)
       msg
     
-    ;; timers and errors (catch/throw stuff) are nothing special, they are just "events"
+    ;; timers and errors (catch/throw stuff) are nothing special, they are just mere messages
 
     ;; this actor gets a periodic tick (using existing actor timer code)
     ;; then sends a message to the randomizer, forever ;; this is over-kill, but, I hope
@@ -164,19 +183,14 @@
     (actors:send self msg-symbol self randomizer sleep-amount node)))
 
 
-(defun get-fire-p (n)
-  "return T if RANDOM(1/n) is 25% of n or less"
-  ;; repeatable random numbers are created with RANDOM, after calling emotiq/random:init-random
-  (multiple-value-bind (num dem)
-      (random n)
-    (declare (ignore num))
-    (truncate n 4)
-    (zerop dem)))
-
 ;;;;;;;;;;;;;;
 ;; actor body
 ;;;;;;;;;;;;;;
-(defun random-timer-actor (transaction-maker &rest msg)
+
+(defparameter *nticks* 0
+  "private variable used by random-timer-actor")
+
+(defun randomizer-actor (transaction-maker &rest msg)
   "after a pseudo-random number of ticks, wake the transaction-creator up"
 
   (let ((msg-symbol (first msg))
@@ -186,19 +200,23 @@
     ;; messages are always lists, and, by convention, the first token in a message is a keyword
     ;; dlambda is just a convenience
     (assert (eq :tick msg-symbol))
-    
-    (let ((fire-p t)) ; (get-fire-p 50)))
-      (emotiq:note "timer fire-p ~s" fire-p)
-      (when fire-p
-        (actors:send transaction-maker :create-transaction node)))))
+
+    (decf *nticks*)
+
+    (when (<= *nticks* 0)
+      (setf *nticks* (random 50)) ;; 50 is a just pulled out of thin air (might need tuning)
+      (emotiq:note "nticks reset to ~a" *nticks*)
+      (actors:send transaction-maker :create-transaction node))))
   
-(defun create-an-amount-lower-or-equal-to (n)
-  "apply some heuristic to generate an amount which we can use in a randomly-created transaction"
-  n)
 
 ;;;;;;;;;;;;;;
 ;; actor body
 ;;;;;;;;;;;;;;
+
+(defun create-an-amount-lower-or-equal-to (n)
+  "apply some heuristic to generate an amount which we can use in a randomly-created transaction"
+  n)
+
 (defun transaction-creator (&rest msg)
 
   (let ((msg-symbol (first msg))
