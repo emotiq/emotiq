@@ -58,7 +58,7 @@
   `(cosi-simgen:with-current-node cosi-simgen::*my-node*
      ,@body))
 
-;; from test/geness.lisp
+;; from test/genesis.lisp
 (defun verify-genesis-block (&key (root (emotiq/fs:etc/)))
   (let* ((genesis-block
           (emotiq/config:get-genesis-block
@@ -80,7 +80,7 @@
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
-    #+nil(dump-results strm)
+    (dump-results strm)
     #+nil(generate-pseudo-random-transactions)
     #+nil(block-explorer)));; not tested
 
@@ -539,3 +539,19 @@
 (defun shutdown ()
   (r2-shutdown)
   (gossip::graceful-shutdown))
+
+;============
+
+(defmethod get-all-transactions-to-given-target-account ((a account))
+  "return a list of transactions that SPEND (and COLLET) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
+  (let ((account-address (emotiq/txn:address (account-pkey a)))
+        (result nil))
+    (cosi-simgen:with-current-node (cosi-simgen:current-node)
+      (cosi/proofs/newtx::do-blockchain (block) ;; TODO: optimize this
+        (cosi/proofs/newtx::do-transactions (tx block)
+          (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
+                    (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
+            (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
+              (when (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
+                (push tx result)))))))
+    result))
