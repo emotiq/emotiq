@@ -16,7 +16,7 @@
   ;; see Rationale for [Function] make-random-state in https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node133.html
   (setf *random-state* (make-random-state t))
   ;;; Save initial seed
-  (let ((path (merge-pathnames *random-state-filename* (emotiq/fs:tmp/))))
+  (let ((path (merge-pathnames *random-state-filename* (emotiq/fs:etc/))))
     (unless (probe-file path)
       (with-open-file (s path
                          :direction :output
