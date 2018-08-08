@@ -143,5 +143,6 @@
                emotiq/random)
   :components ((:module source
                         :pathname "./"
-                        :components ((:file "app")))))
+                        :components ((:file "app")
+                                     (:file "app-get-transactions")))))
 
