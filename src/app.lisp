@@ -180,16 +180,10 @@
   (let ((bal-genesis (get-balance (get-genesis-key))))
     (emotiq:note"genesis balance(~a)~%" bal-genesis))
 
-  (let ((bal-alice (get-balance *alice*))
+  #+nil(let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
-;    (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
-    
-;    (setf emotiq:*notestream* *standard-output*)
-;    (emotiq:note "sleeping again")
-;    (setf emotiq:*notestream* strm)
-;    (sleep 20)
     (with-current-node
      (setf emotiq:*notestream* *standard-output*)
      (cosi/proofs/newtx:dump-txs :blockchain t)
@@ -228,6 +222,7 @@
      (values))))
 
 
-(defun r2-shutdown ()
+(defun shutdown ()
   (emotiq-rest:stop-server)
-  (websocket/wallet::stop-server))
+  (websocket/wallet::stop-server)
+  (core-crypto:shutdown))

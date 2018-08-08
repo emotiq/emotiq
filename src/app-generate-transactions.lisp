@@ -37,7 +37,17 @@
 (defparameter *transaction-creator-actor* nil
   "creates a transaction using *from* and *to* lists, whenever pinged")
 
+(defparameter *debug-counter-actor* nil
+  "counts the number of time it has been sent a message (kind of a poor-mans oscilloscope)")
+
+(defparameter *counter* 0
+  "accessed only by *debug-counter-actor*")
+
 (useful-macros:defmonitor
+
+    ;; this is probably over-kill - it's a monitor for threads, not actors (i.e. much too coarse-grained)
+    ;; 
+
     ((ensure-lists ()
        ;; helper that checks and resets (if necessary) the from and to lists
        ;; should be done atomically, hence in a (Hoare) monitor
@@ -84,6 +94,7 @@
 
       (let ((tick-period 1) ;; bald guess at something that resembles "human time" and will allow a test set of transactions to propagate
             (node cosi-simgen::*my-node*))
+
         (setf *transaction-creator-actor*
               (actors:make-actor
                #'(lambda (&rest msg)
@@ -91,6 +102,7 @@
                     (first msg)
                     node
                     msg))))
+
         (setf *randomizer-actor*
               (actors:make-actor
                #'(lambda (&rest msg)
@@ -99,30 +111,58 @@
                     (first msg)
                     node
                     msg))))
+
         (setf *ticker-actor* (actors:make-actor #'forever-ticker))
-        (actors:send *transaction-creator-actor* :create-transaction node)
-        #+nil(actors:send *ticker-actor* :again *ticker-actor* *rnadomizer-actor* tick-period node)
+
+        (setf *debug-counter-actor* (actors:make-actor #'debug-counter))
+
+        ;; testing - actors can be tested one at a time
+        ;; in this case "test" means a "sanity check" before tying everything together
+        ;; we might be able to roll some of these tests into lisp-unit for regression testing (with some thought)
+        ;; (this is akin to what lispers do by testing functions in a REPL, but actors (threads) provide
+        ;; encapsulation of control-flow which no call-return language (incl. lisp, oop, etc.) can provide
+
+        ;; test 1 - can the *transaction-creator-actor* create a single transaction?
+        ; (actors:send *transaction-creator-actor* :create-transaction node)
+        ;;  passed
+
+        ;; test 2 - does the ticker create ticks ad infinitum?  It should create an emotiq:note every tick-amount seconds
+        (actors:send *ticker-actor* :again *ticker-actor* *debug-counter-actor* tick-period node)
+        ;; note that we are substituting *debug-counter-actor* where *randomizing-actor* would go - they are "pin compatible",
+        ;; hence, we can use *counter-actor* like a probe, to see if *ticker-actor* is working
+        ;;  passed
+
         ))))
 
+(defun debug-counter (&rest msg)
+  "on every message received, incs the private variable *counter* and creates an emotiq:note"
+  (declare (ignore msg))
+  (incf *counter*)
+  #-lispworks(emotiq:note "counter = ~a" *counter*)
+  #+lispworks(emotiq:note "counter = ~a        room=~a" *counter* (system:room-values)))
+
+;;;;;;;;;;;;;;
 ;; actor body
+;;;;;;;;;;;;;;
 (defun forever-ticker (&rest msg)
   (destructuring-bind (msg-symbol self randomizer sleep-amount node)
       msg
-    (emotiq:note "ticker ~s ~s ~s ~s ~s" msg-symbol self randomizer sleep-amount node)
     
     ;; timers and errors (catch/throw stuff) are nothing special, they are just "events"
-    
+
     ;; this actor gets a periodic tick (using existing actor timer code)
     ;; then sends a message to the randomizer, forever ;; this is over-kill, but, I hope
     ;; it is very obvious
     
-    ;; ignore the message, just send a tick to the randomizer
-    
     (sleep sleep-amount)
-    (emotiq:note "sending to randomizer")
-    #+nil(actors:send randomizer :tick node)
-    (emotiq:note "sending to self/forever-ticker")
-    #+nil(actors:send self :again self randomizer sleep-amount node)))
+
+    (assert (eq :again msg-symbol))
+
+    (actors:send randomizer :tick node)
+    
+    ;; wake self up again by sending a message to self with the sleep-amount in the message
+    (actors:send self msg-symbol self randomizer sleep-amount node)))
+
 
 (defun get-fire-p (n)
   "return T if RANDOM(1/n) is 25% of n or less"
@@ -133,7 +173,9 @@
     (truncate n 4)
     (zerop dem)))
 
+;;;;;;;;;;;;;;
 ;; actor body
+;;;;;;;;;;;;;;
 (defun random-timer-actor (transaction-maker &rest msg)
   "after a pseudo-random number of ticks, wake the transaction-creator up"
 
@@ -154,7 +196,9 @@
   "apply some heuristic to generate an amount which we can use in a randomly-created transaction"
   n)
 
+;;;;;;;;;;;;;;
 ;; actor body
+;;;;;;;;;;;;;;
 (defun transaction-creator (&rest msg)
 
   (let ((msg-symbol (first msg))
@@ -192,5 +236,5 @@
                        from-account
                        to-account
                        fee)
-          (spend from-account (account-pkey to-account) new-amount :fee fee))))))
+          (spend from-account to-account new-amount :fee fee))))))
 
