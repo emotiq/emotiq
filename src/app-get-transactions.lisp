@@ -10,7 +10,7 @@
           (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
                     (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
             (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
-              (emotiq:note "comparing ~a [~a] account-address ~a to transaction-output ~a -> ~a"
+              #+nil-might-help-with-debug(emotiq:note "comparing ~a [~a] account-address ~a to transaction-output ~a -> ~a"
                            (account-name a)
                            (emotiq/txn:address (account-triple a))
                            account-address
