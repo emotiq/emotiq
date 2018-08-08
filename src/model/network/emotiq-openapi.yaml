@@ -12,6 +12,7 @@ tags:
   - name: transaction
   - name: dictionary
   - name: support
+  - name: node
 paths:
 # MUST implement  
   /consensus/:
@@ -232,8 +233,9 @@ paths:
               application/json:
                 schema:
                   type: array
-                    items:
-                      $ref: '#/components/schemas/transaction'
+                  items:
+                    $ref: '#/components/schemas/transaction'
+
   '/wallet/{name}/address':
     post:
       tags:
@@ -255,6 +257,7 @@ paths:
             properties:
               address:
                 type: string
+
 # MUST implement
   '/wallet/{name}/address/':
     get:
@@ -435,16 +438,16 @@ paths:
           application/json:
             schema:
               type: object
-                properties:
-                  email:
-                    type: string
-                  subject:
-                    type: string
-                  problem:
-                    type: string
-                  logs:
-                    type: boolean
-                    description: does the user want to attach logs
+              properties:
+                email:
+                  type: string
+                subject:
+                  type: string
+                problem:
+                  type: string
+                logs:
+                  type: boolean
+                  description: does the user want to attach logs                  
       responses:
         '204':
           description: Success
