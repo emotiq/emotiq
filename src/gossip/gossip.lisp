@@ -1150,7 +1150,7 @@ dropped on the floor.
                  (cond (interim-table
                         (if (eql :ANONYMOUS interim-table) ; accept replies from any srcuid
                             kindsym
-                            (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+                            (multiple-value-bind (val present-p) (kvs:lookup-key interim-table (vec-repr:bev-vec srcuid))
                               (declare (ignore val))
                               (if present-p
                                   kindsym
@@ -1953,12 +1953,12 @@ gets sent back, and everything will be copacetic.
                          (loop for reply being each hash-value of interim-table
                            while reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    ;(edebug 1 node :COALESCE interim-data local-data)
+    (edebug 5 node :COALESCE interim-data local-data interim-table)
     (let ((coalesced-output
            (reduce coalescer
                    interim-data
                    :initial-value local-data)))
-      ;(edebug 1 node :COALESCED-OUTPUT coalesced-output)
+      (edebug 5 node :COALESCED-OUTPUT coalesced-output)
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
