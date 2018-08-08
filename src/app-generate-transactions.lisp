@@ -230,7 +230,7 @@
           (from-account (get-from))
           (from-bal 0)
           (max-froms 16) ;; a bald guess as to the number of from-accounts we will search before giving up
-          (some-lower-limit 100) ;; bald guess at what kind of (random) amount we want to use
+          (some-lower-limit 15) ;; bald guess at what kind of (random) amount we want to use
           (fee 10))
 
       ;; search for an account with sufficient balance to handle the amount + fees
@@ -246,7 +246,7 @@
       ;; it terminates with bal still = 0
       
       (if (< from-bal some-lower-limit)
-          (emotiq:note "can't create a transaction, since ~A accounts do not have suffient funds (~A)"
+          (emotiq:note "can't create a transaction, since ~A accounts do not have sufficient funds (~A)"
                        max-froms (+ fee some-lower-limit))
         (let ((new-amount (create-an-amount-lower-or-equal-to some-lower-limit)))
           (emotiq:note "transaction creator making a transaction of ~A from ~A to ~A with fee ~A"
