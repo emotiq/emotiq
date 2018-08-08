@@ -545,7 +545,7 @@
 ;============
 
 (defmethod get-all-transactions-to-given-target-account ((a account))
-  "return a list of transactions that SPEND (and COLLET) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
+  "return a list of transactions that SPEND (and COLLECT) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
   (let ((account-address (emotiq/txn:address (account-pkey a)))
         (result nil))
     (cosi-simgen:with-current-node (cosi-simgen:current-node)
@@ -554,11 +554,91 @@
           (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
                     (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
             (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
-              (emotiq:note "comparing ~a account-address ~a to transaction-output ~a -> ~a"
+              (emotiq:note "comparing ~a [~a] account-address ~a to transaction-output ~a -> ~a"
                            (account-name a)
+                           (emotiq/txn:address (account-triple a))
                            account-address
                            (cosi/proofs/newtx::tx-out-public-key-hash out)
-                           (eq (cosi/proofs/newtx:account-address= account-address (cosi/proofs/newtx::tx-out-public-key-hash out))))
-              (when (eq (cosi/proofs/newtx:account-address= account-address (cosi/proofs/newtx::tx-out-public-key-hash out)))
+                           (cosi/proofs/newtx::account-addresses= account-address (cosi/proofs/newtx::tx-out-public-key-hash out)))
+              (when (cosi/proofs/newtx::account-addresses= account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
                 (push tx result)))))))
     result))
+
+
+
+#|
+2018-08-08 13:22:06 balances alice(99999999999999190) bob(190) mary(480) james(90)
+
+
+2018-08-08 13:22:06 transactions to:
+alice (#<Tx 2zfzn! Spend ffdyt![0] => 99999999999999990/1yvuyk!> 
+#<Tx gwdrf! Spend 2zfzn![0] => 490/1yyira!, 99999999999999490/1yvuyk!> 
+#<Tx ehpku! Spend gwdrf![1] => 190/1z8fiN!, 99999999999999290/1yvuyk!> 
+#<Tx 6w5nj! Spend ehpku![1] => 90/1z6hz4!, 99999999999999190/1yvuyk!>)
+
+bob (#<Tx gwdrf! Spend 2zfzn![0] => 490/1yyira!, 99999999999999490/1yvuyk!> 
+#<Tx h2by1! Spend gwdrf![0] => 290/1z8fiN!, 190/1yyira!>)
+
+mary (#<Tx ehpku! Spend gwdrf![1] => 190/1z8fiN!, 99999999999999290/1yvuyk!> 
+#<Tx h2by1! Spend gwdrf![0] => 290/1z8fiN!, 190/1yyira!>)
+
+james (#<Tx 6w5nj! Spend ehpku![1] => 90/1z6hz4!, 99999999999999190/1yvuyk!>)
+
+
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> T
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1ypf7Bz..KeDFCw3> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> T
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> T
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> T
+2018-08-08 13:22:06 comparing alice [#<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe>] account-address #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> T
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1ypf7Bz..KeDFCw3> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> T
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing bob [#<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm>] account-address #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> T
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1ypf7Bz..KeDFCw3> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> T
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing mary [#<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC>] account-address #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> -> T
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1ypf7Bz..KeDFCw3> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1z8fiNj..kaB9DrC> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yyiraT..QqbkqMm> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvuykw..uim2TVe> -> NIL
+2018-08-08 13:22:06 comparing james [#<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ>] account-address #<PBC-INTERFACE:ADDRESS 1z6hz4q..gd5CmEQ> to transaction-output #<PBC-INTERFACE:ADDRESS 1yvAjz1..3cbSpD7> -> NIL
+|#
