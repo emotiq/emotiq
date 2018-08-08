@@ -184,15 +184,15 @@
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
     (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
-    (let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
-          (txo-bob (get-all-transactions-to-given-target-account *bob*))
-          (txo-mary (get-all-transactions-to-given-target-account *mary*))
-          (txo-james (get-all-transactions-to-given-target-account *james*)))
+    (let ((tx-alice (get-all-transactions-to-given-target-account *alice*))
+          (tx-bob (get-all-transactions-to-given-target-account *bob*))
+          (tx-mary (get-all-transactions-to-given-target-account *mary*))
+          (tx-james (get-all-transactions-to-given-target-account *james*)))
       (emotiq:note "transactions to:~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                   txo-alice
-                   txo-bob
-                   txo-mary
-                   txo-james))
+                   tx-alice
+                   tx-bob
+                   tx-mary
+                   tx-james))
     (setf emotiq:*notestream* *standard-output*) ;;; ?? I tried to dynamically bind emotiq:*notestream* with LET, but that didn't work (???)
     (emotiq:note "sleeping again")
     (setf emotiq:*notestream* strm)
