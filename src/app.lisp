@@ -81,6 +81,7 @@
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
     (dump-results strm)
+
     #+nil(generate-pseudo-random-transactions)
     #+nil(block-explorer)));; not tested
 
@@ -176,22 +177,22 @@
   (get-balance (account-triple a)))
 
 (defun dump-results (strm)
-  (let ((bal-genesis (get-balance (get-genesis-key))))
+  (let ((bal-genesis (get-balance *genesis*)))
     (emotiq:note"genesis balance(~a)~%" bal-genesis))
   (let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
     (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
-    #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
-               (txo-bob (get-all-transactions-to-given-target-account *bob*))
-               (txo-mary (get-all-transactions-to-given-target-account *mary*))
-               (txo-james (get-all-transactions-to-given-target-account *james*)))
-           (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                        txo-alice
-                        txo-bob
-                        txo-mary
-                        txo-james))
+    (let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
+          (txo-bob (get-all-transactions-to-given-target-account *bob*))
+          (txo-mary (get-all-transactions-to-given-target-account *mary*))
+          (txo-james (get-all-transactions-to-given-target-account *james*)))
+      (emotiq:note "transactions to:~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
+                   txo-alice
+                   txo-bob
+                   txo-mary
+                   txo-james))
     (setf emotiq:*notestream* *standard-output*) ;;; ?? I tried to dynamically bind emotiq:*notestream* with LET, but that didn't work (???)
     (emotiq:note "sleeping again")
     (setf emotiq:*notestream* strm)
