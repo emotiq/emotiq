@@ -445,7 +445,8 @@
                     msg))))
         (setf *ticker-actor* (actors:make-actor #'forever-ticker))
         (actors:send *transaction-creator-actor* :create-transaction node)
-        #+nil(actors:send *ticker-actor* :again *ticker-actor* *rnadomizer-actor* tick-period node)))))
+        #+nil(actors:send *ticker-actor* :again *ticker-actor* *rnadomizer-actor* tick-period node)
+        ))))
 
 ;; actor body
 (defun forever-ticker (&rest msg)
@@ -463,9 +464,9 @@
     
     (sleep sleep-amount)
     (emotiq:note "sending to randomizer")
-    ;(actors:send randomizer :tick node)
+    #+nil(actors:send randomizer :tick node)
     (emotiq:note "sending to self/forever-ticker")
-    ;(actors:send self :again self randomizer sleep-amount node)))
+    #+nil(actors:send self :again self randomizer sleep-amount node)))
 
 (defun get-fire-p (n)
   "return T if RANDOM(1/n) is 25% of n or less"
@@ -554,7 +555,7 @@
                     (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
             (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
               (emotiq:note "comparing ~a account-address ~a to transaction-output ~a -> ~a"
-                           (account-name)
+                           (account-name a)
                            account-address
                            (cosi/proofs/newtx::tx-out-public-key-hash out)
                            (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out)))
