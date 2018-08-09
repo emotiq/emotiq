@@ -123,7 +123,6 @@ in KEYWORDS removed."
   `(let ((,new-var (remove-keywords ,var ',keywords)))
      ,@body))
 
-
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
 ; Case 2: *use-all-neighbors* = 1 and *active-ignores* = true. The more common gossip case.
@@ -357,18 +356,19 @@ are in place between nodes.
      (:tiny  (new-tiny-uid)))))
                    
 (defun uid? (thing)
-  (typep thing 'vec-repr:bev))
+  (or (typep thing 'vec-repr:ub8v)
+      (typep thing 'pbc:public-key)))
 
 (defun uid= (thing1 thing2)
   (handler-case (vec-repr:vec= thing1 thing2)
     ; Because sometimes these things are symbols if they name actors
     (error () (equalp thing1 thing2))))
 
-(defclass uid-mixin ()
+(defclass uid-slot ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
         :documentation "Unique ID. These are assumed to be BEV objects.")))
 
-(defmethod print-object ((thing uid-mixin) stream)
+(defmethod print-object ((thing uid-slot) stream)
    (with-slots (uid) thing
        (print-unreadable-object (thing stream :type t :identity nil)
           (when uid
@@ -409,7 +409,7 @@ are in place between nodes.
   "Returns a process with given name, if any."
   (find-if (lambda (process) (ignore-errors (string-equal name (subseq (process-name process) 0 (length name))))) (all-processes)))
 
-(defclass gossip-message-mixin (uid-mixin)
+(defclass gossip-message-mixin (uid-slot)
   ((timestamp :initarg :timestamp :initform (usec::get-universal-time-usec) :accessor timestamp
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
@@ -467,7 +467,7 @@ are in place between nodes.
           (graphID new-msg)  (graphID msg))
     new-msg))
 
-(defclass solicitation-uid-mixin ()
+(defclass solicitation-uid-slot ()
   ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
                      :documentation "UID of solicitation message that elicited this reply.")))
 
@@ -475,7 +475,7 @@ are in place between nodes.
 ;   message with a new UID. (Replies can often be changed as they percolate backwards;
 ;   they need new UIDs so that a node that has seen one set of information won't
 ;   automatically ignore it.)
-(defclass reply (gossip-message-mixin solicitation-uid-mixin)
+(defclass reply (gossip-message-mixin solicitation-uid-slot)
   ()
   (:documentation "Reply message. Used to reply to solicitations that need an :UPSTREAM or direct reply.
      This class is not used for :GOSSIP or :NEIGHBORCAST replies; those replies are just new solicitations.
@@ -513,7 +513,7 @@ are in place between nodes.
 (defun make-final-reply (&rest args)
   (apply 'make-instance 'final-reply args))
 
-(defclass system-async (gossip-message-mixin solicitation-uid-mixin)
+(defclass system-async (gossip-message-mixin solicitation-uid-slot)
   ()
   (:documentation "Used only for special timeout and socket-wakeup messages. In this case, solicitation-uid field
     is used to indicate which solicitation should be timed out at the receiver of this message."))
@@ -535,7 +535,7 @@ are in place between nodes.
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
 
-(defclass abstract-gossip-node (uid-mixin)
+(defclass abstract-gossip-node (uid-slot)
   ((logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")
@@ -543,7 +543,7 @@ are in place between nodes.
                 :documentation "True if this node should be considered temporary, i.e. should not be
            found by many functions that look for node in the local node table. (Eventually, temporary
            nodes should be stored in a separate, weak hash table.)")))
-   
+
 (defclass gossip-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works")))
@@ -621,6 +621,24 @@ are in place between nodes.
 
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
+
+(defclass no-targets (error)
+  ((current-host :initarg :current-host :initform nil :accessor current-host)
+   (message :initarg :message :initform nil :accessor message
+            :documentation "Solicitation attempting to be delivered"))
+  (:documentation "Error condition indicating no targets are available at a host with an anonymous destination."))
+
+(defclass no-reply-destination (error)
+  ((reply :initarg :reply :initform nil :accessor reply)
+   (soluid :initarg :soluid :initform nil :accessor soluid)
+   (data :initarg :data :initform nil :accessor data))
+  (:documentation "No destination for reply"))
+
+(defmacro as-uid (thing)
+  "If thing has a UID, retrieve it. Otherwise assume it's already a UID."
+  `(if (typep ,thing 'uid-slot)
+       (uid ,thing)
+       ,thing))
 
 (defmethod node-matches-host? ((node proxy-gossip-node) (hostpair cons))
   "Returns true if host of node matches hostpair."
@@ -709,7 +727,7 @@ are in place between nodes.
       (initialize-node node :pkey pkey :skey skey)
       node)))
 
-(defmethod set-uid ((self uid-mixin) value)
+(defmethod set-uid ((self uid-slot) value)
   (setf (slot-value self 'uid) value))
 
 (defun make-proxy-node (mode &rest args)
@@ -921,9 +939,7 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                  (uid node)
-                  node))
+  (let* ((uid (as-uid node))
          (mbox (mpcompat:make-mailbox))
          (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
@@ -955,9 +971,7 @@ dropped on the floor.
   action because they should set the srcuid parameter to be their own rather than nil."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                 (uid node)
-                 node)))
+  (let ((uid (as-uid node)))
     (let* ((solicitation (make-solicitation
                           :kind kind
                           :args args))
@@ -972,9 +986,7 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                  (uid node)
-                  node))
+  (let* ((uid (as-uid node))
          (mbox (mpcompat:make-mailbox))
          (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
@@ -1006,9 +1018,7 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                  (uid node)
-                  node))
+  (let* ((uid (as-uid node))
          (node (if (typep node 'abstract-gossip-node)
                    node
                    (lookup-node node)))
@@ -1077,15 +1087,24 @@ dropped on the floor.
 (defun lookup-node (uid)
   (kvs:lookup-key *nodes* (vec-repr:bev-vec uid)))
 
+(defgeneric send-msg (msg destuid srcuid)
+  (:documentation "Sends msg to destuid from srcuid. Srcuid can be nil, but generally should
+   contain the id of the sender, if known.
+   Returns nil if successful; an error object otherwise."))
+
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler methods for bootstrapping messages
    before #'neighbors connectivity has been established.
    See Note D."
-  (let ((no-forward-msg (copy-message msg))
-        (nodes (local-real-uids)))
-    (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
-    (forward msg srcuid nodes)))
+  (let ((nodes (local-real-uids)))
+    (cond (nodes
+           (let ((no-forward-msg (copy-message msg)))
+             (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
+             (forward msg srcuid nodes)))
+          (t (make-condition 'no-targets
+                             :current-host (eripa)
+                             :message msg)))))
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
@@ -1097,7 +1116,9 @@ dropped on the floor.
                                     :gossip ; actor-verb
                                     srcuid  ; first arg of actor-msg
                                     msg))
-      (edebug 5 :warn error destuid msg :from srcuid))))
+      (progn
+        (edebug 5 :warn error destuid msg :from srcuid)
+        error))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -1294,11 +1315,14 @@ dropped on the floor.
   (error "Bug: Cannot locally-receive to a proxy node!"))
 
 (defun forward (msg srcuid destuids)
-  "Sends msg from srcuid to multiple destuids"
-  (unless (uid? srcuid) (setf srcuid (uid srcuid)))
-  (mapc (lambda (destuid)
-          (send-msg msg destuid srcuid))
-        destuids))
+  "Sends msg from srcuid to multiple destuids. Returns nil if successful; error otherwise."
+  (setf srcuid (as-uid srcuid))
+
+  (let ((failure (reduce (lambda (x destuid)
+                           (or x (send-msg msg destuid srcuid)))
+                         destuids
+                         :initial-value nil)))
+    failure))
 
 (defun send-gossip-timeout-message (actor soluid)
   "Send a gossip-timeout message to an actor. (We're not using the actors' native timeout mechanisms at this time.)"
@@ -1381,7 +1405,7 @@ dropped on the floor.
   (let* ((soluid (first (args msg)))
          (reply-kind (second (args msg)))
          (where-to-send-reply (get-upstream-source thisnode soluid)))
-    (if (more-replies-expected? thisnode soluid)
+    (when (more-replies-expected? thisnode soluid)
       (send-interim-reply thisnode reply-kind soluid where-to-send-reply)
       ; else we'd have already sent a final reply and no further action is needed.
       )))
@@ -1717,6 +1741,7 @@ dropped on the floor.
 ;;; REPLY SUPPORT ROUTINES
 
 (defun send-final-reply (srcnode destination soluid kind data)
+  "Return nil if successful; an error object otherwise."
   (let ((reply (make-final-reply :solicitation-uid soluid
                                  :kind kind
                                  :args (list data)))
@@ -1735,7 +1760,12 @@ dropped on the floor.
           ;   somebody running the sim told it to.
           ((or (null where-to-send-reply)
                (eql t where-to-send-reply))
-           (edebug 1 srcnode :NO-REPLY-DESTINATION! soluid data))
+           (let ((e (make-condition 'no-reply-destination
+                                    :reply reply
+                                    :soluid soluid
+                                    :data data)))
+             (edebug 1 :error "No Reply Destination" e)
+             e))
           (t
            (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (actor-send where-to-send-reply reply)))))
@@ -1764,64 +1794,6 @@ dropped on the floor.
     coalesced-data ; mostly for debugging
     ))
 
-#|
-DISCUSSION:
-send-interim-reply needs to be delayed.
-interim-replies don't resolve anything in the gossip model; they just provide (sometimes valuable)
-partial information to the ultimate solicitor. However, if things are moving along properly,
-a huge flurry of almost content-free interim-replies doesn't accomplish anything except to
-clog up communication.
-
-I don't want to get rid of interim-replies altogether because they'll be needed in cases of any
-malfunctioning nodes. But I'd like to delay them a bit -- put them on the actor's back-burner
-as it were.
-Specifically what I need is a way to tell an actor
-1. Put the send-interim-reply on the back burner and if nothing usurps it, execute it after a 1 second
-delay.
-2. If a send-final-reply happens, remove any send-interim-reply requests from the back-burner.
-3. If a second send-interim-reply request comes in when one is already on the back-burner, do nothing,
-because the original will take care of it. However, do reset the clock to make it execute 1 second
-from now, rather than 1 second from whatever time the original request set up.
-
-REMAINDER OF DISCUSSION IS OBSOLETE. WE SOLVE THE PROBLEM WITH SEND-SELF NOW.
-
-There are a couple of tricky issues here I don't know how to solve:
--- How to create a local "back-burner" queue on an actor. Conceivably this could just be another slot
-on an actor, and #'next-message could be made to look at it last. Or possibly it could be put on the
-actor-message-mbox at lowest priority?
--- How to ensure the actor gets put back on the *actor-ready-queue* 1 second from now.
-
-Another solution might be to just give actors a "yield" capability such that they put themselves back
-onto the far end of the *actor-ready-queue* and give other actors (or technically, other messages to
-themselves) a chance to run first.
-
-Can an actor be on the *actor-ready-queue* more than once? I would hope so. But no. The queue doesn't even
-really contain actors per se; it just contains lexical closures, all of which are associated with some
-actor. However, the way #'send works is that it never re-adds an actor's run closure to the queue if the
-actor is already busy.
-
-FUNDAMENTAL MISUNDERSTANDING ABOVE: An actor must *never* be on the ready queue more than once because then
-it could be executed by two processes concurrently, and that's *never* allowed. All atomicity guarantees of
-the actor model would dissolve under such a scenario.
-
-I suppose the simplest solution is to just make a timer for this, but the resolution of the timers
-is 1 second and that's almost too coarse-grained for the job.
-
-IDEA: An actor cannot re-insert itself onto the ready-queue -- because even if an actor added
-some code to the ready-queue for itself to run later, the actor-busy flag would still be a problem.
-When the current function ended, the actor would negate the actor-busy flag, but the other body
-of code would already be in the queue. Without its actor-busy flag (the flag is attached to the actor,
-not to the lambda body in the ready-queue) the other lambda body could cause problems. We could
-change the actor-busy flag to a semaphore so it could take on a integral value of how many times the
-actor occurred in the queue, but I think a better solution is:
-
-Just spin up another actor. We'll call it the echo-actor. And it's sole job will be to "reflect" a message
-back to us. This way, an actor can cause a message to itself to get reinserted into the head of the queue
-normally and that code will be executed later, if any other lambda bodies are in the queue ahead of it.
-Because an actor cannot properly send a message to itself, but it can send a message to another actor that
-gets sent back, and everything will be copacetic.
-|#
-
 (defun send-interim-reply (thisnode reply-kind soluid where-to-send-reply)
   "Send an interim reply, right now."
   ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
@@ -1843,7 +1815,7 @@ gets sent back, and everything will be copacetic.
   "Called by a node actor to tell itself (or another actor, but we never do that now)
   to maybe send an interim reply after it processes any possible interim messages, which
   could themselves obviate the need for an interim reply."
-  ; Should we make these things be yet another class with solicitation-uid-mixin?
+  ; Should we make these things be yet another class with solicitation-uid-slot?
   ; Or just make a general class of administrative messages with timeout being one?
   (let ((msg (make-solicitation
               :kind :maybe-sir
