@@ -37,7 +37,7 @@
    blocks of the blockchain (i.e., the value of node:*blockchain*)
    beginning the most recent minted and ending with the genesis block, with
    BLOCK-VAR bound during each iteration to the block."
-  `(loop :for ,block-var :in node:*blockchain*
+  `(loop :for ,block-var :in (to-list) ;; node:*blockchain*
       :do (progn ,@body)))
 
 (defmacro do-transactions ((tx-var blk) &body body)
@@ -61,12 +61,36 @@
          ,@body))))
 
 
+(defun to-list (&optional (from node:*blockchain*))
+  (um:accum acc
+    (um:nlet-tail iter ((id from))
+                  (when id ;; terminate on null reference (from genesis block)
+                    (if-let (blk (gethash (vec-repr:int id) node:*blocks*))
+                      (progn
+                        ;; or terminate when missing the block
+                        (acc blk)
+                        (iter (block:prev-block-hash blk)))
+                      (emotiq:em-warn "Missing block ~A -- you might want to ask for a back-fill"
+                                      id))))))
+
+
 (defun count-transactions (&key (types '(:spend)))
   (let ((count 0))
     (do-all-transactions (tx)
       (when (member (txn:type tx) types)
         (incf count)))
     count))
+
+
+(defun add-block (node block)
+  (let ((hash-id (vec-repr:int (block:hash block))))
+    (setf (node:blockchain node) hash-id
+          (gethash hash-id (node:blocks node)) block)))
+    
+
+(defun latest-block ()
+  (and node:*blockchain* (gethash node:*blockchain* node:*blocks*)))
+
 
 (defun dump (&key file mempool block blockchain node)
   (flet ((dump-loops ()

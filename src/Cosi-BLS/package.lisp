@@ -2,30 +2,30 @@
 ;; package :COSI was only used for initial cut (Brook's stage 1)
 ;; supplanted by :COSI-SIMGEN
 ;; Does this mean we should eliminate this package definition? --MTE
-(defpackage :cosi
-  (:use :common-lisp :crypto/modular-arith)
-  (:import-from :edwards-ecc
-		:ed-add 
-		:ed-sub 
-		:ed-mul 
-		:ed-div 
-		:ed-affine
-		:ed-nth-pt
-		:*ed-r*
-		:*ed-q*
-                :ed-neutral-point
-                :ed-pt=
-		:with-ed-curve
-		:ed-compress-pt
-		:ed-decompress-pt
-		:ed-validate-point
-		:ed-random-pair)
-  (:import-from :ecc-crypto-b571
-                :convert-bytes-to-int
-		:convert-int-to-nbytesv)
-  (:export
-   :schnorr-signature
-   :verify-schnorr-signature))
+;; (defpackage :cosi
+;;   (:use :common-lisp :crypto/modular-arith)
+;;   (:import-from :edwards-ecc
+;; 		:ed-add 
+;; 		:ed-sub 
+;; 		:ed-mul 
+;; 		:ed-div 
+;; 		:ed-affine
+;; 		:ed-nth-pt
+;; 		:*ed-r*
+;; 		:*ed-q*
+;;                 :ed-neutral-point
+;;                 :ed-pt=
+;; 		:with-ed-curve
+;; 		:ed-compress-pt
+;; 		:ed-decompress-pt
+;; 		:ed-validate-point
+;; 		:ed-random-pair)
+;;   (:import-from :ecc-crypto-b571
+;;                 :convert-bytes-to-int
+;; 		:convert-int-to-nbytesv)
+;;   (:export
+;;    :schnorr-signature
+;;    :verify-schnorr-signature))
 
 (defpackage :range-proofs
   (:use :common-lisp
@@ -104,7 +104,7 @@
 (defpackage :cosi/proofs
   (:use
    :common-lisp
-   :cosi
+   ;;:cosi
    :crypto/modular-arith
    :vec-repr
    :edec
@@ -204,7 +204,7 @@
 (defpackage :cosi/proofs/newtx          ; New Transactions
   (:use 
    :common-lisp
-   :cosi
+   ;;:cosi
    :crypto/modular-arith
    :vec-repr
    :edec
@@ -248,7 +248,7 @@
 (defpackage :cosi-simgen
   (:use
    :common-lisp
-   :cosi
+   ;;:cosi
    :crypto/modular-arith
    :vec-repr
    :hash

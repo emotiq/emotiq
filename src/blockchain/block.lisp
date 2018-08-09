@@ -27,11 +27,9 @@
     :reader signature-bitmap
     :initform 0
     :documentation
-    "Use methods ith-witness-signed-p and set-ith-witness-signed-p OR,
-     to access directly, supply a bitmap represented by an
-     integer (potentially a bignum), where each position of the bitmap
-     corresponds to a vector index, such that its state tells you
-     whether that particular potential witness signed.")
+    "Supply a bitmap represented by an integer (potentially a bignum), where each 
+     position of the bitmap corresponds to a vector index, such that its state tells 
+     you whether that particular potential witness signed.")
    (witnesses
     :initform nil
     :reader witnesses
@@ -143,7 +141,7 @@ added to the blockchain."
       (setf timestamp (- (get-universal-time) +unix-epoch-ut+)
             election-proof block-election-proof
             leader-pkey block-leader-pkey
-            witnesses block-witnesses
+            witnesses (coerce block-witnesses 'vector)
             transactions block-transactions
             merkle-root-hash (compute-merkle-root-hash blk)
             input-script-merkle-root-hash (compute-input-script-merkle-root-hash blk)
@@ -151,7 +149,7 @@ added to the blockchain."
       (when prev-block? 
         (with-slots (prev-block-hash)
             blk
-          (setf prev-block-hash (hash prev-block?))))
+          (setf prev-block-hash (vec-repr:int (hash prev-block?)))))
       blk)))
 
 
@@ -172,8 +170,7 @@ added to the blockchain."
          (block (make-block nil nil nil nil transactions)))
     (flet ((ensure-pkey (key)
              ;; Currently, our config system gives us public keys as bignums
-             ;; (function get-stakes), while the simulator
-             ;; (function keys-and-stakes in package emotiq/sim) supplies them as
+             ;; (function get-stakes), while the simulator supplies them as
              ;; instances.
              (if (typep key 'pbc:public-key)
                  key

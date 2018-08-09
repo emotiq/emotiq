@@ -48,12 +48,8 @@
   (call-next-method))
 
 (defmethod initialize-instance :after ((node node:node) &key &allow-other-keys)
-  (when (null (node:blockchain node))
-    (let ((genesis-block (emotiq/config:get-genesis-block)))
-      (push genesis-block (node:blockchain node))
-      (setf (gethash (block:hash genesis-block)
-                     (node:blocks node))
-            genesis-block))))
+  (unless (node:blockchain node)
+    (blockchain:add-block node (emotiq/config:get-genesis-block))))
 
 
 (defun make-node-dispatcher (node)

@@ -76,8 +76,7 @@
   (pr "~A got genesis block" (node:short-id (current-node)))
   (unless blk   ; Why are we using optional args. ???  -mhd, 6/12/18
     (error "BLK is nil, can't continue."))
-  (push blk *blockchain*)
-  (setf (gethash (block:hash blk) *blocks*) blk))
+  (blockchain:add-block (current-node) blk))
 
 (defmethod node-dispatcher ((msg-sym (eql :new-transaction)) &key txn)
   (txn:validate txn))
@@ -102,7 +101,8 @@
 (defmethod node-dispatcher ((msg-sym (eql :block-finished)) &key)
   (emotiq/tracker:track :block-finished)
   (pr "Block committed to blockchain")
-  (pr "Block signatures = ~D" (logcount (block:signature-bitmap (first *blockchain*))))
+  (pr "Block signatures = ~D" (logcount (block:signature-bitmap (blockchain:latest-block))))
+  (send-blockchain-comment)
   (send-hold-election))
 
 (defmethod node-dispatcher ((msg-sym (eql :gossip)) &rest msg)
@@ -336,7 +336,7 @@
   (let ((wsum nil))
     (loop
        :for ix :from 0
-       :for wkey :in (coerce (block:witnesses blk) 'list)
+       :for wkey :across (block:witnesses blk)
        :do (when (logbitp ix bits)
              (setf wsum (add-pkeys wsum wkey))))
     wsum))
@@ -346,7 +346,7 @@
        (check-byz-threshold bits blk)
        (pbc:check-hash hash sig (composite-pkey blk bits))))
 
-(defun check-block-multisignature (blk)
+(defun check-block-multisig (blk)
   (let* ((bits (block:signature-bitmap blk))
          (sig  (block:signature blk))
          (hash (hash:hash/256 (signature-hash-message blk))))
@@ -371,7 +371,7 @@
      (or (and (vec-repr:int= *leader*
                              (block:leader-pkey blk))
               (block:check-transactions-hash blk)
-              (let ((prevblk (first *blockchain*)))
+              (let ((prevblk (blockchain:latest-block)))
                 (or (null prevblk)
                     (and (> (block:timestamp blk) (block:timestamp prevblk))
                          (vec-repr:int= (block:prev-block-hash blk) (block:hash prevblk)))))
@@ -386,10 +386,9 @@
      ;; validity and then sign to indicate we have seen and committed
      ;; block to blockchain. Return non-nil to indicate willingness to sign.
      (or (and (vec-repr:int= *leader* (block:leader-pkey blk))
-              (check-block-multisignature blk)
+              (check-block-multisig blk)
               (progn
-                (push blk *blockchain*)
-                (setf (gethash (block:hash blk) *blocks*) blk)
+                (blockchain:add-block node blk)
                 ;; For new tx: ultra simple for now: there's no UTXO
                 ;; database. Just remhash from the mempool all
                 ;; transactions that made it into the block.
@@ -509,7 +508,7 @@
   (pr "Assemble new block")
   (let* ((node (current-node))
          (self (current-actor))
-         (new-block (block:make-block (first *blockchain*)
+         (new-block (block:make-block (blockchain:latest-block)
                                       *election-proof* *leader*
                                       (map 'vector #'first (get-witness-list))
                                       txns)))
@@ -547,7 +546,9 @@
     (pr "Leader see transactions: ~a" txns)
     (if txns
         (leader-assemble-block txns prepare-timeout commit-timeout)
-        (done-with-duties))))
+        (progn
+          (send-blockchain-comment)
+          (done-with-duties)))))
 
 ;; -----------------------------------------------------------------
 ;; debug

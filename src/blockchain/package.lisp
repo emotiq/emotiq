@@ -6,8 +6,10 @@
    #:ip
    #:real-ip
    #:pkey-zkp
-   #:skey
    #:pkey
+   #:skey
+   #:short-pkey
+   #:short-skey
    #:parent
    #:other-members
    #:bitpos
@@ -26,6 +28,7 @@
    #:corrupted-p
    #:cpu-load
    #:self
+   #:rh-state
    #:make-other-members
    #:iteri-other-members
    #:iter-other-members
@@ -86,6 +89,9 @@
    #:do-transactions
    #:do-all-transactions
    #:count-transactions
+   #:add-block
+   #:to-list
+   #:latest-block
    #:get-utxos
    #:dump))
 
