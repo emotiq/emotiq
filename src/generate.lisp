@@ -125,6 +125,14 @@ endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
       (push (cons :stakes stakes) configuration))
     configuration))
 
+(defun write-configuration (directory configuration)
+  (with-open-file (o (merge-pathnames emotiq/config:*conf-filename* directory)
+                     :if-exists :supersede
+                     :direction :output)
+    (cl-json:encode-json 
+     (alexandria:alist-hash-table configuration)
+     o)))
+
 (defun generate-node (directory
                       configuration
                       &key
@@ -267,21 +275,24 @@ The genesis block for the node is returned as the second value.
 (defun ensure-defaults (&key
                           force
                           (for-purely-local nil)
+                          (destination (emotiq/fs:etc/))
                           (nodes-dns-ip *eg-config-zerotier*))
   "Ensure that configuration will start up, even in the absence of explicit configuration
 
 With FORCE true, overwrite destination without warning.
 
+Place resulting configuration in DESTINATION, defaulting to the
+current value returned by (emotiq/fs:etc/).
+
 With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
-  (let ((root (emotiq/fs:new-temporary-directory))
-        (destination (emotiq/fs:etc/)))
+  (let ((root (emotiq/fs:new-temporary-directory)))
     (unless force
       (when (not (zerop
                   (length (directory
                            (make-pathname :name :wild :type :wild
                                            :defaults destination))))))
       (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
-      (return-from ensure-defaults (emotiq/config:settings)))
+      (return-from ensure-defaults (emotiq/config:settings :root destination)))
     (ensure-directories-exist root)
     (let ((directories
            (generate-network :root root
@@ -295,8 +306,8 @@ With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
         (uiop:run-program
          (format nil "cat /dev/null > ~a"
                  (merge-pathnames emotiq/config:*hosts-filename* destination)))
-        (let* ((keypairs (emotiq/config:get-keypairs))
-               (local-machine (emotiq/config:local-machine))
+        (let* ((keypairs (emotiq/config:get-keypairs :root destination))
+               (local-machine (emotiq/config:local-machine :root destination))
                (eripa (getf local-machine :eripa))
                (gossip-port (getf local-machine :gossip-port))
                (result
@@ -307,5 +318,5 @@ With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
           (emotiq:note "Finished mangling configuration for purely local nodes~%~t~a"
                        result)))
       (values
-       (emotiq/config:settings)
+       (emotiq/config:settings :root destination)
        destination))))

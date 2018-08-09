@@ -112,6 +112,6 @@ schemas:
             description: The AMOUNT to pay
             type: float # TODO FIXME
     response:
-      type: array
+      type: 
       items:
         $ref: "/schemas/transaction"

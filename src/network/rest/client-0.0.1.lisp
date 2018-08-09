@@ -34,7 +34,9 @@ gives the toplevel definitions of the following functions:")
        (:dt "ping()")
        (:dd "Ping service test.")
        (:dt "transactions()")
-       (:dd "Return all transactions associated with the default wallet."))))))
+       (:dd "Return all transactions associated with the default wallet.")
+       (:dt "submitTransaction()")
+       (:dd "Submit a new transaction"))))))
 
 (restas:define-route
     %client.js
@@ -105,7 +107,20 @@ gives the toplevel definitions of the following functions:")
 
     (defun transactions ()
       (let ((message (form-rpc-request "transactions" nil)))
+        (send message)))
+    
+    (defun submit-transaction ()
+      (let* ((params (ps:create
+                      transaction
+                      (ps:create 
+                       address  "address to be paid"
+                       amount 99)
+                      name  "name of wallet"
+                      address  "address in named wallet"))
+             (message (form-rpc-request "submit-transaction" params)))
         (send message)))))
+
+
 
 
 

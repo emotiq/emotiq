@@ -47,10 +47,11 @@
     (emotiq-rest:start-server :port (emotiq/config:setting :rest-server-port)))
 
   (emotiq/tracker:start-tracker)
-  (emotiq:start-node)
-  (cosi-simgen:startup-elections))
-
-;; Entry Point for binary (aka "production" version of the system.
+  (when (string-equal "true"
+                      (emotiq/config:setting :gossip-server))
+    (emotiq:start-node)))
+  
+;; Entry Point for binary (aka "production") 
 (defun start ()
   ;; This is for running in the binary command line only. For now, if we're
   ;; starting from the command line, we assume it's for
@@ -62,11 +63,29 @@
   (message-running-state "from command line")
   (core-crypto:startup)
   (actors:install-actor-system)
-  (main))
+  (let ((command-line-options (argv)))
+    (if (assoc :emotiq-user-home command-line-options)
+        (main :etc-and-wallets (alexandria:assoc-value command-line-options :emotiq-user-home))
+        (main))))
 
 (defun argv ()
-#+lispworks system:*line-arguments-list*
-#+OPENMCL ccl:*command-line-argument-list*)
+  (let* ((argv
+         #+lispworks system:*line-arguments-list*
+         #+OPENMCL ccl:*command-line-argument-list*)
+         (parsing argv)
+         result)
+    (loop
+       :until (not parsing)
+       :for option-or-value = (pop parsing)
+       :doing (cond
+                ((or
+                  (string-equal option-or-value "--user-store")
+                  (string-equal option-or-value "-c"))
+                 (push (cons :emotiq-user-home (pop parsing))
+                         result))))
+    (values
+     result
+     argv)))
 
 (defun message-running-state (&optional how-started-message?)
   (format *standard-output* "~%Running ~a in ~a~%with args [~a]~%"

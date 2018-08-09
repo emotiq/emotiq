@@ -70,7 +70,7 @@ The default name for a wallet is *DEFAULT-WALLET-NAME*."
 
 (defun primary-address (wallet)
   (emotiq/txn:address
-   (keying-triple wallet)))
+   (pbc:keying-triple wallet)))
 
 (defun key-phrase (wallet)
   (cosi-keying:convert-int-to-wordlist

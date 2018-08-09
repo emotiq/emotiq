@@ -29,9 +29,22 @@ paths:
       'submit-transaction':
         description:
           Instruct the node wallet to sign and submit a transaction to the chain
+        params:
+          schema:
+            type: object
+            properties:
+              transaction:
+                schema:
+                  $ref: 'messages.yaml#/schemas/transactions/submit'
+              name:
+                description: The name of the wallet that the transaction is being signed from
+                type: string
+              address:
+                description: The address of the wallet that the transaction is being sent from
+                type: string
         result:
           schema:
-            $ref: 'messages.yaml#/schemas/transactions/submit'
+            $ref: 'messages.yaml#/schemas/transaction'
       'get-transaction':
         description:
           Retireve the best information that the node peer has about transaction

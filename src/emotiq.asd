@@ -56,6 +56,7 @@
                actors
                emotiq/wallet
                emotiq-rest
+               alexandria
                websocket/wallet
 	       emotiq/tracker
                emotiq/random)
@@ -90,6 +91,7 @@
 
 (defsystem "emotiq/node"  ;; a live node
   :depends-on (gossip
+               cosi-bls
                emotiq/logging)
   :components ((:module source
                 :pathname "./"
