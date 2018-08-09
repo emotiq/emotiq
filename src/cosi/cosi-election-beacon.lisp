@@ -1,6 +1,19 @@
 (in-package :emotiq/cosi)
 
 
+(defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n beacon sig)
+  (when (validate-election-message n beacon sig)
+    (run-election n)))
+
+
+(defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
+  (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
+             (or (pr "Got call for new election") t)
+             (>= (length *election-calls*)
+                 (bft-threshold (get-witness-list))))
+    (run-special-election)))
+
+
 (defvar *all-nodes* nil
   "list of (pubkey stake) associations for all witness nodes")
 
@@ -198,10 +211,6 @@ based on their relative stake"
 ;; --------------------------------------------------------------------------
 ;; Augment message handlers for election process
 
-(defmethod node-dispatcher ((msg-sym (eql :hold-an-election)) &key n beacon sig)
-  (when (validate-election-message n beacon sig)
-    (run-election n)))
-
 (defun run-special-election ()
   ;; try to resync on stalled system
   (with-election-reply (seed) :next-after-reset
@@ -359,11 +368,5 @@ based on their relative stake"
       (gossip:broadcast (make-signed-call-for-election-message pkey *local-epoch* skey)
                         :graphID :UBER))))
 
-(defmethod node-dispatcher ((msg-sym (eql :call-for-new-election)) &key pkey epoch sig)
-  (when (and (validate-call-for-election-message pkey epoch sig) ;; valid call-for-election?
-             (or (pr "Got call for new election") t)
-             (>= (length *election-calls*)
-                 (bft-threshold (get-witness-list))))
-    (run-special-election)))
 
 

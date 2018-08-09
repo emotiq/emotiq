@@ -107,6 +107,7 @@
 			     (:file "cosi-construction")
                              #+LISPWORKS (:file "cosi-construction-debug")
                              (:file "cosi-gossip")
+                             (:file "cosi-blockchain-sync")
                              (:file "cosi-handlers")
                              (:file "cosi-election-beacon")
                              (:file "cosi-network-translation")))))

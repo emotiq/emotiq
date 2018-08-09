@@ -40,3 +40,7 @@
     (gossip:broadcast msg
                       :startNodeID my-pkey ; without this we get an error sending to NIL destnode
                       :graphID :UBER)))
+
+
+(defun sign-message (msg)
+  (append msg (list :sig (pbc:sign-hash msg (node:skey (current-node))))))
