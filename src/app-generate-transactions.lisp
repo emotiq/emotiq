@@ -76,8 +76,10 @@
      ;; end monitor
      ))
 
-(defun generate-pseudo-random-transactions ()
+(defun generate-pseudo-random-transactions (most-tokens-account)
   "spawn an actor that wakes up and spends tokens from some account in *from* to another account in *to*"
+  ;; in this testing code, one account has most of the tokens (*alice* in app,lisp)
+  ;; spend some (a lot) of the tokens into the accounts used below
   (let ((keypairs (emotiq/config:get-keypairs))
         (nameindex -1))
     (let ((account-list (mapcar #'(lambda (pair)
@@ -92,6 +94,12 @@
       ;; when one of them peters out, reset the lists
       (setf *all-accounts* account-list)
       (ensure-lists)
+
+      ;; this line can be deleted when run in non-test environment
+      ;; (i.e. when accounts in account-list already have tokens,
+      ;;  in this test environment, all of the tokens have been spent 
+      ;;  to another account "most-tokens-account" in app.lisp)
+      (setup-accounts most-tokens-account)
 
       ;; in general, using actors here is over-kill
       ;; actors are just an efficient way to invoke the process paradigm
@@ -256,3 +264,20 @@
                        fee)
           (spend from-account to-account new-amount :fee fee))))))
 
+
+(defun setup-accounts (most-tokens-account)
+  "side effect: spend some tokens into the test accounts from most-tokens-account"
+  (let ((n (length *all-accounts*))
+        (big-amount (get-balance most-tokens-account))
+        (fee 10)
+        (fudge-factor 20))
+    (let ((per-account-amount (- (/ big-amount n)
+                                 (* n (+ fee fudge-factor)))))
+      (mapc #'(lambda (account-under-test)
+                (spend most-tokens-account
+                       account-under-test
+                       per-account-amount
+                       :fee fee))
+            *all-accounts*)
+      (sleep 20)))) ;; wait for transactions to propagate - is this necessary?
+        

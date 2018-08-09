@@ -81,7 +81,7 @@
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
     (dump-results strm)
-    (generate-pseudo-random-transactions)))
+    (generate-pseudo-random-transactions *alice*)))
 
 (defun app ()
   "helper for tests"
