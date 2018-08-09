@@ -140,9 +140,12 @@
                emotiq/txn
                emotiq/startup
                cosi-bls
-               emotiq/random)
+               emotiq/random
+               useful-macros
+               core-crypto)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "app")
-                                     (:file "app-get-transactions")))))
+                                     (:file "app-get-transactions")
+                                     (:file "app-generate-transactions")))))
 

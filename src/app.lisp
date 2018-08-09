@@ -80,7 +80,8 @@
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
-    (dump-results strm)))
+    (dump-results strm)
+    (generate-pseudo-random-transactions)))
 
 (defun app ()
   "helper for tests"
@@ -179,7 +180,7 @@
   (let ((bal-genesis (get-balance (get-genesis-key))))
     (emotiq:note"genesis balance(~a)~%" bal-genesis))
 
-  (let ((bal-alice (get-balance *alice*))
+  #+nil(let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
@@ -221,6 +222,7 @@
      (values))))
 
 
-(defun r2-shutdown ()
+(defun shutdown ()
   (emotiq-rest:stop-server)
-  (websocket/wallet::stop-server))
+  (websocket/wallet::stop-server)
+  (core-crypto:shutdown))
