@@ -37,6 +37,9 @@
           (exception-condition ex)
           (metadata ex)))
 
+(defmethod unwrap (object)
+  object)
+
 (defmethod bind (fn (monad monad))
   "General bind. Reverse arguments from typical bind because this way works better for composition in Lisp.
    Fn should produce another monad, but this is not strictly enforced.

@@ -28,7 +28,7 @@
   (assert-true
    (unordered-equal *uids*
                     (unwrap (solicit-wait uid :list-alive))
-                    :test 'uid=)))
+                    :test 'gossip::uid=)))
 
 (defun %key-value (uid)
   (gossip:archive-log)

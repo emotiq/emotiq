@@ -1092,10 +1092,6 @@ dropped on the floor.
          (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can actor-send to
                         (actor destnode)
                         destuid)))
-    #+IGNORE
-    (when (and (uid= (vec-repr:bev 8) srcuid)
-               (uid= (vec-repr:bev 5) destuid))
-      (break "backflow"))
     (edebug 5 "send-msg" msg srcuid "to" destuid)
     (uiop:if-let (error (actor-send destactor
                                     :gossip ; actor-verb
@@ -1166,13 +1162,11 @@ dropped on the floor.
 ;;; TODO: Remove old entries in message-cache, eventually.
 (defmethod memoize-message ((node gossip-node) (msg gossip-message-mixin) srcuid)
   "Record the fact that this node has seen this particular message.
-   In cases of solicitation messages, we also care about the upstream sender, so
-   we just save that as the value in the key/value pair."
+  In cases of solicitation messages, we also care about the upstream sender, so
+  we just save that as the value in the key/value pair."
   (kvs:relate-unique! (message-cache node)
                       (vec-repr:bev-vec (uid msg))
-                      (if srcuid
-                          (or (ignore-errors (vec-repr:bev-vec srcuid)) ; might be an actor name
-                              srcuid)
+                      (or srcuid
                           t) ; because solicitations from outside might not have a srcid
                       ))
 
@@ -1644,7 +1638,11 @@ dropped on the floor.
             (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
               (send-interim-reply thisnode kind soluid upstream-source)))))))
 
+(defun run-coalescer (coalescer local-data new-data)
+  (funcall coalescer local-data new-data))
+
 (defmethod generic-srr-handler ((msg final-reply) (thisnode gossip-node) srcuid)
+  (edebug 1 :generic-srr-handler :final-reply msg thisnode)
   (let* ((kind (kind msg))
          (soluid (solicitation-uid msg))
          (local-data (kvs:lookup-key (reply-cache thisnode) (vec-repr:bev-vec soluid)))
@@ -1652,7 +1650,7 @@ dropped on the floor.
     ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
     (kvs:relate-unique! (reply-cache thisnode)
                         (vec-repr:bev-vec soluid)
-                        (funcall coalescer local-data (first (args msg))))
+                        (run-coalescer coalescer local-data (first (args msg))))
     (cancel-replier thisnode kind soluid srcuid)))
 
 (defgeneric initial-reply-value (kind thisnode msgargs)
@@ -1728,7 +1726,7 @@ dropped on the floor.
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (edebug 1 srcnode :FINALREPLY soluid :to where-to-send-reply data)
+           (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
@@ -1755,7 +1753,7 @@ dropped on the floor.
     (kvs:remove-key (timers thisnode) (vec-repr:bev-vec soluid))
     (kvs:remove-key (timeout-handlers thisnode) (vec-repr:bev-vec soluid))
     ; must create a new reply here; cannot reuse an old one because its content has changed
-    (send-final-reply
+    (send-final-reply 
      thisnode
      (if (uid? reply-to)
          (if (uid= reply-to (uid thisnode)) ; can't send a reply to myself, so punt and send it upstream
@@ -1951,14 +1949,14 @@ gets sent back, and everything will be copacetic.
          (interim-data (when (and interim-table
                                   (hash-table-p interim-table))
                          (loop for reply being each hash-value of interim-table
-                           while reply collect (first (args reply)))))
+                           when reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    (edebug 5 node :COALESCE interim-data local-data interim-table)
+    (edebug 5 node :COALESCE interim-data (unwrap local-data) interim-table)
     (let ((coalesced-output
            (reduce coalescer
                    interim-data
                    :initial-value local-data)))
-      (edebug 5 node :COALESCED-OUTPUT coalesced-output)
+      (edebug 5 node :COALESCED-OUTPUT (unwrap coalesced-output))
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1974,7 +1972,7 @@ gets sent back, and everything will be copacetic.
                       (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) (vec-repr:bev-vec soluid))))
                         (if timeout-handler ; will be nil for messages that don't expect a reply
                             (funcall timeout-handler nil)
-                            ; (edebug 1 thisnode :NO-TIMEOUT-HANDLER! soluid) ; this is not an error. Quit logging it.
+                            (edebug 5 thisnode :NO-TIMEOUT-HANDLER! soluid)
                             )))
                      (t ; more repliers are expected
                       ; functionally coalesce all known data and send it upstream as another interim reply
