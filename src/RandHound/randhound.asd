@@ -47,14 +47,7 @@ THE SOFTWARE.
                         :pathname "./"
                         :serial t
                         :components (
-                                     ;; (:file "randhound")
-                                     (:file "rh-common")
-                                     (:file "rh-timestamps")
-                                     (:file "rh-logging")
-                                     (:file "rh-init")
-                                     (:file "rh-sim")
-                                     (:file "rh-client")
-                                     (:file "rh-server")
+                                     (:file "randhound")
                                      ))))
 
 (defsystem "randhound/test/allegro"

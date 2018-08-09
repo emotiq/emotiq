@@ -9,19 +9,19 @@
            (mapcar (lambda (plist)
                      (getf plist :public))
                    nodes)))
-         (coinbase-pkey-as-integer
+         (coinbase-pkey
           (getf (first nodes) :public))
          (coinbase-keypair
           (pbc:make-keying-triple
            (getf (first nodes) :public)
            (getf (first nodes) :private)))
-         (genesis-block              
-          (cosi/proofs:create-genesis-block coinbase-pkey-as-integer stakes)))
+         (genesis-block
+          (cosi/proofs:create-genesis-block coinbase-pkey stakes)))
     (values
      (cosi-simgen:with-block-list ((list genesis-block))
        (cosi/proofs/newtx:get-balance (emotiq/txn:address coinbase-keypair)))
      coinbase-keypair
-     coinbase-pkey-as-integer)))
+     coinbase-pkey)))
 
 (define-test verify-genesis-block-generate ()
   (let ((iterations 100))
@@ -32,8 +32,7 @@
             (multiple-value-bind (amount coinbase-keypair coinbase-public-address)
                 (create-and-check-genesis-block)
               (assert-true (equal (vec-repr:int (pbc:keying-triple-pkey coinbase-keypair))
-                                  coinbase-public-address))
+                                  (vec-repr:int coinbase-public-address)))
               (assert-true (equal amount
                                   (cosi/proofs/newtx:initial-total-coin-amount))))
             (format t ".")))))
-

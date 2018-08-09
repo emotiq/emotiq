@@ -153,57 +153,66 @@ THE SOFTWARE.
 
 ;; --------------------------------------------------------
 
+(defun %add-to-ready-queue (self)
+  ;; Mark busy, if not already marked. And if it wasn't
+  ;; already marked, place it into the ready queue and be
+  ;; sure there are Executives running.
+  (when (CAS (car (actor-busy self)) nil t)
+    ;; use the busy cell to hold our wakeup time - for use by watchdog,
+    ;; and non-nil for the CAS we just grabbed
+    (setf (car (actor-busy self)) (get-universal-time))
+    ;; The Ready Queue contains Actors awaiting a runtime thread. When
+    ;; dequeued, they will be sent to RUN by an executive thread.
+    (mailbox-send *actor-ready-queue* self ;; car is fn, cdr is timestamp
+                  :prio (actor-priority self))
+    (unless *executive-processes*
+      (ensure-executives))
+    ))
+
+
 (defmethod send ((self actor) &rest msg)
   ;; send a message to an Actor and possibly activate it if not
   ;; already running. SMP-safe
-  (let ((mbox (actor-mailbox self)))
-    (labels ((add-self-to-ready-queue ()
-               ;; Mark busy, if not already marked. And if it wasn't
-               ;; already marked, place it into the ready queue and be
-               ;; sure there are Executives running.
-               (when (CAS (car (actor-busy self)) nil t)
-                 ;; The Ready Queue just contains function closures to
-                 ;; be dequeued and executed by the Executives.
-                 (mailbox-send *actor-ready-queue* (cons #'run (get-universal-time)) ;; car is fn, cdr is timestamp
-                               :prio (actor-priority self))
-                 (unless *executive-processes*
-                   (ensure-executives))))
-             
-             (run ()
-               (#+:LISPWORKS hcl:unwind-protect-blocking-interrupts-in-cleanups
-                #+(OR :ALLEGRO :CLOZURE sbcl)  unwind-protect
-                   (let ((*current-actor* self))
-                     (loop for (msg ok) = (multiple-value-list
-                                           (next-message mbox))
-                           while ok do (apply 'dispatch-message self msg)))
-                 ;; <-- a message could have arrived here, but would
-                 ;; have failed to enqueue the Actor.  So we double
-                 ;; check after clearing the busy mark.
-                 ;;
-                 ;; Note that this had been a simple SETF shown
-                 ;; commented out and replaced with CAS:
-                 ;;
-                 ;;   (setf (car (actor-busy self)) nil)
-                 #-:LISPWORKS (CAS (car (actor-busy self)) t nil)
-                 #+:LISPWORKS (progn
-                                (setf (car (actor-busy self)) nil)
-                                (sys:ensure-memory-after-store))
-                 ;;
-                 ;; And while, ostensibly, that nilling SETF
-                 ;; accomplishes an atomic write just like the CAS
-                 ;; operation, there is another benefit to the CAS in
-                 ;; that any and all memory writes will have become
-                 ;; flushed to memory before CAS. Hence, when we query
-                 ;; the mailbox-not-empty-p we will see an accurate
-                 ;; mailbox. Without CAS, some mail could have been
-                 ;; written but not yet flushed to memory, and the
-                 ;; mailbox-not-empty-p could indicate incorrectly.
-                 ;;
-                 (when (mailbox-not-empty-p mbox)
-                   (add-self-to-ready-queue)))))
-      (deposit-message mbox msg)
-      (add-self-to-ready-queue))
-    ))
+  (deposit-message (actor-mailbox self) msg)
+  (%add-to-ready-queue self))
+
+
+(defun %run-actor (self)
+  (let ((mbox  (actor-mailbox self))
+        (since (car (actor-busy self)))) ;; wakeup time
+    (#+:LISPWORKS hcl:unwind-protect-blocking-interrupts-in-cleanups
+     #+(OR :ALLEGRO :CLOZURE sbcl)  unwind-protect
+     (let ((*current-actor* self))
+       (loop for (msg ok) = (multiple-value-list
+                             (next-message mbox))
+             while ok do (apply 'dispatch-message self msg)))
+     ;; -- the following are the unwind clauses --
+     ;; <-- a message could have arrived here, but would
+     ;; have failed to enqueue the Actor.  So we double
+     ;; check after clearing the busy mark.
+     ;;
+     ;; Note that this had been a simple SETF shown
+     ;; commented out and replaced with CAS:
+     ;;
+     ;;   (setf (car (actor-busy self)) nil)
+     #-:LISPWORKS (CAS (car (actor-busy self)) since nil) ;; need the wakeup time here...
+     #+:LISPWORKS (progn
+                    (setf (car (actor-busy self)) nil)
+                    (sys:ensure-memory-after-store))
+     ;;
+     ;; And while, ostensibly, that nilling SETF
+     ;; accomplishes an atomic write just like the CAS
+     ;; operation, there is another benefit to the CAS in
+     ;; that any and all memory writes will have become
+     ;; flushed to memory before CAS. Hence, when we query
+     ;; the mailbox-not-empty-p we will see an accurate
+     ;; mailbox. Without CAS, some mail could have been
+     ;; written but not yet flushed to memory, and the
+     ;; mailbox-not-empty-p could indicate incorrectly.
+     ;;
+     (when (mailbox-not-empty-p mbox)
+       (%add-to-ready-queue self))
+     )))
 
 ;; -----------------------------------------------
 ;; Since these methods are called against (CURRENT-ACTOR) they can
@@ -659,11 +668,11 @@ THE SOFTWARE.
 (defun executive-loop ()
   ;; the main executive loop
   (unwind-protect
-      (loop for entry = (mailbox-read *actor-ready-queue*
+      (loop for actor = (mailbox-read *actor-ready-queue*
                                       "Waiting for Actor")
             do
             (restart-case
-                (funcall (car entry)) ;; car is fn, cadr is timestamp
+                (%run-actor actor)
               (:terminate-actor ()
                 :report "Terminate Actor"
                 )))
@@ -680,16 +689,15 @@ THE SOFTWARE.
   ;; this is a support routine, to be called only from the safe
   ;; Monitor section. So, only one of us is mutating
   ;; *ACTOR-READY-QUEUE*, the pointer.
-  (let ((old-mb  (shiftf *actor-ready-queue*
-                         (make-prio-mailbox))))
+  (let ((old-mb     (shiftf *actor-ready-queue*
+                            (make-prio-mailbox)))
+        (do-nothing (make-actor #'do-nothing)))
     ;; nudge any Executives waiting on the queue to move over to the
     ;; new one.
-    (let ((entry (cons 'do-nothing (get-universal-time)))) ;; car is fn, cadr is timestamp
-      (mapc (lambda (proc)
-              (declare (ignore proc))
-              (mailbox-send old-mb entry))
-            *executive-processes*))
-    ))
+    (mapc (lambda (proc)
+            (declare (ignore proc))
+            (mailbox-send old-mb do-nothing))
+          *executive-processes*)))
 
 #|
 (defun test-stall ()
@@ -712,10 +720,10 @@ THE SOFTWARE.
     ((terminate-actor (actor)
        (dolist (exec *executive-processes*)
          (mpcompat:process-interrupt exec 'exec-terminate-actor actor)))
-     
+
      (check-sufficient-execs ()
-       (um:when-let (entry (mailbox-peek *actor-ready-queue*)) ;; anything waiting to run?
-         (let ((age  (- (get-universal-time) (cdr entry))))   ;; cadr entry is timestamp
+       (um:when-let (actor (mailbox-peek *actor-ready-queue*)) ;; anything waiting to run?
+         (let ((age  (- (get-universal-time) (car (actor-busy actor)))))
            (unless (< age *maximum-age*)
              ;; -------------------------------------------
              ;;

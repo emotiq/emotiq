@@ -8,11 +8,12 @@
 (defmethod address ((account pbc:keying-triple))
   (address (pbc:keying-triple-pkey account)))
 (defmethod address ((integers cons))
+  ;; not really a list of integers any more -- a list of public keys (tagged items)
   (address (pbc:make-keying-triple (first integers) (second integers))))
 
 (defmethod get-utxos ((account pbc:keying-triple))
   (get-utxos (address account)))
-(defmethod get-utxos ((address string))
+(defmethod get-utxos ((address pbc:address))
   (cosi-simgen:with-current-node cosi-simgen:*my-node*
     (cosi/proofs/newtx:get-utxos-per-account address)))
          
@@ -77,12 +78,8 @@
          :do (incf selected-amount tx-amount)
          :do (push txn-spec selected-txns)
          :do (cond ((= selected-amount amount) (exact))
-                   ((> selected-amount amount) (surplus))
-                   (t (error "insufficient funds for txamount ~A~%~tselected amount ~A~%~tselected transactions ~A"
-                             tx-amount
-                             selected-amount 
-                             selected-txns)))))))
-
+                   ((> selected-amount amount) (surplus))))
+      (error "insufficient funds in txns=~A for amount=~A" selected-txns amount))))
 
 
 ;; UTXOS: (list (TXO (TxID INDEX) AMT) ...)

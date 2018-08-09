@@ -3,9 +3,6 @@
 (in-package :cosi/proofs)
 
 
-
-
-                                                                                ;
 (defclass eblock ()
   ((protocol-version
     :initform 1
@@ -19,16 +16,19 @@
 
    (timestamp
     :reader block-timestamp
+    :initform nil
     :documentation 
       "Approximate creation time in seconds since Unix epoch. The time zone is UTC.")
 
    (leader-pkey
     :reader block-leader-pkey
+    :initform nil
     :documentation
     "Public key for the leader for this epoch.")
 
    (election-proof
-    :reader block-election-proof)
+    :reader block-election-proof
+    :initform nil)
 
    (signature
     :initform nil
@@ -52,6 +52,7 @@
 
    (witnesses-and-stakes
     :accessor block-witnesses-and-stakes
+    :initform nil
     :documentation
     "An a-list of the form
 
@@ -184,7 +185,7 @@ added to the blockchain."
       (when prev-block? 
         (with-slots (prev-block-hash)
             blk
-          (setf prev-block-hash (int (hash-block prev-block?)))))
+          (setf prev-block-hash (hash-block prev-block?))))
       blk)))
 
 

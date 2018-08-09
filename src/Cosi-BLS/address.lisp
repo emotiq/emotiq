@@ -83,21 +83,18 @@
 ;; currencies to be concerned with. NB: currently defaulting to testnet. Later,
 ;; consider changing later in project to mainnet. -mhd, 5/27/18
 
-
-
 (defun encode-address (hash160 version-octet)
   "Takes HASH160, a 20 byte RIPEMD160 hash of a public key, and a version octet,
   returns a corresponding string in Bitcoin address Base58check format."
   (let* ((prefix+data
            (concatenate
-            'ub8-vector `#(,version-octet) (vec-repr:bev-vec hash160)))
+            'ub8-vector `#(,version-octet) (hash:hash-bytes hash160)))
          (checksum-vec
-           (checksum-hash-address prefix+data))
+          (checksum-hash-address prefix+data))
          ;; tack that checksum onto the end of the prefix+data
          (prefix+data+checksum
            (concatenate 'ub8-vector prefix+data checksum-vec)))
-    (vec-repr:base58-str prefix+data+checksum)))
-
+    (pbc:addr prefix+data+checksum)))
 
 
 (defun checksum-hash-address (prefix+data)  
@@ -105,20 +102,20 @@
    with the version prefix followed by the 20 octets of hash data. This returns
    an octet vector of the first 4 bytes of the double sha2/256 hash of
    prefix+data."
-  (subseq (vec-repr:bev-vec
+  (subseq (hash:hash-bytes
            (hash:hash/sha2/256 (hash:hash/sha2/256 prefix+data)))
           0 4))
 
 
 
-(defun public-key-to-address (public-key &key net override-version)
+(defmethod public-key-to-address ((public-key pbc:public-key) &key net override-version)
   "Produce an address for PUBLIC-KEY. Keyword :NET can be either :MAIN for
    mainnet, :TEST for testnet, or nil to default.  The version prefix is usually
    determined by the net. However, if OVERRIDE-VERSION is specified non-nil, it
    should be a version prefix octet to be used, and in that case it is used
    instead. This is intended to be used as a testing and debugging feature."
   (encode-address
-   (hash:hash/ripemd/160 (hash:hash/sha2/256 (vec-repr:int public-key)))
+   (hash:hash/ripemd/160 (hash:hash/sha2/256 public-key))
    (or override-version
        (ecase (or net *default-net-for-public-key-to-address*)
          (:main +mainnet-version-for-public-key-to-address+)

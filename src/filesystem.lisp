@@ -47,7 +47,7 @@
 
 (defun tmp/ ()
   "Writable filesystem for temporary output"
-  (let ((d "#p/var/tmp/emotiq/"))
+  (let ((d (merge-pathnames "emotiq/" (uiop:default-temporary-directory))))
     (ensure-directories-exist d)
     d))
 
@@ -65,7 +65,7 @@
     (make-pathname :directory `(:relative ,@(cdr (pathname-directory dir))))))
 
 
-(defun new-temporary-directory (&key (root #p"/var/tmp/emotiq/"))
+(defun new-temporary-directory (&key (root (tmp/)))
   (loop
      :for sub-directory = (make-pathname
                             :defaults root

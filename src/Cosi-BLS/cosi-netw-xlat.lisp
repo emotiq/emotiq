@@ -83,35 +83,12 @@ THE SOFTWARE.
 
 (defmethod gossip-send (pkey aid msg)
   ;; stub code to do direct UDP until we plug in actual Gossip code...
-  (gossip:singlecast msg (int pkey)
+  (gossip:singlecast msg pkey
                      :graphID :uber))
 
 (defmethod ac:send ((pkey pbc:public-key) &rest msg)
-  (if (int= pkey (node-pkey *my-node*))
+  (if (pbc= pkey (node-pkey *my-node*))
       (apply 'ac:send (node-self *my-node*) msg)
     (gossip-send pkey nil msg)))
         
 ;; --------------------------------------------------------------
-;; THE SOCKET INTERFACE, TILL GOSSIP IS UP...
-;; --------------------------------------------------------------
-
-(defun make-hmac (msg pkey skey)
-  ;; Every packet sent to another node is accompanied by an HMAC that
-  ;; is unforgeable. If a MITM attack occurs, the receiving node will
-  ;; fail HMAC verification and just drop the incoming packet on the
-  ;; floor. So MITM modifications become tantamount to a DOS attack.
-  (pbc:sign-message msg pkey skey))
-
-
-(defun verify-hmac (packet)
-  (let ((decoded (ignore-errors
-                   ;; might not be a valid encoding
-                   (loenc:decode packet))))
-    (when (and decoded
-               (ignore-errors
-                 ;; might not be a pbc:signed-message
-                 (pbc:check-message decoded)))
-      ;; return the contained message
-      (pbc:signed-message-msg decoded))
-    ))
-

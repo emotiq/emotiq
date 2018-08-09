@@ -57,7 +57,8 @@
                emotiq/wallet
                emotiq-rest
                websocket/wallet
-	       emotiq/tracker)
+	       emotiq/tracker
+               emotiq/random)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -108,7 +109,7 @@
                emotiq/logging
                emotiq/filesystem
                lisp-object-encoder
-               crypto-pairings
+               core-crypto
                useful-macros)
   :components ((:module source
                 :pathname "./"
@@ -127,13 +128,24 @@
                 :serial t
                 :components ((:file "generate")))))
 
+(defsystem "emotiq/random"
+  :depends-on (emotiq/filesystem)
+  :components ((:module source
+                :pathname "./"
+                :components ((:file "repeatable-randoms")))))
+
 (defsystem "emotiq/app"
   :depends-on (gossip
                emotiq
                emotiq/txn
                emotiq/startup
-               cosi-bls)
+               cosi-bls
+               emotiq/random
+               useful-macros
+               core-crypto)
   :components ((:module source
                         :pathname "./"
-                        :components ((:file "app")))))
+                        :components ((:file "app")
+                                     (:file "app-get-transactions")
+                                     (:file "app-generate-transactions")))))
 

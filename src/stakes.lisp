@@ -17,7 +17,7 @@
       (with-open-file (o p
                          :direction :input)
         (loop :with form
-           :while (setf form (read o nil nil nil)) :collecting form)))))
+           :while (setf form (core-crypto:read-safely o)) :collecting form)))))
 
 (defparameter *keypairs-filename*
   (make-pathname :name "keypairs" :type "conf"))
@@ -27,7 +27,7 @@
     (emotiq:note "No pairs database found at '~a'" pathname)
     (return-from read-pairs-database nil))
   (with-open-file (s pathname)
-    (loop :for pair = (read s nil nil nil) 
+    (loop :for pair = (core-crypto:read-safely s) 
        :until (not pair)
        :collect pair)))
 

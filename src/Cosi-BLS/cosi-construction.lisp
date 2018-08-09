@@ -60,6 +60,10 @@ THE SOFTWARE.
              :initarg  :skey)
    (pkey     :accessor node-pkey     ;; cached ECC point for public key
              :initarg  :pkey)
+   (short-pkey :accessor node-short-pkey ;; short/fast public key for Randhound
+               :initarg :short-pkey)
+   (short-skey :accessor node-short-skey ;; short/fast secret key for Randhound
+               :initarg :short-skey)
    (parent   :accessor node-parent   ;; points to node of group parent
              :initarg  :parent
              :initform nil)
@@ -73,7 +77,8 @@ THE SOFTWARE.
    (blockchain     :accessor node-blockchain
                    :initform nil)
    (blockchain-tbl :accessor node-blockchain-tbl
-                   :initform (make-hash-table))
+                   :initform (make-hash-table
+                              :test 'equalp))
    (mempool        :accessor  node-mempool
                    :initform  (make-hash-table
                                :test 'equalp))
@@ -112,6 +117,8 @@ THE SOFTWARE.
    (self     :accessor node-self     ;; ptr to Actor handler
              :accessor gossip:application-handler ;; accessor used by gossip system to find our Actor
              :initarg  :self)
+   (rh-state :accessor node-rh-state
+             :initform nil)          ;; ptr to Randhound state info
    ))
 
 ;; -------------------------------------------------------
@@ -138,11 +145,14 @@ THE SOFTWARE.
 (define-symbol-macro *beacon*         (node-current-beacon *current-node*))
 (define-symbol-macro *local-epoch*    (node-local-epoch    *current-node*))
 
+;; randhound items
+(define-symbol-macro *rh-state*       (node-rh-state       *current-node*))
+
 (defun add-to-blockchain (node blk)
   (with-current-node node
-    (let ((hashID (int (hash-block blk))))
+    (let ((hashID (hash-block blk)))
       (setf *blockchain* hashID
-            (gethash hashID *blockchain-tbl*) blk))))
+            (gethash (bev-vec hashID) *blockchain-tbl*) blk))))
 
 ;; -------------------------------------------------------
 
@@ -173,9 +183,22 @@ THE SOFTWARE.
   (error "Need to specify..."))
 
 ;; new for Gossip support, and conceptually cleaner...
-(defmethod initialize-instance :around ((node node) &key &allow-other-keys)
+(defmethod initialize-instance :around ((node node) &key pkey skey &allow-other-keys)
   (setf (node-self node) (make-node-dispatcher node)
         *current-node*   node)
+  ;; -------------------------------------------------
+  ;; Set up some short keys for Randhound
+  ;;
+  ;; This should likely be changed for production. The code here is
+  ;; good'nuff for simulation
+  ;;
+  (let ((short-keys (pbc:with-pairing :PAIRING-AR160
+                      (pbc:make-key-pair (list :RANDHOUND skey)))
+                    ;; will be the hash of skey
+                    ))
+    (setf (node-short-pkey node) (pbc:keying-triple-pkey short-keys)
+          (node-short-skey node) (pbc:keying-triple-skey short-keys)))
+  ;; -------------------------------------------------
   (call-next-method))
 
 (defmethod initialize-instance :after ((node node) &key &allow-other-keys)
@@ -191,20 +214,79 @@ THE SOFTWARE.
 
 (defun latest-block ()
   (and *blockchain*
-       (gethash *blockchain* *blockchain-tbl*)))
+       (gethash (bev-vec *blockchain*) *blockchain-tbl*)))
 
 (defun block-list (&optional (from *blockchain*))
   (um:accum acc
     (um:nlet-tail iter ((id from))
       (when id
         ;; terminate on null reference (from genesis block)
-          (um:if-let (blk (gethash (int id) *blockchain-tbl*))
+          (um:if-let (blk (gethash (bev-vec id) *blockchain-tbl*))
             (progn
               ;; or terminate when missing the block
               (acc blk)
               (iter (block-prev-block-hash blk)))
             (warn "Missing block ~A -- you might want to ask for a back-fill" (short-id id)))
           ))))
+
+#|
+Twist comments, regarding possible messsage "you might want to ask for a back-fill"
+
+
+That error is present because I didn't know what else to do there. It needs something better, but I don't know your wallet node architecture. Presumably the user needs to be told that he can't obtain the blockchain at the moment. We do 3 tries at random, and each try has random seeking to some depth (8 levels?).
+
+The "you may want to ask for a backfill" should happen when tracing the blockchain, discovers some missing blocks (a hole - a backpointer hash value with no corresponding record in the *BLOCKCHAIN-TBL* hash table.)
+
+So it sounds like you either have invalid back hash pointers, or are comparing them incorrectly (like yesterday), or else there really is a hole in your blockchain records.
+
+(my bet says an incorrect comparison, but I believe I always convert to INT for a hash table key...)
+...
+Yes, I wrote that code last week, on Thursday, as I recall. A very loooong day too.
+
+That error is present because I didn't know what else to do there. It needs something better, but I don't know your wallet node architecture. Presumably the user needs to be told that he can't obtain the blockchain at the moment. We do 3 tries at random, and each try has random seeking to some depth (8 levels?).
+
+The "you may want to ask for a backfill" should happen when tracing the blockchain, discovers some missing blocks (a hole - a backpointer hash value with no corresponding record in the *BLOCKCHAIN-TBL* hash table.)
+
+So it sounds like you either have invalid back hash pointers, or are comparing them incorrectly (like yesterday), or else there really is a hole in your blockchain records.
+
+(my bet says an incorrect comparison, but I believe I always convert to INT for a hash table key...)
+...
+Also, while I doubt you have hit this condition yet, it is possible for more than one node to believe they are elected Leader, and will try to assemble a block and get the other witnesses to approve it.
+
+The hope here (hope is not a strategy!!) is that a BFT super-majority of nodes will ignore one of the faux Leaders and discard his request for approval.
+
+But if our logic is twisted, then it might be possible to have some weird hash back pointers. Our code would have to be really badly hosed for that to happen. The backlinks really ought to point to a block that really is on the blockchain.
+
+... but just sayin...
+...
+so maybe the block creator is using a different hash method than the witness comparators?
+....
+Just looking again at [...] WITH-BLOCK-LIST macro -- puts me in mind of something that Pascal Costanza and his student came up with - dyanamic function bindings - to complement dynamic data bindings.
+
+I have a copy of the code around here somewhere. About 1 page long. Very clever, and might actually do a better job of what Mark is trying to accomplish here (better in the sense of fewer unintended consequences).
+...
+Looked at the code where that "you might want to..." message arises. I wrote it. It is keying the hash table, INT-wise, a hash that is stored as an INT in the block. But I overtly call INT on the hash value anyway, just in case.
+
+And the blocks are stored, also using the INT of their hash, into that hash table, and uses the same Hash function as the creator to find its key for insertion.
+
+So that leads me to believe that your comparisons (performed by the hash table itself) are really valid. And so maybe there really is a hole?
+...
+The block header fields used to derive the hash value should all be immutable slots and unchanged after forming the hash. If anything in those header slots changes after the fact, then you could fail to derive the same hash value.
+
+But we are hashing the header of the previous block, already inserted into the blockchain, and so that block should be entirely immutable at that point.
+
+You could insert a periodic scanner to check the hashes of blocks in the blockchain and halt if it detects a change. If somewhere an immutable block got mutated...
+
+Or just insert a check on every call to (BLOCK-LIST).
+
+...
+
+(maphash 
+       (lambda (k v) 
+             (assert (pbc= k (hash-block v))))
+       *blockchain-tbl*)
+
+|#
 
 (defmacro with-block-list ((blockchain-list) &body body)
   `(let ((block-list (symbol-function 'cosi-simgen:block-list)))

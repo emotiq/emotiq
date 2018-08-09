@@ -1,6 +1,3 @@
-;; currently trying to track down "insuffient funds" on a second transaction
-;; using (emotiq/app::r2) to chip away at the problem
-;;
 ;; test usage:
 ;; (emotiq/app::test-app)
 
@@ -12,13 +9,6 @@
 (defparameter *tx2* nil)
 (defparameter *tx3* nil)
 (defparameter *tx4* nil)
-
-(defun get-nth-key (n)
-  "return a keying triple from the config file for nth id"
-  (let ((public-private (nth n (emotiq/config:get-keypairs))))
-    (pbc:make-keying-triple
-     (first public-private)
-     (second public-private))))
 
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
@@ -33,7 +23,7 @@
    (name :accessor account-name)))
 
 (defun get-genesis-key ()
-  (get-nth-key 0))
+  (emotiq/config:get-nth-key 0))
 
 (defun make-genesis-account ()
   (let ((r (make-instance 'account))
@@ -55,19 +45,63 @@
           (account-name a) name)
     a))
 
-(defun app2 ()
-  #+(or)
+(defun make-account-given-keypairs (name pkey skey)
+  "return an account class"
+  (let ((a (make-instance 'account)))
+    (setf (account-triple a) (pbc:make-keying-triple pkey skey)
+          (account-skey a) skey
+          (account-pkey a) pkey
+          (account-name a) name)
+    a))
+
+(defmacro with-current-node (&rest body)
+  `(cosi-simgen:with-current-node cosi-simgen::*my-node*
+     ,@body))
+
+;; from test/geness.lisp
+(defun verify-genesis-block (&key (root (emotiq/fs:etc/)))
+  (let* ((genesis-block
+          (emotiq/config:get-genesis-block
+           :root root))
+         (keypair
+          (emotiq/config:get-nth-key 0 :root root)))
+    (values
+     (cosi-simgen:with-block-list ((list genesis-block))
+       (cosi/proofs/newtx:get-balance (emotiq/txn:address keypair)))
+     (emotiq/txn:address keypair)
+     root)))
+
+(defun test-app ()
+  "entry point for tests"
+  (let ((strm emotiq:*notestream*))
+    (emotiq:main)
+    (setf gossip::*debug-level* nil)
+    (app)
+    (setq *node* cosi-simgen::*my-node*  ;; for debugging
+           *blocks* (cosi-simgen::block-list))
+    (verify-genesis-block)
+    (dump-results strm)
+    (generate-pseudo-random-transactions *alice*)))
+
+(defun app ()
+  "helper for tests"
+
   (wait-for-node-startup)
 
   (setf *genesis* (make-genesis-account))
 
+  (let ((bal (get-balance *genesis*))
+        (a (emotiq/txn:address (account-triple *genesis*))))
+    (emotiq:note "balance for genesis is ~A" bal)
+    (emotiq:note "address of genesis ~A" a))
+  
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
 	*mary* (make-account "mary")
         *james* (make-account "james"))
-
+  
   (let ((fee 10))
-
+    
     ;; make various transactions
     (send-all-genesis-coin-to *alice*)
 
@@ -80,13 +114,13 @@
     (sleep 30)
 
     (spend *bob* *mary* 290 :fee fee)
+    ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
 
     (sleep 120)))
 
-
 ;; alice should have 999...999,190
 ;; bob 190
-;; mary 190
+;; mary 480
 ;; james 90
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -96,8 +130,7 @@
 (defun wait-for-node-startup ()
   "do whatever it takes to get this node's blockchain to be current"
   ;; currently - nothing - don't care
-  (emotiq:note "sleeping to let blockchain start up (is this necessary?)")
-  (sleep 5)
+  ;; no-op
   )
 
 (defmethod publish-transaction ((txn cosi/proofs/newtx::transaction))
@@ -119,15 +152,15 @@
     (setf *tx0* txn)
     *tx0*))
 
-(defmacro with-current-node (&rest body)
-  `(cosi-simgen:with-current-node (cosi-simgen:current-node)
-     ,@body))
-
 (defmethod spend ((from account) (to account) amount &key (fee 10))
   "make a transaction and publish it"
   ;; minimum fee 10 required by Cosi-BLS/new-transactions.lisp/validate-transaction
   (with-current-node
-   (let ((txn (emotiq/txn:make-spend-transaction (account-triple from) (emotiq/txn:address (account-pkey to)) amount :fee fee)))
+   (let ((txn (emotiq/txn:make-spend-transaction
+               (account-triple from)
+               (emotiq/txn:address (account-pkey to))
+               amount
+               :fee fee)))
      (publish-transaction txn)
      (emotiq:note "sleeping to let txn propagate (is this necessary?)")
      (sleep 30)
@@ -141,55 +174,36 @@
 (defmethod get-balance ((a account))
   (get-balance (account-triple a)))
 
-(defmethod get-all-transactions-to-given-target-account ((a account))
-  "return a list of transactions that SPEND (and COLLET) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
-  (let ((account-address (emotiq/txn:address (account-pkey a)))
-        (result nil))
-    (cosi-simgen:with-current-node (cosi-simgen:current-node)
-      (cosi/proofs/newtx::do-blockchain (block) ;; TODO: optimize this
-        (cosi/proofs/newtx::do-transactions (tx block)
-          (when (or (eq :COLLECT (cosi/proofs/newtx::transaction-type tx))
-                    (eq :SPEND (cosi/proofs/newtx::transaction-type tx)))
-            (dolist (out (cosi/proofs/newtx::transaction-outputs tx)) 
-              (when (eq account-address (cosi/proofs/newtx::tx-out-public-key-hash out))
-                (push tx result)))))))
-    result))
-
-(defun test-app ()
-  (let ((strm emotiq:*notestream*))
-    (emotiq:main)
-    (app2)
-    (dump-results strm)))
 
 (defun dump-results (strm)
+
   (let ((bal-genesis (get-balance (get-genesis-key))))
     (emotiq:note"genesis balance(~a)~%" bal-genesis))
-  (let ((bal-alice (get-balance *alice*))
+
+  #+nil(let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
-    (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
-    #+nil(let ((txo-alice (get-all-transactions-to-given-target-account *alice*))
-               (txo-bob (get-all-transactions-to-given-target-account *bob*))
-               (txo-mary (get-all-transactions-to-given-target-account *mary*))
-               (txo-james (get-all-transactions-to-given-target-account *james*)))
-           (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                        txo-alice
-                        txo-bob
-                        txo-mary
-                        txo-james))
-    (setf emotiq:*notestream* *standard-output*) ;;; ?? I tried to dynamically bind emotiq:*notestream* with LET, but that didn't work (???)
-    (emotiq:note "sleeping again")
-    (setf emotiq:*notestream* strm)
-    (sleep 20)
     (with-current-node
      (setf emotiq:*notestream* *standard-output*)
      (cosi/proofs/newtx:dump-txs :blockchain t)
      (emotiq:note "")
      (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
      (dumpamounts)
-     (setf emotiq:*notestream* strm)
-     (values))))
+     
+     ;; this gathers all txns to alice/bob/mary/james (incl. change txns)
+     (let ((tx-alice (get-all-transactions-to-given-target-account *alice*))
+           (tx-bob (get-all-transactions-to-given-target-account *bob*))
+           (tx-mary (get-all-transactions-to-given-target-account *mary*))
+           (tx-james (get-all-transactions-to-given-target-account *james*)))
+       (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
+                    tx-alice
+                    tx-bob
+                    tx-mary
+                    tx-james)
+       
+       (setf emotiq:*notestream* strm)
+       (values)))))
 
 (defun dumpamounts ()
   (let ((aliceamount (- (- *max-amount* 10) 30 490 190 90))
@@ -208,93 +222,7 @@
      (values))))
 
 
-;;; ;; verify that transactions can refer to themselves in same block - apparently not
-;;
-;; initial: initial-coin-units * subunits-per-coin
-;;
-;; gossip:send node :kill-node
-;;
-
-;; stuff that worked a few days ago
-;; 
-;; (R2) works and produces 4 blocks.  The first block contains one txn - COINBASE.  The other 3 blocks contain 2 txns - a COLLECT (leader's reward) and a SPEND txn.
-;;
-;; I'm going to leave the code below in, until I can get the code above to work...
-
-(defun r2 ()
-  (setf gossip::*debug-level* 0)
-  (emotiq:main)
-  (let ((from (emotiq/app::make-genesis-account))
-        (paul (pbc:make-key-pair :paul)))
-    (let ((txn (emotiq/txn:make-spend-transaction
-                (emotiq/app::account-triple from)
-                (emotiq/txn:address paul) 1000)))
-      (gossip:broadcast (list :new-transaction-new :trn txn) :graphId :uber)
-      
-      ;; adding this transaction gives an "insufficient funds" message
-      ;; obs - 3 blocks were created when I used the debugger - does this need more time
-      ;; to settle?
-      (sleep 30)
-      (let ((mark (pbc:make-key-pair :mark)))
-             (let ((txn2 (emotiq/txn:make-spend-transaction paul (emotiq/txn:address mark) 500)))
-               (gossip:broadcast (list :new-transaction-new :trn txn2) :graphID :uber))
-             (sleep 30)
-             (let ((shannon (pbc:make-key-pair :shannon)))
-               (let ((txn3 (emotiq/txn:make-spend-transaction mark (emotiq/txn:address shannon) 50)))
-                 (gossip:broadcast (list :new-transaction-new :trn txn3) :graphID :uber)
-                 (sleep 30))))))
-
-  ;; inspect this node to see resulting blockchain
-  cosi-simgen:*my-node*)
-
-(defun r2-shutdown ()
+(defun shutdown ()
   (emotiq-rest:stop-server)
-  (websocket/wallet::stop-server))
-
-;; ideas to try:
-;; - see if we get two successive hold-elections w/o intervening :prepares (means that leader found
-;;   no work)
-;; - maybe also check our own mempool for emptiness?
-
-
-;; 
-;; potentially useful functions in new-transactions.lisp
-;;
-; find-transaction-per-id
-; make-transaction-inputs
-; verify-transaction
-; check-public-keys-for-transaction-inputs
-; utxo-p
-; find-tx
-
-(defun block-explorer ()
-  (for-all-blocks (b)
-     (for-all-transactions-in-block (tx b)
-        (explore-transaction (txid)))))
-
-#+(or)
-(defun explore-transaction (txid)
-  (let ((tx (cosi/proofs/newtx:find-tx txid)))
-    (let ((from-list (get-transaction-tx-outs tx)))
-      (let ((to-list (get-transaction-tx-inss tx)))
-        (let (out-txid-list (mapcar #'cosi/proofs/newtx:transaction-id from-txid-list))
-          (let (in-txid-list (mapcar #'cosi/proofs/newtx:transaction-id to-txid-list))
-            ;; at this point, 
-            ;; tx == the given transaction CLOS object
-            ;; txid == string txid for this transaction
-            ;; out-list == list of CLOS objects this tx gets inputs from
-            ;; out-txid-list == list of string id's this tx gets inputs from
-            ;; in-list == list of tx CLOS objects that this tx outputs to
-            ;; in-txid-list == list of string id's that this tx outputs to
-            (emotiq:note "[txids] tx=~A from=~A to=~A" txid)))))))
-
-(defun get-transaction-txid-outs (tx)
-  "return a list of CLOS transactions that are outputs of this transaction"
-  (cosi/proofs/newtx:transaction-outputs tx))
-
-(defun get-transaction-txid-ins (tx)
-  "return a list of CLOS transactions that are inputs of this transaction"
-  (cosi/proofs/newtx:transaction-inputs tx))
-
-
-  
+  (websocket/wallet::stop-server)
+  (core-crypto:shutdown))

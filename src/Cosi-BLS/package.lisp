@@ -51,9 +51,10 @@
    :ed-compress-pt
    :ed-decompress-pt
    :with-ed-curve
-   :ed-from-hash
+   :ed-pt-from-hash
    :ed-random-generator
-   :ed-random-pair)
+   :ed-random-pair
+   :hash-to-pt-range)
   (:import-from :ecc-crypto-b571
    :convert-int-to-nbytesv
    :convert-bytes-to-int)
@@ -294,6 +295,8 @@
    :set-executive-pool
    :with-borrowed-mailbox
    :pr)
+  (:import-from :pbc
+   :pbc=)
   (:export
    :*current-node*
    :current-node
@@ -314,6 +317,7 @@
    :*blockchain-tbl*
    :*mempool*
    :*utxo-table*
+   :*rh-state*
    :send
    :reply
    :node-dispatcher

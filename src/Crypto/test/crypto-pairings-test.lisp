@@ -1,15 +1,10 @@
-(in-package :crypto-pairings-test)
+(in-package :core-crypto-test)
 
 (define-test basis-consistency
-  (assert-true (hash:hash-check edec::*curve1174*  edec::*chk-curve1174*))
-  (assert-true (hash:hash-check edec::*curve-e382* edec::*chk-curve-e382*))
-  (assert-true (hash:hash-check edec::*curve41417* edec::*chk-curve41417*))
-  (assert-true (hash:hash-check edec::*curve-e521* edec::*chk-curve-e521*))
-
-  (assert-true (hash:hash-check pbc::*curve-default-ar160-params* pbc::*chk-curve-default-ar160-params*))
-  (assert-true (hash:hash-check pbc::*curve-fr256-params-old*     pbc::*chk-curve-fr256-params-old*))
-  (assert-true (hash:hash-check pbc::*curve-fr256-params*         pbc::*chk-curve-fr256-params*))
-  (assert-true (hash:hash-check pbc::*curve-fr449-params*         pbc::*chk-curve-fr449-params*))
+  (assert-true (hash:hash-check pbc::*pairing-default-ar160-params* pbc::*chk-pairing-default-ar160-params*))
+  (assert-true (hash:hash-check pbc::*pairing-fr256-params-old*     pbc::*chk-pairing-fr256-params-old*))
+  (assert-true (hash:hash-check pbc::*pairing-fr256-params*         pbc::*chk-pairing-fr256-params*))
+  (assert-true (hash:hash-check pbc::*pairing-fr449-params*         pbc::*chk-pairing-fr449-params*))
   )
 
 (define-test keying
@@ -57,7 +52,11 @@
 (define-test vrf
   (let* ((k    (make-key-pair :test))
         (vrf   (compute-vrf :test-seed (keying-triple-skey k))))
-    (assert-true (validate-vrf vrf (keying-triple-pkey k)))))
+    (assert-true (validate-vrf (vrf-proof vrf) (vrf-y vrf)))
+    (assert-true (validate-vrf-mapping :test-seed
+                                       (vrf-proof vrf)
+                                       (keying-triple-pkey k)
+                                       (vrf-y vrf)))))
 
 (define-test pedersen-proof
   (let* ((proof (make-pedersen-proof 15)))
@@ -90,6 +89,4 @@
     (assert-true (check-confidential-purchase ppurch
                                               cost fees))))
 |#
-
-
 

@@ -1,24 +1,27 @@
 # Emotiq demo blockchain network on localhost
 
-Using scripts located here, we can run 3 Emotiq nodes bound to 127.0.0.1.
+Using scripts located here, we can run upto 13 Emotiq nodes bound to 127.0.0.1.
 To avoid conflicts, each node uses its own set of TCP ports:
 
 1. Node 1 ports:
   * 3140 - REST API
-  * 3145 - WebSockets API
+  * 4145 - WebSockets API
   * 65000 - Gossip communications
 1. Node 2 ports:
   * 3141 - REST API
-  * 3146 - WebSockets API
+  * 4146 - WebSockets API
   * 65001 - Gossip communications
-1. Node 3 ports:
-  * 3142 - REST API
-  * 3147 - WebSockets API
-  * 65002 - Gossip communications
+
+...
+
+1. Node 13 ports:
+  * 3152 - REST API
+  * 4147 - WebSockets API
+  * 65012 - Gossip communications
 
 Configuration files for this nodes are located in `var/etc` folder from the root of the repository.
 
-Each node runs in its own `tmux` session. Sessions are named `node1`, `node2`, `node3` respectively.
+Each node runs in its own `tmux` session. Sessions are named `node1`, `node2` ... `node13` respectively.
 
 ## Requirements
 
@@ -84,10 +87,12 @@ brew install ansifilter
 
 This script copies configurations from `node-configs` directory to `var/etc`.
 
-### Start 3-node blockchain
+### Start N-node blockchain
 ```bash
-./start-blockchain.bash
+./start-blockchain.bash [N]
 ```
+
+Here `N` is number of nodes to start, optional, defaults to `3`.
 
 This script starts 3 nodes in the separate `tmux` sessions `node1`, `node2` and `node3`
 One can attach to the node Lisp REPL using following command:
@@ -97,8 +102,9 @@ tmux a -t node1   # for Node 1
 
 ### (Experimental) Start blockchain with CCL IDE running 1st node
 ```bash
-./start-blockchain-with-ide.bash
+./start-blockchain-with-ide.bash [N]
 ```
+Here `N` is number of nodes to start, optional, defaults to `3`.
 
 **ATTENTION** When buffer pops up, press `Command-Shift-E` to start node.
 CCL Cocoa IDE assumed to be named `Clozure CL64.app` (change )
@@ -107,13 +113,15 @@ CCL Cocoa IDE assumed to be named `Clozure CL64.app` (change )
 
 ### Run single WebSockets ping to each node
 ```bash
-./ping-nodes.bash
+./ping-nodes.bash [N]
 ```
+Here `N` is number of nodes to start, optional, defaults to `3`.
 
 ### Stop all nodes
 ```bash
-./stop-blockchain.bash
+./stop-blockchain.bash [N]
 ```
+Here `N` is number of nodes to start, optional, defaults to `3`.
 
 ### Toggle `tmux` session logging for a node
 ```bash
