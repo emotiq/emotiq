@@ -114,3 +114,6 @@ For all outputs of transaction
 (defmethod get-transactions ((a acount))
   (append (get-transactions-to-given-target-account a)
           (get-transactions-from-given-target-account a)))
+
+(defun address-of-genesis ()
+  (emotiq/txn:address (emotiq/app:triple emotiq/app::*genesis*)))

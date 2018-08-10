@@ -191,7 +191,8 @@
    #:payee-address
    #:amount-paid
    #:address-of-sender
-   #:amount-in-input))
+   #:amount-in-input
+   #:address-of-genesis))
 
 (defpackage emotiq/random
   (:use #:cl)
