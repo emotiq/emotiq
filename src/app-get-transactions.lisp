@@ -1,6 +1,6 @@
 (in-package :emotiq/app)
 
-;; this is test code only - striving for obviousness, not efficiency (probably only needs a single pass throught blocks/txns)
+;; this is test code only - striving for obviousness, not efficiency (probably only needs a single pass through blocks/txns)
 
 #|
 
@@ -32,9 +32,9 @@ For all outputs of transaction
 
 (defmethod get-all-transactions-to-given-target-account ((a account))
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions) ; "
-  (let ((account-address (emotiq/txn:address (a, ccount-pkey a)))
+  (let ((account-address (emotiq/txn:address (account-pkey a)))
         (result nil))
-    (cosi-simgen:with-current-node (cosi-simgen:current-node)
+    (emotiq/app::with-current-node
       (cosi/proofs/newtx:do-blockchain (block) ;; TODO: optimize this
         (cosi/proofs/newtx:do-transactions (tx block)
           (when (or (eq :COLLECT (cosi/proofs/newtx:transaction-type tx))
@@ -54,7 +54,7 @@ For all outputs of transaction
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) from account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
   (let ((account-address (emotiq/txn:address (account-pkey a)))
         (result nil))
-    (cosi-simgen:with-current-node (cosi-simgen:current-node)
+    (emotiq/app::with-current-node
       (cosi/proofs/newtx:do-blockchain (block)
         (cosi/proofs/newtx:do-transactions (tx block)
           (when (or (eq :COLLECT (cosi/proofs/newtx:transaction-type tx))
@@ -62,7 +62,7 @@ For all outputs of transaction
             (dolist (inputs (cosi/proofs/newtx:transaction-inputs tx)) 
               ;; assert (all inputs point to the same address)
               (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-in-id
-                (push tx result)))))))
+                (push tx result)))))))))
     result))
 
 (defmethod get-address-of-sender ((tx cosi/proofs/newtx:transaction))
@@ -77,6 +77,15 @@ For all outputs of transaction
       (if (eq :coinbase (cosi/proofs/newtx:transaction-type prev-tx))
           (address-of-genesis)
         (input-address (first (cosi/proofs/newtx:transaction-inputs prev-tx)))))))
+
+(defmethod input-address ((in cosi/proofs/newtx:transaction-input))
+  "return address of this input by reaching back to the output which is connected to it"
+  (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id))
+        (index (cosi/proofs/newtx:tx-in-index)))
+    (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
+      (let ((outlist (cosi/proofs/newtx:transaction-outputs)))  ;; sequence of outputs
+        (let ((out (nth index outlist)))  ;; index and grab appropriate output
+          (cosi/proofs/newtx:tx-out-public-key-hash out))))))  ;; TODO: check if this is the correct use of this field
 
 (defmethod amount-in-input ((in cosi/proofs/newtx:transaction-input))
   "return amount sent to this input by an output from a txn"
@@ -99,11 +108,11 @@ For all outputs of transaction
 
 (defmethod get-epoch ((eblock cosi/proofs:eblock))
   ;; very inefficient
-  (emotiq/app:with-current-node
+  (emotiq/app::with-current-node
    (length (cosi-simgen:block-list))))
 
 (defmethod fee-paid-for-transaction ((tx cosi/proofs/newtx:transaction))
-  (cosi/proofs/newtx:compute-transaaction-fee tx))
+  (cosi/proofs/newtx:compute-transaction-fee tx))
 
 (defmethod payee-address ((out cosi/proofs/newtx:transaction-output))
   (cosi/proofs/newtx:tx-out-public-key-hash out))
@@ -111,9 +120,9 @@ For all outputs of transaction
 (defmethod amount-paid ((out cosi/proofs/newtx:transaction-output))
   (cosi/proofs/newtx:tx-out-amount out))
 
-(defmethod get-transactions ((a acount))
-  (append (get-transactions-to-given-target-account a)
-          (get-transactions-from-given-target-account a)))
+(defmethod get-transactions ((a account))
+  (append (get-all-transactions-to-given-target-account a)
+          (get-all-transactions-from-given-target-account a)))
 
 (defun address-of-genesis ()
-  (emotiq/txn:address (emotiq/app:triple emotiq/app::*genesis*)))
+  (emotiq/txn:address (emotiq/app::account-triple emotiq/app::*genesis*)))

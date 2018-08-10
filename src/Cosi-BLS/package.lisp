@@ -244,6 +244,7 @@
    to-txid
    find-tx
 
+   #:transaction
    #:transaction-type
    #:compute-transaction-fee
    #:tx-out-public-key-hash
@@ -252,10 +253,11 @@
    #:do-transactions
    #:transaction-ouputs
    #:transaction-inputs
-   #:transaction-ouput
+   #:transaction-output
    #:transaction-input
    #:account-addresses=
    #:tx-in-id
+   #:tx-in-index
    #:find-transaction-per-id))
 
 ;; from cosi-construction
