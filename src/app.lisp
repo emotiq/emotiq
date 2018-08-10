@@ -10,6 +10,8 @@
 (defparameter *tx3* nil)
 (defparameter *tx4* nil)
 
+(defparameter *blocks* nil)
+
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
 (defparameter *bob* nil)
@@ -229,10 +231,23 @@
 
 
 (defun writebc (&optional (filename "block-chain.loenc"))
-  (let ((f (merge-pathnames (emotiq/user/root/) filename)))
+  (let ((f (merge-pathnames (emotiq/filesystem:emotiq/user/root/) filename)))
     (with-open-file (o f
                        :element-type '(unsigned-byte 8)
                        :direction :output
                        :if-exists :supersede)
-      (loenc:serialize (cosi-simgen:block-list) o))))
+      (loenc:serialize (cosi-simgen:block-list) o)
+      (values))))
+
+
+(defun readbc (&optional (filename "block-chain.loenc"))
+  (let ((f (merge-pathnames (emotiq/filesystem:emotiq/user/root/) filename)))
+    (with-open-file (o f
+                       :element-type '(unsigned-byte 8)
+                       :direction :input)
+      (setf emotiq/app::*blocks* (loenc:deserialize o)))
+    (format t "~%blockchain now available in emotiq/app:*blocks*~%~%")
+    emotiq/app::*blocks*))
+
+
   
