@@ -61,8 +61,9 @@ For all outputs of transaction
                     (eq :SPEND (cosi/proofs/newtx:transaction-type tx)))
             (dolist (inputs (cosi/proofs/newtx:transaction-inputs tx)) 
               ;; assert (all inputs point to the same address)
-              (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-in-id
-                (push tx result)))))))))
+              (let ((any-single-input (first inputs)))
+                (when (cosi/proofs/newtx:account-addresses= account-address (input-address any-single-input))
+                  (push tx result))))))))
     result))
 
 (defmethod get-address-of-sender ((tx cosi/proofs/newtx:transaction))
