@@ -242,7 +242,21 @@
    get-balance
 
    to-txid
-   find-tx))
+   find-tx
+
+   #:transaction-type
+   #:compute-transaction-fee
+   #:tx-out-public-key-hash
+   #:tx-out-amount
+   #:do-blockchain
+   #:do-transactions
+   #:transaction-ouputs
+   #:transaction-inputs
+   #:transaction-ouput
+   #:transaction-input
+   #:account-addresses=
+   #:tx-in-id
+   #:find-transaction-per-id))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen

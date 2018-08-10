@@ -179,7 +179,19 @@
    #:send-all-genesis-coin-to
    #:spend
    #:get-transactions
-   #:get-balance))
+   #:get-balance
+   #:get-all-transactions-to-given-target-account
+   #:get-all-transactions-from-given-target-account
+   #:get-address-of-sender
+   #:amount-in-input
+   #:get-txid
+   #:get-tx-type
+   #:get-epoch
+   #:fee-paid-for-transaction
+   #:payee-address
+   #:amount-paid
+   #:address-of-sender
+   #:amount-in-input))
 
 (defpackage emotiq/random
   (:use #:cl)
