@@ -230,6 +230,8 @@
   (core-crypto:shutdown))
 
 
+
+
 (defun writebc (&optional (filename "block-chain.loenc"))
   (let ((f (merge-pathnames (emotiq/filesystem:emotiq/user/root/) filename)))
     (with-open-file (o f

@@ -192,7 +192,8 @@
    #:amount-paid
    #:address-of-sender
    #:amount-in-input
-   #:address-of-genesis))
+   #:address-of-genesis
+   #:*blocks*))
 
 (defpackage emotiq/random
   (:use #:cl)
