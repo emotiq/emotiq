@@ -21,13 +21,13 @@ For each transaction
 
 For all inputs of transactions
 
-1.	Address that input came from
-2.	amount in the input
+1.	Address that input came from                                         ==> (address-of-sender current-tx)
+2.	amount in the input                                                  ==> (amount-in-input in)
 
 For all outputs of transaction
 
-1.	Address that was paid
-2.	amount that was paid.
+1.	Address that was paid                                                ==> (cosi/proofs/newtx::tx-out-public-key-hash out)
+2.	amount that was paid.                                                ==> (cosi/proofs/newtx::tx-out-amount out)
 |#
 
 (defmethod get-all-transactions-to-given-target-account ((a account))
@@ -73,7 +73,20 @@ For all outputs of transaction
   ;; I'm not unwinding the input fully - it points back to a transaction output and index - index not needed, we
   ;; just need to know who sent this
   (let ((prev-transaction-id (tx-in-id (first (cosi/proofs/newtx::transaction-inputs tx)))))
-    (let ((prev-tx (get-transaction-by-id prev-transaction-id)))
+    (let ((prev-tx (find-transaction-per-id tx-in-id)))  ;; inefficient
       (if (eq :coinbase (cosi/proofs/newtx::transaction-type prev-tx))
           (address-of-genesis)
         (input-address (first (cosi/proofs/newtx::transaction-inputs prev-tx)))))))
+
+(defmethod amount-in-input ((in cosi/proofs/newtx::transaction-input))
+  "return amount sent to this input by an output from a txn"
+  (let ((prev-txn-id (cosi/proofs/newtx::tx-in-id))
+        (index (cosi/proofs/newtx::tx-in-index)))
+    (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
+      (let ((outlist (cosi/proofs/newtx::transaction-outputs)))  ;; sequence of outputs
+        (let ((out (nth index outlist)))  ;; index and grab appropriate output
+          (cosi/proofs/newtx::tx-out-amount out))))))  ;; return amount from that particular output
+
+(defun find-transaction-per-id (txid)
+  ;; inefficient - this calls do-blockchain and do-transactions
+  (cosi/proofs/newtx::find-transaction-per-id txid))
