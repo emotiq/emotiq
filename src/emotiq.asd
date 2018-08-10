@@ -144,7 +144,9 @@
                cosi-bls
                emotiq/random
                useful-macros
-               core-crypto)
+               core-crypto
+               emotiq/filesystem
+               lisp-object-encoder)
   :components ((:module source
                         :pathname "./"
                         :components ((:file "app")

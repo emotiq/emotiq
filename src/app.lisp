@@ -226,3 +226,13 @@
   (emotiq-rest:stop-server)
   (websocket/wallet::stop-server)
   (core-crypto:shutdown))
+
+
+(defun writebc (&optional (filename "block-chain.loenc"))
+  (let ((f (merge-pathnames (emotiq/user/root/) filename)))
+    (with-open-file (o f
+                       :element-type '(unsigned-byte 8)
+                       :direction :output
+                       :if-exists :supersede)
+      (loenc:serialize (cosi-simgen:block-list) o))))
+  
