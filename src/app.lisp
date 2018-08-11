@@ -238,7 +238,7 @@
                        :element-type '(unsigned-byte 8)
                        :direction :output
                        :if-exists :supersede)
-      (loenc:serialize (cosi-simgen:block-list) o)
+      (loenc:serialize emotiq/app::*blocks* o)
       (values))))
 
 
