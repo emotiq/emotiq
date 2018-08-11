@@ -193,7 +193,8 @@
    #:address-of-sender
    #:amount-in-input
    #:address-of-genesis
-   #:*blocks*))
+   #:*blocks*
+   #:*node*))
 
 (defpackage emotiq/random
   (:use #:cl)
