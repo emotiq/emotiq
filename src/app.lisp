@@ -81,7 +81,8 @@
     (setf gossip::*debug-level* nil)
     (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
-           *blocks* (cosi-simgen::block-list))
+           *blocks (cosi-simgen::block-list))
+    (writebc)
     (verify-genesis-block)
     (dump-results strm)
     (generate-pseudo-random-transactions *alice*)))
