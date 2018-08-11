@@ -80,8 +80,8 @@
     (emotiq:main)
     (setf gossip::*debug-level* nil)
     (app)
-    (setq *node* cosi-simgen::*my-node*  ;; for debugging
-           *blocks (cosi-simgen::block-list))
+    (setf emotiq/app:*node* cosi-simgen::*my-node*  ;; for debugging
+          emotiq/app:*blocks (cosi-simgen::block-list))
     (writebc)
     (verify-genesis-block)
     (dump-results strm)
