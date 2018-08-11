@@ -11,6 +11,7 @@
 (defparameter *tx4* nil)
 
 (defparameter *blocks* nil)
+(defparameter *node* nil)
 
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
@@ -178,6 +179,7 @@
 
 
 (defun dump-results (strm)
+  (declare (ignorable strm))
 
   (let ((bal-genesis (get-balance (get-genesis-key))))
     (emotiq:note"genesis balance(~a)~%" bal-genesis))
