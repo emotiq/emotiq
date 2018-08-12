@@ -32,6 +32,8 @@ For all outputs of transaction
 
 (defmethod get-all-transactions-to-given-target-account ((a account))
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions) ; "
+  ;; FYI - there is one transaction from alice to bob and one transaction from bob to mary - this second transaction 
+  ;; produces "change" back to bob, hence, there are two transactions TO bob (one from alice and one from bob)
   (let ((account-address (emotiq/txn:address (account-pkey a)))
         (result nil))
     (emotiq/app::with-current-node
@@ -40,18 +42,13 @@ For all outputs of transaction
           (when (or (eq :COLLECT (cosi/proofs/newtx:transaction-type tx))
                     (eq :SPEND (cosi/proofs/newtx:transaction-type tx)))
             (dolist (out (cosi/proofs/newtx:transaction-outputs tx)) 
-              #+nil-might-help-with-debug(emotiq:note "comparing ~a [~a] account-address ~a to transaction-output ~a -> ~a"
-                           (account-name a)
-                           (emotiq/txn:address (account-triple a))
-                           account-address
-                           (cosi/proofs/newtx:tx-out-public-key-hash out)
-                           (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-hash out)))
               (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-hash out))
                 (push tx result)))))))
     result))
 
 (defmethod get-all-transactions-from-given-target-account ((a account))
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) from account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
+  ;; FYI - there should be ONE transaction FROM bob, with two outputs (one back to bob)
   (let ((account-address (emotiq/txn:address (account-pkey a)))
         (result nil))
     (emotiq/app::with-current-node

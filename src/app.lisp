@@ -85,7 +85,7 @@
     (writebc)
     (verify-genesis-block)
     (dump-results strm)
-    (generate-pseudo-random-transactions *alice*)))
+    #+nil(generate-pseudo-random-transactions *alice*)))
 
 (defun make-accounts ()
   (setf *genesis* (make-genesis-account))
@@ -184,7 +184,7 @@
   (declare (ignorable strm))
 
   (let ((bal-genesis (get-balance (get-genesis-key))))
-    (emotiq:note"genesis balance(~a)~%" bal-genesis))
+    (emotiq:note"genesis balance(~a)" bal-genesis))
 
   #+nil(let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
