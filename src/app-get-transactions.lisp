@@ -59,7 +59,7 @@ For all outputs of transaction
         (cosi/proofs/newtx:do-transactions (tx block)
           (when (or (eq :COLLECT (cosi/proofs/newtx:transaction-type tx))
                     (eq :SPEND (cosi/proofs/newtx:transaction-type tx)))
-            (dolist (inputs (cosi/proofs/newtx:transaction-inputs tx)) 
+            (let ((inputs (cosi/proofs/newtx:transaction-inputs tx))) 
               ;; assert (all inputs point to the same address)
               (let ((any-single-input (first inputs)))
                 (when (cosi/proofs/newtx:account-addresses= account-address (input-address any-single-input))
@@ -73,7 +73,7 @@ For all outputs of transaction
   ;; being careful about COINBASE (which has no inputs)
   ;; I'm not unwinding the input fully - it points back to a transaction output and index - index not needed, we
   ;; just need to know who sent this
-  (let ((prev-transaction-id (tx-in-id (first (cosi/proofs/newtx:transaction-inputs tx)))))
+  (let ((prev-transaction-id (cosi/proofs/newtx:tx-in-id (first (cosi/proofs/newtx:transaction-inputs tx)))))
     (let ((prev-tx (find-transaction-per-id tx-in-id)))  ;; inefficient
       (if (eq :coinbase (cosi/proofs/newtx:transaction-type prev-tx))
           (address-of-genesis)
@@ -81,16 +81,18 @@ For all outputs of transaction
 
 (defmethod input-address ((in cosi/proofs/newtx:transaction-input))
   "return address of this input by reaching back to the output which is connected to it"
-  (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id))
-        (index (cosi/proofs/newtx:tx-in-index)))
-    (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
-      (let ((outlist (cosi/proofs/newtx:transaction-outputs)))  ;; sequence of outputs
-        (let ((out (nth index outlist)))  ;; index and grab appropriate output
-          (cosi/proofs/newtx:tx-out-public-key-hash out))))))  ;; TODO: check if this is the correct use of this field
+  (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id in))
+        (index (cosi/proofs/newtx:tx-in-index in)))
+    (if (= -1 index)
+        (address-of-genesis)
+      (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
+        (let ((outlist (cosi/proofs/newtx:transaction-outputs prev-txn)))  ;; sequence of outputs
+          (let ((out (nth index outlist)))  ;; index and grab appropriate output
+            (cosi/proofs/newtx:tx-out-public-key-hash out)))))))  ;; TODO: check if this is the correct use of this field
 
 (defmethod amount-in-input ((in cosi/proofs/newtx:transaction-input))
   "return amount sent to this input by an output from a txn"
-  (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id))
+  (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id in))
         (index (cosi/proofs/newtx:tx-in-index)))
     (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
       (let ((outlist (cosi/proofs/newtx:transaction-outputs)))  ;; sequence of outputs
@@ -107,10 +109,22 @@ For all outputs of transaction
 (defmethod get-tx-type ((tx cosi/proofs/newtx:transaction))
   (cosi/proofs/newtx:transaction-type tx))
 
+(defmethod get-epoch ((eblock (eql nil)))
+  0)
+
 (defmethod get-epoch ((eblock cosi/proofs:eblock))
   ;; very inefficient
-  (emotiq/app::with-current-node
-   (length (cosi-simgen:block-list))))
+  ;; cosi-simgen::block-list produces a list of all the blocks in a node's blockchain
+  ;; it takes an optional parameter which represents the block to start with (instead of
+  ;; the full blockchain)J
+  (let ((hblock (cosi/proofs:hash-block eblock)))
+    (let ((blocks-from (cosi-simgen::block-list hblock)))
+      (1- (length blocks-from)))))
+     
+(defun test-epoch ()
+  "should return the epoch of every block in *blocks*"
+  (mapcar #'emotiq/app::get-epoch emotiq/app:*blocks*))
+    
 
 (defmethod fee-paid-for-transaction ((tx cosi/proofs/newtx:transaction))
   (cosi/proofs/newtx:compute-transaction-fee tx))
@@ -121,7 +135,7 @@ For all outputs of transaction
 (defmethod amount-paid ((out cosi/proofs/newtx:transaction-output))
   (cosi/proofs/newtx:tx-out-amount out))
 
-(defmethod get-transactions ((a account))
+(defmethod get-transactions ((a account)) ;;TODO duplicates
   (append (get-all-transactions-to-given-target-account a)
           (get-all-transactions-from-given-target-account a)))
 

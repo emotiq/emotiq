@@ -194,7 +194,12 @@
    #:amount-in-input
    #:address-of-genesis
    #:*blocks*
-   #:*node*))
+   #:*node*
+   #:*genesis*
+   #:*alice*
+   #:*bob*
+   #:*mary*
+   #:*james*))
 
 (defpackage emotiq/random
   (:use #:cl)

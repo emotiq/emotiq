@@ -87,23 +87,24 @@
     (dump-results strm)
     (generate-pseudo-random-transactions *alice*)))
 
+(defun make-accounts ()
+  (setf *genesis* (make-genesis-account))
+  (setf *alice* (make-account "alice")
+	*bob* (make-account "bob")
+	*mary* (make-account "mary")
+        *james* (make-account "james")))
+  
 (defun app ()
   "helper for tests"
 
   (wait-for-node-startup)
 
-  (setf *genesis* (make-genesis-account))
+  (make-accounts)
 
   (let ((bal (get-balance *genesis*))
         (a (emotiq/txn:address (account-triple *genesis*))))
     (emotiq:note "balance for genesis is ~A" bal)
     (emotiq:note "address of genesis ~A" a))
-  
-  (setf *alice* (make-account "alice")
-	*bob* (make-account "bob")
-	*mary* (make-account "mary")
-        *james* (make-account "james"))
-  
   (let ((fee 10))
     
     ;; make various transactions
@@ -242,17 +243,26 @@
                        :direction :output
                        :if-exists :supersede)
       (loenc:serialize emotiq/app::*blocks* o)
-      (values))))
-
+      (loenc:serialize emotiq/app::*genesis* o)
+      (loenc:serialize emotiq/app::*alice* o)
+      (loenc:serialize emotiq/app::*bob* o)
+      (loenc:serialize emotiq/app::*mary* o)
+      (loenc:serialize emotiq/app::*james* o)
+  (values))))
 
 (defun readbc (&optional (filename "block-chain.loenc"))
   (let ((f (merge-pathnames (emotiq/filesystem:emotiq/user/root/) filename)))
     (with-open-file (o f
                        :element-type '(unsigned-byte 8)
                        :direction :input)
-      (setf emotiq/app::*blocks* (loenc:deserialize o)))
-    (format t "~%blockchain now available in emotiq/app:*blocks*~%~%")
-    emotiq/app::*blocks*))
+      (setf emotiq/app::*blocks* (loenc:deserialize o))
+      (setf emotiq/app:*genesis* (loenc:deserialize o))
+      (setf emotiq/app:*alice* (loenc:deserialize o))
+      (setf emotiq/app:*bob* (loenc:deserialize o))
+      (setf emotiq/app:*mary* (loenc:deserialize o))
+      (setf emotiq/app:*james* (loenc:deserialize o))))
+  (format t "~%blockchain now available in emotiq/app:*blocks*~%~%")
+  emotiq/app::*blocks*)
 
 
   
