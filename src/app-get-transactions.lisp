@@ -117,6 +117,8 @@ For all outputs of transaction
   ;; cosi-simgen::block-list produces a list of all the blocks in a node's blockchain
   ;; it takes an optional parameter which represents the block to start with (instead of
   ;; the full blockchain)J
+  ;; FYI: *blockchain* contain a single hashed (hash-block) eblock
+  ;; block-list returns a list of (not hashed) eblocks
   (let ((hblock (cosi/proofs:hash-block eblock)))
     (let ((blocks-from (cosi-simgen::block-list hblock)))
       (1- (length blocks-from)))))
