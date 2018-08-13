@@ -71,10 +71,10 @@
      (emotiq/txn:address keypair)
      root)))
 
-(defun test-app ()
+(defun test-app (&key etc-and-wallets)
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
-    (emotiq:main)
+    (emotiq:main :etc-and-wallets etc-and-wallets)
     (setf gossip::*debug-level* nil)
     (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
