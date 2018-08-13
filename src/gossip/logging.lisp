@@ -118,7 +118,7 @@
     ;(format *standard-output* "Serializing log to ~a" path)
     ;; must not use FORMAT to *standard-output* here, because this is being
     ;; run in a multiprocessing environment (Actors or no Actors)
-    (lisp-object-encoder:serialize logvector stream)))
+    (loenc:serialize logvector stream)))
     
 (defun write-as-string (msg stream)
   "Writes a list of objects (msg) as a string to stream"
@@ -152,7 +152,7 @@
   "Deserialize object-based log file at path"
   (with-open-file
       (o path :direction :input :element-type '(unsigned-byte 8))
-    (lisp-object-encoder:deserialize o)))
+    (loenc:deserialize o)))
 
 (defun %save-log (&key (text-only nil) (copy-first t))
   "Saves current *log* to two files -- one as objects and one as just strings.
