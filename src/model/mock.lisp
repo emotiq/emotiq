@@ -89,12 +89,12 @@
                            (:address . ,address)
                            (:amount . 1000))))))))
 
+#+nil
 (defun transactions ()
   *transactions*)
 
-#+(or)
 (defun transactions-from-chain ()
-  (emotiq/app:get-all-transactions-to-a-given-target-account
+  (emotiq/app:get-transactions-from-chain
    (emotiq/txn:address
     (emotiq/wallet:keying-triple
      (emotiq/wallet:get-wallet-named emotiq/wallet:*default-wallet-name*)))))

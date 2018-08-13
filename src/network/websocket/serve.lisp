@@ -75,7 +75,7 @@
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")
-             (setf result (model/wallet:transactions)))
+             (setf result (model/wallet:transactions-from-chain)))
             (t
              (setf result nil
                    error `(:object (:code . -32601)

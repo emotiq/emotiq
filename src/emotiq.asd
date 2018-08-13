@@ -59,7 +59,8 @@
                alexandria
                websocket/wallet
 	       emotiq/tracker
-               emotiq/random)
+               emotiq/random
+               emotiq/app)
   :components ((:module source
                 :pathname "./"
                 :serial t
@@ -140,7 +141,7 @@
   :depends-on (gossip
                emotiq
                emotiq/txn
-               emotiq/startup
+               ;emotiq/startup
                cosi-bls
                emotiq/random
                useful-macros

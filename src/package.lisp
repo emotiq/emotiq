@@ -182,6 +182,7 @@
    #:get-balance
    #:get-all-transactions-to-given-target-account
    #:get-all-transactions-from-given-target-account
+   #:get-transactions
    #:get-address-of-sender
    #:amount-in-input
    #:get-txid

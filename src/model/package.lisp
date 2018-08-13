@@ -3,7 +3,7 @@
   (:nicknames :model/wallet)
   (:export
    #:mock
-   #:transactions
+   #:transactions-from-chain
    #:recovery-phrase
    #:get-wallet
    #:enumerate-wallets
