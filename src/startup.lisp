@@ -23,6 +23,12 @@
 
 (in-package "EMOTIQ")
 
+(defun emotiq-watchdog (age)
+  "Don't throw an error when this happens; just report it"
+  (em-warn "Actor Executives are stalled (blocked waiting or compute bound). Last heartbeat was ~A sec ago."
+             age)
+  (ac::start-watchdog-timer))
+
 (defun main (&key etc-and-wallets how-started-message?)
   "Main loop for Emotiq daemon"
   (emotiq/random:init-random) ;; after calling this, (RANDOM 100) will return the same sequence of pseudo-random numbers on each test run 
@@ -46,8 +52,10 @@
                       (emotiq/config:setting :rest-server))
     (emotiq-rest:start-server :port (emotiq/config:setting :rest-server-port)))
 
+  (setf ac::*maximum-age* 60) ; report inactivity once this many seconds
+  (setf ac::*watchdog-hook* 'emotiq-watchdog) ; don't error when this happens, just report it.
   (emotiq/tracker:start-tracker)
-  (emotiq:start-node)
+  (start-node)
   (cosi-simgen:startup-elections))
 
 ;; Entry Point for binary (aka "production" version of the system.
