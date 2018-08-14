@@ -124,7 +124,7 @@ sample from emotiq/src/model/mock.lisp
             (:id . ,(txid-long-string (get-txid tx))) ;; added 'transaction-' for debug
             (:timestamp . ,timestamp)
             (:epoch . ,epoch)
-            (:type. ,kind)
+            (:type . ,kind)
             (:fee . ,fee)
             ,in-alist
             ,out-alist))))))
