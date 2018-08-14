@@ -1001,7 +1001,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; of the hash of the transaction.
 
 (defvar *initial-coinbase-tx-in-id-value*
-  (make-instance 'hash:hash
+  (make-instance 'hash:hash/256  ;; per recommendation
                  :val (bev (hex "0000000000000000000000000000000000000000000000000000000000000000"))))
 
 (defvar *initial-coinbase-tx-in-index-value*
