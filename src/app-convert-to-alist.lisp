@@ -96,43 +96,49 @@ sample from emotiq/src/model/mock.lisp
 (defun test-alist (wallet-address)
   (let ((txn-list (get-transactions wallet-address)))
     `(:array
-      (:object
-       (:id . ,wallet-address)
-       (:array
-        ,(convert-transactions-to-alist txn-list))))))
+    ;  (:object
+       ;(:wallet-id . ,wallet-address)  ;; added 'wallet-' for debug
+       ;(:array
+    ,(convert-transactions-to-alist txn-list))))
 
 (defun convert-transactions-to-alist (txn-list)
   "convert txn tuples (tx timestamp epoch kind fee) into alists for json"
   (mapcar #'convert-one-transaction-to-alist-from-tuple txn-list))
+
+(defun txid-long-string (transaction-id)
+  "Return a string representation of TRANSACTION-ID, a byte vector,
+   for display. The result is a lowercase hex string."
+  (nstring-downcase (format nil (pbc::addr-str transaction-id))))
 
 (defun convert-one-transaction-to-alist-from-tuple (tuple)
   (destructuring-bind (tx timestamp epoch kind fee)
       tuple
     (let ((ins (cosi/proofs/newtx:transaction-inputs tx))
           (outs (cosi/proofs/newtx:transaction-outputs tx)))
-      (let ((in-alist `(:inputs .
-                        (:array ,(mapcar #'convert-input-to-alist ins))))
-            (out-alist `(:outputs .
-                         (:array ,(mapcar #'convert-output-to-alist outs)))))
-        `(:object
-          (:id . ,(get-txid tx))
-          (:timestamp . ,timestamp)
-          (:epoch . ,epoch)
-          (:type. ,kind)
-          (:fee . ,fee)
-          ,in-alist
-          ,out-alist)))))
+      (let ((*print-readably* t))
+        (let ((in-alist `(:inputs .
+                          (:array ,(mapcar #'convert-input-to-alist ins))))
+              (out-alist `(:outputs .
+                           (:array ,(mapcar #'convert-output-to-alist outs)))))
+          `(:object
+            (:id . ,(txid-long-string (get-txid tx))) ;; added 'transaction-' for debug
+            (:timestamp . ,timestamp)
+            (:epoch . ,epoch)
+            (:type. ,kind)
+            (:fee . ,fee)
+            ,in-alist
+            ,out-alist))))))
 
 (defun convert-input-to-alist (i)
   `(:object
     (:cloaked . (:false))
-    (:address . ,(get-address-of-sender-to-input i))
+    (:address . ,(pbc:addr-str (get-address-of-sender-to-input i)))
     (:amount . ,(amount-in-input i))))
 
 (defun convert-output-to-alist (o)
   `(:object
     (:cloaked . (:false))
-    (:address . ,(payee-address o))
+    (:address . ,(pbc:addr-str (payee-address o)))
     (:amount . ,(amount-paid o))))
 
     
