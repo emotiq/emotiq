@@ -60,6 +60,7 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
          (dotfile (merge-pathnames (make-pathname :name name :type "dot") folder)))
     dotfile))
 
+#+OBSOLETE
 (defun short (n)
   "Returns a (possibly shortened) string version of integer n."
   (let ((orig (format nil "~D" n)))
@@ -75,12 +76,12 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
   (declare (ignore edgetable graphID))
   (format stream "~%  \"~A\" [fontsize=\"10.0\", tooltip=\"~A\", label=<~A<BR /> ~
         <FONT POINT-SIZE=\"8\">~A/~D<BR />~A</FONT>>, style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
+                     (vec-repr:int (uid node))
                      (uid node)
-                     (uid node)
-                     (short (uid node))
+                     (vec-repr:int (uid node))
                      (real-address node)
                      (real-port node)
-                     (short (real-uid node))))
+                     (real-uid node)))
 
 #| OLD
 (format stream "~%  \"~A\" [fontsize=\"12.0\", label=\"\\N\", style=\"filled\", fillcolor=\"#ffff00Af\"] ;"
@@ -89,15 +90,15 @@ an error when it fails, so we have to wrap an ignore-errors around the call.
 
 (defmethod dump-node ((node gossip-node) stream edgetable graphID)
   (format stream "~%  \"~A\" [fontsize=\"12.0\", penwidth=4.0, label=\"\~A\", tooltip=\"~A\", style=\"filled\", fillcolor=\"#00ff00Af\"] ;"
-          (uid node)
-          (short (uid node))
+          (vec-repr:int (uid node))
+          (vec-repr:int (uid node))
           (uid node))
   (dolist (neighbor (neighborhood node graphID))
-    (let* ((minuid (min neighbor (uid node)))
-           (maxuid (max neighbor (uid node)))
+    (let* ((minuid (min (vec-repr:int neighbor) (vec-repr:int (uid node))))
+           (maxuid (max (vec-repr:int neighbor) (vec-repr:int (uid node))))
            (key (cons minuid maxuid)))
       (unless (gethash key edgetable) ; don't dump links twice
-        (format stream "~%  \"~A\" -- \"~A\";" (uid node) neighbor)
+        (format stream "~%  \"~A\" -- \"~A\";" (vec-repr:int (uid node)) (vec-repr:int neighbor))
         (setf (gethash key edgetable) t)))))
 
 (defun write-inner-commands (stream nodelist graphID)

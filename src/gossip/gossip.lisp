@@ -20,7 +20,7 @@
 (defparameter *default-uid-style* :short ":tiny, :short, or :long. :short is shorter; :long is more comparable with other emotiq code.
        :tiny should only be used for testing, documentation, and graph visualization of nodes on a single machine since it creates extremely short UIDs
         that are not expected to be globally-unique.")
-(defparameter *max-message-age* 30 "Messages older than this number of seconds will be ignored")
+(defparameter *max-message-age* (truncate 300e6) "Messages older than this number of microseconds will be ignored")
 (defparameter *max-seconds-to-wait* 10 "Max seconds to wait for all replies to come in")
 (defparameter *direct-reply-max-seconds-to-wait* *max-seconds-to-wait* "Max seconds to wait for direct replies")
 ;(defparameter *direct-reply-max-seconds-to-wait* 100 "Max seconds to wait for direct replies")
@@ -123,7 +123,6 @@ in KEYWORDS removed."
   `(let ((,new-var (remove-keywords ,var ',keywords)))
      ,@body))
 
-
 ; Typical cases:
 ; Case 1: *use-all-neighbors* = true and *active-ignores* = nil. The total-coverage (neighborcast) case.
 ; Case 2: *use-all-neighbors* = 1 and *active-ignores* = true. The more common gossip case.
@@ -170,7 +169,7 @@ are in place between nodes.
 
 (defun make-uid-mapper ()
   "Returns a table that maps UIDs to objects"
-  (kvs:make-store ':hashtable :test 'equal))
+  (kvs:make-store ':hashtable :test 'equalp))
 
 ;;; defglobal here makes running tests easier
 #+LISPWORKS
@@ -186,8 +185,8 @@ are in place between nodes.
   "Returns a list of local nodes for which pred returns true. If pred=T, return all local nodes."
   (when pred
     (loop for node being each hash-value of *nodes*
-      when (or (eq t pred)
-               (funcall pred node))
+      when (or (eql t pred)
+               (ignore-errors (funcall pred node)))
       collect node)))
 
 (defun real-node-p (node)
@@ -350,26 +349,30 @@ are in place between nodes.
 
 (defun new-uid (&optional (style *default-uid-style*))
   "Generate a new UID of the given style"
-  (case style
-    (:long  (long-uid))
-    (:short (short-uid))
-    (:tiny  (new-tiny-uid))))
+  (vec-repr:bev
+   (case style
+     (:long  (long-uid))
+     (:short (short-uid))
+     (:tiny  (new-tiny-uid)))))
                    
 (defun uid? (thing)
-  (integerp thing))
+  (or (typep thing 'vec-repr:ub8v)
+      (typep thing 'pbc:public-key)))
 
 (defun uid= (thing1 thing2)
-  (eql thing1 thing2))
+  (handler-case (vec-repr:vec= thing1 thing2)
+    ; Because sometimes these things are symbols if they name actors
+    (error () (equalp thing1 thing2))))
 
-(defclass uid-mixin ()
+(defclass uid-slot ()
   ((uid :initarg :uid :initform (new-uid) :reader uid
-        :documentation "Unique ID. These are assumed to become larger over time and not be random: They
-         are used in discriminating later messages from earlier ones.")))
+        :documentation "Unique ID. These are assumed to be BEV objects.")))
 
-(defmethod print-object ((thing uid-mixin) stream)
+(defmethod print-object ((thing uid-slot) stream)
    (with-slots (uid) thing
        (print-unreadable-object (thing stream :type t :identity nil)
-          (when uid (princ uid stream)))))
+          (when uid
+              (prin1 (vec-repr:bev-vec uid) stream)))))
 
 ;;; Should move these to mpcompat
 (defun all-processes ()
@@ -406,8 +409,8 @@ are in place between nodes.
   "Returns a process with given name, if any."
   (find-if (lambda (process) (ignore-errors (string-equal name (subseq (process-name process) 0 (length name))))) (all-processes)))
 
-(defclass gossip-message-mixin (uid-mixin)
-  ((timestamp :initarg :timestamp :initform (get-universal-time) :accessor timestamp
+(defclass gossip-message-mixin (uid-slot)
+  ((timestamp :initarg :timestamp :initform (usec::get-universal-time-usec) :accessor timestamp
               :documentation "Timestamp of message origination")
    (hopcount :initarg :hopcount :initform 0 :accessor hopcount
              :documentation "Number of hops this message has traversed.")
@@ -464,7 +467,7 @@ are in place between nodes.
           (graphID new-msg)  (graphID msg))
     new-msg))
 
-(defclass solicitation-uid-mixin ()
+(defclass solicitation-uid-slot ()
   ((solicitation-uid :initarg :solicitation-uid :initform nil :accessor solicitation-uid
                      :documentation "UID of solicitation message that elicited this reply.")))
 
@@ -472,7 +475,7 @@ are in place between nodes.
 ;   message with a new UID. (Replies can often be changed as they percolate backwards;
 ;   they need new UIDs so that a node that has seen one set of information won't
 ;   automatically ignore it.)
-(defclass reply (gossip-message-mixin solicitation-uid-mixin)
+(defclass reply (gossip-message-mixin solicitation-uid-slot)
   ()
   (:documentation "Reply message. Used to reply to solicitations that need an :UPSTREAM or direct reply.
      This class is not used for :GOSSIP or :NEIGHBORCAST replies; those replies are just new solicitations.
@@ -510,14 +513,14 @@ are in place between nodes.
 (defun make-final-reply (&rest args)
   (apply 'make-instance 'final-reply args))
 
-(defclass system-async (gossip-message-mixin solicitation-uid-mixin)
+(defclass system-async (gossip-message-mixin solicitation-uid-slot)
   ()
   (:documentation "Used only for special timeout and socket-wakeup messages. In this case, solicitation-uid field
     is used to indicate which solicitation should be timed out at the receiver of this message."))
 
 (defun make-system-async (&rest args)
   (let ((msg (apply 'make-instance 'system-async args)))
-    (when (and (eq :timeout (kind msg))
+    (when (and (eql :timeout (kind msg))
                (null (solicitation-uid msg)))
       (error "No solicitation-uid on timeout"))
     msg))
@@ -532,7 +535,7 @@ are in place between nodes.
     (setf (solicitation-uid new-msg) (solicitation-uid msg))
     new-msg))
 
-(defclass abstract-gossip-node (uid-mixin)
+(defclass abstract-gossip-node (uid-slot)
   ((logfn :initarg :logfn :initform 'default-logging-function :accessor logfn
           :documentation "If non-nil, assumed to be a function called with every
               message seen to log it.")
@@ -540,7 +543,7 @@ are in place between nodes.
                 :documentation "True if this node should be considered temporary, i.e. should not be
            found by many functions that look for node in the local node table. (Eventually, temporary
            nodes should be stored in a separate, weak hash table.)")))
-   
+
 (defclass gossip-actor (ac:actor)
   ((node :initarg :node :initform nil :accessor node
          :documentation "The gossip-node on behalf of which this actor works")))
@@ -554,14 +557,14 @@ are in place between nodes.
                   :documentation "Cache of seen messages. Table mapping UID of message to UID of upstream sender.
           Used to ensure identical messages are not acted on twice, and to determine where
           replies to a message should be sent in case of :UPSTREAM messages.")
-   (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equal)
+   (repliers-expected :initarg :repliers-expected :initform (kvs:make-store ':hashtable :test 'equalp)
                       :accessor repliers-expected
                       :documentation "2-level Hash-table mapping a solicitation id to another hashtable of srcuids
           that I expect to reply to that solicitation. Values in second hashtable are either interim replies
           that have been received from that srcuid for the given solicitation id.
           Only accessed from this node's actor thread. No locking needed.
           See Note B below for more info.")
-   (reply-cache :initarg :reply-cache :initform (kvs:make-store ':hashtable :test 'equal)
+   (reply-cache :initarg :reply-cache :initform (kvs:make-store ':hashtable :test 'equalp)
                 :accessor reply-cache
                 :documentation "Hash-table mapping a solicitation id to some data applicable to THIS node
           for that solicitation. Only accessed from this node's actor
@@ -571,9 +574,9 @@ are in place between nodes.
    (neighbors :initarg :neighbors :initform (kvs:make-store ':hashtable :test 'equal) :accessor neighbors
               :documentation "Table of lists of UIDs of direct neighbors of this node. This is the mechanism that establishes
               the connectivity of the node graph. Table is indexed by graphID.")
-   (timers :initarg :timers :initform nil :accessor timers
+   (timers :initarg :timers :initform (kvs:make-store ':hashtable :test 'equalp) :accessor timers
            :documentation "Table mapping solicitation uids to a timer dealing with replies to that uid.")
-   (timeout-handlers :initarg :timeout-handlers :initform nil :accessor timeout-handlers
+   (timeout-handlers :initarg :timeout-handlers :initform (kvs:make-store ':hashtable :test 'equalp) :accessor timeout-handlers
                      :documentation "Table of functions of 1 arg: timed-out-p that should be
            called to clean up after waiting operations are done. Keyed on solicitation id.
            Timed-out-p is true if a timeout happened. If nil, it means operations completed without
@@ -618,6 +621,24 @@ are in place between nodes.
 
 (defclass udp-gossip-node (proxy-gossip-node)
   ())
+
+(defclass no-targets (error)
+  ((current-host :initarg :current-host :initform nil :accessor current-host)
+   (message :initarg :message :initform nil :accessor message
+            :documentation "Solicitation attempting to be delivered"))
+  (:documentation "Error condition indicating no targets are available at a host with an anonymous destination."))
+
+(defclass no-reply-destination (error)
+  ((reply :initarg :reply :initform nil :accessor reply)
+   (soluid :initarg :soluid :initform nil :accessor soluid)
+   (data :initarg :data :initform nil :accessor data))
+  (:documentation "No destination for reply"))
+
+(defmacro as-uid (thing)
+  "If thing has a UID, retrieve it. Otherwise assume it's already a UID."
+  `(if (typep ,thing 'uid-slot)
+       (uid ,thing)
+       ,thing))
 
 (defmethod node-matches-host? ((node proxy-gossip-node) (hostpair cons))
   "Returns true if host of node matches hostpair."
@@ -674,12 +695,12 @@ are in place between nodes.
     :node node
     :fn 
     (lambda (&rest msg)
-      (edebug 5 "Gossip Actor" (ac::current-actor) "received" msg)
+      (edebug 6 "Gossip Actor" (ac::current-actor) "received" msg)
       (apply 'gossip-dispatcher node msg))))
 
 (defun memoize-node (node)
   "Ensure this node is memoized on *nodes*"
-  (kvs:relate-unique! *nodes* (uid node) node)
+  (kvs:relate-unique! *nodes* (vec-repr:bev-vec (uid node)) node)
   node)
 
 (defun %make-node (&rest args)
@@ -689,7 +710,7 @@ are in place between nodes.
       (let ((node (apply 'make-instance 'gossip-node args)))
         (when neighborhood
           (mapcar (lambda (uid)
-                    (pushnew uid (neighborhood node)))
+                    (pushnew (vec-repr:bev uid) (neighborhood node)))
                   neighborhood))
         node))))
 
@@ -706,7 +727,7 @@ are in place between nodes.
       (initialize-node node :pkey pkey :skey skey)
       node)))
 
-(defmethod set-uid ((self uid-mixin) value)
+(defmethod set-uid ((self uid-slot) value)
   (setf (slot-value self 'uid) value))
 
 (defun make-proxy-node (mode &rest args)
@@ -774,9 +795,9 @@ are in place between nodes.
   (pushnew (uid node2) (neighborhood node1 graphID)))
   
 (defmethod connected? ((node1 gossip-node) (node2 gossip-node) &optional (graphID +default-graphid+))
-  (or (member (uid node2) (neighborhood node1 graphID) :test 'equal)
+  (or (member (uid node2) (neighborhood node1 graphID) :test 'uid=)
       ; redundant if we connected the graph correctly in the first place
-      (member (uid node1) (neighborhood node2 graphID) :test 'equal)))
+      (member (uid node1) (neighborhood node2 graphID) :test 'uid=)))
 
 (defun linear-path (nodelist &optional (graphID +default-graphid+))
   "Create a linear path through the nodes"
@@ -918,9 +939,7 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                  (uid node)
-                  node))
+  (let* ((uid (as-uid node))
          (mbox (mpcompat:make-mailbox))
          (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
@@ -928,7 +947,7 @@ dropped on the floor.
         (progn 
           (ac:register-actor actor actor-name)
           (let* ((solicitation (make-solicitation
-                                :reply-to (uid node)
+                                :reply-to uid
                                 :kind kind
                                 :forward-to t ; neighborcast
                                 :args args))
@@ -952,9 +971,7 @@ dropped on the floor.
   action because they should set the srcuid parameter to be their own rather than nil."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                 (uid node)
-                 node)))
+  (let ((uid (as-uid node)))
     (let* ((solicitation (make-solicitation
                           :kind kind
                           :args args))
@@ -969,9 +986,7 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                  (uid node)
-                  node))
+  (let* ((uid (as-uid node))
          (mbox (mpcompat:make-mailbox))
          (actor (ac:make-actor (lambda (&rest msg) (apply 'actor-send mbox msg))))
          (actor-name (gentemp "OUTPUTTER" :gossip)))
@@ -1003,9 +1018,7 @@ dropped on the floor.
   Don't use this on messages that don't expect a reply, because it'll wait forever."
   (unless node
     (error "No destination node supplied. You might need to run make-graph or restore-graph-from-file first."))
-  (let* ((uid (if (typep node 'abstract-gossip-node) ; yeah this is kludgy.
-                  (uid node)
-                  node))
+  (let* ((uid (as-uid node))
          (node (if (typep node 'abstract-gossip-node)
                    node
                    (lookup-node node)))
@@ -1064,37 +1077,48 @@ dropped on the floor.
                             (and (typep ad 'augmented-data)
                                  (listp (data ad))
                                  (null (cdr (data ad)))
-                                 (eql (uid localnode)
-                                      (first (data ad)))))
+                                 (uid= (uid localnode)
+                                       (first (data ad)))))
                           allnodes)))
       (ensure-proxies allnodes) ; ensure proxies exist for all returned UIDs
-      (kvs:remove-key! *nodes* (uid localnode)) ; delete temp node
+      (kvs:remove-key! *nodes* (vec-repr:bev-vec (uid localnode))) ; delete temp node
       )))
 
 (defun lookup-node (uid)
-  (kvs:lookup-key *nodes* uid))
+  (kvs:lookup-key *nodes* (vec-repr:bev-vec uid)))
+
+(defgeneric send-msg (msg destuid srcuid)
+  (:documentation "Sends msg to destuid from srcuid. Srcuid can be nil, but generally should
+   contain the id of the sender, if known.
+   Returns nil if successful; an error object otherwise."))
 
 (defmethod send-msg ((msg solicitation) (destuid (eql 0)) srcuid)
   "Sending a message to destuid=0 broadcasts it to all local (non-proxy) nodes in *nodes* database.
    This is intended to be used by incoming-message-handler methods for bootstrapping messages
    before #'neighbors connectivity has been established.
    See Note D."
-  (let ((no-forward-msg (copy-message msg))
-        (nodes (local-real-uids)))
-    (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
-    (forward msg srcuid nodes)))
+  (let ((nodes (local-real-uids)))
+    (cond (nodes
+           (let ((no-forward-msg (copy-message msg)))
+             (setf (forward-to no-forward-msg) nil) ; don't let any node forward. Just reply immediately.
+             (forward msg srcuid nodes)))
+          (t (make-condition 'no-targets
+                             :current-host (eripa)
+                             :message msg)))))
 
 (defmethod send-msg ((msg gossip-message-mixin) destuid srcuid)
   (let* ((destnode (lookup-node destuid))
          (destactor (if destnode ; if destuid doesn't represent a gossip node, assume it represents something we can actor-send to
                         (actor destnode)
                         destuid)))
-    (edebug 5 "send-msg" msg destnode srcuid)
+    (edebug 5 "send-msg" msg srcuid "to" destuid)
     (uiop:if-let (error (actor-send destactor
                                     :gossip ; actor-verb
                                     srcuid  ; first arg of actor-msg
                                     msg))
-      (edebug 5 :warn error destuid msg :from srcuid))))
+      (progn
+        (edebug 5 :warn error destuid msg :from srcuid)
+        error))))
 
 (defun current-node ()
   (uiop:if-let (actor (ac:current-actor))
@@ -1114,11 +1138,12 @@ dropped on the floor.
   Kindsym is the name of the gossip method that should be called to handle this message.
   Doesn't change anything in message or node."
   (declare (ignore srcuid)) ; not using this for acceptance criteria in the general method
-  (let ((soluid (uid msg)))
-    (cond ((> (get-universal-time) (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
+  (let ((soluid (uid msg))
+        (current-time (usec::get-universal-time-usec)))
+    (cond ((> current-time (+ *max-message-age* (timestamp msg))) ; ignore too-old messages
            (values nil :too-old))
           (t
-           (let ((already-seen? (kvs:lookup-key (message-cache thisnode) soluid)))
+           (let ((already-seen? (kvs:lookup-key (message-cache thisnode) (vec-repr:bev-vec soluid))))
              (cond (already-seen? ; Ignore if already seen
                     (values nil :already-seen))
                    (t ; it's a new message
@@ -1133,16 +1158,16 @@ dropped on the floor.
                              (values nil :no-kind)))))))))))
 
 (defmethod accept-msg? ((msg reply) (thisnode gossip-node) srcuid)
-  (if (eq :active-ignore (kind msg))
+  (if (eql :active-ignore (kind msg))
       (values nil :active-ignore)
       (multiple-value-bind (kindsym failure-reason) (call-next-method) ; the one on gossip-message-mixin
         ; Also ensure this reply is actually expected
         (cond (kindsym
-               (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (solicitation-uid msg))))
+               (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (vec-repr:bev-vec (solicitation-uid msg)))))
                  (cond (interim-table
                         (if (eql :ANONYMOUS interim-table) ; accept replies from any srcuid
                             kindsym
-                            (multiple-value-bind (val present-p) (kvs:lookup-key interim-table srcuid)
+                            (multiple-value-bind (val present-p) (kvs:lookup-key interim-table (vec-repr:bev-vec srcuid))
                               (declare (ignore val))
                               (if present-p
                                   kindsym
@@ -1158,16 +1183,17 @@ dropped on the floor.
 ;;; TODO: Remove old entries in message-cache, eventually.
 (defmethod memoize-message ((node gossip-node) (msg gossip-message-mixin) srcuid)
   "Record the fact that this node has seen this particular message.
-   In cases of solicitation messages, we also care about the upstream sender, so
-   we just save that as the value in the key/value pair."
+  In cases of solicitation messages, we also care about the upstream sender, so
+  we just save that as the value in the key/value pair."
   (kvs:relate-unique! (message-cache node)
-                      (uid msg)
-                      (or srcuid t) ; because solicitations from outside might not have a srcid
+                      (vec-repr:bev-vec (uid msg))
+                      (or srcuid
+                          t) ; because solicitations from outside might not have a srcid
                       ))
 
 (defmethod get-upstream-source ((node gossip-node) soluid)
   "Retrieves the upstream source uid for a given soluid on this node"
-  (kvs:lookup-key (message-cache node) soluid))
+  (kvs:lookup-key (message-cache node) (vec-repr:bev-vec soluid)))
 
 (defun remove-nth (n list)
   "Returns nth item and returns item and new list."
@@ -1207,7 +1233,7 @@ dropped on the floor.
              nil)))))
 
 (defmethod get-downstream ((node gossip-node) srcuid howmany &optional (graphID +default-graphid+))
-  (let ((all-neighbors (remove srcuid (neighborhood node graphID))))
+  (let ((all-neighbors (remove srcuid (neighborhood node graphID) :test 'uid=)))
     (use-some-neighbors all-neighbors howmany)))
 
 (defun send-active-ignore (to from kind soluid failure-reason)
@@ -1289,11 +1315,14 @@ dropped on the floor.
   (error "Bug: Cannot locally-receive to a proxy node!"))
 
 (defun forward (msg srcuid destuids)
-  "Sends msg from srcuid to multiple destuids"
-  (unless (uid? srcuid) (setf srcuid (uid srcuid)))
-  (mapc (lambda (destuid)
-          (send-msg msg destuid srcuid))
-        destuids))
+  "Sends msg from srcuid to multiple destuids. Returns nil if successful; error otherwise."
+  (setf srcuid (as-uid srcuid))
+
+  (let ((failure (reduce (lambda (x destuid)
+                           (or x (send-msg msg destuid srcuid)))
+                         destuids
+                         :initial-value nil)))
+    failure))
 
 (defun send-gossip-timeout-message (actor soluid)
   "Send a gossip-timeout message to an actor. (We're not using the actors' native timeout mechanisms at this time.)"
@@ -1317,7 +1346,7 @@ dropped on the floor.
     (lambda (timed-out-p)
       "Cleanup operations if timeout happens, or all expected replies come in. This won't hurt anything
       if no cleanup was necessary, but it's a waste of time."
-      (let ((timer (kvs:lookup-key (timers node) soluid)))
+      (let ((timer (kvs:lookup-key (timers node) (vec-repr:bev-vec soluid))))
         (cond (timed-out-p
                ; since timeout happened, actor infrastructure will take care of unscheduling the timeout
                (edebug 3 node :DONE-WAITING-TIMEOUT msg (more-replies-expected? node soluid t)))
@@ -1333,10 +1362,10 @@ dropped on the floor.
 
 (defmethod prepare-repliers ((thisnode gossip-node) soluid downstream)
   "Prepare reply tables for given node, solicitation uid, and set of downstream repliers."
-  (let ((interim-table (kvs:make-store ':hashtable :test 'equal)))
+  (let ((interim-table (kvs:make-store ':hashtable :test 'equalp)))
     (dolist (replier-uid downstream)
-      (kvs:relate-unique! interim-table replier-uid nil))
-    (kvs:relate-unique! (repliers-expected thisnode) soluid interim-table)
+      (kvs:relate-unique! interim-table (vec-repr:bev-vec replier-uid) nil))
+    (kvs:relate-unique! (repliers-expected thisnode) (vec-repr:bev-vec soluid) interim-table)
     interim-table))
 
 ;;;; GOSSIP METHODS. These handle specific gossip protocol solicitations and replies.
@@ -1351,7 +1380,7 @@ dropped on the floor.
   (cond ((eq srcuid 'ac::*master-timer*)
          ;;(edebug 1 thisnode :timing-out msg :from srcuid (solicitation-uid msg))
          (let* ((soluid (solicitation-uid msg))
-                (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+                (timeout-handler (kvs:lookup-key (timeout-handlers thisnode) (vec-repr:bev-vec soluid))))
            (when timeout-handler
              (funcall timeout-handler t))))
         (t ; log an error and do nothing
@@ -1360,7 +1389,7 @@ dropped on the floor.
 (defmethod more-replies-expected? ((node gossip-node) soluid &optional (whichones nil))
   "Utility function. Can be called by message handlers.
   If whichones is true, returns not just true but an actual list of expected repliers [or nil if none]."
-  (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
+  (let ((interim-table (kvs:lookup-key (repliers-expected node) (vec-repr:bev-vec soluid))))
     (when interim-table
       (if (eql :ANONYMOUS interim-table)
           nil
@@ -1376,7 +1405,7 @@ dropped on the floor.
   (let* ((soluid (first (args msg)))
          (reply-kind (second (args msg)))
          (where-to-send-reply (get-upstream-source thisnode soluid)))
-    (if (more-replies-expected? thisnode soluid)
+    (when (more-replies-expected? thisnode soluid)
       (send-interim-reply thisnode reply-kind soluid where-to-send-reply)
       ; else we'd have already sent a final reply and no further action is needed.
       )))
@@ -1443,7 +1472,7 @@ dropped on the floor.
   Message will percolate along the graph until it reaches destination node, at which point it stops percolating.
   Every intermediate node will have the message forwarded through it but message will not be 'delivered' to intermediate nodes.
   Destination node is not expected to reply (at least not with builtin gossip-style replies)."
-  (if (eql (uid thisnode) (car (args msg)))
+  (if (uid= (uid thisnode) (car (args msg)))
       (handoff-to-application-handlers thisnode msg (lambda (msg) (cdr (args msg))))
       ; thisnode becomes new source for forwarding purposes
       (forward msg thisnode (get-downstream thisnode srcuid (forward-to msg) (graphID msg)))))
@@ -1573,18 +1602,17 @@ dropped on the floor.
          (cleanup (make-timeout-handler thisnode msg kind)))
     (flet ((initialize-reply-cache ()
              "Set up node's reply-cache with initial-reply-value for this message"
-             (kvs:relate-unique! (reply-cache thisnode) soluid (initial-reply-value kind thisnode (args msg))))
+             (kvs:relate-unique! (reply-cache thisnode) (vec-repr:bev-vec soluid) (initial-reply-value kind thisnode (args msg))))
            
            (must-coalesce? ()
              "Returns true if this node must coalesce any incoming replies.
              If nil, there is no possibility of repliers, so no coalescence is needed."
              (or (eql :UPSTREAM (reply-to msg))
                  (and (uid? (reply-to msg)) ; check for potential direct replies back to this node
-                      (eql (reply-to msg) (uid thisnode))))))
+                      (uid= (reply-to msg) (uid thisnode))))))
       ; Always initialize the reply cache--even if there are no downstream nodes--because we assume that if this
       ;   node could potentially be replied to, it itself is always considered a participant node of the message.
       (when (must-coalesce?) (initialize-reply-cache))
-      ; (if (not (eql 495831281100387564650501 (uid thisnode))) (break))
       
       ;;; It's possible for there to be a downstream but have no potential repliers. In that case
       ;;; we need to go ahead and reply.
@@ -1602,12 +1630,12 @@ dropped on the floor.
                         (progn ; not :UPSTREAM. Repliers will be anonymous.
                           (setf seconds-to-wait *direct-reply-max-seconds-to-wait*)
                           (edebug 1 thisnode :WAITING msg :ANONYMOUS)
-                          (kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)))
+                          (kvs:relate-unique! (repliers-expected thisnode) (vec-repr:bev-vec soluid) :ANONYMOUS)))
                     (forward msg thisnode downstream)
                     ; wait a finite time for all replies
                     (setf timer (schedule-gossip-timeout (ceiling seconds-to-wait) (actor thisnode) soluid))
-                    (kvs:relate-unique! (timers thisnode) soluid timer)
-                    (kvs:relate-unique! (timeout-handlers thisnode) soluid cleanup) ; bind timeout handler
+                    (kvs:relate-unique! (timers thisnode) (vec-repr:bev-vec soluid) timer)
+                    (kvs:relate-unique! (timeout-handlers thisnode) (vec-repr:bev-vec soluid) cleanup) ; bind timeout handler
                     ;(edebug 1 thisnode :WAITING msg (ceiling *max-seconds-to-wait*) downstream)
                     )
                    (t ; just forward the message since there won't be an :UPSTREAM reply
@@ -1625,7 +1653,7 @@ dropped on the floor.
   (let ((kind (kind msg))
         (soluid (solicitation-uid msg)))
     ; First record the data in the reply appropriately
-    (unless (eql :ANONYMOUS (kvs:lookup-key (repliers-expected thisnode) soluid)) ; ignore interim-replies to anonymous expectations
+    (unless (eql :ANONYMOUS (kvs:lookup-key (repliers-expected thisnode) (vec-repr:bev-vec soluid))) ; ignore interim-replies to anonymous expectations
       (when (record-interim-reply msg thisnode soluid srcuid) ; true if this reply is later than previous
         ; coalesce all known data and send it upstream as another interim reply.
         ; (if this reply is not later, drop it on the floor)
@@ -1634,15 +1662,19 @@ dropped on the floor.
             (let ((upstream-source (get-upstream-source thisnode (solicitation-uid msg))))
               (send-interim-reply thisnode kind soluid upstream-source)))))))
 
+(defun run-coalescer (coalescer local-data new-data)
+  (funcall coalescer local-data new-data))
+
 (defmethod generic-srr-handler ((msg final-reply) (thisnode gossip-node) srcuid)
+  (edebug 1 :generic-srr-handler :final-reply msg thisnode)
   (let* ((kind (kind msg))
          (soluid (solicitation-uid msg))
-         (local-data (kvs:lookup-key (reply-cache thisnode) soluid))
+         (local-data (kvs:lookup-key (reply-cache thisnode) (vec-repr:bev-vec soluid)))
          (coalescer (coalescer kind)))
     ; Any time we get a final reply, we destructively coalesce its data into local reply-cache
     (kvs:relate-unique! (reply-cache thisnode)
-                        soluid
-                        (funcall coalescer local-data (first (args msg))))
+                        (vec-repr:bev-vec soluid)
+                        (run-coalescer coalescer local-data (first (args msg))))
     (cancel-replier thisnode kind soluid srcuid)))
 
 (defgeneric initial-reply-value (kind thisnode msgargs)
@@ -1709,16 +1741,17 @@ dropped on the floor.
 ;;; REPLY SUPPORT ROUTINES
 
 (defun send-final-reply (srcnode destination soluid kind data)
+  "Return nil if successful; an error object otherwise."
   (let ((reply (make-final-reply :solicitation-uid soluid
                                  :kind kind
                                  :args (list data)))
         (where-to-send-reply (cond ((uid? destination)
                                     destination)
-                                   ((eq :UPSTREAM destination)
+                                   ((eql :UPSTREAM destination)
                                     (get-upstream-source srcnode soluid))
                                    (t destination))))
     (cond ((uid? where-to-send-reply) ; should be a uid or T. Might be nil if there's a bug.
-           (edebug 1 srcnode :FINALREPLY soluid :to where-to-send-reply data)
+           (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (send-msg reply
                      where-to-send-reply
                      (uid srcnode)))
@@ -1726,8 +1759,13 @@ dropped on the floor.
           ;   This can mean that srcnode autonomously initiated the request, or
           ;   somebody running the sim told it to.
           ((or (null where-to-send-reply)
-               (eq t where-to-send-reply))
-           (edebug 1 srcnode :NO-REPLY-DESTINATION! soluid data))
+               (eql t where-to-send-reply))
+           (let ((e (make-condition 'no-reply-destination
+                                    :reply reply
+                                    :soluid soluid
+                                    :data data)))
+             (edebug 1 :error "No Reply Destination" e)
+             e))
           (t
            (edebug 1 srcnode :FINALREPLY soluid :TO where-to-send-reply data)
            (actor-send where-to-send-reply reply)))))
@@ -1737,15 +1775,15 @@ dropped on the floor.
   timeout has happened. Only for upstream [reduce-style] replies; don't use otherwise.
   Cleans up reply tables and reply upstream with final reply containing coalesced data.
   Assumes any timers have already been cleaned up."
-  (let ((coalesced-data ;(kvs:lookup-key (reply-cache thisnode) soluid)) ; will already have been coalesced here
+  (let ((coalesced-data ;(kvs:lookup-key (reply-cache thisnode) (vec-repr:bev-vec soluid))) ; will already have been coalesced here
          (coalesce thisnode reply-kind soluid))) ; won't have already been coalesced if we timed out!
     ; clean up reply tables.
-    (kvs:remove-key (repliers-expected thisnode) soluid) ; might not have been done if we timed out
-    (kvs:remove-key (reply-cache thisnode) soluid)
-    (kvs:remove-key (timers thisnode) soluid)
-    (kvs:remove-key (timeout-handlers thisnode) soluid)
+    (kvs:remove-key (repliers-expected thisnode) (vec-repr:bev-vec soluid)) ; might not have been done if we timed out
+    (kvs:remove-key (reply-cache thisnode) (vec-repr:bev-vec soluid))
+    (kvs:remove-key (timers thisnode) (vec-repr:bev-vec soluid))
+    (kvs:remove-key (timeout-handlers thisnode) (vec-repr:bev-vec soluid))
     ; must create a new reply here; cannot reuse an old one because its content has changed
-    (send-final-reply
+    (send-final-reply 
      thisnode
      (if (uid? reply-to)
          (if (uid= reply-to (uid thisnode)) ; can't send a reply to myself, so punt and send it upstream
@@ -1755,64 +1793,6 @@ dropped on the floor.
      soluid reply-kind coalesced-data)
     coalesced-data ; mostly for debugging
     ))
-
-#|
-DISCUSSION:
-send-interim-reply needs to be delayed.
-interim-replies don't resolve anything in the gossip model; they just provide (sometimes valuable)
-partial information to the ultimate solicitor. However, if things are moving along properly,
-a huge flurry of almost content-free interim-replies doesn't accomplish anything except to
-clog up communication.
-
-I don't want to get rid of interim-replies altogether because they'll be needed in cases of any
-malfunctioning nodes. But I'd like to delay them a bit -- put them on the actor's back-burner
-as it were.
-Specifically what I need is a way to tell an actor
-1. Put the send-interim-reply on the back burner and if nothing usurps it, execute it after a 1 second
-delay.
-2. If a send-final-reply happens, remove any send-interim-reply requests from the back-burner.
-3. If a second send-interim-reply request comes in when one is already on the back-burner, do nothing,
-because the original will take care of it. However, do reset the clock to make it execute 1 second
-from now, rather than 1 second from whatever time the original request set up.
-
-REMAINDER OF DISCUSSION IS OBSOLETE. WE SOLVE THE PROBLEM WITH SEND-SELF NOW.
-
-There are a couple of tricky issues here I don't know how to solve:
--- How to create a local "back-burner" queue on an actor. Conceivably this could just be another slot
-on an actor, and #'next-message could be made to look at it last. Or possibly it could be put on the
-actor-message-mbox at lowest priority?
--- How to ensure the actor gets put back on the *actor-ready-queue* 1 second from now.
-
-Another solution might be to just give actors a "yield" capability such that they put themselves back
-onto the far end of the *actor-ready-queue* and give other actors (or technically, other messages to
-themselves) a chance to run first.
-
-Can an actor be on the *actor-ready-queue* more than once? I would hope so. But no. The queue doesn't even
-really contain actors per se; it just contains lexical closures, all of which are associated with some
-actor. However, the way #'send works is that it never re-adds an actor's run closure to the queue if the
-actor is already busy.
-
-FUNDAMENTAL MISUNDERSTANDING ABOVE: An actor must *never* be on the ready queue more than once because then
-it could be executed by two processes concurrently, and that's *never* allowed. All atomicity guarantees of
-the actor model would dissolve under such a scenario.
-
-I suppose the simplest solution is to just make a timer for this, but the resolution of the timers
-is 1 second and that's almost too coarse-grained for the job.
-
-IDEA: An actor cannot re-insert itself onto the ready-queue -- because even if an actor added
-some code to the ready-queue for itself to run later, the actor-busy flag would still be a problem.
-When the current function ended, the actor would negate the actor-busy flag, but the other body
-of code would already be in the queue. Without its actor-busy flag (the flag is attached to the actor,
-not to the lambda body in the ready-queue) the other lambda body could cause problems. We could
-change the actor-busy flag to a semaphore so it could take on a integral value of how many times the
-actor occurred in the queue, but I think a better solution is:
-
-Just spin up another actor. We'll call it the echo-actor. And it's sole job will be to "reflect" a message
-back to us. This way, an actor can cause a message to itself to get reinserted into the head of the queue
-normally and that code will be executed later, if any other lambda bodies are in the queue ahead of it.
-Because an actor cannot properly send a message to itself, but it can send a message to another actor that
-gets sent back, and everything will be copacetic.
-|#
 
 (defun send-interim-reply (thisnode reply-kind soluid where-to-send-reply)
   "Send an interim reply, right now."
@@ -1835,7 +1815,7 @@ gets sent back, and everything will be copacetic.
   "Called by a node actor to tell itself (or another actor, but we never do that now)
   to maybe send an interim reply after it processes any possible interim messages, which
   could themselves obviate the need for an interim reply."
-  ; Should we make these things be yet another class with solicitation-uid-mixin?
+  ; Should we make these things be yet another class with solicitation-uid-slot?
   ; Or just make a general class of administrative messages with timeout being one?
   (let ((msg (make-solicitation
               :kind :maybe-sir
@@ -1844,42 +1824,42 @@ gets sent back, and everything will be copacetic.
     (send-self msg)))
 
 (defun later-reply? (new old)
-  "Returns true if old is nil or new has a higher uid"
+  "Returns true if old is nil or new has a later timestamp"
   (or (null old)
-      (> (uid new) (uid old))))
+      (> (timestamp new) (timestamp old))))
 
 ;;; Memorizing previous replies
 (defmethod set-previous-reply ((node gossip-node) soluid srcuid reply)
   "Remember interim reply indexed by soluid and srcuid"
   ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
-  (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
+  (let ((interim-table (kvs:lookup-key (repliers-expected node) (vec-repr:bev-vec soluid))))
     (unless interim-table
-      (setf interim-table (kvs:make-store ':hashtable :test 'equal))
-      (kvs:relate-unique! (repliers-expected node) soluid interim-table))
-    (kvs:relate-unique! interim-table srcuid reply)))
+      (setf interim-table (kvs:make-store ':hashtable :test 'equalp))
+      (kvs:relate-unique! (repliers-expected node) (vec-repr:bev-vec soluid) interim-table))
+    (kvs:relate-unique! interim-table (vec-repr:bev-vec srcuid) reply)))
 
 (defmethod get-previous-reply ((node gossip-node) soluid srcuid)
   "Retrieve interim reply indexed by soluid and srcuid"
   ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
-  (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
+  (let ((interim-table (kvs:lookup-key (repliers-expected node) (vec-repr:bev-vec soluid))))
     (when interim-table
-      (kvs:lookup-key interim-table srcuid))))
+      (kvs:lookup-key interim-table (vec-repr:bev-vec srcuid)))))
 
 (defmethod remove-previous-reply ((node gossip-node) soluid srcuid)
   "Remove interim reply (if any) indexed by soluid and srcuid from repliers-expected table.
   Return true if table is now empty; false if any other expected repliers remain.
   Second value is true if given soluid and srcuid was indeed present in repliers-expected."
   ; Don't ever call this for replies to :ANONYMOUS expectations. See Note C.
-  (let ((interim-table (kvs:lookup-key (repliers-expected node) soluid)))
+  (let ((interim-table (kvs:lookup-key (repliers-expected node) (vec-repr:bev-vec soluid))))
     (unless interim-table
       (return-from remove-previous-reply (values t nil))) ; no table found. Happens for soluids where no replies were ever expected.
     (multiple-value-bind (store was-present?)
-                         (kvs:remove-key! interim-table srcuid) ; whatever was there before should have been nil or an interim-reply, but we're not checking for that
+                         (kvs:remove-key! interim-table (vec-repr:bev-vec srcuid)) ; whatever was there before should have been nil or an interim-reply, but we're not checking for that
       (declare (ignore store))
       (cond ((zerop (hash-table-count interim-table))
              ; if this is the last reply, kill the whole table for this soluid and return true
              ;; (edebug 1 node :KILL-TABLE-1 nil)
-             (kvs:remove-key! (repliers-expected node) soluid)
+             (kvs:remove-key! (repliers-expected node) (vec-repr:bev-vec soluid))
              (values t was-present?))
             (t (values nil was-present?))))))
 
@@ -1936,19 +1916,19 @@ gets sent back, and everything will be copacetic.
   local reply-cache in a way that's specific to kind, and return result.
   This purely functional and does not change reply-cache.
   This is essentially a reduce operation but of course we can't use that name."
-  (let* ((local-data    (kvs:lookup-key (reply-cache node) soluid))
-         (interim-table (kvs:lookup-key (repliers-expected node) soluid))
+  (let* ((local-data    (kvs:lookup-key (reply-cache node) (vec-repr:bev-vec soluid)))
+         (interim-table (kvs:lookup-key (repliers-expected node) (vec-repr:bev-vec soluid)))
          (interim-data (when (and interim-table
                                   (hash-table-p interim-table))
                          (loop for reply being each hash-value of interim-table
-                           while reply collect (first (args reply)))))
+                           when reply collect (first (args reply)))))
          (coalescer (coalescer kind)))
-    ;(edebug 1 node :COALESCE interim-data local-data)
+    (edebug 5 node :COALESCE interim-data (unwrap local-data) interim-table)
     (let ((coalesced-output
            (reduce coalescer
                    interim-data
                    :initial-value local-data)))
-      ;(edebug 1 node :COALESCED-OUTPUT coalesced-output)
+      (edebug 5 node :COALESCED-OUTPUT (unwrap coalesced-output))
       coalesced-output)))
 
 (defun cancel-replier (thisnode reply-kind soluid srcuid)
@@ -1956,15 +1936,15 @@ gets sent back, and everything will be copacetic.
   If no more repliers, reply upstream with final reply.
   If more repliers, reply upstream either immediately or after a yield period with an interim-reply.
   Returns true if a [now-cancelled] reply had been expected from soluid/srcuid."
-  (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) soluid)))
+  (let ((interim-table (kvs:lookup-key (repliers-expected thisnode) (vec-repr:bev-vec soluid))))
     (cond ((eql :ANONYMOUS interim-table)
            nil) ; do nothing and return nil if we're accepting :ANONYMOUS replies
           (t (multiple-value-bind (no-more-repliers was-present?) (remove-previous-reply thisnode soluid srcuid)
                (cond (no-more-repliers
-                      (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) soluid)))
+                      (let ((timeout-handler (kvs:lookup-key (timeout-handlers thisnode) (vec-repr:bev-vec soluid))))
                         (if timeout-handler ; will be nil for messages that don't expect a reply
                             (funcall timeout-handler nil)
-                            ; (edebug 1 thisnode :NO-TIMEOUT-HANDLER! soluid) ; this is not an error. Quit logging it.
+                            (edebug 5 thisnode :NO-TIMEOUT-HANDLER! soluid)
                             )))
                      (t ; more repliers are expected
                       ; functionally coalesce all known data and send it upstream as another interim reply
@@ -1982,10 +1962,10 @@ gets sent back, and everything will be copacetic.
   (let ((dead-list nil))
     (maphash (lambda (key value)
                (declare (ignore value))
-               (unless (member key alive-list)
+               (unless (member key alive-list :test 'equalp)
                  (push key dead-list)))
              *nodes*)
-    (sort dead-list #'<)))
+    dead-list))
 
 ;;;; Network communications
 
@@ -2088,7 +2068,7 @@ gets sent back, and everything will be copacetic.
           ;  and even then, make the proxy be temporary so it won't be found by
           ;  e.g. #'uber-set
           (when (or (uid? reply-to) ; if reply-to is nil or not one of these, we don't need a proxy to reply to
-                    (eq :UPSTREAM reply-to))
+                    (eql :UPSTREAM reply-to))
             (let ((proxy (ensure-proxy-node :tcp rem-address rem-port srcuid t)))
               ; if we needed a proxy for replies and failed to make one (or find one), then
               ;   an error happened, so drop the whole message on the floor.
@@ -2185,6 +2165,7 @@ gets sent back, and everything will be copacetic.
    Prepare all nodes for new simulation.
    Only necessary to call this once, or
    again if you change the graph or want to start with a clean log."
+  (gossip-init ':maybe)
   (when archive-log (archive-log))
   (sleep .5)
   (start-gossip-transport usocket:*wildcard-host*
@@ -2448,7 +2429,7 @@ We have a mechanism to allow replies to a node to occur from unpredictable sourc
 when we send a message with forward-to :NEIGHBORCAST or :GOSSIP but whose reply-to slot is a single UID.
 In this case, there's no way to know who might reply in advance, so we have to allow replies (to this soluid)
 from any srcuid. So in that case, we do
-(kvs:relate-unique! (repliers-expected thisnode) soluid :ANONYMOUS)
+(kvs:relate-unique! (repliers-expected thisnode) (vec-repr:bev-vec soluid) :ANONYMOUS)
 to prepare for replies.
 There are several implications here:
 1. We cannot know in advance when we have received all possible replies. Thus we have to depend on a timeout
