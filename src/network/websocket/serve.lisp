@@ -66,16 +66,18 @@
                     (from-address (alexandria:assoc-value parameters :from-address))
                     (to-address (alexandria:assoc-value (rest transaction) :address))
                     (amount (alexandria:assoc-value (rest transaction) :amount)))
-               (declare (ignore name from-address))
+               (declare (ignore name))
                (let ((transaction-result
-                      (model/wallet::submit-new-transaction
+                      (emotiq/app::submit-new-transaction
+                       :from from-address
                        :address to-address
                        :amount amount)))
                  (setf result transaction-result))))
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")
-             (setf result (model/wallet:transactions-from-chain)))
+             (let ((transaction-result (emotiq/app:get-transactions-from-chain)))
+               (setf result transaction-result)))
             (t
              (setf result nil
                    error `(:object (:code . -32601)

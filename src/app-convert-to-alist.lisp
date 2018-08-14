@@ -121,7 +121,26 @@ sample from emotiq/src/model/mock.lisp
               (out-alist `(:outputs .
                            (:array ,(mapcar #'convert-output-to-alist outs)))))
           `(:object
-            (:id . ,(txid-long-string (get-txid tx))) ;; added 'transaction-' for debug
+            (:id . ,(txid-long-string (get-txid tx)))
+            (:timestamp . ,timestamp)
+            (:epoch . ,epoch)
+            (:type . ,kind)
+            (:fee . ,fee)
+            ,in-alist
+            ,out-alist))))))
+
+(defun convert-one-spend-transaction-to-alist-from-tuple (tuple)  ;; TODO: this is ever so slightly different from above, why?  (notice ,@(mapcars...))
+  (destructuring-bind (tx timestamp epoch kind fee)
+      tuple
+    (let ((ins (cosi/proofs/newtx:transaction-inputs tx))
+          (outs (cosi/proofs/newtx:transaction-outputs tx)))
+      (let ((*print-readably* t))
+        (let ((in-alist `(:inputs .
+                          (:array ,@(mapcar #'convert-input-to-alist ins))))
+              (out-alist `(:outputs .
+                           (:array ,@(mapcar #'convert-output-to-alist outs)))))
+          `(:object
+            (:id . ,(txid-long-string (get-txid tx)))
             (:timestamp . ,timestamp)
             (:epoch . ,epoch)
             (:type . ,kind)

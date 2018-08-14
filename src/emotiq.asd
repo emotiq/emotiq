@@ -154,5 +154,6 @@
                         :components ((:file "app")
                                      (:file "app-get-transactions")
                                      (:file "app-generate-transactions")
+                                     (:file "app-spend")
                                      (:file "app-convert-to-alist")))))
 

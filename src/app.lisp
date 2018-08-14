@@ -83,7 +83,6 @@
     (setf emotiq/app:*node* cosi-simgen::*my-node*  ;; for debugging
           emotiq/app:*blocks* (cosi-simgen::block-list))
     (writebc)
-    (verify-genesis-block)
     (dump-results strm)
     #+nil(generate-pseudo-random-transactions *alice*)))
 
@@ -100,6 +99,8 @@
   (wait-for-node-startup)
 
   (make-accounts)
+
+  (verify-genesis-block)
 
   (let ((bal (get-balance *genesis*))
         (a (emotiq/txn:address (account-triple *genesis*))))
@@ -167,8 +168,9 @@
                amount
                :fee fee)))
      (publish-transaction txn)
-     (emotiq:note "sleeping to let txn propagate (is this necessary?)")
+     (emotiq:note "~&sleeping to let txn propagate (is this necessary?)")
      (sleep 30)
+     (emotiq:note "~&finished sleeping~%")
      txn)))
   
 (defmethod get-balance ((triple pbc:keying-triple))
