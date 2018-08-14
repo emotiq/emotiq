@@ -10,6 +10,8 @@
 (defparameter *tx3* nil)
 (defparameter *tx4* nil)
 
+(defparameter *blocks* nil)
+
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
 (defparameter *bob* nil)

@@ -179,7 +179,10 @@
    #:send-all-genesis-coin-to
    #:spend
    #:get-transactions
-   #:get-balance))
+   #:get-balance
+   #:test-app
+   #:*blocks*
+   #:*node*))
 
 (defpackage emotiq/random
   (:use #:cl)
