@@ -31,23 +31,31 @@ For all outputs of transaction
 |#
 
 (defmethod get-all-transactions-to-given-target-account ((a account))
-  (let ((account-address (emotiq/txn:address (account-pkey a))))
+  (let ((account-address (emotiq/txn:address (account-triple a))))
     (get-all-transactions-to-given-target-account account-address)))
         
-(defmethod get-all-transactions-to-given-target-account ((account-address pbc:keying-triplee))
+(defmethod get-all-transactions-to-given-target-account ((account pbc:keying-triple))
+  (get-all-transactions-to-given-target-account (emotiq/txn:address account)))
+                                                       
+(defmethod get-all-transactions-to-given-target-account ((account-address pbc:addr))
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions) ; "
   ;; FYI - there is one transaction from alice to bob and one transaction from bob to mary - this second transaction 
   ;; produces "change" back to bob, hence, there are two transactions TO bob (one from alice and one from bob)
-  (let ((result nil))
+  (let ((result nil)
+        (alists nil))
     (emotiq/app::with-current-node
      (cosi/proofs/newtx:do-blockchain (block) ;; TODO: optimize this
-       (cosi/proofs/newtx:do-transactions (tx block)
-         (when (or (eq :COLLECT (cosi/proofs/newtx:transaction-type tx))
-                   (eq :SPEND (cosi/proofs/newtx:transaction-type tx)))
-           (dolist (out (cosi/proofs/newtx:transaction-outputs tx)) 
-             (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-hash out))
-               (push tx result)))))))
-    result))
+       (let ((timestamp (cosi/proofs::blocktimestamp block))
+             (epoch (get-epoch block)))
+         (cosi/proofs/newtx:do-transactions (tx block)
+           (let ((kind (cosi/proof/newtx:transaction-type tx)))
+             (when (or (eq :COLLECT kind)
+                       (eq :SPEND kind))
+               (let ((fee (fee-paid-for-transaction tx)))
+                 (dolist (out (cosi/proofs/newtx:transaction-outputs tx)) 
+                   (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-hash out))
+                     (push (list tx timestamp epoch kind fee) result))))))))))
+       result))
 
 
 (defmethod get-all-transactions-from-given-target-account ((a account))
@@ -59,14 +67,18 @@ For all outputs of transaction
   (let ((result nil))
     (emotiq/app::with-current-node
       (cosi/proofs/newtx:do-blockchain (block)
-        (cosi/proofs/newtx:do-transactions (tx block)
-          (when (or (eq :COLLECT (cosi/proofs/newtx:transaction-type tx))
-                    (eq :SPEND (cosi/proofs/newtx:transaction-type tx)))
-            (let ((inputs (cosi/proofs/newtx:transaction-inputs tx))) 
-              ;; assert (all inputs point to the same address)
-              (let ((any-single-input (first inputs)))
-                (when (cosi/proofs/newtx:account-addresses= account-address (input-address any-single-input))
-                  (push tx result))))))))
+       (let ((timestamp (cosi/proofs::blocktimestamp block))
+             (epoch (get-epoch block)))
+         (cosi/proofs/newtx:do-transactions (tx block)
+           (let ((kind (cosi/proofs/newtx:transaction-type tx))
+                 (when (or (eq :COLLECT kind)
+                           (eq :SPEND kind))
+                   (let ((fee (fee-paid-for-transaction tx)))
+                     (let ((inputs (cosi/proofs/newtx:transaction-inputs tx))) 
+                       ;; assert (all inputs point to the same address)
+                       (let ((any-single-input (first inputs)))
+                         (when (cosi/proofs/newtx:account-addresses= account-address (input-address any-single-input))
+                           (push (list tx timestamp epoch kind fee) result))))))))))))
     result))
 
 (defmethod get-address-of-sender ((tx cosi/proofs/newtx:transaction))
@@ -81,6 +93,15 @@ For all outputs of transaction
       (if (eq :coinbase (cosi/proofs/newtx:transaction-type prev-tx))
           (address-of-genesis)
         (input-address (first (cosi/proofs/newtx:transaction-inputs prev-tx)))))))
+
+(defmethod get-address-of-sender-to-input ((in cosi/proofs/newtx:transaction-input))
+  "given an input, return address of who sent it"
+  (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id in))
+        (index (cosi/proofs/newtx:tx-in-index in)))
+    (if (= -1 index)
+        (address-of-genesis)
+      (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
+        (get-address-of-sender prev-txn-id)))))
 
 (defmethod input-address ((in cosi/proofs/newtx:transaction-input))
   "return address of this input by reaching back to the output which is connected to it"
@@ -154,3 +175,4 @@ For all outputs of transaction
 
 (defun get-transactions-from-chain (keyingtriple)
   (emotiq-rest:as-json (get-transactions keyingtriple)))
+
