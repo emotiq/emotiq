@@ -61,7 +61,7 @@
   `(cosi-simgen:with-current-node cosi-simgen::*my-node*
      ,@body))
 
-;; from test/geness.lisp
+;; from test/genesis.lisp
 (defun verify-genesis-block (&key (root (emotiq/fs:etc/)))
   (let* ((genesis-block
           (emotiq/config:get-genesis-block
