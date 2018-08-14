@@ -94,11 +94,13 @@ For all outputs of transaction
   ;; being careful about COINBASE (which has no inputs)
   ;; I'm not unwinding the input fully - it points back to a transaction output and index - index not needed, we
   ;; just need to know who sent this
-  (let ((prev-transaction-id (cosi/proofs/newtx:tx-in-id (first (cosi/proofs/newtx:transaction-inputs tx)))))
-    (let ((prev-tx (find-transaction-per-id prev-transaction-id)))  ;; inefficient
-      (if (eq :coinbase (cosi/proofs/newtx:transaction-type prev-tx))
-          (address-of-genesis)
-        (input-address (first (cosi/proofs/newtx:transaction-inputs prev-tx)))))))
+  (if (eq :coinbase (cosi/proofs/newtx:transaction-type tx))
+      (address-of-genesis) ;; special case for genesis
+    (let ((prev-transaction-id (cosi/proofs/newtx:tx-in-id (first (cosi/proofs/newtx:transaction-inputs tx)))))
+      (let ((prev-tx (find-transaction-per-id prev-transaction-id)))  ;; inefficient
+        (if (eq :coinbase (cosi/proofs/newtx:transaction-type prev-tx))
+            (address-of-genesis)
+          (input-address (first (cosi/proofs/newtx:transaction-inputs prev-tx))))))))
 
 (defmethod get-address-of-sender-to-input ((in cosi/proofs/newtx:transaction-input))
   "given an input, return address of who sent it"
