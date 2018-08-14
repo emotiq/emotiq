@@ -20,7 +20,7 @@ sample from emotiq/src/model/mock.lisp
                         (:array
                          (:object                              <-- an input
                           (:cloaked . (:false))                <-- always uncloaked for MVP (testnet: ask David, every wallet must send first txn cloaked)
-                          (:address . ,address)                <-- address of sender?
+                          (:address . ,address)                <-- address of sender?  (should this be the txid of originating txn?)
                           (:amount . 10000))))                 <-- amount sent to this input
                (:outputs .                                     <-- outputs of this txn
                          (:array
