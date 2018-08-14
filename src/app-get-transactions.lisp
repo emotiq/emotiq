@@ -34,8 +34,8 @@ For all outputs of transaction
   (let ((account-address (emotiq/txn:address (account-triple a))))
     (get-all-transactions-to-given-target-account account-address)))
         
-(defmethod get-all-transactions-to-given-target-account ((account pbc:keying-triple))
-  (get-all-transactions-to-given-target-account (emotiq/txn:address account)))
+(defmethod get-all-transactions-to-given-target-account ((a pbc:keying-triple))
+  (get-all-transactions-to-given-target-account (emotiq/txn:address a)))
                                                        
 (defmethod get-all-transactions-to-given-target-account ((account-address pbc:address))
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions) ; "
@@ -62,7 +62,10 @@ For all outputs of transaction
 (defmethod get-all-transactions-from-given-target-account ((a account))
   (get-all-transactions-from-given-target-account (emotiq/txn:address (account-pkey a))))
 
-(defmethod get-all-transactions-from-given-target-account ((account-address pbc:keying-triple))
+(defmethod get-all-transactions-from-given-target-account ((a pbc:keying-triple))
+  (get-all-transactions-to-given-target-account (emotiq/txn:address a)))
+                                                       
+(defmethod get-all-transactions-from-given-target-account ((account-address pbc:address))
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) from account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions)"
   ;; FYI - there should be ONE transaction FROM bob, with two outputs (one back to bob)
   (let ((result nil))
@@ -74,7 +77,9 @@ For all outputs of transaction
            (let ((kind (cosi/proofs/newtx:transaction-type tx)))
              (when (or (eq :COLLECT kind)
                        (eq :SPEND kind))
-               (let ((fee (fee-paid-for-transaction tx)))
+               (let ((fee (if (eq :COLLECT kind)
+                              0
+                            (fee-paid-for-transaction tx))))
                  (let ((inputs (cosi/proofs/newtx:transaction-inputs tx))) 
                    ;; assert (all inputs point to the same address)
                    (let ((any-single-input (first inputs)))
@@ -118,7 +123,7 @@ For all outputs of transaction
 (defmethod amount-in-input ((in cosi/proofs/newtx:transaction-input))
   "return amount sent to this input by an output from a txn"
   (let ((prev-txn-id (cosi/proofs/newtx:tx-in-id in))
-        (index (cosi/proofs/newtx:tx-in-index)))
+        (index (cosi/proofs/newtx:tx-in-index in)))
     (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
       (let ((outlist (cosi/proofs/newtx:transaction-outputs prev-txn)))  ;; sequence of outputs
         (let ((out (nth index outlist)))  ;; index and grab appropriate output
