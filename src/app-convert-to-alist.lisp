@@ -93,12 +93,12 @@ sample from emotiq/src/model/mock.lisp
 |#
 
 
-(defun test convert-to-alist (wallet-address)
+(defun test-alist (wallet-address)
   (let ((txn-list (get-transactions wallet-address)))
     `(:array
       (:object
        (:id . ,wallet-address)
-       (:timestamp . ,time
+       (:timestamp . ,time)
        (:array
         ,(convert-transactions-to-alist txn-list))))))
 
@@ -109,8 +109,8 @@ sample from emotiq/src/model/mock.lisp
 (defun convert-one-transaction-to-alist-from-tuple (tuple)
   (destructuring-bind (tx timestamp epoch kind fee)
       tuple
-    (let ((ins (cosi/proofs/txn:transaction-inputs tx))
-          (outs (cosi/proofs/txn:transaction-outputs tx))
+    (let ((ins (cosi/proofs/newtx:transaction-inputs tx))
+          (outs (cosi/proofs/newtx:transaction-outputs tx))
           (id (get-txid tx)))
       (let ((in-alist `(:inputs .
                         (:array ,(mapcar #'convert-input-to-alist ins))))
