@@ -76,6 +76,9 @@
 ;; handler with embedded authenticated message. If any failure along
 ;; the way, just drop the message on the floor.
 
+(defun actual-gossip-port ()
+   *actual-tcp-gossip-port*)
+
 (defun do-process-authenticated-packet (deserialize-fn body-fn)
   "Handle decoding and authentication. If fails in either case just do nothing."
   (let ((decoded (handler-case
@@ -644,7 +647,7 @@ are in place between nodes.
   "Returns true if host of node matches hostpair."
   (with-slots (real-address real-port) node
     (and (usocket::ip= real-address (first hostpair))
-         (= real-port (second hostpair)))))
+         (eql real-port (second hostpair)))))
 
 (defmethod node-matches-host? (node host)
   (declare (ignore node host))
@@ -739,7 +742,7 @@ are in place between nodes.
     (setf (actor node) actor)
     ; rule: We should never have a proxy and a real node with same uid.
     ;  Furthermore: uid of a proxy should always be forced to match its real-uid, except when its real-uid=0.
-    (unless (= 0 (real-uid node))
+    (unless (eql 0 (real-uid node))
       (let ((oldnode (lookup-node (real-uid node))))
         (when oldnode
           (edebug 1 :WARN oldnode "being replaced by proxy" node)))
@@ -929,7 +932,7 @@ dropped on the floor.
 
 (defun actor-send (&rest args)
   "Error-safe version of ac:send. Returns nil if successful; otherwise returns error object"
-  (gossip-handler-case (progn (apply 'ac:send args)
+  (handler-case (progn (apply 'ac:send args)
                          nil)
                        (error (e) e)))
 
@@ -2226,7 +2229,7 @@ dropped on the floor.
 (defun other-udp-port ()
   (when *udp-gossip-socket*
     (let ((gossip-port (emotiq/config:setting :gossip-server-port)))
-      (if (= gossip-port *actual-udp-gossip-port*)
+      (if (eql gossip-port *actual-udp-gossip-port*)
         (1+ gossip-port)
         gossip-port))))
 
@@ -2235,7 +2238,7 @@ dropped on the floor.
    has already established one. Only used for testing two processes communicating on one machine."
   (when *tcp-gossip-socket*
     (let ((gossip-port (emotiq/config:setting :gossip-server-port)))
-      (if (= gossip-port *actual-tcp-gossip-port*)
+      (if (eql gossip-port *actual-tcp-gossip-port*)
           (1+ gossip-port)
           gossip-port))))
     

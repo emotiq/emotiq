@@ -52,6 +52,8 @@
    #:establish-broadcast-group
    #:dissolve-graph
    #:memoize-node
+   #:hello
+   #:actual-gossip-port
 
    #:shutdown-gossip-server
    ))

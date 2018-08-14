@@ -77,7 +77,6 @@
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
     (emotiq:main :etc-and-wallets etc-and-wallets)
-    (setf gossip::*debug-level* nil)
     (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
