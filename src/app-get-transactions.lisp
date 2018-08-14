@@ -41,8 +41,7 @@ For all outputs of transaction
   "return a list of transactions (CLOS in-memory, local to node) that SPEND (and COLLECT) to account 'a' ; N.B. this only returns transactions that have already been committed to the blockchain (e.g. transactions in MEMPOOL are not considered ; no UTXOs (unspent transactions) ; "
   ;; FYI - there is one transaction from alice to bob and one transaction from bob to mary - this second transaction 
   ;; produces "change" back to bob, hence, there are two transactions TO bob (one from alice and one from bob)
-  (let ((result nil)
-        (alists nil))
+  (let ((result nil))
     (emotiq/app::with-current-node
      (cosi/proofs/newtx:do-blockchain (block) ;; TODO: optimize this
        (let ((timestamp (cosi/proofs::block-timestamp block))
@@ -51,7 +50,9 @@ For all outputs of transaction
            (let ((kind (cosi/proofs/newtx:transaction-type tx)))
              (when (or (eq :COLLECT kind)
                        (eq :SPEND kind))
-               (let ((fee (fee-paid-for-transaction tx)))
+               (let ((fee (if (eq :COLLECT kind)
+                              0
+                            (fee-paid-for-transaction tx))))
                  (dolist (out (cosi/proofs/newtx:transaction-outputs tx)) 
                    (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-hash out))
                      (push (list tx timestamp epoch kind fee) result))))))))))
@@ -101,7 +102,7 @@ For all outputs of transaction
     (if (= -1 index)
         (address-of-genesis)
       (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
-        (get-address-of-sender prev-txn-id)))))
+        (get-address-of-sender prev-txn)))))
 
 (defmethod input-address ((in cosi/proofs/newtx:transaction-input))
   "return address of this input by reaching back to the output which is connected to it"
