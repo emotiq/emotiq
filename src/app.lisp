@@ -17,8 +17,8 @@
 (defparameter *james* nil)
 
 (defclass account ()
-  ((skey :accessor account-skey)  
-   (pkey :accessor account-pkey)  
+  ((skey :accessor account-skey)
+   (pkey :accessor account-pkey)
    (triple :accessor account-triple)
    (name :accessor account-name)))
 
@@ -75,7 +75,7 @@
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
     (emotiq:main :etc-and-wallets etc-and-wallets)
-    (setf gossip::*debug-level* nil)
+    ; (setf gossip::*debug-level* nil)
     (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
@@ -94,14 +94,14 @@
         (a (emotiq/txn:address (account-triple *genesis*))))
     (emotiq:note "balance for genesis is ~A" bal)
     (emotiq:note "address of genesis ~A" a))
-  
+
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
 	*mary* (make-account "mary")
         *james* (make-account "james"))
-  
+
   (let ((fee 10))
-    
+
     ;; make various transactions
     (send-all-genesis-coin-to *alice*)
 
@@ -165,7 +165,7 @@
      (emotiq:note "sleeping to let txn propagate (is this necessary?)")
      (sleep 30)
      txn)))
-  
+
 (defmethod get-balance ((triple pbc:keying-triple))
   "return the balance for a given account"
   (with-current-node
@@ -190,7 +190,7 @@
      (emotiq:note "")
      (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
      (dumpamounts)
-     
+
      ;; this gathers all txns to alice/bob/mary/james (incl. change txns)
      (let ((tx-alice (get-all-transactions-to-given-target-account *alice*))
            (tx-bob (get-all-transactions-to-given-target-account *bob*))
@@ -201,7 +201,7 @@
                     tx-bob
                     tx-mary
                     tx-james)
-       
+
        (setf emotiq:*notestream* strm)
        (values)))))
 
@@ -212,7 +212,7 @@
         (jamesamount 90))
     (emotiq:note "calculated balances alice(~a) bob(~a) mary(~a) james(~a)~%"
                  aliceamount bobamount maryamount jamesamount)))
-    
+
 (defun dtx ()
   (with-current-node
    (let ((strm emotiq:*notestream*))
