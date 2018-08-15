@@ -267,4 +267,11 @@
   emotiq/app::*blocks*)
 
 
-  
+  ;;;;;;  debugging helpers
+(defun addr-str (a)
+  "return string address for emotiq/app::account a"
+  (if (null a)
+      (progn
+        (format *standard-output* "~&account is NIL~%")
+        "")
+    (pbc:addr-str (emotiq/txn:address (account-triple a)))))
