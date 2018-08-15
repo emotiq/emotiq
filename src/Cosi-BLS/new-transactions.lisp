@@ -1020,8 +1020,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (defun coinbase-transaction-input-p (transaction-input)
   (with-slots (tx-in-id tx-in-index) transaction-input
-    (and (equal tx-in-id *initial-coinbase-tx-in-id-value*)
-         (equal tx-in-index *initial-coinbase-tx-in-index-value*))))
+    (and (pbc= tx-in-id *initial-coinbase-tx-in-id-value*)
+         (= tx-in-index *initial-coinbase-tx-in-index-value*))))
 
 (defun make-coinbase-transaction-input ()
   (make-instance
