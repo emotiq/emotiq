@@ -1000,9 +1000,34 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; their normal function, so these values are arbitrary. These two ARE part
 ;;; of the hash of the transaction.
 
+
+(defparameter *initial-coinbase-tx-in-id-value* nil)
+
+(defun zero-address ()
+  ; So I would probably choose to form an arbitrary HASH/256 of any old seed, then copy the BEV into a new vector, then zap that vector with a FILL of zero. 
+  ; And then reconstruct the HASH/256 item with that modified BEV. (COPY-SEQ)
+  (let* ((h (hash:hash/256 :test))
+         (vec (vec-repr:bev-vec h))
+         (dum (copy-seq vec)))
+    (fill dum 0)
+    (setf (slot-value h 'hash::val) (vec-repr:bev dum))
+    h))
+
+(defun init-new-transactions ()
+  (setf *initial-coinbase-tx-in-id-value* (zero-address)))
+
+#|
 (defvar *initial-coinbase-tx-in-id-value*
   (make-instance 'hash:hash/256  ;; per recommendation
                  :val (bev (hex "0000000000000000000000000000000000000000000000000000000000000000"))))
+|#
+
+#| don't use the below
+(defvar *zeros* "0000000000000000000000000000000000000000000000000000000000000000")
+(assert (= 64 (length *zeros*)))
+(defvar *initial-coinbase-tx-in-id-value*
+  (hash:hash/256 *zeros*))
+|#
 
 (defvar *initial-coinbase-tx-in-index-value*
   -1)
