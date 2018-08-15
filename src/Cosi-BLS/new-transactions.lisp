@@ -367,7 +367,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
           (loop with new-bindings = bindings
                 for var in vars
                 as arg in args
-                do (setq new-bindings (acons var arg new-bindings))
+                do (setq new-bindings (acons (if (consp var)
+                                                 (car var)
+                                               var)
+                                             arg new-bindings))
                 finally (return (eval-x body new-bindings))))
         (let ((script-op? (get-script-op function-name)))
           (if script-op?
@@ -749,7 +752,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(def-script-op public-key-equal-verify ((public-key public-key) (public-key-hash hash:hash))
+(def-script-op public-key-equal-verify ((public-key public-key) (public-key-hash pbc:address))
   (cond
     ((not (typep public-key 'pbc:public-key))
      (pr "Arg public-key (~s) is not of correct type: ~s"
@@ -1052,7 +1055,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    :%tx-in-public-key nil
    :%tx-in-signature nil))
 
-(defmethod make-coinbase-transaction-output ((public-key-hash hash:hash) (amount integer))
+(defmethod make-coinbase-transaction-output ((public-key-hash pbc:address) (amount integer))
   (make-instance
    'transaction-output
    :tx-out-public-key-hash public-key-hash
@@ -1063,7 +1066,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defmethod make-genesis-transaction ((public-key-hash hash:hash))
+(defmethod make-genesis-transaction ((public-key-hash pbc:address))
   (make-newstyle-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output

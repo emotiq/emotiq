@@ -1183,7 +1183,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (latest-block)
                                               *election-proof* *leader*
-                                              (get-witness-list)
+                                              (coerce (get-witness-list) 'vector)
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
