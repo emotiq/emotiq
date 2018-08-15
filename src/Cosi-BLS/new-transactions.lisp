@@ -1081,6 +1081,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    represents a sha-3/256 hash result."
   (hash:hash= tx-id-1 tx-id-2))
 
+(defmethod tx-ids= (tx-id-1 tx-id-2)
+  nil)
+
 (defmacro do-blockchain ((block-var) &body body)
   "Do blocks of the blockchain in reverse chronological order. Iterate over the
    blocks of the blockchain (i.e., the value of cosi-simgen:*blockchain*)
