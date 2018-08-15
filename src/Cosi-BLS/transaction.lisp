@@ -111,22 +111,22 @@ the simple commitment to the uncloaked value"
 (defmethod make-hashlock (arg (pkey pbc:public-key))
   (hash:hash/256 arg pkey))
 
-(defun make-admin-commit (amt &optional (gamma (random-between 1 *ed-r*)))
+(defmethod make-admin-commit ((amt integer) &optional (gamma (random-between 1 *ed-r*)))
   (values
    (range-proofs:simple-commit (range-proofs:gpt) (range-proofs:hpt) gamma amt)
    gamma))
 
-(defun check-amt (amt)
+(defmethod check-amt ((amt integer))
   (and (not (minusp amt))
        (< amt #.(ash 1 range-proofs:*max-bit-length*))))
 
-(defun need-valid-amt (amt)
+(defmethod need-valid-amt ((amt integer))
   (unless (check-amt amt)
     (error "Amount out of range [0..2^64): ~A" amt)))
 
 ;; ---------------------------------------------------------------------
 
-(defun make-cloaked-txin (amt gam pkey skey)
+(defmethod make-cloaked-txin ((amt integer) (gam integer) (pkey pbc:public-key) (skey pbc:secret-key))
   "Make a TXIN with value proof"
   (need-valid-amt amt)
   (let* ((prf       (range-proofs:make-range-proof amt :gamma gam))
@@ -141,7 +141,7 @@ the simple commitment to the uncloaked value"
                     :encr      encr)
      gam)))
 
-(defun make-uncloaked-txin (amt gam pkey skey)
+(defmethod make-uncloaked-txin ((amt integer) (gam integer) (pkey pbc:public-key) (skey pbc:secret-key))
   "Make a signed uncloaked TXIN. Someone must sign for it. When no
 pre-existing UTXO, e.g., sum of block fees and confiscated stakes,
 only the epoch leader."
@@ -223,10 +223,10 @@ Typically used for stakes. Public key is G2, Secret key is 1."
                  (trans-fee trn)
                  (trans-gamadj trn)))
 
-(defmethod =hash-trn ((trn transaction) hash)
+(defmethod =hash-trn ((trn transaction) (hash hash:hash))
   (hash:hash= hash (hash-trn trn)))
 
-(defun do-make-transaction (txins gam-txins txouts txout-secrets fee)
+(defmethod do-make-transaction ((txins list) (gam-txins list) (txouts list) (txout-secrets list) (fee integer))
   "TXINS is a list of TXIN structs, TXOUTS is a list of TXOUT structs,
 some cloaked, some not.  Add up the txins, subtract the txouts. Result
 should be zero value, but some non-zero gamma sum. We make a
@@ -308,7 +308,7 @@ during TXIN formation will be properly disposed of."
 
 ;; ---------------------------------------------------------------------
 
-(defmethod validate-txin ((utx cloaked-txin) hash)
+(defmethod validate-txin ((utx cloaked-txin) (hash hash:hash))
   (let* ((hl  (make-hashlock (txin-prf utx)
                              (txin-pkey utx))))
     (and (hash:hash= hl
@@ -319,7 +319,7 @@ during TXIN formation will be properly disposed of."
          (range-proofs:validate-range-proof (txin-prf utx))
          )))
 
-(defmethod validate-txin ((utx uncloaked-txin) hash)
+(defmethod validate-txin ((utx uncloaked-txin) (hash hash:hash))
   (let* ((amt  (uncloaked-txin-amt utx))
          (hl   (make-hashlock (pedersen-commitment utx)
                               (txin-pkey utx))))
@@ -359,28 +359,28 @@ during TXIN formation will be properly disposed of."
 ;; ---------------------------------------------------------------------
 ;; Recover spend info
 
-(defmethod get-txin-amount ((txin uncloaked-txin) skey)
+(defmethod get-txin-amount ((txin uncloaked-txin) (skey pbc:secret-key))
   (declare (ignore skey))
   (uncloaked-txin-amt txin))
 
-(defmethod get-txin-amount ((txin cloaked-txin) skey)
+(defmethod get-txin-amount ((txin cloaked-txin) (skey pbc:secret-key))
   (decrypt-txin-info txin skey))
 
 
 
-(defmethod decrypt-txin-info  ((txin cloaked-txin) skey)
+(defmethod decrypt-txin-info  ((txin cloaked-txin) (skey pbc:secret-key))
   (pbc:ibe-decrypt (cloaked-txin-encr txin) skey))
 
-(defmethod find-txin-for-pkey-hash (pkey (trn transaction))
+(defmethod find-txin-for-pkey-hash ((pkey pbc:public-key) (trn transaction))
   (find pkey (trans-txins trn)
         :key 'txin-pkey
         :test 'int=))
 
 
-(defmethod decrypt-txout-info ((txout cloaked-txout) skey)
+(defmethod decrypt-txout-info ((txout cloaked-txout) (skey pbc:secret-key))
   (pbc:ibe-decrypt (cloaked-txout-encr txout) skey))
 
-(defmethod find-txout-for-pkey-hash (pkey-hash (trn transaction))
+(defmethod find-txout-for-pkey-hash ((pkey-hash hash:hash) (trn transaction))
   (find pkey-hash (trans-txouts trn)
         :key  'txout-hashpkey
         :test 'hash:hash=))

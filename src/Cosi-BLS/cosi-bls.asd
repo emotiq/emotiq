@@ -59,6 +59,7 @@ THE SOFTWARE.
                                      (:file "cosi-handlers")
                                      (:file "mvp-election-beacon")
                                      (:file "new-transactions")
+                                     (:file "post-tx-block")
                                      (:file "cosi-netw-xlat")))))
 
 

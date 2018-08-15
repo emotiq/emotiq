@@ -201,22 +201,22 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   "An a-list of the form
     ((name . (arglist . body)) ...)")
 
-(defun get-locking-script (name)
+(defmethod get-locking-script ((name symbol))
   "If found, returns a list of the form (NAME FUNCTION-NAME (ARGS...))"
   (assoc name *transaction-scripts*))
 
-(defun make-locking-script (name)
+(defmethod make-locking-script ((name symbol))
   (let ((new (list name (list '()))))
     (push new *transaction-scripts*)
     new))
 
-(defun get-or-make-locking-script (name)
+(defmethod get-or-make-locking-script ((name symbol))
   (or (get-locking-script name)
       (make-locking-script name)))
 
 
 
-(defun get-unlocking-script (name)
+(defmethod get-unlocking-script ((name symbol))
   (get-locking-script name))
 
 ;; For now, locking and unlockin scripts are the same below this level, but keep
@@ -224,7 +224,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   
   
 
-(defun define-script (name arglist body)
+(defmethod define-script ((name symbol) arglist body)
   (let* ((entry (get-or-make-locking-script name))
          (arglist-and-body (cdr entry)))
     (setf (first arglist-and-body) (copy-tree arglist))
@@ -246,7 +246,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
   "An a-list of the form
      ((name op-dispatch-function) ...)")
 
-(defun get-script-op (name)
+(defmethod get-script-op ((name symbol))
   "If found, returns a list of the form (NAME OP-FUNCTION-NAME)"
   (assoc name *script-ops*))
 
@@ -283,7 +283,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; (eval-x '(list 1 2 3 foo 5) '((foo . 4))) => (1 2 3 4 5)
 ;;; (eval-x '(and (= (* a b) c) (or x y)) '((a . 1) (b . 2) (c . 2) (x . nil) (y . 13))) => 13
 
-(defun eval-x (expr bindings)
+(defmethod eval-x (expr (bindings list))
   (cond
     ((atom expr)
      (case expr
@@ -358,7 +358,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                            collect (eval-x arg bindings))))
           (apply-x function-name args bindings)))))))
 
-(defun apply-x (function-name args bindings)
+(defmethod apply-x ((function-name symbol) (args list) (bindings list))
   (let ((script? (get-locking-script function-name)))
     (if script?
         (destructuring-bind (name vars body)
@@ -379,7 +379,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                'undefined-function-or-script-op
                function-name))))))
 
-(defun eval-x-error (type &rest additional-args)
+(defmethod eval-x-error ((type symbol) &rest additional-args)
   (emotiq:em-warn "Error in eval-x of type ~a: additional info: ~s"
         type additional-args)
   (fail-script))
@@ -447,7 +447,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
          (entry
            (list name op-dispatch-function-name)))
     `(progn
-       (defun ,op-dispatch-function-name ,arglist
+       (defmethod ,op-dispatch-function-name ,arglist
          (require-transaction-script-context)
          (let ((*current-script-op* ',name))
            ,@body))
@@ -507,11 +507,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (defparameter *minimum-transaction-fee* 10)
 
-(defun transaction-fee-too-low-p (transaction-fee)
+(defmethod transaction-fee-too-low-p ((transaction-fee integer))
   (< transaction-fee *minimum-transaction-fee*))               ; ---!!! review!!
 
 
-(defun validate-transaction (transaction)
+(defmethod validate-transaction ((transaction transaction))
   "Validate TRANSACTION, and either accept it (by returning true) or
    reject it by returning false (nil).  This is for transactions
    transmitted via gossip network.  The following checks are done:
@@ -613,7 +613,9 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                     (add-transaction-to-mempool transaction)
                     (return t)))))
 
-(defun run-chainlisp-script (transaction transaction-input utxo)
+(defmethod run-chainlisp-script ((transaction transaction)
+                                 (transaction-input transaction-input)
+                                 (utxo transaction-output))
   (in-transaction (transaction)
     (in-transaction-script-context
       (let* ((lock-script (tx-out-lock-script utxo))
@@ -694,7 +696,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; feature. Only needed for case of creating a coinbase transaction,
 ;;; created by miners/minters when a block is created.
 
-(defun serialize-transaction (transaction)
+(defmethod serialize-transaction ((transaction transaction))
   (with-output-to-string (out)
     (flet ((emit (x)
              (format out "~a " x)))
@@ -722,16 +724,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defun hash-transaction-id (tx)
+(defmethod hash-transaction-id ((tx transaction))
   (transaction-hash (serialize-transaction tx)))
 
-(defun hash-transaction-input-scripts-id (tx)
+(defmethod hash-transaction-input-scripts-id ((tx transaction))
   (transaction-hash 
    (loop for tx-in in (transaction-inputs tx)
          as script = (tx-in-unlock-script tx-in)
          collect script)))
 
-(defun hash-transaction-witness-id (tx)
+(defmethod hash-transaction-witness-id ((tx transaction))
   (transaction-hash 
    (loop for tx-in in (transaction-inputs tx)
          as signature = (%tx-in-signature tx-in)
@@ -747,7 +749,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(def-script-op public-key-equal-verify (public-key public-key-hash)
+(def-script-op public-key-equal-verify ((public-key public-key) (public-key-hash hash:hash))
   (cond
     ((not (typep public-key 'pbc:public-key))
      (pr "Arg public-key (~s) is not of correct type: ~s"
@@ -779,17 +781,17 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
          (t
           (fail-script-op)))))))
 
-(def-script-op check-signature (public-key signature)
+(def-script-op check-signature ((public-key public-key) (signature signature))
   (check-hash
    (transaction-hash (serialize-current-transaction))
    signature public-key))
 
 
-(def-locking-script script-pub-key (public-key signature)
+(def-locking-script script-pub-key ((public-key public-key) (signature signature))
   (and (public-key-equal-verify public-key ^tx-public-key-hash)
        (check-signature public-key signature)))
 
-(def-locking-script script-pub-key-cloaked (public-key signature proof message)
+(def-locking-script script-pub-key-cloaked ((public-key public-key) (signature signature) proof message)
   (and (public-key-equal-verify public-key ^tx-public-key-hash)
        (check-signature public-key signature)
        ;; proof: a "bulletproof" (cloaked amount) giving the amount of tokens to
@@ -833,7 +835,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; Each input if any is the form abreviated-id[index].
 ;;; Each output is of the form amount/abbreviated-address.
 
-(defun print-transaction (transaction stream)
+(defmethod print-transaction ((transaction transaction) stream)
   (print-unreadable-object (transaction stream)
     (with-slots 
           (transaction-inputs transaction-outputs)
@@ -869,7 +871,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defparameter *hash-abbrev-ending* "!") ; Alts: "\\" "-|" ".:"
 
 
-(defun abbrev-hash-string (string &key style)
+(defmethod abbrev-hash-string ((string string) &key style)
   "By default abbreviate STRING by writing just its STYLE-specific
    preferense for the number of characters to write --
    *hash-abbrev-length* gives the default. Default for abbrev length
@@ -984,7 +986,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defparameter *minimum-spend-amount* 0) ; ---!!! review!!
 (defparameter *maximum-spend-amount* (initial-total-coin-amount))
 
-(defun in-legal-money-range-p (amount)
+(defmethod in-legal-money-range-p ((amount integer))
   (and (>= amount *minimum-spend-amount*)
        (<= amount *maximum-spend-amount*)))
 
@@ -1032,7 +1034,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 (defvar *initial-coinbase-tx-in-index-value*
   -1)
 
-(defun coinbase-transaction-input-p (transaction-input)
+(defmethod coinbase-transaction-input-p ((transaction-input transaction-input))
   (with-slots (tx-in-id tx-in-index) transaction-input
     (and (equal tx-in-id *initial-coinbase-tx-in-id-value*)
          (equal tx-in-index *initial-coinbase-tx-in-index-value*))))
@@ -1050,7 +1052,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    :%tx-in-public-key nil
    :%tx-in-signature nil))
 
-(defun make-coinbase-transaction-output (public-key-hash amount)
+(defmethod make-coinbase-transaction-output ((public-key-hash hash:hash) (amount integer))
   (make-instance
    'transaction-output
    :tx-out-public-key-hash public-key-hash
@@ -1061,7 +1063,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defun make-genesis-transaction (public-key-hash)
+(defmethod make-genesis-transaction ((public-key-hash hash:hash))
   (make-newstyle-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
@@ -1072,12 +1074,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defun tx-ids= (tx-id-1 tx-id-2)
+(defmethod tx-ids= ((tx-id-1 hash:hash) (tx-id-2 hash:hash))
   "Return true if transaction IDs are equal. TX-ID-1 and TX-ID-2 must
    transaction ID's, which are represented as instances of class BEV (a class to
    represent a big-endian vector of (unsigned-byte 8) elements), which in turn
    represents a sha-3/256 hash result."
-  (pbc= tx-id-1 tx-id-2))
+  (hash:hash= tx-id-1 tx-id-2))
 
 (defmacro do-blockchain ((block-var) &body body)
   "Do blocks of the blockchain in reverse chronological order. Iterate over the
@@ -1123,7 +1125,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     result))
 
 
-(defun find-transaction-per-id (id &optional also-search-mempool-p)
+(defmethod find-transaction-per-id ((id hash:hash) &optional also-search-mempool-p)
   "Search blockchain for a transaction with TXID matching ID. If
 also-search-mempool-p is true, this also searches the current
 mempool. This returns the transaction as a first value if found, and
@@ -1187,7 +1189,7 @@ returns the block the transaction was found in as a second value."
                    (values nil :utxo-on-blockchain))))))
 
 
-(defun trace-compare-all-tx-ids (id)
+(defmethod trace-compare-all-tx-ids ((id hash:hash))
   (pr "Trace:")
   (do-blockchain (blk)
     (do-transactions (tx blk)
@@ -1247,7 +1249,7 @@ returns the block the transaction was found in as a second value."
 
 
 
-(defun get-hash-key-of-transaction (transaction)
+(defmethod get-hash-key-of-transaction ((transaction transaction))
   "Transactions may be stored in EQUALP hash tables. The mempool, for
   example, is an equalp hash table. This returns a key that is a byte
   vector, i.e., such that it has the property that it may be compared
@@ -1257,13 +1259,13 @@ returns the block the transaction was found in as a second value."
 
 
 
-(defun add-transaction-to-mempool (transaction)
+(defmethod add-transaction-to-mempool ((transaction transaction))
   "Add TRANSACTION to the mempool. It is OK to call this when the
    transaction is already in the mempool.  This returns TRANSACTION as its value."
   (let ((key (get-hash-key-of-transaction transaction)))
     (setf (gethash key cosi-simgen:*mempool*) transaction)))
 
-(defun remove-transaction-from-mempool (transaction mempool)
+(defmethod remove-transaction-from-mempool ((transaction transaction) mempool)
   "Remove TRANSACTION, a transaction instance, from MEMPOOL, and return true if
    there was such an entry or false (nil) otherwise."
   (remhash (get-hash-key-of-transaction transaction) mempool))
@@ -1272,7 +1274,7 @@ returns the block the transaction was found in as a second value."
 
 
 
-(defun make-transaction-inputs (input-specs &key transaction-type)
+(defmethod make-transaction-inputs ((input-specs list) &key transaction-type)
   "Make transaction inputs for TRANSACTION-TYPE, which defaults to :SPEND."
   (loop with transaction-type = (or transaction-type :spend)
         with unlock-script 
@@ -1294,7 +1296,7 @@ returns the block the transaction was found in as a second value."
 ;;; (a/k/a address) and signature for verification, needed to unlock the value
 ;;; of the transaction at hand.
 
-(defun map-transaction-type-to-unlock-script (transaction-type)
+(defmethod map-transaction-type-to-unlock-script ((transaction-type symbol))
   (get-unlocking-script 
    (ecase transaction-type
      ((:spend :spend-cloaked :collect :coinbase)
@@ -1302,7 +1304,7 @@ returns the block the transaction was found in as a second value."
   
 
 
-(defun make-transaction-outputs (output-specs &key transaction-type)
+(defmethod make-transaction-outputs ((output-specs list) &key transaction-type)
   (loop with transaction-type = (or transaction-type :spend)
         with lock-script
           = (map-transaction-type-to-lock-script transaction-type)
@@ -1315,7 +1317,7 @@ returns the block the transaction was found in as a second value."
 
 
 
-(defun map-transaction-type-to-lock-script (transaction-type)
+(defmethod map-transaction-type-to-lock-script ((transaction-type symbol))
   (get-locking-script 
    (ecase transaction-type
      ((:spend :collect :coinbase) 'script-pub-key)
@@ -1325,7 +1327,7 @@ returns the block the transaction was found in as a second value."
 ;; ---*** transaction cloaked. Review later!  -mhd, 6/26/18
 
 
-(defun check-secret-keys-for-transaction-inputs (secret-keys tx-inputs)
+(defmethod check-secret-keys-for-transaction-inputs ((secret-keys list) (tx-inputs list))
   (unless (= (length secret-keys) (length tx-inputs))
     (emotiq:em-warn 
      "Unequal-length secret-keys/tx-input hashes ~a length = ~d vs. ~a length = ~d. Programming error likely!"
@@ -1334,7 +1336,7 @@ returns the block the transaction was found in as a second value."
      tx-inputs
      (length tx-inputs))))
 
-(defun check-public-keys-for-transaction-inputs (public-keys tx-inputs)
+(defmethod check-public-keys-for-transaction-inputs ((public-keys list) (tx-inputs list))
   (unless (= (length public-keys) (length tx-inputs))
     (emotiq:em-warn 
      "Unequal-length public-keys/tx-input hashes ~a length = ~d vs. ~a length = ~d. Programming error likely!"
@@ -1344,7 +1346,7 @@ returns the block the transaction was found in as a second value."
      (length tx-inputs))))
 
 
-(defun make-and-maybe-sign-transaction (tx-inputs tx-outputs &key skeys pkeys (type :spend))
+(defmethod make-and-maybe-sign-transaction ((tx-inputs list) (tx-outputs list) &key skeys pkeys (type :spend))
   "Create a transaction. Then, if keyword keys is provided non-nil,
 the transaction is signed. In the signing case, keys should supply one
 secret key for each input, either as a single secret atomic secret
@@ -1361,7 +1363,7 @@ or else it defaults to :SPEND for an uncloaked spend transaction."
 
 
 
-(defun make-newstyle-transaction (tx-inputs tx-outputs type)
+(defmethod make-newstyle-transaction ((tx-inputs list) (tx-outputs list) (type symbol))
   "Create a transaction with inputs TX-INPUTS, outputs TX-OUTPUTS, and
 of type TYPE."
   (make-instance
@@ -1370,7 +1372,7 @@ of type TYPE."
    :transaction-inputs tx-inputs
    :transaction-outputs tx-outputs))
 
-(defun sign-transaction (transaction skeys pkeys)
+(defmethod sign-transaction ((transaction transaction) (skeys list) (pkeys list))
   "Sign transactions with secret and public key or keys SKEYS and PKEYS,
    respectively. SKEYS/PKEYS should be supplied as either a single atomic key or
    a singleton list in the case of a single input or as a list of two or more
@@ -1408,7 +1410,7 @@ of type TYPE."
 ;;; whitespace elimination. It is an error to pass a non-string to
 ;;; this function.
 
-(defun account-addresses= (address-1 address-2)
+(defmethod account-addresses= ((address-1 pbc:address) (address-2 pbc:address))
   (declare (type pbc:address address-1 address-2))
   (string= (pbc:addr-str address-1) (pbc:addr-str address-2)))
 
@@ -1419,7 +1421,7 @@ of type TYPE."
 ;;; TRANSACTION at OUTPUT-INDEX is found to have been spent, and false (nil) if
 ;;; TRANSACTION itself or the beginning of the blockchain is reached.
 
-(defun utxo-p (transaction output-index)
+(defmethod utxo-p ((transaction transaction) (output-index integer))
   "Return whether TRANSACTION's output at index OUTPUT-INDEX has been spent. As
    a second value, returns whether the transaction was found at all."
   (let ((this-transaction-id (transaction-id transaction)))
@@ -1448,7 +1450,7 @@ of type TYPE."
 
 
 
-(defun get-utxos-per-account (address)
+(defmethod get-utxos-per-account ((address pbc:address))
   "Return the UTXOs for ADDRESS as a list of two elements of the form
 
      (TXO OUTPOINT AMT)
@@ -1486,7 +1488,7 @@ of type TYPE."
 
 
 
-(defun get-balance (address)
+(defmethod get-balance ((address pbc:address))
   "Return the sum of all amounts of all UTXOs of ADDRESS. A second
    value returned is a non-negative integer that indicates the number
    of UTXOs associated with the address."
@@ -1505,14 +1507,14 @@ of type TYPE."
 ;;;; Printing Utilities
 
 
-(defun txid-string (transaction-id)
+(defmethod txid-string ((transaction-id hash:hash))
   "Return a string representation of TRANSACTION-ID, a byte vector,
    for display. The result is a lowercase hex string."
-  (nstring-downcase (format nil (short-str (addr-str transaction-id)))))
+  (format nil (short-str (addr-str transaction-id))))
   
 
 
-(defun dump-tx (tx &key out-only)
+(defmethod dump-tx ((tx transaction) &key out-only)
   (unless (eq (transaction-type tx) ':spend)
     (pr "  ~a Transaction" (transaction-type tx)))
   (pr "  TxID: ~a" (txid-string (transaction-id tx)))
@@ -1564,17 +1566,15 @@ of type TYPE."
 ;;; These functions are primarily intended as convenience functions for use in
 ;;; the debugger or in the REPL, not in production.
 
-(defun to-txid (string-or-txid)
+(defmethod to-txid ((txid string))
   "Given either a hex string or txid byte vector, if it's a string, remove any
    non-hex-digit characters, and convert the resulting hex string to a txid byte
    vector. Otherwise, it is assumed a valid txid byte vector and returned."
-  (if (stringp string-or-txid)
-      (ironclad:hex-string-to-byte-array
-       (remove-if-not
-        #'(lambda (char) (digit-char-p char 16))
-        string-or-txid))
-      string-or-txid))
+  (make-instance 'hash:hash/256
+                 :val (bev (hex txid))))
 
+(defmethod to-txid ((txid hash:hash))
+  txid)
 
 (defun find-tx (txid-or-string &optional also-search-mempool-p)
   "Find transaction on the blockchain whose transaction ID corresponds to
@@ -1593,12 +1593,12 @@ of type TYPE."
 (defparameter *wait-for-tx-count-tick-every* 10)
 (defparameter *wait-for-tx-default-tx-types* '(:spend :spend-cloaked))
 
-(defun spend-tx-types-p (tx-types)
+(defmethod spend-tx-types-p ((tx-types symbol))
   (equal '#.(sort (copy-list '(:spend :spend-cloaked)) #'string<)
          (sort (copy-list tx-types) #'string<)))
 
-(defun wait-for-tx-count (n &key interval timeout node tx-types
-                                 tick-print tick-every)
+(defmethod wait-for-tx-count ((n integer) &key interval timeout node tx-types
+                              tick-print tick-every)
   "Alternate sleeping for a small INTERVAL while waiting for there to
    have been a total of N spend transactions (or possibly other types
    if TX-TYPES is specified) on the blockchain. INTERVAL defaults to
@@ -1668,7 +1668,7 @@ of type TYPE."
 
 
 
-(defun transaction-must-precede-p (t1 t2)
+(defmethod transaction-must-precede-p ((t1 transaction) (t2 transaction))
   "Predicate on two transactions T1 and T2. True if any input of T2
    refers to T1, meaning T1 must precede T2 on the blockchain."
   (loop with t1-txid = (transaction-id t1)
@@ -1731,7 +1731,7 @@ of type TYPE."
 
 
 
-(defun make-collect-transaction (fee)
+(defmethod make-collect-transaction ((fee integer))
   "Make a collect transaction with amount equal to FEE, an amount of
    tokens to transfer. The fee is designated to be paid to the address
    (a function of the public key) of the leader node."
@@ -1754,7 +1754,7 @@ of type TYPE."
 
 
 
-(defun compute-transaction-fee (transaction)
+(defmethod compute-transaction-fee ((transaction transaction))
   "Compute the transaction fee on TRANSACTION, a transaction instance
    that has been fully validated and comes from the mempool, and this
    therefore makes all the assumptions as to validations, such as UTXO
@@ -1788,7 +1788,7 @@ of type TYPE."
                   (return fee))))
 
 
-(defun check-block-transactions (blk)
+(defmethod check-block-transactions ((blk cosi/proofs:eblock))
   "Return nil if invalid block. This is run by a CoSi block 
    validator. Validate by recomputing the full merkle hash on all the 
    transactions and comparing with that with that saved in the 
@@ -1805,7 +1805,7 @@ of type TYPE."
 
 
 
-(defun clear-transactions-in-block-from-mempool (block)
+(defmethod clear-transactions-in-block-from-mempool ((block cosi/proofs:eblock))
   "Remove transactions that have just been added the block from the mempool that
    is globally bound to cosi-simgen:*mempool*. Note that these transactions may
    not be identical EQ Lisp instances, so even if you're holding a pointer to

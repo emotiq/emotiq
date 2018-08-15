@@ -1,11 +1,12 @@
 (in-package :pbc)
 
-(defun make-keying-triple (public-key secret-key &optional signature)
+(defmethod make-keying-triple ((public-key public-key) (secret-key secret-key) &optional signature)
   "Make a PBC:KEYING-TRIPLE from its integer representation of PUBLIC-KEY and SECRET-KEY"
   (make-instance 'pbc:keying-triple
                  :pkey public-key
                  :skey secret-key
-                 :sig (or signature (pbc:sign-hash (hash:hash/256 public-key) secret-key))))
+                 :sig (or signature
+                          (pbc:sign-hash (hash:hash/256 public-key) secret-key))))
 
 (defun make-keying-pairs ()
   "Makes a public/private keypair seeded via UUID:MAKE-V1-UUID
