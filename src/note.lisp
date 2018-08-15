@@ -6,19 +6,27 @@
 ;;; N.b. deliberately not a macro so we can theoretically inspect the
 ;;; call stack.
 
-(defun timestring ()
-  "Return a string representing current time"
-  (let ((formats '(simple-date-time:|yyyymmddThhmmssZ|
-                   simple-date-time:|yyyy-mm-dd hh:mm:ss|)))
-    (apply (second formats)
-           (list (simple-date-time:now)))))
+(defun logevent (msg &key (level :info) (subsystem :top) data)
+  (let ((d (alexandria:plist-alist data)))
+    (setf (alexandria:assoc-value d :timestamp) (simple-date-time:now))
+    (setf (alexandria:assoc-value d :level) level)
+    (setf (alexandria:assoc-value d :msg) msg)
+    (setf (alexandria:assoc-value d :subsystem) subsystem)
+    d))
 
-(defun %prefixed-note (prefix message-or-format &rest args)
-  (when *notestream*
-    (let ((timestamped (concatenate 'string "~%" (timestring) prefix message-or-format)))
-      ; following because some format control strings like ~& throw errors on
-      ;   some kinds of *notestream*, e.g. those created by #'make-log-window
-      (write-string (apply #'format nil timestamped args) *notestream*))))
+(defun logevent-to-string (event)
+  (let ((prefix-with-msg (format nil "~&~A ~A ~A msg: ~A" 
+                        (simple-date-time:|yyyy-mm-dd hh:mm:ss| (alexandria:assoc-value event :timestamp))
+                        (string (alexandria:assoc-value event :level))
+                        (string (alexandria:assoc-value event :subsystem))
+                        (alexandria:assoc-value event :msg)))
+        (stripped-data (alexandria:remove-from-plist (alexandria:alist-plist event) :level :msg :subsystem :timestamp)))
+      (if stripped-data
+          (format nil "~A | ~{~a: ~a~^, ~}~%" prefix-with-msg stripped-data)
+          (format nil "~A~%" prefix-with-msg))))
+
+(defun logevent-to-json (event)
+  (cl-json:encode-json-alist-to-string event))
 
 ;;; Do NOT call the following with leading or trailing newlines
 ;;;  in message-or-format. They will be added automatically.
@@ -26,7 +34,10 @@
   "Emit a note of progress to the appropiate logging system
 MESSAGE-OR-FORMAT is either a simple string containing a message, or
 a CL:FORMAT control string referencing the values contained in ARGS."
-  (apply #'%prefixed-note " " message-or-format args))
+  (let* ((msg (apply #'format nil message-or-format args))
+        (evt (logevent msg :level :info :subsystem :unknown)))
+      (write-string (logevent-to-string evt) *notestream*)
+    ))
 
 (eval-when (:load-toplevel)
   ;; hook, even if Actors isn't loaded...

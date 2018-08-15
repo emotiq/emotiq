@@ -15,6 +15,8 @@
 
 (defsystem "emotiq/logging"
   :depends-on (emotiq
+               alexandria
+               cl-json
                simple-date-time)
   :components ((:file "note")))
 
