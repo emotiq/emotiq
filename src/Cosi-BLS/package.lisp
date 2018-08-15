@@ -258,7 +258,9 @@
    #:account-addresses=
    #:tx-in-id
    #:tx-in-index
-   #:find-transaction-per-id))
+   #:find-transaction-per-id
+
+   #:init-new-transactions))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
