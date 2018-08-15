@@ -242,7 +242,9 @@
    get-balance
 
    to-txid
-   find-tx))
+   find-tx
+
+   #:init-new-transactions))
 
 ;; from cosi-construction
 (defpackage :cosi-simgen
