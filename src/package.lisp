@@ -173,6 +173,10 @@
   (:use #:cl)
   (:export
    #:account
+   #:account-skey
+   #:account-pkey
+   #:account-triple
+   #:account-name
    #:make-account
    #:wait-for-node-startup
    #:publish-transaction

@@ -105,24 +105,24 @@
   (let ((bal (get-balance *genesis*))
         (a (emotiq/txn:address (account-triple *genesis*))))
     (emotiq:note "balance for genesis is ~A" bal)
-    (emotiq:note "address of genesis ~A" a))
-  (let ((fee 10))
-    
-    ;; make various transactions
-    (send-all-genesis-coin-to *alice*)
-
-    (sleep 30)
-
-    (spend *alice* *bob* 490 :fee fee)
-    (spend *alice* *mary* 190 :fee fee)
-    (spend *alice* *james* 90 :fee fee)
-
-    (sleep 30)
-
-    (spend *bob* *mary* 290 :fee fee)
-    ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
-
-    (sleep 120)))
+    (emotiq:note "address of genesis ~A" a)
+    (let ((fee 10))
+      
+      ;; make various transactions
+      (send-all-genesis-coin-to *alice*)
+      
+      (sleep 30)
+      
+      (spend *alice* *bob* 490 :fee fee)
+      (spend *alice* *mary* 190 :fee fee)
+      (spend *alice* *james* 90 :fee fee)
+      
+      (sleep 30)
+      
+      (spend *bob* *mary* 290 :fee fee)
+      ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
+      
+      (sleep 120))))
 
 ;; alice should have 999...999,190
 ;; bob 190

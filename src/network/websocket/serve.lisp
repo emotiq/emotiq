@@ -69,8 +69,8 @@
                (declare (ignore name))
                (let ((transaction-result
                       (emotiq/app::submit-new-transaction
-                       :from from-address
-                       :address to-address
+                       ; :from from-address  ;; emotiq/app::account, leave this fields unassigned for testing
+                       ; :address to-address ;; emotiq/app::account, leave this fields unassigned for testing
                        :amount amount)))
                  (setf result transaction-result))))
             ((string= method "enumerate-wallets")
