@@ -76,7 +76,7 @@
             ((string= method "enumerate-wallets")
              (setf result (model/wallet:enumerate-wallets)))
             ((string= method "transactions")
-             (let ((transaction-result (emotiq/app:get-transactions-from-chain)))
+             (let ((transaction-result (emotiq/app:get-transactions-from-chain)))  ;; should supply :keyingtriple <xxx> as keyword param (wallet address)
                (setf result transaction-result)))
             (t
              (setf result nil

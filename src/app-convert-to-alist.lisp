@@ -93,8 +93,8 @@ sample from emotiq/src/model/mock.lisp
 |#
 
 
-(defun test-alist (wallet-address)
-  (let ((txn-list (get-transactions wallet-address)))
+(defun test-alist (wallet-address-keying-triple)
+  (let ((txn-list (get-transactions wallet-address-keying-triple)))
     `(:array
     ;  (:object
        ;(:wallet-id . ,wallet-address)  ;; added 'wallet-' for debug

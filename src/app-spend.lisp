@@ -1,14 +1,14 @@
 (in-package :emotiq/app)
 
-(defun submit-new-transaction (&key from address amount)
+(defun submit-new-transaction (&key (from (emotiq/app::account-triple *alice*)) (to-pkey (emotiq/app::account-pkey *james*)) amount)
   "return a transaction as json"
   (declare (ignorable from address amount))
-  (let ((fee 10))
+  (let ((standard-fee 10))
     (emotiq-rest:as-json
      (convert-one-spend-transaction-to-alist-from-tuple
       (list
-       (spend *alice* *james* 90 :fee fee)
+       (spend from to-pkey amount :fee standard-fee)
        0 ;; timestamp - invalid invalid until published
        0 ;; epoch - invalid until published
        :spend
-       fee)))))
+       standard-fee)))))

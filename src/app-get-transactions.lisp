@@ -181,9 +181,6 @@ For all outputs of transaction
 (defun address-of-genesis ()
   (emotiq/txn:address (emotiq/app::account-triple emotiq/app::*genesis*)))
 
-(defun stubbed-out-get-transactions-from-chain (keyingtriple)
-  (emotiq-rest:as-json (get-transactions keyingtriple)))
-
-(defun get-transactions-from-chain ()
-  (emotiq-rest:as-json (test-alist *james*)))
+(defun get-transactions-from-chain (&key (keyingtriple (emotiq/app::account-triple emotiq/app::*james*)))
+  (emotiq-rest:as-json (test-alist keyingtriple)))
 
