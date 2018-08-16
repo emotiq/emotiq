@@ -25,6 +25,9 @@
    (triple :accessor account-triple)
    (name :accessor account-name)))
 
+(defmethod account-address ((acct account))
+  (pbc:addr-str (cosi/proofs:public-key-to-address (account-pkey acct))))
+
 (defun get-genesis-key ()
   (emotiq/config:get-nth-key 0))
 
@@ -188,7 +191,7 @@
   (let ((bal-genesis (get-balance (get-genesis-key))))
     (emotiq:note"genesis balance(~a)" bal-genesis))
 
-  #+nil(let ((bal-alice (get-balance *alice*))
+  (let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
@@ -203,12 +206,16 @@
      (let ((tx-alice (get-all-transactions-to-given-target-account *alice*))
            (tx-bob (get-all-transactions-to-given-target-account *bob*))
            (tx-mary (get-all-transactions-to-given-target-account *mary*))
-           (tx-james (get-all-transactions-to-given-target-account *james*)))
-       (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                    tx-alice
-                    tx-bob
-                    tx-mary
-                    tx-james)
+           (tx-james (get-all-transactions-to-given-target-account *james*))
+           (alice-id (cosi/proofs/newtx::abbrev-hash-string (account-address *alice*)))
+           (bob-id   (cosi/proofs/newtx::abbrev-hash-string (account-address *bob*)))
+           (mary-id  (cosi/proofs/newtx::abbrev-hash-string (account-address *mary*)))
+           (james-id (cosi/proofs/newtx::abbrev-hash-string (account-address *james*))))
+       (emotiq:note "transactions-to~%alice/~a ~A~%bob/~a ~A~%mary/~a ~A~%james/~a ~A~%"
+                    alice-id tx-alice
+                    bob-id   tx-bob
+                    mary-id  tx-mary
+                    james-id tx-james)
        
        (setf emotiq:*notestream* strm)
        (values)))))
