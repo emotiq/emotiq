@@ -207,15 +207,18 @@
            (tx-bob (get-all-transactions-to-given-target-account *bob*))
            (tx-mary (get-all-transactions-to-given-target-account *mary*))
            (tx-james (get-all-transactions-to-given-target-account *james*))
+           (tx-genesis (get-all-transactions-to-given-target-account *genesis*))
            (alice-id (cosi/proofs/newtx::abbrev-hash-string (account-address *alice*)))
            (bob-id   (cosi/proofs/newtx::abbrev-hash-string (account-address *bob*)))
            (mary-id  (cosi/proofs/newtx::abbrev-hash-string (account-address *mary*)))
-           (james-id (cosi/proofs/newtx::abbrev-hash-string (account-address *james*))))
-       (emotiq:note "transactions-to~%alice/~a ~A~%bob/~a ~A~%mary/~a ~A~%james/~a ~A~%"
+           (james-id (cosi/proofs/newtx::abbrev-hash-string (account-address *james*)))
+           (genesis-id (cosi/proofs/newtx::abbrev-hash-string (account-address *genesis*))))
+       (emotiq:note "transactions-to~%alice/~a ~A~%bob/~a ~A~%mary/~a ~A~%james/~a ~A~%genesis/~a ~A"
                     alice-id tx-alice
                     bob-id   tx-bob
                     mary-id  tx-mary
-                    james-id tx-james)
+                    james-id tx-james
+                    genesis-id tx-genesis)
        
        (setf emotiq:*notestream* strm)
        (values)))))
