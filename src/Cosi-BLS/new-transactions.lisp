@@ -707,6 +707,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; feature. Only needed for case of creating a coinbase transaction,
 ;;; created by miners/minters when a block is created.
 
+#|
 (defmethod serialize-transaction ((transaction transaction))
   (with-output-to-string (out)
     (flet ((emit (x)
@@ -721,6 +722,17 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
             as id-hex-string = (hex-str id) ; better: emit this
             as index = (tx-in-index tx-in)  ; integer
             do (emit id-hex-string) (emit index)))))
+|#
+
+(defmethod serialize-transaction ((transaction transaction))
+  (um:accum acc
+    (loop for tx-out in (transaction-outputs transaction) do
+          (acc (tx-out-public-key-addr tx-out))
+          (acc (tx-out-amount tx-out))
+          (acc (tx-out-lock-script tx-out)))
+    (loop for tx-in in (transaction-inputs transaction) do
+          (acc (tx-in-id tx-in))
+          (acc (tx-in-index tx-in)))))
 
 (defun serialize-current-transaction ()
   (serialize-transaction *current-transaction*))
