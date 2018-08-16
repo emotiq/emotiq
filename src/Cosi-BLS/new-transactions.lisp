@@ -1516,7 +1516,7 @@ of type TYPE."
 (defmethod txid-string ((transaction-id hash:hash))
   "Return a string representation of TRANSACTION-ID, a byte vector,
    for display. The result is a lowercase hex string."
-  (format nil (short-str (addr-str transaction-id))))
+  (format nil (short-str (hex-str transaction-id))))
   
 
 
