@@ -39,6 +39,12 @@
                     &key (root (emotiq/fs:etc/)))
   "Return the keying triple from the network configuration for Nth id"
   (let ((public-private (nth n (get-keypairs :root root))))
+    (when (or (null (first public-private))
+              (null (second public-private)))
+      ;; this is really an error - developer forgot to run config
+      (error (format nil "get-nth-key sees NIL in [~a,~a] (has the config been run?)~%e.g. (emotiq/config/generate:ensure-defaults :force t :for-purely-local t)~%"
+                     (first public-private)
+                     (second public-private))))
     (values 
      (pbc:make-keying-triple
       (first public-private)
