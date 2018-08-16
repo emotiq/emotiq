@@ -188,7 +188,12 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    (tx-out-message
     :reader tx-out-message
     :initarg :tx-out-message
-    :initform nil)))
+    :initform nil)
+
+   (%tx-out-public-key
+    :reader %tx-out-public-key
+    :initarg :%tx-out-public-key)
+   ))
 
 (defclass transaction-input ()
   ((tx-in-id :reader tx-in-id :initarg :tx-in-id)
@@ -1062,10 +1067,13 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    :%tx-in-public-key nil
    :%tx-in-signature nil))
 
+(defvar *%debug-public-key* nil)
+
 (defmethod make-coinbase-transaction-output ((public-key-addr pbc:address) (amount integer))
   (make-instance
    'transaction-output
    :tx-out-public-key-addr public-key-addr
+   :%tx-out-public-key *%debug-public-key* ;; for debugging purposes
    :tx-out-amount amount
    :tx-out-lock-script (get-locking-script 'script-pub-key)))
 
@@ -1542,13 +1550,13 @@ of type TYPE."
               (member (transaction-type tx)
                       '(:coinbase :collect))) ; no-input tx types
     (loop for tx-in in (transaction-inputs tx)
-          do (pr "    input outpoint: index = ~a/TxID = ~a"
+          do (pr "    input outpoint: index = ~a/TxID = ~a "
                      (tx-in-index tx-in) (txid-string (tx-in-id tx-in)))))
   (pr "    outputs:")
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
-        do (pr "      [~d] amt = ~a (out to) addr = ~a"
-                   i (tx-out-amount tx-out) (tx-out-public-key-addr tx-out))))
+        do (pr "      [~d] amt = ~a (out to) addr = ~a (~a)"
+               i (tx-out-amount tx-out) (tx-out-public-key-addr tx-out) (%tx-out-public-key tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()
@@ -1760,7 +1768,8 @@ of type TYPE."
            (cosi/proofs:public-key-to-address leader-public-key)))
     (make-newstyle-transaction
      (list (make-coinbase-transaction-input))
-     (list (make-coinbase-transaction-output leader-address fee))
+     (list (let ((*%debug-public-key* leader-public-key))
+             (make-coinbase-transaction-output leader-address fee)))
      ':collect)))
 
 ;; The "coinbase" terminilogy, and some early implementation
@@ -1847,3 +1856,8 @@ of type TYPE."
 ;; block-transactions is list. It is now specified as sequence, and it's left
 ;; open for it to become a merkle tree; clean up later!  -mhd, 6/20/18
 
+
+(defun show-me ()
+  (mapc (lambda (blk)
+          (dump-txs :block blk))
+        (cosi-simgen:block-list)))
