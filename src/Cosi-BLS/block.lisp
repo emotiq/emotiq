@@ -222,7 +222,12 @@ added to the blockchain."
            (cosi/proofs/newtx:make-genesis-transaction
             (cosi/proofs:public-key-to-address public-key)))
          (transactions (list genesis-transaction))
-         (block (create-block nil nil nil nil transactions))
+         (g-d-keying   (make-key-pair :g-d))
+         (block (create-block nil ;; no prior block
+                              nil ;; no election proof
+                              (keying-triple-pkey g-d-keying) ;; guess who...
+                              #() ;; no witnesses
+                              transactions))
          (normalized-block-witnesses-and-stakes
            (normalize-witnesses-and-stakes witnesses-and-stakes)))
     (setf (block-witnesses-and-stakes block)

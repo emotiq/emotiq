@@ -26,7 +26,7 @@ For all inputs of transactions
 
 For all outputs of transaction
 
-1.	Address that was paid                                                ==> (cosi/proofs/newtx:tx-out-public-key-hash out)
+1.	Address that was paid                                                ==> (cosi/proofs/newtx:tx-out-public-key-addr out)
 2.	amount that was paid.                                                ==> (cosi/proofs/newtx:tx-out-amount out)
 |#
 
@@ -54,7 +54,7 @@ For all outputs of transaction
                               0
                             (fee-paid-for-transaction tx))))
                  (dolist (out (cosi/proofs/newtx:transaction-outputs tx)) 
-                   (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-hash out))
+                   (when (cosi/proofs/newtx:account-addresses= account-address (cosi/proofs/newtx:tx-out-public-key-addr out))
                      (push (list tx timestamp epoch kind fee) result))))))))))
        result))
 
@@ -120,7 +120,7 @@ For all outputs of transaction
       (let ((prev-txn (find-transaction-per-id prev-txn-id)))  ;; inefficient
         (let ((outlist (cosi/proofs/newtx:transaction-outputs prev-txn)))  ;; sequence of outputs
           (let ((out (nth index outlist)))  ;; index and grab appropriate output
-            (cosi/proofs/newtx:tx-out-public-key-hash out)))))))  ;; TODO: check if this is the correct use of this field
+            (cosi/proofs/newtx:tx-out-public-key-addr out)))))))  ;; TODO: check if this is the correct use of this field
 
 (defmethod amount-in-input ((in cosi/proofs/newtx:transaction-input))
   "return amount sent to this input by an output from a txn"
@@ -164,7 +164,7 @@ For all outputs of transaction
   (cosi/proofs/newtx:compute-transaction-fee tx))
 
 (defmethod payee-address ((out cosi/proofs/newtx:transaction-output))
-  (cosi/proofs/newtx:tx-out-public-key-hash out))
+  (cosi/proofs/newtx:tx-out-public-key-addr out))
 
 (defmethod amount-paid ((out cosi/proofs/newtx:transaction-output))
   (cosi/proofs/newtx:tx-out-amount out))

@@ -65,7 +65,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; as a so-called "change address".
 
 (defclass transaction ()
-  ((transaction-type :reader transaction-type :initarg :transaction-type :initform :spend)
+  (
+   (transaction-id   :reader transaction-id) ;; will become the hash of its contents, sans signatures
+   
+   (transaction-type :reader transaction-type :initarg :transaction-type :initform :spend)
 
    ;; [First put outputs, since they start out at first unspent until a
    ;; later transaction arrives with inputs authorized to redeem them.]
@@ -95,12 +98,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;; ---!!! data as opposed to its hash (or possibly to have that be optional per
 ;; ---!!! node).  -mhd, 6/8/18
 
-
-
+#||#
+(defmethod initialize-instance :after ((tx transaction) &key &allow-other-keys)
+  (setf (slot-value tx 'transaction-id) (hash-transaction-id tx)))
+#||#
+#|
 (defmethod transaction-id ((tx transaction))
   "Get hash of TX, a transaction, which also uniquely* identifies it,
    as hash:hash/256 instance."
   (hash-transaction-id tx))
+|#
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
@@ -154,16 +161,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;; https://en.bitcoin.it/wiki/Script#Standard_Transaction_to_Bitcoin_address_.28pay-to-pubkey-hash.29
 
 
-;;; Newer Standard Bitcoin Transaction: Pay-to-Witness-Public-Key-Hash (P2WPKH)
+;;; Newer Standard Bitcoin Transaction: Pay-to-Witness-Public-Key-Addr (P2WPKH)
 ;;;
 ;;; The newer transaction uses BIP 141 "Segregated Witness" (SegWit).
 ;;;
 ;;; 
 
 (defclass transaction-output ()
-  ((tx-out-public-key-hash              ; like the Bitcoin address
-    :reader tx-out-public-key-hash
-    :initarg :tx-out-public-key-hash)
+  ((tx-out-public-key-addr              ; like the Bitcoin address
+    :reader tx-out-public-key-addr
+    :initarg :tx-out-public-key-addr)
    (tx-out-lock-script               ; what Bitcoin calls scriptPubKey
     :reader tx-out-lock-script
     :initarg :tx-out-lock-script)
@@ -397,11 +404,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;;   transaction
 ;;;     transaction id: abc123....
 ;;;     [transaction output]
-;;;       tx-out-public-key-hash: def456...
+;;;       tx-out-public-key-addr: def456...
 ;;;       tx-out-amount: 50
 ;;;       tx-out-lock-script:
 ;;;         (public-key signature)
-;;;         (and (public-key-equal-verify public-key ^tx-public-key-hash)
+;;;         (and (public-key-equal-verify public-key ^tx-public-key-addr)
 ;;;              (check-signature public-key signature))
 ;;;     [transaction input]
 ;;;       ...
@@ -419,7 +426,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;;         (^tx-public-key ^tx-signature)
 
 ;; These need better logic for set up; 2nd args ignored!!
-(def-script-var ^tx-public-key-hash ignore)
+(def-script-var ^tx-public-key-addr ignore)
 (def-script-var ^tx-public-key ignore)
 (def-script-var ^tx-signature ignore)
 (def-script-var ^current-epoch ignore)
@@ -623,7 +630,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     (in-transaction-script-context
       (let* ((lock-script (tx-out-lock-script utxo))
              (unlock-script (tx-in-unlock-script transaction-input))
-             (public-key-hash (tx-out-public-key-hash utxo)))
+             (public-key-addr (tx-out-public-key-addr utxo)))
       (when (null lock-script)
         (fail-script))
       (when (null unlock-script)
@@ -646,8 +653,8 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
          ;; script as script vars. Kludge this for now --
          ;; automate soon.
 
-         `((^tx-public-key-hash
-            . ,public-key-hash))))))))
+         `((^tx-public-key-addr
+            . ,public-key-addr))))))))
 
 ;; Above rules/logic/documentation loosely based on Bitcoin "tx"
 ;; documentation here:
@@ -704,7 +711,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     (flet ((emit (x)
              (format out "~a " x)))
       (loop for tx-out in (transaction-outputs transaction)
-            as hash = (tx-out-public-key-hash tx-out) ; base58 string
+            as hash = (tx-out-public-key-addr tx-out) ; base58 string
             as amt = (tx-out-amount tx-out)           ; integer
             as script = (tx-out-lock-script tx-out)   ; chainlisp form
             do (emit hash) (emit amt) (emit script))
@@ -752,34 +759,34 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(def-script-op public-key-equal-verify ((public-key public-key) (public-key-hash pbc:address))
+(def-script-op public-key-equal-verify ((public-key public-key) (public-key-addr pbc:address))
   (cond
     ((not (typep public-key 'pbc:public-key))
      (pr "Arg public-key (~s) is not of correct type: ~s"
              public-key 'pbc:public-key)
      (fail-script-op))
-    ((not (typep public-key-hash 'address))
-     (pr "Public-key-hash ~s not an ADDRESS but ADDRESS expected"
-             public-key-hash)
+    ((not (typep public-key-addr 'address))
+     (pr "Public-Key-Addr ~s not an ADDRESS but ADDRESS expected"
+             public-key-addr)
      (fail-script-op))
     (t
-     (let* ((public-key-hash-from-public-key
+     (let* ((public-key-addr-from-public-key
               (cosi/proofs:public-key-to-address public-key))
-            (l1 (length (addr-str public-key-hash)))
-            (l2 (length (addr-str public-key-hash-from-public-key))))
+            (l1 (length (addr-str public-key-addr)))
+            (l2 (length (addr-str public-key-addr-from-public-key))))
        (cond
-         ((not (typep public-key-hash-from-public-key 'address))
+         ((not (typep public-key-addr-from-public-key 'address))
           (pr "Public-key hash ~s derived from public-key ~s not an ADDRESS but ADDRESS expected"
-                  public-key-hash-from-public-key public-key)
+                  public-key-addr-from-public-key public-key)
           (fail-script-op))
          ((not (= l1 l2))
           (pr "Public key ADDRESS ~s length ~s not same as public key ~s ADDRESS ~s length ~s"
-                  public-key-hash l2
-                  public-key public-key-hash-from-public-key l2)
+                  public-key-addr l2
+                  public-key public-key-addr-from-public-key l2)
           (fail-script-op))
          ((account-addresses=
-           public-key-hash
-           public-key-hash-from-public-key)
+           public-key-addr
+           public-key-addr-from-public-key)
           t)
          (t
           (fail-script-op)))))))
@@ -791,11 +798,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 (def-locking-script script-pub-key ((public-key public-key) (signature signature))
-  (and (public-key-equal-verify public-key ^tx-public-key-hash)
+  (and (public-key-equal-verify public-key ^tx-public-key-addr)
        (check-signature public-key signature)))
 
 (def-locking-script script-pub-key-cloaked ((public-key public-key) (signature signature) proof message)
-  (and (public-key-equal-verify public-key ^tx-public-key-hash)
+  (and (public-key-equal-verify public-key ^tx-public-key-addr)
        (check-signature public-key signature)
        ;; proof: a "bulletproof" (cloaked amount) giving the amount of tokens to
        ;; transfer
@@ -859,14 +866,14 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
                  (format stream " "))) ; (normal tx has 1+ inputs)
       (format stream "=> ")
       (loop for tx-out in transaction-outputs
-            as public-key-hash-string
+            as public-key-addr-string
               = (abbrev-hash-string
-                 (addr-str (tx-out-public-key-hash tx-out)) :style ':address)
+                 (addr-str (tx-out-public-key-addr tx-out)) :style ':address)
             as amt = (tx-out-amount tx-out)
             as first-time = t then nil
             when (not first-time)
               do (format stream ", ")
-            do (format stream "~d/~a" amt public-key-hash-string)))))
+            do (format stream "~d/~a" amt public-key-addr-string)))))
 
 
 
@@ -1055,10 +1062,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    :%tx-in-public-key nil
    :%tx-in-signature nil))
 
-(defmethod make-coinbase-transaction-output ((public-key-hash pbc:address) (amount integer))
+(defmethod make-coinbase-transaction-output ((public-key-addr pbc:address) (amount integer))
   (make-instance
    'transaction-output
-   :tx-out-public-key-hash public-key-hash
+   :tx-out-public-key-addr public-key-addr
    :tx-out-amount amount
    :tx-out-lock-script (get-locking-script 'script-pub-key)))
 
@@ -1066,11 +1073,11 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 
 
-(defmethod make-genesis-transaction ((public-key-hash pbc:address))
+(defmethod make-genesis-transaction ((public-key-addr pbc:address))
   (make-newstyle-transaction
    (list (make-coinbase-transaction-input))
    (list (make-coinbase-transaction-output
-          public-key-hash 
+          public-key-addr 
           (initial-total-coin-amount)))
    ':coinbase))
 
@@ -1314,10 +1321,10 @@ returns the block the transaction was found in as a second value."
   (loop with transaction-type = (or transaction-type :spend)
         with lock-script
           = (map-transaction-type-to-lock-script transaction-type)
-        for (public-key-hash amount) in output-specs
+        for (public-key-addr amount) in output-specs
         collect (make-instance
                  'transaction-output
-                 :tx-out-public-key-hash public-key-hash
+                 :tx-out-public-key-addr public-key-addr
                  :tx-out-amount amount
                  :tx-out-lock-script lock-script)))
 
@@ -1378,7 +1385,10 @@ of type TYPE."
    :transaction-inputs tx-inputs
    :transaction-outputs tx-outputs))
 
-(defmethod sign-transaction ((transaction transaction) (skeys list) (pkeys list))
+(defmethod check-types ((lst list) (type symbol))
+  (assert (every (um:rcurry 'typep type) lst)))
+
+(defmethod sign-transaction ((transaction transaction) (secret-keys list) (public-keys list))
   "Sign transactions with secret and public key or keys SKEYS and PKEYS,
    respectively. SKEYS/PKEYS should be supplied as either a single atomic key or
    a singleton list in the case of a single input or as a list of two or more
@@ -1387,18 +1397,22 @@ of type TYPE."
    signature is stored in the %tx-in-signature slot of each input, and note also
    that the signature stores and makes accessible its corresponding public key."
   (with-slots (transaction-inputs) transaction
-    (let* ((message (serialize-transaction transaction))
-           (secret-keys (if (and skeys (atom skeys)) (list skeys) skeys)))
+    (check-types transaction-inputs 'transaction-input)
+    (check-types secret-keys        'secret-key)
+    (check-types public-keys        'public-key)
+    (let ((hash  (transaction-hash (serialize-transaction transaction))))
       (check-secret-keys-for-transaction-inputs secret-keys transaction-inputs)
-      (let ((public-keys (if (and pkeys (atom pkeys)) (list pkeys) pkeys)))
-        (check-public-keys-for-transaction-inputs public-keys transaction-inputs)
-        (loop for tx-input in transaction-inputs
-              as secret-key in secret-keys
-              as public-key in public-keys
-              as signature = (sign-hash (transaction-hash message) secret-key)
-              do (setf (%tx-in-signature tx-input) signature)
-                 (setf (%tx-in-public-key tx-input) public-key))))))
+      (check-public-keys-for-transaction-inputs public-keys transaction-inputs)
+      (loop for tx-input in transaction-inputs
+            as secret-key in secret-keys
+            as public-key in public-keys
+            as signature = (sign-hash hash secret-key)
+            do
+            (setf (%tx-in-signature tx-input) signature)
+            (setf (%tx-in-public-key tx-input) public-key)))))
   
+(defmethod sign-transaction ((transaction transaction) (skey secret-key) (pkey public-key))
+  (sign-transaction transaction (list skey) (list pkey)))
 
 
 
@@ -1477,9 +1491,9 @@ of type TYPE."
     (do-blockchain (block)
       (do-transactions (tx block)
         (loop for txo in (transaction-outputs tx)
-              as public-key-hash = (tx-out-public-key-hash txo)
+              as public-key-addr = (tx-out-public-key-addr txo)
               as index from 0
-              when (and (account-addresses= public-key-hash address)
+              when (and (account-addresses= public-key-addr address)
                         (utxo-p tx index))
                 collect `(,txo (,(transaction-id tx) ,index) 
                                ,(tx-out-amount txo))
@@ -1534,7 +1548,7 @@ of type TYPE."
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
         do (pr "      [~d] amt = ~a (out to) addr = ~a"
-                   i (tx-out-amount tx-out) (tx-out-public-key-hash tx-out))))
+                   i (tx-out-amount tx-out) (tx-out-public-key-addr tx-out))))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()

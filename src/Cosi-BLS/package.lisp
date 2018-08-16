@@ -247,7 +247,7 @@
    #:transaction
    #:transaction-type
    #:compute-transaction-fee
-   #:tx-out-public-key-hash
+   #:tx-out-public-key-addr
    #:tx-out-amount
    #:do-blockchain
    #:do-transactions
