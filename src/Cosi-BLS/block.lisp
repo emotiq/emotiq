@@ -271,6 +271,9 @@ added to the blockchain."
   (apply #'hash-256 (serialize-block-octets blk)))
 
 
+(defmethod print-object ((blk eblock) out-stream)
+  (print-unreadable-object (blk out-stream :type t)
+    (princ (short-str (hex-str (hash-block blk))) out-stream)))
 
 (defmethod listed-transactions-of-block ((blk eblock))
   "Return the transactions of BLOCK as a list. The caller must not
