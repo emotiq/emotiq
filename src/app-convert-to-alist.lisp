@@ -108,7 +108,7 @@ sample from emotiq/src/model/mock.lisp
 (defun txid-long-string (transaction-id)
   "Return a string representation of TRANSACTION-ID, a byte vector,
    for display. The result is a lowercase hex string."
-  (nstring-downcase (format nil (pbc::addr-str transaction-id))))
+  (format nil (pbc::addr-str transaction-id)))
 
 (defun convert-one-transaction-to-alist-from-tuple (tuple)
   (destructuring-bind (tx timestamp epoch kind fee)

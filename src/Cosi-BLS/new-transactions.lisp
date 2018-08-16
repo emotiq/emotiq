@@ -66,7 +66,7 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 
 (defclass transaction ()
   (
-   (transaction-id   :reader transaction-id) ;; will become the hash of its contents, sans signatures
+   ;; (transaction-id   :reader transaction-id) ;; will become the hash of its contents, sans signatures
    
    (transaction-type :reader transaction-type :initarg :transaction-type :initform :spend)
 
@@ -98,16 +98,16 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;; ---!!! data as opposed to its hash (or possibly to have that be optional per
 ;; ---!!! node).  -mhd, 6/8/18
 
-#||#
+#|
 (defmethod initialize-instance :after ((tx transaction) &key &allow-other-keys)
   (setf (slot-value tx 'transaction-id) (hash-transaction-id tx)))
+|#
 #||#
-#|
 (defmethod transaction-id ((tx transaction))
   "Get hash of TX, a transaction, which also uniquely* identifies it,
    as hash:hash/256 instance."
   (hash-transaction-id tx))
-|#
+#||#
 
 ;; ---!!! * "uniquely", assuming certain rules and conventions are
 ;; ---!!! followed to ensure this, some of which are still to-be-done;
