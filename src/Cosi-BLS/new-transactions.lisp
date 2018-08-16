@@ -189,10 +189,6 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
     :reader tx-out-message
     :initarg :tx-out-message
     :initform nil)
-
-   (%tx-out-public-key
-    :reader %tx-out-public-key
-    :initarg :%tx-out-public-key)
    ))
 
 (defclass transaction-input ()
@@ -1067,13 +1063,10 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
    :%tx-in-public-key nil
    :%tx-in-signature nil))
 
-(defvar *%debug-public-key* nil)
-
 (defmethod make-coinbase-transaction-output ((public-key-addr pbc:address) (amount integer))
   (make-instance
    'transaction-output
    :tx-out-public-key-addr public-key-addr
-   :%tx-out-public-key *%debug-public-key* ;; for debugging purposes
    :tx-out-amount amount
    :tx-out-lock-script (get-locking-script 'script-pub-key)))
 
@@ -1555,8 +1548,10 @@ of type TYPE."
   (pr "    outputs:")
   (loop for tx-out in (transaction-outputs tx)
         as i from 0
-        do (pr "      [~d] amt = ~a (out to) addr = ~a (~a)"
-               i (tx-out-amount tx-out) (tx-out-public-key-addr tx-out) (%tx-out-public-key tx-out))))
+        do (pr "      [~d] amt = ~a (out to) addr = ~a"
+               i (tx-out-amount tx-out)
+               (short-str (addr-str (tx-out-public-key-addr tx-out))))
+        ))
 
 (defun dump-txs (&key file mempool block blockchain node)
   (flet ((dump-loops ()

@@ -219,9 +219,8 @@ added to the blockchain."
   (when (not *newtx-p*)
     (error "Sorry, only know how to do this for new transactions (*newtx-p*)."))
   (let* ((genesis-transaction
-          (let ((cosi/proofs/newtx::*%debug-public-key* public-key))
-            (cosi/proofs/newtx:make-genesis-transaction
-             (cosi/proofs:public-key-to-address public-key))))
+          (cosi/proofs/newtx:make-genesis-transaction
+           (cosi/proofs:public-key-to-address public-key)))
          (transactions (list genesis-transaction))
          (g-d-keying   (make-key-pair :g-d))
          (block (create-block nil ;; no prior block

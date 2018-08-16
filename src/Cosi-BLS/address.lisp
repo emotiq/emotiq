@@ -107,7 +107,6 @@
           0 4))
 
 
-
 (defmethod public-key-to-address ((public-key pbc:public-key) &key net override-version)
   "Produce an address for PUBLIC-KEY. Keyword :NET can be either :MAIN for
    mainnet, :TEST for testnet, or nil to default.  The version prefix is usually
