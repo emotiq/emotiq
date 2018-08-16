@@ -155,5 +155,6 @@
                                      (:file "app-get-transactions")
                                      (:file "app-generate-transactions")
                                      (:file "app-spend")
+                                     (:file "app-make-node-accounts")
                                      (:file "app-convert-to-alist")))))
 
