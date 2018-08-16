@@ -8,7 +8,7 @@
 ;; for lack of better graphics, let's use pipe syntax to show what I am building
 ;;
 ;; ticker | randomizer | transaction-creator
-;; 
+;;
 ;; the pipe syntax cannot show that "ticker" is sending itself a message, endlessly
 ;;
 ;; maybe (loop (ticker | ticker |2)) 2| randomizer | transaction-creator
@@ -16,7 +16,7 @@
 ;; these are honest message sends between concurrent pieces of code
 ;; the loopback to ticker is not recursion, it is a message send (important point to understand)
 ;; smalltalk talks about using message-sends, but it actually uses call-return
-;; 
+;;
 
 ;; I've "unrolled" most of the code, in the hopes of making it simpler to understand.
 ;; It might be useful to delete the comments, before reading.
@@ -47,6 +47,14 @@
 (defparameter *counter* 0
   "accessed only by *debug-counter-actor*")
 
+(defun log-info (msg &key (subsystem :emotiq/app) (level :info) data)
+  (emotiq:s-note msg :subsystem subsystem :level level :data data)
+)
+
+(defun log-debug (msg &key (subsystem :emotiq/app) (level :debug) data)
+  (emotiq:s-note msg :subsystem subsystem :level level :data data)
+)
+
 (useful-macros:defmonitor
 
     ;; this is probably over-kill - it's a monitor for threads, not actors (i.e. much too coarse-grained)
@@ -62,7 +70,7 @@
                  (null *to*))
          (setf *from* *all-accounts*
                *to* (reverse *all-accounts*))))
-  
+
      (get-from ()
        ;; return an account from the *from* list and pop
        (ensure-lists)
@@ -89,7 +97,7 @@
                                      (second pair)))
                                 keypairs)))
       ;; some (any) kind of randomization of accounts
-      ;; for now, run *front* from the beginning of *all-accounts* 
+      ;; for now, run *front* from the beginning of *all-accounts*
       ;; and *to* backwards
       ;; when one of them peters out, reset the lists
       (setf *all-accounts* account-list)
@@ -97,7 +105,7 @@
 
       ;; this line can be deleted when run in non-test environment
       ;; (i.e. when accounts in account-list already have tokens,
-      ;;  in this test environment, all of the tokens have been spent 
+      ;;  in this test environment, all of the tokens have been spent
       ;;  to another account "most-tokens-account" in app.lisp)
       (setup-accounts most-tokens-account)
 
@@ -165,8 +173,8 @@
   "on every message received, incs the private variable *counter* and creates an emotiq:note"
   (declare (ignore msg))
   (incf *counter*)
-  #-lispworks(emotiq:note "counter = ~a" *counter*)
-  #+lispworks(emotiq:note "counter = ~a        room=~a" *counter* (system:room-values)))
+  #-lispworks(emotiq:s-note "Debug counter" :level :debug :subsystem :app :data '(:counter *counter*))
+  #+lispworks(emotiq:s-note "Debug counter" :level :debug :subsystem :app :data `(:counter *counter* :room ,(system:room-values))))
 
 ;;;;;;;;;;;;;;
 ;; actor body
@@ -174,19 +182,19 @@
 (defun forever-ticker (&rest msg)
   (destructuring-bind (msg-symbol self randomizer sleep-amount node)
       msg
-    
+
     ;; timers and errors (catch/throw stuff) are nothing special, they are just mere messages
 
     ;; this actor gets a periodic tick (using existing actor timer code)
     ;; then sends a message to the randomizer, forever ;; this is over-kill, but, I hope
     ;; it is very obvious
-    
+
     (sleep sleep-amount)
 
     (assert (eq :again msg-symbol))
 
     (actors:send randomizer :tick node)
-    
+
     ;; wake self up again by sending a message to self with the sleep-amount in the message
     (actors:send self msg-symbol self randomizer sleep-amount node)))
 
@@ -203,7 +211,7 @@
 
   (let ((msg-symbol (first msg))
         (node (second msg)))
-    
+
     ;; should not receive anything but :tick messages,
     ;; messages are always lists, and, by convention, the first token in a message is a keyword
     ;; dlambda is just a convenience
@@ -213,9 +221,9 @@
 
     (when (<= *nticks* 0)
       (setf *nticks* (random 50)) ;; 50 is a just pulled out of thin air (might need tuning)
-      (emotiq:note "nticks reset to ~a" *nticks*)
+      (log-info "nticks reset to" :data `(:nticks ,*nticks*))
       (actors:send transaction-maker :create-transaction node))))
-  
+
 
 ;;;;;;;;;;;;;;
 ;; actor body
@@ -229,8 +237,8 @@
 
   (let ((msg-symbol (first msg))
         (node (second msg)))
-    
-    (emotiq:note "transaction-creator ~A ~A" msg-symbol node)
+
+    (log-info "transaction-creator" :data `(:msg-symbol ,msg-symbol :node ,node))
 
     (assert (eq msg-symbol :create-transaction))
 
@@ -248,20 +256,20 @@
                  (setf from-bal bal)
                  (return))
                 ((< bal some-lower-limit)
-                 (emotiq:note "account ~A balance is ~A" from-account bal)
+                 (log-info "Account balance" :data `(:account ,from-account :balance ,bal))
                  (setf from-account (get-from))))))
       ;; loop ends with bal set to something >= (+ fee some-lower-limit), or,
       ;; it terminates with bal still = 0
-      
+
       (if (< from-bal some-lower-limit)
-          (emotiq:note "can't create a transaction, since ~A accounts do not have sufficient funds (~A)"
-                       max-froms (+ fee some-lower-limit))
+          (log-info "can't create a transaction, since accounts do not have sufficient funds."
+                       :data `(:accounts ,max-froms :funds ,(+ fee some-lower-limit)))
         (let ((new-amount (create-an-amount-lower-or-equal-to some-lower-limit)))
-          (emotiq:note "transaction creator making a transaction of ~A from ~A to ~A with fee ~A"
-                       new-amount
-                       from-account
-                       to-account
-                       fee)
+          (log-info "transaction creator making a transaction with fee"
+                :data `(:amount ,new-amount
+                        :from-account ,from-account
+                        :to-account ,to-account
+                        :fee fee))
           (spend from-account to-account new-amount :fee fee))))))
 
 
@@ -280,4 +288,3 @@
                        :fee fee))
             *all-accounts*)
       (sleep 20)))) ;; wait for transactions to propagate - is this necessary?
-        

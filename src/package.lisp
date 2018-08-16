@@ -52,6 +52,7 @@
   (:export
    #:*notestream*
    #:note
+   #:s-note
    #:em-warn)
   (:export
    #:production-p

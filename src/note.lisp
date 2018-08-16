@@ -39,6 +39,14 @@ a CL:FORMAT control string referencing the values contained in ARGS."
       (write-string (logevent-to-string evt) *notestream*)
     ))
 
+(defun s-note (msg &key (level :info) (subsystem :unknown) data)
+  "Emit a note of progress to the appropiate logging system
+MESSAGE-OR-FORMAT is either a simple string containing a message, or
+a CL:FORMAT control string referencing the values contained in ARGS."
+  (let* ((evt (logevent msg :level level :subsystem subsystem :data data)))
+      (write-string (logevent-to-string evt) *notestream*)
+    ))
+
 (eval-when (:load-toplevel)
   ;; hook, even if Actors isn't loaded...
   ;; If Actors are loaded later, they will respect the hook
@@ -47,4 +55,7 @@ a CL:FORMAT control string referencing the values contained in ARGS."
 
 (defun em-warn (message-or-format &rest args)
   "Like note but this is for warnings."
-  (apply #'%prefixed-note " WARN " message-or-format args))
+  (let* ((msg (apply #'format nil message-or-format args))
+        (evt (logevent msg :level :warn :subsystem :unknown)))
+    (write-string (logevent-to-string evt) *notestream*))
+  )

@@ -77,7 +77,7 @@
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
     (emotiq:main :etc-and-wallets etc-and-wallets)
-    (setf gossip::*debug-level* nil)
+    ;; (setf gossip::*debug-level* nil)
     (app)
     (setq *node* cosi-simgen::*my-node*  ;; for debugging
            *blocks* (cosi-simgen::block-list))
@@ -94,8 +94,8 @@
 
   (let ((bal (get-balance *genesis*))
         (a (emotiq/txn:address (account-triple *genesis*))))
-    (emotiq:note "balance for genesis is ~A" bal)
-    (emotiq:note "address of genesis ~A" a))
+    (log-info "balance for genesis" :data `(:balance ,bal))
+    (log-info "address of genesis" :data `(:address ,a)))
   
   (setf *alice* (make-account "alice")
 	*bob* (make-account "bob")
@@ -164,7 +164,7 @@
                amount
                :fee fee)))
      (publish-transaction txn)
-     (emotiq:note "sleeping to let txn propagate (is this necessary?)")
+     (log-info "sleeping to let txn propagate (is this necessary?)")
      (sleep 30)
      txn)))
   
@@ -180,7 +180,7 @@
 (defun dump-results (strm)
 
   (let ((bal-genesis (get-balance (get-genesis-key))))
-    (emotiq:note"genesis balance(~a)~%" bal-genesis))
+    (log-info "genesis balance" :data `(:balance ,bal-genesis)))
 
   #+nil(let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
@@ -189,8 +189,10 @@
     (with-current-node
      (setf emotiq:*notestream* *standard-output*)
      (cosi/proofs/newtx:dump-txs :blockchain t)
-     (emotiq:note "")
-     (emotiq:note "balances alice(~a) bob(~a) mary(~a) james(~a)~%" bal-alice bal-bob bal-mary bal-james)
+     (log-info "balance for alice" :data `(:balance ,bal-alice))
+     (log-info "balance for bob" :data `(:balance ,bal-bob))
+     (log-info "balance for mary" :data `(:balance ,bal-mary))
+     (log-info "balance for james" :data `(:balance ,bal-james))
      (dumpamounts)
      
      ;; this gathers all txns to alice/bob/mary/james (incl. change txns)
@@ -198,11 +200,10 @@
            (tx-bob (get-all-transactions-to-given-target-account *bob*))
            (tx-mary (get-all-transactions-to-given-target-account *mary*))
            (tx-james (get-all-transactions-to-given-target-account *james*)))
-       (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                    tx-alice
-                    tx-bob
-                    tx-mary
-                    tx-james)
+       (log-info "transactions for alice" :data `(:transactions ,tx-alice))
+       (log-info "transactions for bob" :data `(:transactions ,tx-bob))
+       (log-info "transactions for mary" :data `(:transactions ,tx-mary))
+       (log-info "transactions for james" :data `(:transactions ,tx-james))
        
        (setf emotiq:*notestream* strm)
        (values)))))
@@ -212,8 +213,10 @@
         (bobamount  (- 490 300))
         (maryamount (+ 290 190))
         (jamesamount 90))
-    (emotiq:note "calculated balances alice(~a) bob(~a) mary(~a) james(~a)~%"
-                 aliceamount bobamount maryamount jamesamount)))
+    (log-info "calculatred balance for alice" :data `(:balance ,aliceamount))
+    (log-info "calculatred balance for bob" :data `(:balance ,bobamount))
+    (log-info "calculatred balance for mary" :data `(:balance ,maryamount))
+    (log-info "calculatred balance for james" :data `(:balance ,jamesamount))))
     
 (defun dtx ()
   (with-current-node
