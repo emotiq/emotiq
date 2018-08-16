@@ -2064,7 +2064,7 @@ dropped on the floor.
     message ; has already been deserialized at this point
     ;; Unpack envelope containing Gossip metadata.
     (destructuring-bind (destuid srcuid rem-address rem-port msg) packet ;; see Note G
-      (edebug 1 "Gossip transport message received" rem-address rem-port)
+      (edebug 2 "Gossip transport message received" rem-address rem-port)
       ;; Note: Protocol should not be hard-coded. Supply from transport layer? -lukego
       (when (typep msg 'solicitation) ; only make proxies for solicitations; never replies
         (let ((reply-to (reply-to msg))) ; and even then, only make proxies for solicitations that expect replies,
@@ -2082,11 +2082,11 @@ dropped on the floor.
 
 (defun transport-peer-up (peer-address peer-port)
   "Callback for transport layer event."
-  (edebug 1 :TRANSPORT "Transport connection to peer established" peer-address peer-port))
+  (edebug 2 :TRANSPORT "Transport connection to peer established" peer-address peer-port))
 
 (defun transport-peer-down (peer-address peer-port reason)
   "Callback for transport layer event."
-  (edebug 1 :TRANSPORT "Transport connection to peer failed" peer-address peer-port reason))
+  (edebug 1 :ERROR "Transport connection failed" peer-address peer-port reason))
 
 (defun shutdown-gossip-server ()
   "Stop the Gossip Transport network endpoint (if currently running)."

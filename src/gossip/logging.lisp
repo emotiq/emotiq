@@ -195,3 +195,5 @@
     ; :archive pushes current log onto *archived-logs*, then starts a fresh log
     (:archive (%archive-log))))
 
+(defun print-log (&optional (stream t))
+    (loop for item across gossip::*log* do (print item stream)))

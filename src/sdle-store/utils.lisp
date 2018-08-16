@@ -147,7 +147,7 @@
 
 (defun read-32-bit (buf)
   "Read an unsigned 32-bit int in network standard order off STREAM. (bigendian)"
-  (declare (optimize speed (debug 0) (safety 0)))
+  (declare (optimize speed (debug 3) (safety 2)))
   (let ((byte1 (read-byte buf))
         (byte2 (read-byte buf))
         (byte3 (read-byte buf))

@@ -82,7 +82,8 @@
            *blocks* (cosi-simgen::block-list))
     (verify-genesis-block)
     (dump-results strm)
-    (generate-pseudo-random-transactions *alice*)))
+    ;(generate-pseudo-random-transactions *alice*)
+    ))
 
 (defun app ()
   "helper for tests"
@@ -179,7 +180,7 @@
 (defun dump-results (strm)
 
   (let ((bal-genesis (get-balance (get-genesis-key))))
-    (emotiq:note"genesis balance(~a)~%" bal-genesis))
+    (emotiq:note "genesis balance(~a)~%" bal-genesis))
 
   #+nil(let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))

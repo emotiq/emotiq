@@ -103,9 +103,15 @@
         (ignore-errors (usocket::get-peer-address socket))
         (ignore-errors (usocket::get-peer-port socket))))
 
+(defun peerstring (socket)
+  "Returns a string describing socket's peers"
+  (format nil "~A/~A"
+          (ignore-errors (usocket:get-peer-address socket))
+          (ignore-errors (usocket:get-peer-port socket))))
+
 (defun sockets-matching (pred)
   (when pred
-    (loop for socket in (gossip/transport::sockets gossip::*transport*)
+    (loop for socket in (sockets gossip::*transport*)
       when (or (eq t pred)
                (ignore-errors (funcall pred socket)))
       collect socket)))
@@ -170,10 +176,9 @@
                                    :peer-down-hook peer-down
                                    :listen-socket listen-socket)))
     (setf (listen-process transport)
-          (mpcompat:process-run-function (format nil "gossip/transport accept on ~A" listen-socket)
+          (mpcompat:process-run-function (format nil "gossip/transport accept on ~A/~A" address port)
                                          nil
                                          (lambda ()
-                                           (edebug 5 :transport "Started listen thread for" transport)
                                            (run-tcp-listen-thread transport))))
     (edebug 5 :transport "Started transport" transport)
     transport))
@@ -185,11 +190,15 @@
     (mpcompat:with-lock (lock)
       ;; Stop worker processes.
       (mapc #'mpcompat:process-kill (list* listen-process (append readers writers)))
+      (setf readers nil
+            writers nil)
       ;; Stop accepting new connections.
       (ignore-errors (usocket:socket-close listen-socket))
+      (setf listen-socket nil)
       ;; Close existing connections.
       (dolist (socket sockets)
-        (ignore-errors (usocket:socket-close socket)))))
+        (ignore-errors (usocket:socket-close socket)))
+      (setf sockets nil)))
   (edebug 5 :transport "Stopped transport" transport))
 
 (defmethod status-of ((transport tcp-threads-transport))
@@ -199,87 +208,108 @@
 ;;; Listening
 
 (defun run-tcp-listen-thread (transport)
+  (edebug 5 :transport "Started listen thread for" transport)
   (with-slots (listen-socket readers lock peer-down-hook sockets) transport
     (gossip-handler-case
-        (loop
-          (let ((socket (usocket:socket-accept listen-socket)))
-            (mpcompat:with-lock (lock) (push socket sockets))
-            (let ((process (mpcompat:process-run-function (format nil "gossip/transport reader on ~A" socket)
-                             nil
-                             (lambda ()
-                               (edebug 5 :transport "Started read thread for" transport)
-                               (run-tcp-read-thread transport socket)))))
-              (push process (readers transport)))))
-      (error (err)
-             (edebug 5 :error "Listen thread error" err)
-             (when peer-down-hook
-               (funcall peer-down-hook (princ-to-string err)))))))
+     (unwind-protect
+         (loop
+           (let* ((socket (ignore-errors (usocket:socket-accept listen-socket)))
+                  (timed-out-if-null
+                   (ccl::process-input-wait* (ccl::socket-device (usocket:socket socket)) 10000) ; it's milliseconds
+                   ))
+             
+             (cond ((or (null timed-out-if-null)
+                        (gossip::stream-eofp (usocket:socket-stream socket)))
+                    (ignore-errors (usocket:socket-close socket)))
+                   
+                   (t (mpcompat:with-lock (lock) (push socket sockets))
+                      (let ((process (mpcompat:process-run-function (format nil "gossip/transport reader on ~A" socket)
+                                       nil
+                                       (lambda ()
+                                         (tcp-read-loop transport socket)))))
+                        (mpcompat:with-lock (lock) (push process readers)))))))
+       (ignore-errors (usocket:socket-close listen-socket))
+       (when peer-down-hook
+         (funcall peer-down-hook
+                  (ignore-errors (usocket:get-local-address listen-socket))
+                  (ignore-errors (usocket:get-local-port listen-socket))
+                  "Listen thread error. Cannot recover.")))
+     (error () ; should we automatically call #'start again with this transport if this happens??
+            nil))))
 
 ;;; Reading
 
-(defun run-tcp-read-thread (transport socket)
+(defun tcp-read-loop (transport socket)
   "Transfer objects from SOCKET to MESSAGE-RECEIVED-HOOK."
-  (gossip-handler-case
-      (loop
-         (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
-           (edebug 5 :transport "Received message apparently from" (usocket:get-peer-address socket) msg)
-           (when (message-received-hook transport)
-             (funcall (message-received-hook transport) msg))))
-    (error (err)
-      (edebug 5 :error "Read thread error" err)
-      (usocket:socket-close socket)
-      (setf (sockets transport) (remove socket (sockets transport)))
-      (setf (readers transport) (remove (mpcompat:current-process) (readers transport)))
-      )))
+  (edebug 5 :transport "Started read loop from" (peerstring socket))
+  (with-slots (lock peer-down-hook readers sockets) transport
+    (gossip-handler-case
+     (unwind-protect
+         (loop
+           (let ((msg (loenc:deserialize (usocket:socket-stream socket))))
+             (edebug 5 :transport "Received message apparently from" (peerstring socket) msg)
+             (when (message-received-hook transport)
+               (funcall (message-received-hook transport) msg))))
+       ;; Clear state related to this connection.
+       (ignore-errors (usocket:socket-close socket))
+       (mpcompat:with-lock (lock)
+         (setf sockets (remove socket sockets))
+         ;; This process is about to die. Remove it from readers list.
+         (setf readers (remove (mpcompat:current-process) readers)))
+       (when peer-down-hook
+         (funcall peer-down-hook
+                  (ignore-errors (usocket:get-peer-address socket))
+                  (ignore-errors (usocket:get-peer-port socket))
+                  "Read loop error")))
+     (error ()
+            nil))))
 
 ;;; Writing
 
-(defun run-tcp-write-thread (transport address port mailbox)
+(defun tcp-write-loop (transport address port mailbox)
   "Transfer objects from MAILBOX to the remote endpoint ADDRESS:PORT."
   (setf address (canonicalize-address address)
         port    (canonicalize-port    port))
-  (with-slots (lock message-queues peer-down-hook sockets) transport
+  (edebug 4 :transport "Started write loop" :TO address :PORT port)
+  (with-slots (lock message-queues peer-down-hook writers sockets) transport
     (gossip-handler-case
      ;; Establish new connection.
      (let ((socket (ignore-errors (connect-to address port (eripa)))))
        (cond (socket ; connection might have been refused
-              (edebug 5 :transport "Ready to write to" address :PORT port)
+              (edebug 4 :transport "Ready to write to" :ADDRESS address :PORT port :FROMPORT (ignore-errors (usocket:get-local-port socket)))
               (mpcompat:with-lock (lock) (push socket sockets))
               ;; Loop transferring messages from mailbox to socket.
               (unwind-protect
                   (loop
                     (unless (ignore-errors (usocket::get-peer-address socket)) ; force an error to be thrown if socket is not connected
-                      (error "Disconnected socket"))
+                      (error "Disconnected socket")) ; this error should correct itself (because writer will try again)
                     ; Note 1: Ignore-errors above is because: While I know get-peer-address will throw an error on CCL,
                     ;   I don't know if it will do so on other implementations. Therefore we force the error.
                     ; Note 2: Sometimes finish-output will blindly send output to a disconnected socket
                     ;   without throwing an error (at least on CCL), so checking explicitly ensures this won't happen.
                     (loenc:serialize (mpcompat:mailbox-read mailbox)
-                                         (usocket:socket-stream socket))
+                                     (usocket:socket-stream socket))
                     (finish-output (usocket:socket-stream socket))
                     (edebug 5 :transport "Sent message to" address :PORT port))
-                (ignore-errors (usocket:socket-close socket))
                 ;; Clear state related to this connection.
-                (mpcompat:with-lock ((lock transport))
+                (ignore-errors (usocket:socket-close socket))
+                (mpcompat:with-lock (lock)
+                  (setf sockets (remove socket sockets))
+                  ;; Purge message queue to drop messages and forget connection.
                   (remhash (list address port) message-queues)
-                  (setf sockets (remove socket sockets)))))
+                  ;; This process is about to die. Remove it from writers list.
+                  (setf writers (remove (mpcompat:current-process) writers)))
+                (when peer-down-hook
+                  (funcall peer-down-hook address port "Write loop error"))))
              (t (mpcompat:with-lock ((lock transport)) ; if socket itself was not created, remove message queue.
-                  ; I know the error handler _should_ take care of this. Belt and suspenders.
                   (remhash (list address port) message-queues)))))
-             
-     (error (err)
-            ;; Notify that peer is down and then terminate.
-            (edebug 5 :error "Write thread error" err)
-            ;; Purge message queue to drop messages and forget connection.
-            (mpcompat:with-lock (lock)
-              (setf (gethash (list address port) message-queues) nil))
-            (when peer-down-hook
-              (funcall peer-down-hook address port (princ-to-string err)))))))
+     (error ()
+            nil))))
 
 (defun connect-to (address port &optional local-host)
   "Return a new socket conneted to ADDRESS:PORT.
   Retries automatically during *CONNECT-TIMEOUT*."
-  (edebug 5 :transport "Connecting to" address :PORT port)
+  (edebug 5 :transport "Connecting to" :ADDRESS address :PORT port)
   (usocket:socket-connect address port
                           :protocol :stream
                           :nodelay :if-supported
@@ -307,8 +337,7 @@
                 (push (mpcompat:process-run-function (format nil "gossip/transport writer to ~A:~A" address port)
                         nil
                         (lambda ()
-                          (edebug 5 :transport "Started write thread for" transport :TO address :PORT port)
-                          (run-tcp-write-thread transport address port mailbox)))
+                          (tcp-write-loop transport address port mailbox)))
                       writers)
                 mailbox))))))
 
