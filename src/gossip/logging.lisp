@@ -186,7 +186,8 @@
           ;; First object in logmsg is the timestamp.
           ;;
           ;; TODO: use the timestamp directly. It's (car logmsg).
-          (emotiq:note "~{~a~^ ~}" (cdr logmsg)))
+          (let ((msg (format nil "~{~a~^ ~}" (cdr logmsg))))
+            (emotiq:s-note msg :level :info :subsystem :emotiq/gossip)))
     (:quit (ac:become 'ac:do-nothing))
           
     ; :save saves current log to files without modifying it

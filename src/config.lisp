@@ -16,7 +16,7 @@
 (defun settings (&key (root (emotiq/fs:etc/)))
   (let ((p (merge-pathnames *conf-filename* root)))
     (unless (probe-file p)
-      (emotiq:note "No configuration able to be read from '~a'" p)
+      (emotiq:s-note "No configuration able to be read!" :data `(:path ,p) :subsystem :emotiq/conf)
       (return-from settings nil))
     (cl-json:decode-json-from-source p)))
 
@@ -41,7 +41,7 @@
         (values
          keypairs hosts gossip))
     (error (e)
-      (emotiq:note "Configuration strategy failed because ~a" e)
+      (emotiq:s-note "Configuration strategy failed!" :data `(:error ,e))
       nil)))
 
 (defun read-gossip-configuration (pathname)
