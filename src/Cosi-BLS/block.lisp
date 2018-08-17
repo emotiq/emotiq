@@ -135,14 +135,14 @@ comes from a config file.")             ; ---*** TODO: to be
    the block-hash on the current block and the prev-block-hash on a
    newer block on the blockchain. These slots represent the block header only.")
 
-(defun serialize-block-header-octets (block)
+(defmethod serialize-block-header-octets ((blk eblock))
   "Return a serialization of BLOCK header as a list of octet vectors
 for the slots in *names-of-block-slots-to-serialize*. It is an error
 to call this before all slots are bound. This is to be used to hash a
 previous block, i.e., on that has been fully formed and already been
 added to the blockchain."
   (loop for slot-name in *names-of-block-header-slots-to-serialize*
-        collect (loenc:encode (slot-value block slot-name))))
+        collect (loenc:encode (slot-value blk slot-name))))
 
 
 (defvar *unix-epoch-ut* (encode-universal-time 0 0 0 1 1 1970 0)
@@ -165,8 +165,11 @@ added to the blockchain."
 ;;; and they can require this order for a block to be considered valid.
 ;;; Software may also rely upon this order, e.g., as a search heuristic.
 
-(defun create-block (prev-block? block-election-proof block-leader-pkey
-                     block-witnesses block-transactions)
+(defmethod create-block (prev-block?
+                         block-election-proof
+                         (block-leader-pkey public-key)
+                         (block-witnesses vector)
+                         (block-transactions list))
   (let ((blk (make-instance 'eblock)))
     (with-slots (merkle-root-hash 
                  input-script-merkle-root-hash
@@ -177,17 +180,21 @@ added to the blockchain."
       (setf timestamp (- (get-universal-time) *unix-epoch-ut*))
       (setf election-proof block-election-proof)
       (setf leader-pkey block-leader-pkey)
-      (setf witnesses (coerce block-witnesses 'vector))
+      (setf witnesses block-witnesses)
       (setf transactions block-transactions)
       (setf merkle-root-hash (compute-merkle-root-hash blk))
       (setf input-script-merkle-root-hash (compute-input-script-merkle-root-hash blk))
       (setf witness-merkle-root-hash (compute-witness-merkle-root-hash blk))
-      (when prev-block? 
-        (with-slots (prev-block-hash)
-            blk
-          (setf prev-block-hash (hash-block prev-block?))))
       blk)))
 
+(defmethod create-block :around ((prev-block? eblock)
+                                 block-election-proof
+                                 (block-leader-pkey public-key)
+                                 (block-witnesses vector)
+                                 (block-transactions list))
+  (let ((blk (call-next-method)))
+    (setf (slot-value blk 'prev-block-hash) (hash-block prev-block?))
+    blk))
 
 
 (defparameter *newtx-p* t) ; using new-transactions.lisp (package
@@ -196,7 +203,7 @@ added to the blockchain."
 
 
 
-(defun create-genesis-block (public-key witnesses-and-stakes)
+(defmethod create-genesis-block ((public-key pbc:public-key) (witnesses-and-stakes list))
   "Create a genesis block paying to PUBLIC-KEY with WITNESSES-AND-STAKES
    as given. 
 
@@ -212,10 +219,15 @@ added to the blockchain."
   (when (not *newtx-p*)
     (error "Sorry, only know how to do this for new transactions (*newtx-p*)."))
   (let* ((genesis-transaction
-           (cosi/proofs/newtx:make-genesis-transaction
-            (cosi/proofs:public-key-to-address public-key)))
+          (cosi/proofs/newtx:make-genesis-transaction
+           (cosi/proofs:public-key-to-address public-key)))
          (transactions (list genesis-transaction))
-         (block (create-block nil nil nil nil transactions))
+         (g-d-keying   (make-key-pair :g-d))
+         (block (create-block nil ;; no prior block
+                              nil ;; no election proof
+                              (keying-triple-pkey g-d-keying) ;; guess who...
+                              #() ;; no witnesses
+                              transactions))
          (normalized-block-witnesses-and-stakes
            (normalize-witnesses-and-stakes witnesses-and-stakes)))
     (setf (block-witnesses-and-stakes block)
@@ -224,7 +236,7 @@ added to the blockchain."
 
 
 
-(defun normalize-witnesses-and-stakes (witnesses-and-stakes)
+(defmethod normalize-witnesses-and-stakes ((witnesses-and-stakes list))
   "Given an a-list of the form
 
      ( (general-public-key . (emtq-amount-in-subunits))* )
@@ -256,22 +268,25 @@ added to the blockchain."
   (apply #'hash:hash/256 hashables))
 
 
-(defun hash-block (block)
+(defmethod hash-block ((blk eblock))
   "Applies hash-256 to result of serialize-block-octets, q.v."
   ;; Ends up doing the equivalent of
   ;;
   ;;   (hash-256  #<bv 1>  #<bv 2>  ...  #<bv N>)
-  (apply #'hash-256 (serialize-block-octets block)))
+  (apply #'hash-256 (serialize-block-octets blk)))
 
 
+(defmethod print-object ((blk eblock) out-stream)
+  (print-unreadable-object (blk out-stream :type t)
+    (princ (short-str (hex-str (hash-block blk))) out-stream)))
 
-(defun listed-transactions-of-block (block)
+(defmethod listed-transactions-of-block ((blk eblock))
   "Return the transactions of BLOCK as a list. The caller must not
    make any assumption as to whether the result shares list structure
    with the block (or any other data structure) or whether it is
    freshly consed."
   (with-slots (transactions) 
-      block
+      blk
     ;; transactions is a sequence, i.e., list or vector
     (if (listp transactions)
         ;; optimized for list case: no copying needed
@@ -314,11 +329,11 @@ added to the blockchain."
 ;;; TRANSACTIONS according to bitcoin.org Bitcoin developer reference doc, here:
 ;;; https://bitcoin.org/en/developer-reference#block-versions
 
-(defun compute-merkle-root-hash (block)
-  (compute-merkle (list-transaction-ids-of-block block)))
+(defmethod compute-merkle-root-hash ((blk eblock))
+  (compute-merkle (list-transaction-ids-of-block blk)))
 
-(defun list-transaction-ids-of-block (block)
-  (loop for tx in (listed-transactions-of-block block)
+(defmethod list-transaction-ids-of-block ((blk eblock))
+  (loop for tx in (listed-transactions-of-block blk)
         collect (get-transaction-id tx)))
 
 
@@ -327,11 +342,11 @@ added to the blockchain."
 ;;; for a sequence of input scripts, one for each transaction of the
 ;;; block.
 
-(defun compute-input-script-merkle-root-hash (block)
-  (compute-merkle (list-transaction-input-script-ids-of-block block)))
+(defmethod compute-input-script-merkle-root-hash ((blk eblock))
+  (compute-merkle (list-transaction-input-script-ids-of-block blk)))
 
-(defun list-transaction-input-script-ids-of-block (block)
-  (loop for tx in (listed-transactions-of-block block)
+(defmethod list-transaction-input-script-ids-of-block ((blk eblock))
+  (loop for tx in (listed-transactions-of-block blk)
         collect (cosi/proofs/newtx:hash-transaction-input-scripts-id tx)))
 
 
@@ -341,37 +356,17 @@ added to the blockchain."
 ;;; being a sequence of pairs of the combination a signature and a
 ;;; public key.
 
-(defun compute-witness-merkle-root-hash (block)
-  (compute-merkle (list-transaction-witness-ids-of-block block)))
+(defmethod compute-witness-merkle-root-hash ((blk eblock))
+  (compute-merkle (list-transaction-witness-ids-of-block blk)))
 
-(defun list-transaction-witness-ids-of-block (block)
-  (loop for tx in (listed-transactions-of-block block)
+(defmethod list-transaction-witness-ids-of-block ((blk eblock))
+  (loop for tx in (listed-transactions-of-block blk)
         collect (cosi/proofs/newtx:hash-transaction-witness-id tx)))
 
 
 
 
-(defun get-transaction-id (transaction)
-  "Get the identifier of TRANSACTION, an octet vector of length 32, which can be
-   used to hash the transactions leaves of the merkle tree to produce the
-   block's merkle tree root hash. It represents H(PubKey, PedComm), or possibly
-   a superset thereof."
-  (if *newtx-p*
-      (cosi/proofs/newtx:transaction-id transaction)
-      (vec-repr:bev-vec (hash:hash-val (hash-transaction transaction)))))
-
-;; In Bitcoin this is known as the TXID of the transaction.
-
-
-
-(defun hash-transaction (transaction)
-  "Produce a hash for TRANSACTION, including the pair (PubKey, PedComm).
-   The resulting hash's octet vector is usable as a transaction ID."
-  (hash-256 transaction))
-
-
-
-(defun compute-merkle (nodes)
+(defmethod compute-merkle ((nodes list))
   "Compute merkle root hash on nonempty list of hashables NODES."
   (cond
     ((null nodes)                       ; empty blocks permitted
@@ -382,7 +377,7 @@ added to the blockchain."
 
 
 
-(defun compute-merkle-pairs (nodes)
+(defmethod compute-merkle-pairs ((nodes list))
   "Compute the merkle root on NODES, a list of two or more hash
    objects."
   (if (null (rest (rest nodes)))
@@ -398,11 +393,11 @@ added to the blockchain."
 
 
 
-(defun update-block-signature (block sig bits)
+(defmethod update-block-signature ((blk eblock) (sig pbc:signature) (bits integer))
   "Update BLOCK, an eblock instance, slots per SIG, an instance of
    pbc:signed-message, and BITS, a bitmap with format as documented
    for the signature-bitmap slot of eblock."
   (with-slots (signature signature-bitmap)
-      block
+      blk
     (setf signature sig)
     (setf signature-bitmap bits)))

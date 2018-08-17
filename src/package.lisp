@@ -182,7 +182,12 @@
    #:get-balance
    #:test-app
    #:*blocks*
-   #:*node*))
+   #:*node*
+   #:*genesis*
+   #:*alice*
+   #:*bob*
+   #:*mary*
+   #:*james*))
 
 (defpackage emotiq/random
   (:use #:cl)

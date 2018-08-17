@@ -148,7 +148,7 @@ THE SOFTWARE.
 ;; randhound items
 (define-symbol-macro *rh-state*       (node-rh-state       *current-node*))
 
-(defun add-to-blockchain (node blk)
+(defmethod add-to-blockchain ((node node) (blk cosi/proofs:eblock))
   (with-current-node node
     (let ((hashID (hash-block blk)))
       (setf *blockchain* hashID
@@ -170,7 +170,7 @@ THE SOFTWARE.
                      (declare (ignore ix))
                      (funcall fn sub))))
 
-(defmethod set-node-load (node)
+(defmethod set-node-load ((node node))
   (setf (node-load node)
         (1+ (loop for sub across (node-subs node)
                   when sub

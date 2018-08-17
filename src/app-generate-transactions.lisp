@@ -103,7 +103,7 @@
 
       ;; in general, using actors here is over-kill
       ;; actors are just an efficient way to invoke the process paradigm
-      ;; processes/threads would be suffiecient here, since transactions only need
+      ;; processes/threads would be sufficient here, since transactions only need
       ;; to be created in "human time" ; I'm using actors only because they are easily
       ;; at hand, for me
 
