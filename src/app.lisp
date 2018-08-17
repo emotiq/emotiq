@@ -37,7 +37,7 @@
     (setf (account-triple r) gk
           (account-skey r) (pbc:keying-triple-skey gk)
           (account-pkey r) (pbc:keying-triple-pkey gk)
-          (account-name r) "node 0")
+          (account-name r) "genesis")
     (setf *genesis* r)
     r))
 
@@ -77,17 +77,17 @@
      (emotiq/txn:address keypair)
      root)))
 
-(defun test-app (&key etc-and-wallets)
+(defun test-app ()
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
-    (emotiq:main :etc-and-wallets etc-and-wallets)
+    (emotiq:main)
     (setf gossip::*debug-level* nil)
     (app)
-    (setq *node* cosi-simgen::*my-node*  ;; for debugging
-           *blocks* (cosi-simgen::block-list))
-    (verify-genesis-block)
+    (setf emotiq/app:*node* cosi-simgen::*my-node*  ;; for debugging
+          emotiq/app:*blocks* (cosi-simgen::block-list))
+    (writebc)
     (dump-results strm)
-    (generate-pseudo-random-transactions *alice*)))
+    #+nil(generate-pseudo-random-transactions *alice*)))
 
 (defun make-accounts ()
   (setf *genesis* (make-genesis-account))
@@ -171,8 +171,9 @@
                amount
                :fee fee)))
      (publish-transaction txn)
-     (emotiq:note "sleeping to let txn propagate (is this necessary?)")
+     (emotiq:note "~&sleeping to let txn propagate (is this necessary?)")
      (sleep 30)
+     (emotiq:note "~&finished sleeping~%")
      txn)))
   
 (defmethod get-balance ((triple pbc:keying-triple))
@@ -185,9 +186,10 @@
 
 
 (defun dump-results (strm)
+  (declare (ignorable strm))
 
   (let ((bal-genesis (get-balance (get-genesis-key))))
-    (emotiq:note"genesis balance(~a)~%" bal-genesis))
+    (emotiq:note"genesis balance(~a)" bal-genesis))
 
   (let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
