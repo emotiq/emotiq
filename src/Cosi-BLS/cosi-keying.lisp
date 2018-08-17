@@ -69,7 +69,7 @@ THE SOFTWARE.
                   (loenc:encode seed)))
      (ctr-drbg 256))))
 
-(defun get-salt (salt)
+(defmethod get-salt ((salt vector))
   (let ((pref (loenc:encode "salt")))
     (hash:hash-val
      (hash:hash/256
@@ -181,7 +181,7 @@ THE SOFTWARE.
 
 (defvar *english*  (import-wordlist "english.txt"))
 
-(defun convert-int-to-wordlist (val &optional (wref *english*))
+(defmethod convert-int-to-wordlist ((val integer) &optional (wref *english*))
   ;; convert a positive, or zero, 256-bit integer value to a list of
   ;; words representing little-endian encoding in 11-bit groups. The
   ;; integer has another MSB of 8 bits prepended from SHA3/256 of its
@@ -200,7 +200,7 @@ THE SOFTWARE.
           collect (aref wref (ldb (byte 11 pos) v)))
     ))
 
-(defun convert-wordlist-to-int (wlist &optional (wref *english*))
+(defmethod convert-wordlist-to-int ((wlist list) &optional (wref *english*))
   ;; convert a list of 24 words from a wordlist into an integer with
   ;; each word representing an 11-bit group presented in little-endian
   ;; order. The result is a 264-bit integer, which is a 256-bit

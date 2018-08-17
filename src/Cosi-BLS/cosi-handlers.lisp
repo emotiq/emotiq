@@ -1183,7 +1183,7 @@ check that each TXIN and TXOUT is mathematically sound."
          (self      (current-actor))
          (new-block (cosi/proofs:create-block (latest-block)
                                               *election-proof* *leader*
-                                              (get-witness-list)
+                                              (coerce (get-witness-list) 'vector)
                                               trns)))
     (ac:self-call :cosi-sign-prepare
                   :reply-to  self
@@ -1218,7 +1218,7 @@ check that each TXIN and TXOUT is mathematically sound."
     
 (defun leader-exec (prepare-timeout commit-timeout)
   (let ((trns  (get-transactions-for-new-block)))
-    (pr "Leader sees transactions: ~a" trns)
+    (pr "Leader see transactions: ~a" trns)
     (if trns
         (leader-assemble-block trns prepare-timeout commit-timeout)
       ;; else

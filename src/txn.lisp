@@ -18,12 +18,12 @@
     (cosi/proofs/newtx:get-utxos-per-account address)))
          
 
-(defun make-spend-transaction (from-account ;; pbc:keying-triple
-                               to-address     ;; target address
-                               amount
-                               &key
-                                 (fee *transaction-fee*)
-                                 (from-utxos nil)) ;; (list (TXO (TxID INDEX) AMT) ... )
+(defmethod make-spend-transaction ((from-account pbc:keying-triple);; pbc:keying-triple
+                                   (to-address pbc:address)     ;; target address
+                                   (amount integer)
+                                   &key
+                                   (fee *transaction-fee*)
+                                   (from-utxos nil)) ;; (list (TXO (TxID INDEX) AMT) ... )
   (let* ((from-skey (pbc:keying-triple-skey from-account))
          (from-pkey (pbc:keying-triple-pkey from-account))
          (from-address (address from-pkey))
@@ -31,11 +31,15 @@
     (multiple-value-bind (inputs outputs)
         (make-inputs/outputs from-address to-address amount fee from-utxos)
       (let ((transaction (cosi/proofs/newtx::make-newstyle-transaction inputs outputs :spend)))
-        (cosi/proofs/newtx:sign-transaction transaction from-skey from-pkey)
+        (cosi/proofs/newtx:sign-transaction transaction (list from-skey) (list from-pkey))
         transaction))))
 
 
-(defun make-inputs/outputs (from-address to-address amount fee candidates
+(defmethod make-inputs/outputs ((from-address pbc:address)
+                                (to-address pbc:address)
+                                (amount integer)
+                                (fee integer)
+                                (candidates list)
                             &key
                               (get-amount #'third)
                               (get-input-spec #'second))
@@ -60,7 +64,7 @@
 
 ;; (TXO (TxID INDEX) AMT)
 ;; ideally we would use knapsack algorithm, doing it naively for now
-(defun select-inputs (candidates amount get-amount)
+(defmethod select-inputs ((candidates list) (amount integer) get-amount)
   (let ((candidates (sort (coerce candidates 'vector) #'< :key get-amount))
         (selected-amount 0)
         (selected-txns nil))

@@ -11,6 +11,7 @@
 (defparameter *tx4* nil)
 
 (defparameter *blocks* nil)
+(defparameter *node* nil)
 
 (defparameter *genesis* nil)
 (defparameter *alice* nil)
@@ -23,6 +24,9 @@
    (pkey :accessor account-pkey)  
    (triple :accessor account-triple)
    (name :accessor account-name)))
+
+(defmethod account-address ((acct account))
+  (pbc:addr-str (cosi/proofs:public-key-to-address (account-pkey acct))))
 
 (defun get-genesis-key ()
   (emotiq/config:get-nth-key 0))
@@ -60,7 +64,7 @@
   `(cosi-simgen:with-current-node cosi-simgen::*my-node*
      ,@body))
 
-;; from test/geness.lisp
+;; from test/genesis.lisp
 (defun verify-genesis-block (&key (root (emotiq/fs:etc/)))
   (let* ((genesis-block
           (emotiq/config:get-genesis-block
@@ -73,52 +77,55 @@
      (emotiq/txn:address keypair)
      root)))
 
-(defun test-app (&key etc-and-wallets)
+(defun test-app ()
   "entry point for tests"
   (let ((strm emotiq:*notestream*))
-    (emotiq:main :etc-and-wallets etc-and-wallets)
+    (emotiq:main)
     (setf gossip::*debug-level* nil)
     (app)
-    (setq *node* cosi-simgen::*my-node*  ;; for debugging
-           *blocks* (cosi-simgen::block-list))
-    (verify-genesis-block)
+    (setf emotiq/app:*node* cosi-simgen::*my-node*  ;; for debugging
+          emotiq/app:*blocks* (cosi-simgen::block-list))
+    (writebc)
     (dump-results strm)
-    (generate-pseudo-random-transactions *alice*)))
+    #+nil(generate-pseudo-random-transactions *alice*)))
 
+(defun make-accounts ()
+  (setf *genesis* (make-genesis-account))
+  (setf *alice* (make-account "alice")
+	*bob* (make-account "bob")
+	*mary* (make-account "mary")
+        *james* (make-account "james")))
+  
 (defun app ()
   "helper for tests"
 
   (wait-for-node-startup)
 
-  (setf *genesis* (make-genesis-account))
+  (make-accounts)
+
+  (verify-genesis-block)
 
   (let ((bal (get-balance *genesis*))
         (a (emotiq/txn:address (account-triple *genesis*))))
     (emotiq:note "balance for genesis is ~A" bal)
-    (emotiq:note "address of genesis ~A" a))
-  
-  (setf *alice* (make-account "alice")
-	*bob* (make-account "bob")
-	*mary* (make-account "mary")
-        *james* (make-account "james"))
-  
-  (let ((fee 10))
-    
-    ;; make various transactions
-    (send-all-genesis-coin-to *alice*)
-
-    (sleep 30)
-
-    (spend *alice* *bob* 490 :fee fee)
-    (spend *alice* *mary* 190 :fee fee)
-    (spend *alice* *james* 90 :fee fee)
-
-    (sleep 30)
-
-    (spend *bob* *mary* 290 :fee fee)
-    ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
-
-    (sleep 120)))
+    (emotiq:note "address of genesis ~A" a)
+    (let ((fee 10))
+      
+      ;; make various transactions
+      (send-all-genesis-coin-to *alice*)
+      
+      (sleep 30)
+      
+      (spend *alice* *bob* 490 :fee fee)
+      (spend *alice* *mary* 190 :fee fee)
+      (spend *alice* *james* 90 :fee fee)
+      
+      (sleep 30)
+      
+      (spend *bob* *mary* 290 :fee fee)
+      ;(spend *bob* *mary* 1000 :fee fee) ;; should raise insufficient funds error
+      
+      (sleep 120))))
 
 ;; alice should have 999...999,190
 ;; bob 190
@@ -164,8 +171,9 @@
                amount
                :fee fee)))
      (publish-transaction txn)
-     (emotiq:note "sleeping to let txn propagate (is this necessary?)")
+     (emotiq:note "~&sleeping to let txn propagate (is this necessary?)")
      (sleep 30)
+     (emotiq:note "~&finished sleeping~%")
      txn)))
   
 (defmethod get-balance ((triple pbc:keying-triple))
@@ -178,11 +186,12 @@
 
 
 (defun dump-results (strm)
+  (declare (ignorable strm))
 
   (let ((bal-genesis (get-balance (get-genesis-key))))
-    (emotiq:note"genesis balance(~a)~%" bal-genesis))
+    (emotiq:note"genesis balance(~a)" bal-genesis))
 
-  #+nil(let ((bal-alice (get-balance *alice*))
+  (let ((bal-alice (get-balance *alice*))
         (bal-bob   (get-balance *bob*))
         (bal-mary  (get-balance *mary*))
         (bal-james (get-balance *james*)))
@@ -197,12 +206,19 @@
      (let ((tx-alice (get-all-transactions-to-given-target-account *alice*))
            (tx-bob (get-all-transactions-to-given-target-account *bob*))
            (tx-mary (get-all-transactions-to-given-target-account *mary*))
-           (tx-james (get-all-transactions-to-given-target-account *james*)))
-       (emotiq:note "transactions-to~%alice ~A~%bob ~A~%mary ~A~%james ~A~%"
-                    tx-alice
-                    tx-bob
-                    tx-mary
-                    tx-james)
+           (tx-james (get-all-transactions-to-given-target-account *james*))
+           (tx-genesis (get-all-transactions-to-given-target-account *genesis*))
+           (alice-id (cosi/proofs/newtx::abbrev-hash-string (account-address *alice*)))
+           (bob-id   (cosi/proofs/newtx::abbrev-hash-string (account-address *bob*)))
+           (mary-id  (cosi/proofs/newtx::abbrev-hash-string (account-address *mary*)))
+           (james-id (cosi/proofs/newtx::abbrev-hash-string (account-address *james*)))
+           (genesis-id (cosi/proofs/newtx::abbrev-hash-string (account-address *genesis*))))
+       (emotiq:note "transactions-to~%alice/~a ~A~%bob/~a ~A~%mary/~a ~A~%james/~a ~A~%genesis/~a ~A"
+                    alice-id tx-alice
+                    bob-id   tx-bob
+                    mary-id  tx-mary
+                    james-id tx-james
+                    genesis-id tx-genesis)
        
        (setf emotiq:*notestream* strm)
        (values)))))
@@ -228,3 +244,44 @@
   (emotiq-rest:stop-server)
   (websocket/wallet::stop-server)
   (core-crypto:shutdown))
+
+
+
+
+(defun writebc (&optional (filename "block-chain.loenc"))
+  (let ((f (merge-pathnames (emotiq/filesystem:emotiq/user/root/) filename)))
+    (with-open-file (o f
+                       :element-type '(unsigned-byte 8)
+                       :direction :output
+                       :if-exists :supersede)
+      (loenc:serialize emotiq/app::*blocks* o)
+      (loenc:serialize emotiq/app::*genesis* o)
+      (loenc:serialize emotiq/app::*alice* o)
+      (loenc:serialize emotiq/app::*bob* o)
+      (loenc:serialize emotiq/app::*mary* o)
+      (loenc:serialize emotiq/app::*james* o)
+  (values))))
+
+(defun readbc (&optional (filename "block-chain.loenc"))
+  (let ((f (merge-pathnames (emotiq/filesystem:emotiq/user/root/) filename)))
+    (with-open-file (o f
+                       :element-type '(unsigned-byte 8)
+                       :direction :input)
+      (setf emotiq/app::*blocks* (loenc:deserialize o))
+      (setf emotiq/app:*genesis* (loenc:deserialize o))
+      (setf emotiq/app:*alice* (loenc:deserialize o))
+      (setf emotiq/app:*bob* (loenc:deserialize o))
+      (setf emotiq/app:*mary* (loenc:deserialize o))
+      (setf emotiq/app:*james* (loenc:deserialize o))))
+  (format t "~%blockchain now available in emotiq/app:*blocks*~%~%")
+  emotiq/app::*blocks*)
+
+
+  ;;;;;;  debugging helpers
+(defun addr-str (a)
+  "return string address for emotiq/app::account a"
+  (if (null a)
+      (progn
+        (format *standard-output* "~&account is NIL~%")
+        "")
+    (pbc:addr-str (emotiq/txn:address (account-triple a)))))

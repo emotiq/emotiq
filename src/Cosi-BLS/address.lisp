@@ -83,7 +83,7 @@
 ;; currencies to be concerned with. NB: currently defaulting to testnet. Later,
 ;; consider changing later in project to mainnet. -mhd, 5/27/18
 
-(defun encode-address (hash160 version-octet)
+(defmethod encode-address ((hash160 hash:hash/ripemd/160) (version-octet integer))
   "Takes HASH160, a 20 byte RIPEMD160 hash of a public key, and a version octet,
   returns a corresponding string in Bitcoin address Base58check format."
   (let* ((prefix+data
@@ -97,7 +97,7 @@
     (pbc:addr prefix+data+checksum)))
 
 
-(defun checksum-hash-address (prefix+data)  
+(defmethod checksum-hash-address ((prefix+data vector))  
   "Get a checksum for PREFIX+DATA, an octet vector composed of a single octet
    with the version prefix followed by the 20 octets of hash data. This returns
    an octet vector of the first 4 bytes of the double sha2/256 hash of
@@ -105,7 +105,6 @@
   (subseq (hash:hash-bytes
            (hash:hash/sha2/256 (hash:hash/sha2/256 prefix+data)))
           0 4))
-
 
 
 (defmethod public-key-to-address ((public-key pbc:public-key) &key net override-version)

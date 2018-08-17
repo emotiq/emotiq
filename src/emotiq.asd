@@ -147,5 +147,7 @@
                         :pathname "./"
                         :components ((:file "app")
                                      (:file "app-get-transactions")
+                                     (:file "app-spend")
+                                     (:file "app-convert-to-alist")
                                      (:file "app-generate-transactions")))))
 
