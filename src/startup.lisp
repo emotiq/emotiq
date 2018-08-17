@@ -25,6 +25,7 @@
 
 (defun main (&key etc-and-wallets how-started-message?)
   "Main loop for Emotiq daemon"
+  (cosi/proofs/newtx:init-new-transactions)
   (emotiq/random:init-random) ;; after calling this, (RANDOM 100) will return the same sequence of pseudo-random numbers on each test run 
   (when etc-and-wallets
     (setf (symbol-function 'emotiq/fs:etc/)

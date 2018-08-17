@@ -1000,17 +1000,28 @@ OBJECTS. Arg TYPE is implicitly quoted (not evaluated)."
 ;;; their normal function, so these values are arbitrary. These two ARE part
 ;;; of the hash of the transaction.
 
-(defvar *initial-coinbase-tx-in-id-value*
-  (make-instance 'hash:hash
-                 :val (bev (hex "0000000000000000000000000000000000000000000000000000000000000000"))))
+(defparameter *initial-coinbase-tx-in-id-value* nil)
+
+(defun zero-address ()
+  ; Form an arbitrary HASH/256 of any old seed, then copy the BEV into a new vector, then zap that vector with a FILL of zero. 
+  ; And then reconstruct the HASH/256 item with that modified BEV. (COPY-SEQ)
+  (let* ((h (hash:hash/256 :test))
+         (vec (vec-repr:bev-vec h))
+         (dum (copy-seq vec)))
+    (fill dum 0)
+    (setf (slot-value h 'hash::val) (vec-repr:bev dum))
+    h))
+
+(defun init-new-transactions ()
+  (setf *initial-coinbase-tx-in-id-value* (zero-address)))
 
 (defvar *initial-coinbase-tx-in-index-value*
   -1)
 
 (defun coinbase-transaction-input-p (transaction-input)
   (with-slots (tx-in-id tx-in-index) transaction-input
-    (and (equal tx-in-id *initial-coinbase-tx-in-id-value*)
-         (equal tx-in-index *initial-coinbase-tx-in-index-value*))))
+    (and (pbc= tx-in-id *initial-coinbase-tx-in-id-value*)
+         (= tx-in-index *initial-coinbase-tx-in-index-value*))))
 
 (defun make-coinbase-transaction-input ()
   (make-instance
