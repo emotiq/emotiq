@@ -50,7 +50,7 @@ As a second value, return a mapping of wallet names to their local
 pathname resolution."
   (let ((mapping
          (flet ((parent-directory (d)
-                  (nreverse (rest (nreverse (pathname-directory d))))))
+                  (reverse (rest (reverse (pathname-directory d))))))
            (let ((directories-wild
                   (make-pathname
                    :directory `(,@(parent-directory (emotiq-wallet-path))
@@ -60,7 +60,7 @@ pathname resolution."
              (loop
                 :for d :in (directory directories-wild)
                 :collecting (cons (pathname-name-to-wallet-name
-                                   (pathname-name d))
+                                   (first (reverse (pathname-directory d))))
                                   d))))))
     (values
      (mapcar #'car mapping)

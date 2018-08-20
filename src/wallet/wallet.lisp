@@ -45,6 +45,10 @@
 If the wallet already exists, it will not be overwritten unless FORCE
 is non-nil.
 
+Returns the name of the name of the newly created wallet as the primary value.
+
+Returns the serialized representation of the wallet as the second value.
+
 The default name for a wallet is *DEFAULT-WALLET-NAME*."
   (when (get-wallet-named name)
     (unless force
