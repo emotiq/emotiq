@@ -56,16 +56,6 @@
    #:shutdown-gossip-server
    ))
 
-(defpackage gossip/config
-  (:use #:cl)
-  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
-  (:export
-   #:generate-network
-   #:generate-node
-   #:*aws-example*
-   #:initialize 
-   #:get-values))
-
 (defpackage :gossip/transport
   (:use :cl)
   (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)

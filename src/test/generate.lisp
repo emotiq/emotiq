@@ -5,8 +5,8 @@
 
 (define-test key-generation ()
   (let* ((devops-plist emotiq/config/generate:*eg-config-zerotier*)
-         (nodes-dns-ip devops-plist)
-         (nodes (emotiq/config/generate:generate-keys nodes-dns-ip)))
+         (nodes-plist devops-plist)
+         (nodes (emotiq/config/generate:generate-keys nodes-plist)))
     (assert-eq (length devops-plist)
                (length nodes))))
 
@@ -19,7 +19,7 @@
           (root (emotiq/filesystem:new-temporary-directory))
           (directories (emotiq/config/generate:generate-network
                         :root root
-                        :nodes-dns-ip devops-plist)))
+                        :nodes-plist devops-plist)))
      (assert-eq (length devops-plist)
                 (length directories))
      (dolist (d directories)
@@ -60,7 +60,7 @@
            (:hostname "127.0.0.1" :ip "127.0.0.1"
             :gossip-server-port 65012 :rest-server-port 3152 :websocket-server-port 4157))))
     (multiple-value-bind (directories configurations)
-        (emotiq/config/generate:generate-network :nodes-dns-ip service-description
+        (emotiq/config/generate:generate-network :nodes-plist service-description
                                                  :root root)
       (assert-eq (length service-description)
                  (length directories))

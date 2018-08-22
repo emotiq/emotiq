@@ -424,8 +424,8 @@ THE SOFTWARE.
    :set-pairing
    :list-all-pairings
 
-   :make-keying-triple
-   :make-keying-pairs
+   :make-keying-triple ; deprecated
+   :make-key-pair-uuid
 
    ;; for safe-reader
    :address

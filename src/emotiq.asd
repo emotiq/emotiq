@@ -121,6 +121,7 @@
 
 (defsystem "emotiq/config/generate"
   :depends-on (emotiq/config
+               useful-macros
                cosi-bls)
   :in-order-to ((test-op (test-op "test-generate")))
   :components ((:module source

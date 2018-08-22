@@ -131,7 +131,6 @@
 (defpackage emotiq/config
   (:use #:cl)
   (:export
-   #:*nodes-dns-ip*
    #:*max-stake*
 
    #:*conf-filename*
