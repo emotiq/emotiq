@@ -36,24 +36,26 @@ THE SOFTWARE.
                usocket
                bloom-filter
                ads-clos
-	       emotiq/delivery
+               emotiq/startup
                cosi-bls)
-  :in-order-to ((test-op (test-op "randhound-test")))
+  :in-order-to ((test-op (test-op "randhound/t")))
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
                (:module source
                         :depends-on (package)
                         :pathname "./"
-                        :serial t
-                        :components (
-                                     (:file "randhound")
-                                     ))))
+                        :components ((:file "randhound")))))
 
-(defsystem "randhound/test/allegro"
-  :description "Allegro specific CAS timing code from dbm."
-  :depends-on (randhound)
-  :components ((:module source
-                        :pathname "./"
-                        :components ((:file "test-cas")))))
-                        
+(defsystem "randhound/t"
+  :defsystem-depends-on (prove)
+  :depends-on (prove
+                randhound)
+  :perform (test-op (op c)
+              (symbol-call :prove-asdf 'run-test-system c))
+  :components ((:module tests
+                         :pathname  "./"
+                         :components ((:test-file "rh-tests")))))
+
+
+

@@ -97,6 +97,9 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------
 ;; FOR SIM... Get associations between Node PKeys and their Short PKeys
 
+;; V+-- This is the table that should be in consistent sort order
+(defvar *node-table* '(1 2)) 
+
 (defun get-witness-short-keys ()
   ;; NOTE: It is important that the list of witness keys be kept in
   ;; consistent order among all nodes. Each node has its own local
@@ -107,6 +110,8 @@ THE SOFTWARE.
        (lambda (node)
          (list (node-pkey node)
                (node-short-pkey node)))
+       *node-table*
+       #+nil
        cosi-simgen:*node-bit-tbl*)) ;; <-- This is the table that should be in consistent sort order
                               
 ;; ------------------------------------------------------------------
