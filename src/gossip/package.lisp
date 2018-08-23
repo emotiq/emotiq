@@ -53,8 +53,9 @@
    #:dissolve-graph
    #:memoize-node
 
-   #:shutdown-gossip-server
-   ))
+   #:shutdown-gossip-server)
+  (:export
+   #:local-real-nodes))
 
 (defpackage :gossip/transport
   (:use :cl)

@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 (defsystem "randhound"
   :description "Randhound: Unbiasable Randomness Generation in Lisp"
-  :version     "1.0.3"
+  :version     "1.1.0"
   :author      "D.McClain <dbm@emotiq.ch>"
   :license     "Copyright (c) 2018 by Emotiq, A.G. MIT License."
   :depends-on (ironclad
@@ -42,8 +42,12 @@ THE SOFTWARE.
   :components ((:module package
                         :pathname "./"
                         :components ((:file "package")))
-               (:module source
+               (:module cosi-simgen-state
+                        :pathname "./"
                         :depends-on (package)
+                        :components ((:file "state")))
+               (:module source
+                        :depends-on (cosi-simgen-state)
                         :pathname "./"
                         :components ((:file "randhound")))))
 

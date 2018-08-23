@@ -110,7 +110,7 @@ THE SOFTWARE.
        (lambda (node)
          (list (node-pkey node)
                (node-short-pkey node)))
-       *node-table*
+       (node-bitmap-table)
        #+nil
        cosi-simgen:*node-bit-tbl*)) ;; <-- This is the table that should be in consistent sort order
                               
@@ -231,8 +231,10 @@ THE SOFTWARE.
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
   (clear-counters)
   
-  (let* ((node (current-node))
-         (me   (node-pkey node)))
+  (let* ((node
+          (current-node))
+         (me
+          (node-pkey node)))
 
     (when (pbc= me *beacon*)
       (let* ((witnesses  (get-witness-short-keys))

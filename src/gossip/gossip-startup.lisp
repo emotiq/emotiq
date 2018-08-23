@@ -14,33 +14,38 @@
 
 (defun configure-local-machine (keypairs local-machine)
   "Clear log, make local node(s) and start server"
-  (when local-machine
-    (destructuring-bind (&key eripa
+  (unless (or local-machine keypairs)
+    (error "Need configuration context of local machine and known global keypairs"))
+  (destructuring-bind (&key eripa
                               (gossip-port
                                (emotiq/config:setting :gossip-server-port))
                               pubkeys)
-        local-machine
+      local-machine
+    (flet ((skey-for-pkey (pkey keypairs)
+             (search
+              (when (consp pkey)
+                (caar pkey)
+                pkey)
+              keypairs
+              :test 'pbc:pbc=)))
       (when eripa (process-eripa-value eripa))
       (unless (typep gossip-port '(unsigned-byte 16))
-        (error "Invalid gossip-port ~S" gossip-port))
+        (warn "Invalid gossip-port ~S" gossip-port))
       (cond ((consp pubkeys)
              (clear-local-nodes)) ; kill local nodes ;; FIXME should be part of shutdown routine
-            (t (error "Invalid or unspecified public keys ~S" pubkeys)))
-      ;; check to see that all pubkeys have a match in *keypair-db-path*
-      (every (lambda (local-pubkey)
-               (unless (member local-pubkey keypairs :test 'vec-repr:int= :key 'car)
-                 (error "Pubkey ~S is not present in keypairs database" local-pubkey))
-               t)
-             pubkeys)
+            (t (warn "Invalid or unspecified public keys ~S" pubkeys)))
+      (every (lambda (pkey)
+               (unless (skey-for-pkey pkey
+                              (warn (format nil "Pubkey ~a is not present in keypairs database~&~2t~a~%"
+                                             pkey keypairs) pkey keypairs))))
+        (mapcar 'first pubkeys))
       ;; make local nodes
-      (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
-          (mapc (lambda (pubkey)
-                  (make-node ':cosi :pkey pubkey :skey (second (assoc pubkey keypairs
-                                                                      :test 'vec-repr:int=))))
-                pubkeys)
-          (mapc (lambda (pubkey)
-                  (make-node ':gossip :uid pubkey))
-                pubkeys))
+      (loop
+         :for pkey :in (mapcar 'first pubkeys)
+         :for skey = (skey-for-pkey pkey keypairs)
+         :doing (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
+                    (make-node ':cosi :pkey pkey :skey skey)
+                    (make-node ':gossip :uid pkey)))
       ;; keep existing log and start server
       (run-gossip nil)
       t)))
