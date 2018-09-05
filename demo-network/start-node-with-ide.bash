@@ -27,13 +27,16 @@ rc=0
 tempfoo=`basename $0`
 TMPFILE=`mktemp /tmp/${tempfoo}.XXXXXX` || exit 1
 
+node_name="node${node_id}"
+etc_and_wallets="${BASE}/node-configs/${node_name}/"
+
 cat >$TMPFILE <<EOF
 (ql:quickload :emotiq/startup)
-(emotiq:main :config-subpath "node${node_id}/")
+(emotiq:main :etc-and-wallets "${etc_and_wallets}")
 EOF
 
 echo Starting node${node_id} ...
-open -a "Clozure CL64" $TMPFILE
+open -n -a "/Applications/ccl/git/ccl/Clozure CL64.app/Contents/MacOS/dx86cl64" --args -l $TMPFILE
 
 gtimeout ${start_timeout} sh -c 'until nc -z $0 $1 2> /dev/null; do echo "Sleeping 1 sec..."; sleep 1; done' localhost $((3139+${node_id}))
 
