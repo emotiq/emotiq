@@ -35,9 +35,9 @@
              (clear-local-nodes)) ; kill local nodes ;; FIXME should be part of shutdown routine
             (t (warn "Invalid or unspecified public keys ~S" pubkeys)))
       (every (lambda (pkey)
-               (unless (skey-for-pkey pkey
-                              (warn (format nil "Pubkey ~a is not present in keypairs database~&~2t~a~%"
-                                             pkey keypairs) pkey keypairs))))
+               (unless (skey-for-pkey pkey keypairs)
+                 (warn (format nil "Pubkey ~a is not present in keypairs database~&~2t~a~%"
+                               pkey keypairs) pkey keypairs)))
         (mapcar 'first pubkeys))
       ;; make local nodes
       (loop
