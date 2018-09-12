@@ -65,3 +65,18 @@
   
   
 
+(defun assert-well-formed-keypair-list (keypairs)
+  ;; keypairs is of the form (((pub pub ...) (priv priv ...)) ((pub pub ...) (priv priv ...)) ...)
+  (assert (and (consp keypairs)
+               (every #'(lambda (pair)
+                          (and (consp pair)
+                               (= 2 (length pair))
+                               (consp (first pair))
+                               (consp (second pair))))
+                      keypairs))))
+
+(defun skey-for-pkey (pkey keypair-list)
+  (first
+   (second
+    (find pkey keypair-list :test #'(lambda (pk pair)
+                                      (pbc:pbc= pk (first (first pair))))))))

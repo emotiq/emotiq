@@ -1,4 +1,4 @@
-;;; gossip-startup.lisp
+;; gossip-startup.lisp
 ;;; 21-Apr-2018 SVS
 ;;; How to start up a node that can participate in gossip
 
@@ -21,13 +21,9 @@
                                (emotiq/config:setting :gossip-server-port))
                               pubkeys)
       local-machine
-    (flet ((skey-for-pkey (pkey keypairs)
-             (search
-              (when (consp pkey)
-                (caar pkey)
-                pkey)
-              keypairs
-              :test 'pbc:pbc=)))
+    (emotiq/config::assert-well-formed-keypair-list keypairs)
+    (flet ((skey-for-pkey (pkey)
+             (emotiq/config::skey-for-pkey pkey keypairs)))
       (when eripa (process-eripa-value eripa))
       (unless (typep gossip-port '(unsigned-byte 16))
         (warn "Invalid gossip-port ~S" gossip-port))
@@ -35,14 +31,14 @@
              (clear-local-nodes)) ; kill local nodes ;; FIXME should be part of shutdown routine
             (t (warn "Invalid or unspecified public keys ~S" pubkeys)))
       (every (lambda (pkey)
-               (unless (skey-for-pkey pkey keypairs)
+               (unless (skey-for-pkey pkey)
                  (warn (format nil "Pubkey ~a is not present in keypairs database~&~2t~a~%"
                                pkey keypairs) pkey keypairs)))
         (mapcar 'first pubkeys))
       ;; make local nodes
       (loop
          :for pkey :in (mapcar 'first pubkeys)
-         :for skey = (skey-for-pkey pkey keypairs)
+         :for skey = (skey-for-pkey pkey)
          :doing (if (fboundp 'gossip:cosi-loaded-p) ; cosi will fbind this symbol
                     (make-node ':cosi :pkey pkey :skey skey)
                     (make-node ':gossip :uid pkey)))
