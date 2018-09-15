@@ -53,18 +53,9 @@
    #:dissolve-graph
    #:memoize-node
 
-   #:shutdown-gossip-server
-   ))
-
-(defpackage gossip/config
-  (:use #:cl)
-  (:IMPORT-FROM :gossip :edebug :eripa :gossip-handler-case)
+   #:shutdown-gossip-server)
   (:export
-   #:generate-network
-   #:generate-node
-   #:*aws-example*
-   #:initialize 
-   #:get-values))
+   #:local-real-nodes))
 
 (defpackage :gossip/transport
   (:use :cl)

@@ -97,6 +97,9 @@ THE SOFTWARE.
 ;; ------------------------------------------------------------------
 ;; FOR SIM... Get associations between Node PKeys and their Short PKeys
 
+;; V+-- This is the table that should be in consistent sort order
+(defvar *node-table* '(1 2)) 
+
 (defun get-witness-short-keys ()
   ;; NOTE: It is important that the list of witness keys be kept in
   ;; consistent order among all nodes. Each node has its own local
@@ -107,6 +110,8 @@ THE SOFTWARE.
        (lambda (node)
          (list (node-pkey node)
                (node-short-pkey node)))
+       (node-bitmap-table)
+       #+nil
        cosi-simgen:*node-bit-tbl*)) ;; <-- This is the table that should be in consistent sort order
                               
 ;; ------------------------------------------------------------------
@@ -216,7 +221,7 @@ THE SOFTWARE.
   ;; graph with *BEACON* at the top.
   ;;
   ;; All witness nodes are potential participants, including BEACON
-  ;; and LEADER just elected. But we limit the number of participats
+  ;; and LEADER just elected. But we limit the number of participants
   ;; to 1600 nodes or fewer.
   ;;
   ;; If fewer than 36 nodes in the network, then make only one group.
@@ -226,10 +231,10 @@ THE SOFTWARE.
   (setf *rh-start* (get-universal-time)) ;; record start time for timings
   (clear-counters)
   
-  (let* ((node (current-node))
-         (me   (node-pkey node)))
+  (let* ((my-pkey-id (current-node))
+         (me (gossip::lookup-node my-pkey-id)))  ;; a cosi-simgen::node
 
-    (when (pbc= me *beacon*)
+    (when (pbc= my-pkey-id (cosi-simgen::node-current-beacon me))
       (let* ((witnesses  (get-witness-short-keys))
              (session    (hash/256 *local-epoch* (uuid:make-v1-uuid) *beacon*))
              (grpids     (mapcar (lambda (wit)

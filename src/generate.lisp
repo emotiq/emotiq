@@ -25,16 +25,38 @@ Values are changed by pushing key value cons at the beginning of the list,
 where they override any later identical keys according to the semantics of CL:ASSOC")
 
 (defun generate-keys (records)
-  "Generate keys for a list of plist RECORDS"
-  (loop
-     :for (public-key private-key) = (pbc:make-keying-pairs)
-     :for record :in records
-     :collecting (append record
-                         ;;; HACK adapt to gossip/config needs
-                         (unless (find :gossip-server-port record)
-                           (list :gossip-server-port 65002))
-                         (list :public public-key)
-                         (list :private private-key))))
+  "Generate keys for a list of plist RECORDS
+
+The following are valid configuration of a plist record
+
+    :hostname
+
+    :ip 
+
+    :gossip-server-port
+
+    :websocket-server-port
+
+    :rest-server-port
+
+    :local-process-nodes
+"
+  (let (result)
+    (dolist (record records)
+      (let* ((key-or-keys (loop
+                             :repeat (getf record :local-process-nodes 1)
+                             :collecting (pbc:make-key-pair-uuid)))
+             (public-keys (mapcar 'pbc:keying-triple-pkey key-or-keys))
+             (secret-keys (mapcar 'pbc:keying-triple-skey key-or-keys)))
+        (push (append record
+                      ;; HACK adapt to gossip configuration needs.
+                      ;; Better to have a template with default values?
+                      (unless (find :gossip-server-port record)
+                        (list :gossip-server-port 65002))
+                      (list :public-keys public-keys)
+                      (list :private-keys secret-keys))
+              result)))
+    (nreverse result)))
 
 (defun generate-stakes (public-keys &key (max-stake emotiq/config:*max-stake*))
   "Given a list of PUBLIC-KEYS, generate a random stake for each
@@ -67,23 +89,31 @@ Returns the enumeration of lists of public keys and staked amounts."
      :websocket-server-port 3145))
   "An example of the syntax to generate a purely local process 4 node network")
 
+(defun public-keys (nodes)
+  "Return the in-order list of all public keys for a NODES plist."
+  (um:flatten
+   (mapcar
+    (lambda (plist)
+      (getf plist :public-keys))
+    nodes)))
+
 (defun generate-network (&key
                            (root (emotiq/fs:new-temporary-directory))
-                           (nodes-dns-ip *eg-config-zerotier*)
+                           (nodes-plist *eg-config-zerotier*)
                            (force nil)
                            (settings-key-value-alist nil))
   "Generate a test network configuration
 
 Files are generated under the ROOT directory.
 
-NODES-DNS-IP contains a plist of keys describing the tcp/udp service
+NODES-PLIST contains a plist of keys describing the tcp/udp service
 endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
 *EG-CONFIG-ZEROTIER* for examples of the configuration syntax."
-  (let* ((nodes-with-keys (generate-keys nodes-dns-ip))
-         (stakes (generate-stakes (mapcar (lambda (plist)
-                                            (getf plist :public))
-                                          nodes-with-keys)))
-         (address-for-coins (getf (first nodes-with-keys) :public))
+  (let* ((nodes-with-keys (generate-keys nodes-plist))
+         (pkeys (public-keys nodes-with-keys))
+         (stakes (generate-stakes pkeys))
+         ;; currently pay all genesis coin to the first pkey
+         (address-for-coins (first pkeys))
          directories configurations)
     (dolist (node nodes-with-keys)
       (let ((configuration
@@ -114,8 +144,7 @@ endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
                            &key
                              address-for-coins
                              stakes)
-  (let ((configuration
-         (copy-alist +default-configuration+)))
+  (let ((configuration (copy-alist +default-configuration+)))
     (loop
        :for key-value-cons :in (alexandria:plist-alist node)
        :doing (push key-value-cons configuration))
@@ -132,7 +161,8 @@ endpoints at which the nodes will run.  See *EG-CONFIG-LOCALHOST* and
                         (force nil))
   "Generate a complete Emotiq node description within DIRECTORY for CONFIGURATION
 
-Returns the directory in which the node configuration was written as the primary values.
+Returns the directory in which the node configuration was written as
+the primary value.
 
 The genesis block for the node is returned as the second value.
 "
@@ -144,7 +174,7 @@ The genesis block for the node is returned as the second value.
    :host (alexandria:assoc-value configuration :hostname)
    :eripa (alexandria:assoc-value configuration :ip)
    :gossip-port (alexandria:assoc-value configuration :gossip-server-port)
-   :public (list (alexandria:assoc-value configuration :public))
+   :public-keys (alexandria:assoc-value configuration :public-keys)
    :key-records key-records)
   (with-open-file (o (merge-pathnames emotiq/config:*conf-filename* directory)
                      :if-exists :supersede
@@ -213,7 +243,8 @@ The genesis block for the node is returned as the second value.
                      :if-exists :supersede)
     (with-safe-output
       (dolist (node nodes)
-        (format o "~s~%" (list (getf node :public) (getf node :private)))))))
+        (format o "~s~%" (list (getf node :public-keys)
+                               (getf node :private-keys)))))))
 
 (defun generated-directory (configuration)
   "For CONFIGURATION return a uniquely named relative directory for the network generation process"
@@ -231,19 +262,22 @@ The genesis block for the node is returned as the second value.
      :directory `(:relative
                   ,(format nil "~{~a~^-~}"
                            (list host ip
-                                 gossip-server-port rest-server-port websocket-server-port))))))
+                                 gossip-server-port
+                                 rest-server-port
+                                 websocket-server-port))))))
 
-
-(defun generate-gossip-node (&key root host eripa gossip-port public key-records)
+(defun generate-gossip-node (&key
+                               root host eripa
+                               gossip-port public-keys key-records)
   (declare (ignore host)) ;; Hmm?
   (ensure-directories-exist root)
   (write-gossip-conf root
-                     :eripa eripa :port gossip-port :public-key-or-keys public)
+                     :eripa eripa :port gossip-port :public-keys public-keys)
   (write-hosts-conf root
                     key-records)
   root)
 
-(defun write-gossip-conf (directory &key eripa port public-key-or-keys)
+(defun write-gossip-conf (directory &key eripa port public-keys)
   (let ((p (merge-pathnames emotiq/config:*local-machine-filename* directory)))
     (with-open-file (o p
                        :direction :output
@@ -252,7 +286,7 @@ The genesis block for the node is returned as the second value.
         (format o "~s~&"
                 `(:eripa ,eripa
                   :gossip-port ,port
-                  :pubkeys ,public-key-or-keys))))))
+                  :pubkeys ,public-keys))))))
 
 (defun write-hosts-conf (directory records)
   (let ((p (merge-pathnames emotiq/config:*hosts-filename* directory)))
@@ -267,25 +301,26 @@ The genesis block for the node is returned as the second value.
 (defun ensure-defaults (&key
                           force
                           (for-purely-local nil)
-                          (nodes-dns-ip *eg-config-zerotier*))
-  "Ensure that configuration will start up, even in the absence of explicit configuration
+                          (destination (emotiq/fs:etc/))
+                          (nodes-plist *eg-config-zerotier* nodes-plist-p))
+  "Ensure enough default configuration so that EMOTIQ:MAIN will run
 
 With FORCE true, overwrite destination without warning.
 
 With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
-  (let ((root (emotiq/fs:new-temporary-directory))
-        (destination (emotiq/fs:etc/)))
+  (let ((root (emotiq/fs:new-temporary-directory)))
     (unless force
       (when (not (zerop
                   (length (directory
                            (make-pathname :name :wild :type :wild
-                                           :defaults destination))))))
-      (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again." destination)
+                                          :defaults destination))))))
+      (warn "Refusing to overwrite existing '~a' with defaults. Use force to try again."
+            destination)
       (return-from ensure-defaults (emotiq/config:settings)))
     (ensure-directories-exist root)
     (let ((directories
            (generate-network :root root
-                             :nodes-dns-ip nodes-dns-ip)))
+                             :nodes-plist nodes-plist)))
       (uiop:run-program
        (format nil "rsync -avzP ~a ~a"
                (first directories)
@@ -303,7 +338,7 @@ With FOR-PURELY-LOCAL, emits a purely local configuration for the local node."
                 (write-gossip-conf destination
                                    :eripa eripa
                                    :port gossip-port
-                                   :public-key-or-keys (mapcar 'first keypairs))))
+                                   :public-keys (mapcar 'first keypairs))))
           (emotiq:note "Finished mangling configuration for purely local nodes~%~t~a"
                        result)))
       (values

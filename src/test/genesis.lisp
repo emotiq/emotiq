@@ -7,14 +7,13 @@
              emotiq/config/generate::*eg-config-zerotier*))
            (stakes
             (emotiq/config/generate::generate-stakes
-             (mapcar (lambda (plist)
-                       (getf plist :public))
-                     nodes)))
+             (emotiq/config/generate::public-keys nodes)))
            (public-key-for-coins
-            (getf (first nodes) :public))
+            (first (getf (first nodes) :public-keys)))
            (coinbase-keypair
             (pbc:make-keying-triple
-             public-key-for-coins (getf (first nodes) :private)))
+             public-key-for-coins
+             (first (getf (first nodes) :private-keys))))
            (configuration 
             (emotiq/config/generate::make-configuration
              (first nodes)

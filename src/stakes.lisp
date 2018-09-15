@@ -47,7 +47,7 @@
                      (second public-private))))
     (values 
      (pbc:make-keying-triple
-      (first public-private)
-      (second public-private))
+      (first (first public-private))
+      (first (second public-private)))
      public-private)))
 

@@ -53,8 +53,7 @@ THE SOFTWARE.
    :*local-epoch*
    :*election-calls*
    :make-signed-election-message
-   :with-current-node
-   )
+   :with-current-node)
 
   (:export
    :*max-bft*
@@ -87,6 +86,10 @@ THE SOFTWARE.
    :subgroup-commit-thresh
    :subgroup-commit-encr-shares
    :subgroup-commit-proofs
-   :make-subgroup-commit
-   ))
+   :make-subgroup-commit)
+  (:export
+   #:start-randhound-round)
+  (:export
+   #:nodes
+   #:node-bitmap-table))
 
