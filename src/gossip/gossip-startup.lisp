@@ -33,7 +33,7 @@
       (every (lambda (pkey)
                (unless (skey-for-pkey pkey)
                  (warn (format nil "Pubkey ~a is not present in keypairs database~&~2t~a~%"
-                               pkey keypairs) pkey keypairs)))
+                               pkey keypairs))))
         (mapcar 'first pubkeys))
       ;; make local nodes
       (loop
